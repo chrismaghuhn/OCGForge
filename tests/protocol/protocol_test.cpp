@@ -48,7 +48,8 @@ int run() {
         return 1;
     }
     if (decoded.decisions[0].candidates.front().semantic_key != "idle.0.0.123456.0.2.3") {
-        std::cerr << "semantic key is not deterministic\n";
+        std::cerr << "semantic key is not deterministic: "
+                  << decoded.decisions[0].candidates.front().semantic_key << "\n";
         return 1;
     }
     const auto& selected = ygo::protocol::select_candidate(decoded.decisions[0], "idle.0.0.123456.0.2.3");
