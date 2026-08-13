@@ -1,0 +1,87 @@
+{
+  "schema_version": 1,
+  "bundle_id": "6fbbd212ae4be2df36170dcbfcdf5c46aaaa0e3091cf815c2d0261fd01640ea4",
+  "rule_affecting_inputs": {
+    "card_scripts": {
+      "commit": "f337c87018ca723c1aded5143e616bb649555273",
+      "repository": "https://github.com/ProjectIgnis/CardScripts.git",
+      "resolved_checkout_sha256": "ce53e1033ea7a3057745bbe143c1803a4a0c7db7f6cded4c28b0170536320e3c"
+    },
+    "core": {
+      "api_version": "11.0",
+      "commit": "9a0c558c2d686542f7914a6d529fd7aa57746aed",
+      "repository": "https://github.com/edo9300/ygopro-core.git",
+      "resolved_checkout_sha256": "161849049d34de7ea60b2f370cc35f903262c14769e399d0bf43a381d295d7f3"
+    },
+    "database": {
+      "artifact": {
+        "path": "cards.cdb",
+        "sha256": "7a6570fe313ae0affe4e1e2047c564b669397500777da6c3d76e79aac393726f"
+      },
+      "commit": "89ad6837b0766a52984d8c715a7d5d4f8447946b",
+      "repository": "https://github.com/ProjectIgnis/BabelCDB.git",
+      "resolved_checkout_sha256": "acef726f8fb74d7f2b3a43dc14088f117012dbf9c7eab35612716cb8e79df4d1"
+    },
+    "duel_flags": {
+      "names": [],
+      "value": 0
+    },
+    "protocol_slice": "m0.normal_monster_fixture.v1"
+  },
+  "sources": {
+    "core": {
+      "cache_directory": "ocgcore",
+      "commit": "9a0c558c2d686542f7914a6d529fd7aa57746aed",
+      "expected_api_version": "11.0",
+      "license": "AGPL-3.0-or-later",
+      "recursive_submodules": true,
+      "repository": "https://github.com/edo9300/ygopro-core.git",
+      "retrieval_method": "git clone exact commit with recursive submodules",
+      "resolved_checkout_hash": {
+        "algorithm": "sha256",
+        "value": "161849049d34de7ea60b2f370cc35f903262c14769e399d0bf43a381d295d7f3"
+      },
+      "role": "runtime_rules_engine"
+    },
+    "cardscripts": {
+      "cache_directory": "cardscripts",
+      "commit": "f337c87018ca723c1aded5143e616bb649555273",
+      "license": "AGPL-3.0-or-later",
+      "recursive_submodules": false,
+      "repository": "https://github.com/ProjectIgnis/CardScripts.git",
+      "retrieval_method": "git clone exact detached commit",
+      "resolved_checkout_hash": {
+        "algorithm": "sha256",
+        "value": "ce53e1033ea7a3057745bbe143c1803a4a0c7db7f6cded4c28b0170536320e3c"
+      },
+      "role": "runtime_card_scripts"
+    },
+    "babelcdb": {
+      "cache_directory": "babelcdb",
+      "commit": "89ad6837b0766a52984d8c715a7d5d4f8447946b",
+      "license": "UNRESOLVED-LICENSE",
+      "recursive_submodules": false,
+      "repository": "https://github.com/ProjectIgnis/BabelCDB.git",
+      "retrieval_method": "git clone exact detached commit",
+      "resolved_checkout_hash": {
+        "algorithm": "sha256",
+        "value": "acef726f8fb74d7f2b3a43dc14088f117012dbf9c7eab35612716cb8e79df4d1"
+      },
+      "role": "runtime_card_database"
+    }
+  },
+  "database_artifact": {
+    "path": "cards.cdb",
+    "sha256": "7a6570fe313ae0affe4e1e2047c564b669397500777da6c3d76e79aac393726f",
+    "source": "babelcdb"
+  },
+  "duel_flags": {
+    "names": [],
+    "value": 0
+  },
+  "expected_core_api_version": "11.0",
+  "retrieval": {
+    "cache_root": ".cache/rules_bundle",
+    "method": "git clone --filter=blob:none --no-checkout, detached exact commit, recursive submodules where pinned"
+  }
+}

@@ -1,0 +1,24 @@
+# Local build and dependency caches. These are reproducible outputs, not source.
+/build/
+/.cache/
+/.cmake/
+/third_party/cache/
+
+# Native build products and generated traces.
+*.o
+*.obj
+*.a
+*.so
+*.dylib
+*.dll
+*.exe
+/artifacts/
+/traces/
+__pycache__/
+*.py[cod]
+
+# Local IDE and OS state.
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
