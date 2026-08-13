@@ -156,7 +156,14 @@ DecisionRequest decode_idle(const std::vector<std::uint8_t>& frame) {
 
     const auto summonable = reader.u32();
     for (std::uint32_t index = 0; index < summonable; ++index) {
-        add_idle_card(request, 0, index, reader.u32(), reader.u8(), reader.u8(), reader.u32());
+        // Read the wire fields before calling the helper. The reader mutates its
+        // cursor, and function-argument evaluation order is not portable across
+        // the compilers used by the supported Windows build paths.
+        const auto code = reader.u32();
+        const auto controller = reader.u8();
+        const auto location = reader.u8();
+        const auto sequence = reader.u32();
+        add_idle_card(request, 0, index, code, controller, location, sequence);
     }
 
     const auto special = reader.u32();
