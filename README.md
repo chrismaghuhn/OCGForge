@@ -48,23 +48,24 @@ python tools/verify_rules_bundle.py --lock third_party/rules_bundle.lock.json --
 See [THIRD_PARTY.md](THIRD_PARTY.md) for the license records. The complete
 project is not represented as MIT-only.
 
-## Linux build
+## Windows build
 
-The documented clean path uses the host C/C++ compiler and Ninja:
+The documented native path uses MSVC and Ninja from a Visual Studio developer
+environment:
 
 ```text
-cmake --preset dev
-cmake --build --preset dev
-ctest --preset dev
+cmake --preset dev-windows
+cmake --build --preset dev-windows
+ctest --preset dev-windows
 ```
 
-The `dev` configure preset verifies or fetches the pinned rules bundle into
-`.cache/rules_bundle`. A clean build starts with an empty `build/dev` and an
-empty dependency cache; no sibling checkout is required.
+The `dev-windows` configure preset verifies or fetches the pinned rules bundle
+into `.cache/rules_bundle`. A clean build starts with an empty
+`build/dev-windows` and an empty dependency cache; no sibling checkout is
+required.
 
-This Windows workspace did not have a native compiler available during the
-spike, so the equivalent local fallback used pinned repository-local Zig
-0.14.1 and Ninja binaries:
+When native MSVC is unavailable, the repository also contains a local fallback
+using pinned repository-local Zig 0.14.1 and Ninja binaries:
 
 ```text
 cmake --preset dev-windows-zig
@@ -80,14 +81,14 @@ rules bundle.
 Run the controlled duel and write a canonical JSONL trace:
 
 ```text
-build/dev/ygo_core_probe --max-steps 1000 --output artifacts/probe-trace.jsonl
+build/dev-windows/ygo_core_probe.exe --max-steps 1000 --output artifacts/probe-trace.jsonl
 ```
 
 The probe exits nonzero on an unsupported interactive message. The deliberate
 diagnostic path is:
 
 ```text
-build/dev/ygo_core_probe --force-unsupported
+build/dev-windows/ygo_core_probe.exe --force-unsupported
 ```
 
 The output contains the message type, raw-message hash, step, player, bundle,

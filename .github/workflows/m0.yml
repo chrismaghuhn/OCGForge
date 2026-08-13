@@ -6,15 +6,17 @@ on:
 
 jobs:
   m0:
-    runs-on: ubuntu-24.04
+    runs-on: windows-latest
     steps:
       - name: Check out project
         uses: actions/checkout@v4
 
-      - name: Install native build tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install --yes ninja-build
+      - name: Enable MSVC developer environment
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Install Ninja
+        shell: pwsh
+        run: choco install ninja --no-progress --yes
 
       - name: Verify Python
         uses: actions/setup-python@v5
@@ -22,46 +24,45 @@ jobs:
           python-version: "3.11"
 
       - name: Fetch exact rules bundle
-        run: |
-          python tools/fetch_rules_bundle.py \
-            --lock third_party/rules_bundle.lock.json \
-            --cache .cache/rules_bundle
+        shell: pwsh
+        run: python tools/fetch_rules_bundle.py --lock third_party/rules_bundle.lock.json --cache .cache/rules_bundle
 
       - name: Verify exact rules bundle
-        run: |
-          python tools/verify_rules_bundle.py \
-            --lock third_party/rules_bundle.lock.json \
-            --cache .cache/rules_bundle
+        shell: pwsh
+        run: python tools/verify_rules_bundle.py --lock third_party/rules_bundle.lock.json --cache .cache/rules_bundle
 
       - name: Run rules-bundle unit tests
+        shell: pwsh
         run: python -m unittest discover -s tests/python -v
 
       - name: Configure
-        run: cmake --preset dev
+        shell: pwsh
+        run: cmake --preset dev-windows
 
       - name: Build
-        run: cmake --build --preset dev --parallel
+        shell: pwsh
+        run: cmake --build --preset dev-windows --parallel
 
       - name: Run CTest conformance
-        run: ctest --preset dev
+        shell: pwsh
+        run: ctest --preset dev-windows --output-on-failure
 
       - name: Run controlled duel smoke test
+        shell: pwsh
         run: |
-          mkdir --parents artifacts
-          build/dev/ygo_core_probe \
-            --max-steps 1000 \
-            --output artifacts/controlled-duel-trace.jsonl
+          New-Item -ItemType Directory -Force artifacts | Out-Null
+          .\build\dev-windows\ygo_core_probe.exe --max-steps 1000 --output artifacts\controlled-duel-trace.jsonl
 
       - name: Run independent-process determinism test
-        run: |
-          python tests/determinism/determinism_test.py \
-            --probe build/dev/ygo_core_probe
+        shell: pwsh
+        run: python tests/determinism/determinism_test.py --probe build/dev-windows/ygo_core_probe.exe
 
       - name: Run hidden-information test
-        run: ctest --test-dir build/dev --output-on-failure \
-          --tests-regex 'player_view_test'
+        shell: pwsh
+        run: ctest --test-dir build/dev-windows --output-on-failure --tests-regex player_view_test
 
       - name: Check generated lock artifacts
+        shell: pwsh
         run: |
           git diff --check
           git diff --exit-code -- third_party/rules_bundle.lock.json
@@ -74,6 +75,6 @@ jobs:
           if-no-files-found: ignore
           path: |
             artifacts/*.jsonl
-            build/dev/CMakeFiles/CMakeOutput.log
-            build/dev/CMakeFiles/CMakeError.log
-            build/dev/Testing/Temporary/LastTest.log
+            build/dev-windows/CMakeFiles/CMakeOutput.log
+            build/dev-windows/CMakeFiles/CMakeError.log
+            build/dev-windows/Testing/Temporary/LastTest.log

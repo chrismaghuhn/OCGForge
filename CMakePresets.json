@@ -2,20 +2,20 @@
   "version": 6,
   "configurePresets": [
     {
-      "name": "dev",
-      "displayName": "M0 development",
+      "name": "dev-windows",
+      "displayName": "M0 Windows native development",
       "generator": "Ninja",
-      "binaryDir": "${sourceDir}/build/dev",
+      "binaryDir": "${sourceDir}/build/dev-windows",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
         "M0_AUTO_FETCH_RULES": "ON"
       }
     },
     {
-      "name": "release",
-      "displayName": "M0 release verification",
-      "inherits": "dev",
-      "binaryDir": "${sourceDir}/build/release",
+      "name": "release-windows",
+      "displayName": "M0 Windows native release verification",
+      "inherits": "dev-windows",
+      "binaryDir": "${sourceDir}/build/release-windows",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release"
       }
@@ -35,12 +35,12 @@
   ],
   "buildPresets": [
     {
-      "name": "dev",
-      "configurePreset": "dev"
+      "name": "dev-windows",
+      "configurePreset": "dev-windows"
     },
     {
-      "name": "release",
-      "configurePreset": "release"
+      "name": "release-windows",
+      "configurePreset": "release-windows"
     },
     {
       "name": "dev-windows-zig",
@@ -49,15 +49,15 @@
   ],
   "testPresets": [
     {
-      "name": "dev",
-      "configurePreset": "dev",
+      "name": "dev-windows",
+      "configurePreset": "dev-windows",
       "output": {
         "outputOnFailure": true
       }
     },
     {
-      "name": "release",
-      "configurePreset": "release",
+      "name": "release-windows",
+      "configurePreset": "release-windows",
       "output": {
         "outputOnFailure": true
       }
