@@ -172,8 +172,6 @@ ygo::trace::TraceManifest manifest(const ygo::core::CoreHost& host,
 #endif
 #if defined(_WIN32)
     result.platform_identity = "windows";
-#elif defined(__linux__)
-    result.platform_identity = "linux";
 #else
     result.platform_identity = "unknown";
 #endif

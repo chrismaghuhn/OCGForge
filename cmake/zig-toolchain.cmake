@@ -1,6 +1,6 @@
 # Optional local Windows fallback used when a native MSVC/LLVM toolchain is
-# unavailable. Linux CI uses the host C/C++ compiler and does not use this
-# file. The Zig archive is downloaded into the ignored repository-local cache.
+# unavailable. The Zig archive is downloaded into the ignored repository-local
+# cache.
 set(CMAKE_C_COMPILER "${CMAKE_CURRENT_LIST_DIR}/../tools/zig-cc.cmd" CACHE FILEPATH "" FORCE)
 set(CMAKE_CXX_COMPILER "${CMAKE_CURRENT_LIST_DIR}/../tools/zig-cxx.cmd" CACHE FILEPATH "" FORCE)
 set(CMAKE_AR "${CMAKE_CURRENT_LIST_DIR}/../tools/zig-ar.cmd" CACHE FILEPATH "" FORCE)
