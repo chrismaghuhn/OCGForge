@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 
+#include "ygo/observation/player_observation.hpp"
 #include "ygo/protocol/decision_request.hpp"
 
 namespace ygo::trace {
@@ -43,6 +44,9 @@ struct TraceStep {
     std::string selected_semantic_key;
     std::string selected_response_sha256;
     std::string public_state_hash;
+    std::uint8_t perspective_player = 255;
+    std::string observation_schema;
+    std::string observation_hash;
     std::string decision_id;
     std::string continuation_id;
     std::uint32_t continuation_step = 0;
@@ -72,5 +76,8 @@ std::string semantic_gameplay_hash(const EngineTrace& trace);
 TraceStep make_decision_step(std::uint32_t step_index, const std::vector<std::uint8_t>& raw_message,
                              const ygo::protocol::DecisionRequest& request,
                              const std::string& public_state_hash);
+
+void attach_observation_metadata(TraceStep& step,
+                                 const ygo::observation::PlayerObservation& observation);
 
 }  // namespace ygo::trace

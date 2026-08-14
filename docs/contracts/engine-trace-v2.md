@@ -21,6 +21,22 @@ The v2 JSON field `complete_candidate_count` is the trace contract's complete
 `ordered_candidate_semantic_keys` for every decision record. The legal domain
 is never truncated to the immediate candidate count or to a fixed cap.
 
+Each decision record also carries the perspective-safe observation boundary:
+
+```json
+{
+  "perspective_player": 0,
+  "observation_schema": "ygo.player_observation.v1",
+  "observation_hash": "..."
+}
+```
+
+The hash is the canonical `PlayerObservation` hash for that decision and is
+not a hash of raw omniscient engine state. The complete candidate list remains
+represented by ordered semantic keys in the trace; hidden card passcodes,
+deck order, query bytes, and private diagnostic state are not appended to the
+training-safe trace.
+
 The final `FINISH`, `CANCEL`, atomic action, or completed amount allocation has
 `engine_advanced=true` and exactly one `final_engine_response_hash`. The host
 then submits that response once and resumes the pinned core. `decision_index`

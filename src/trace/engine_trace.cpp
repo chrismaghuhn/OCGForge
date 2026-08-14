@@ -131,6 +131,13 @@ TraceStep make_decision_step(std::uint32_t step_index, const std::vector<std::ui
     return step;
 }
 
+void attach_observation_metadata(TraceStep& step,
+                                 const ygo::observation::PlayerObservation& observation) {
+    step.perspective_player = observation.perspective_player;
+    step.observation_schema = observation.schema_version;
+    step.observation_hash = observation.observation_hash;
+}
+
 std::string canonical_trace_jsonl(const EngineTrace& trace) {
     std::ostringstream out;
     const auto& manifest = trace.manifest;
@@ -223,6 +230,14 @@ std::string canonical_trace_jsonl_v2(const EngineTrace& trace) {
         write_nullable_string(out, step.final_engine_response_hash);
         out << ",\"ordered_candidate_semantic_keys\":";
         write_string_array(out, step.ordered_candidate_semantic_keys);
+        out << ",\"observation_hash\":" << json_escape(step.observation_hash)
+            << ",\"observation_schema\":" << json_escape(step.observation_schema)
+            << ",\"perspective_player\":";
+        if (step.perspective_player == 255) {
+            out << "null";
+        } else {
+            out << static_cast<unsigned>(step.perspective_player);
+        }
         out << ",\"player_to_act\":" << static_cast<unsigned>(step.player_to_act)
             << ",\"peak_candidate_count\":" << step.peak_candidate_count
             << ",\"public_state_hash\":" << json_escape(step.public_state_hash)

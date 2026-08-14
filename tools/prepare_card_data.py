@@ -8,6 +8,10 @@ import sqlite3
 from pathlib import Path
 
 
+TYPE_LINK = 0x04000000
+TYPE_PENDULUM = 0x01000000
+
+
 def read_codes(paths: list[Path]) -> list[int]:
     codes: list[int] = []
     for path in paths:
@@ -41,9 +45,15 @@ def main() -> int:
     with args.output.open("w", encoding="utf-8", newline="\n") as stream:
         stream.write("# code|alias|setcode|type|level|attribute|race|atk|def|lscale|rscale|link_marker\n")
         for code, alias, setcode, card_type, level, attribute, race, atk, defense in rows:
+            raw_level = int(level)
+            decoded_level = raw_level & 0xFF
+            lscale = (raw_level >> 16) & 0xFF if card_type & TYPE_PENDULUM else 0
+            rscale = (raw_level >> 24) & 0xFF if card_type & TYPE_PENDULUM else 0
+            link_marker = int(defense) if card_type & TYPE_LINK else 0
+            decoded_defense = 0 if card_type & TYPE_LINK else int(defense)
             stream.write(
-                f"{code}|{alias}|{setcode}|{card_type}|{level}|{attribute}|{race}|"
-                f"{atk}|{defense}|0|0|0\n"
+                f"{code}|{alias}|{setcode}|{card_type}|{decoded_level}|{attribute}|{race}|"
+                f"{atk}|{decoded_defense}|{lscale}|{rscale}|{link_marker}\n"
             )
     return 0
 

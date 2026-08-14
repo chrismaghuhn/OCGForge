@@ -13,6 +13,9 @@
 #include "ocgapi_constants.h"
 #include "ygo/core/core_error.hpp"
 #include "ygo/core/core_host.hpp"
+#include "ygo/observation/decision_integration.hpp"
+#include "ygo/observation/observation_builder.hpp"
+#include "ygo/observation/observation_session.hpp"
 #include "ygo/protocol/message_decoder.hpp"
 #include "ygo/protocol/protocol_error.hpp"
 #include "ygo/trace/engine_trace.hpp"
@@ -258,6 +261,11 @@ int run(const Arguments& arguments) {
     host.load_deck(1, deck_b);
     host.start_duel();
 
+    ygo::observation::ObservationSession observation_sessions[] = {
+        ygo::observation::ObservationSession(0, static_cast<std::uint32_t>(config.duel_flags)),
+        ygo::observation::ObservationSession(1, static_cast<std::uint32_t>(config.duel_flags)),
+    };
+
     ygo::trace::EngineTrace trace;
     trace.manifest = manifest(host, deck_a, deck_b, "m0.deterministic_priority.seeded_tie.v1");
     trace.manifest.trace_schema_version = "ygo.engine_trace.v2";
@@ -278,6 +286,8 @@ int run(const Arguments& arguments) {
     std::uint64_t response_build_time_us_max = 0;
     for (std::uint32_t index = 0; index < arguments.max_steps; ++index) {
         const auto result = host.process();
+        observation_sessions[0].ingest(result.message, index);
+        observation_sessions[1].ingest(result.message, index);
         try {
             const auto decoded = ygo::protocol::decode_messages(result.message, index);
             if (decoded.retry) {
@@ -291,6 +301,15 @@ int run(const Arguments& arguments) {
                 terminal.raw_message_length = static_cast<std::uint32_t>(result.message.size());
                 terminal.raw_message_sha256 = ygo::trace::sha256_bytes(result.message);
                 terminal.public_state_hash = public_state_hash(host, 0);
+                ygo::observation::ObservationBuildConfig observation_config;
+                observation_config.decision_index = decision_index;
+                observation_config.engine_step_index = index;
+                observation_config.visible_events = observation_sessions[0].visible_events();
+                observation_config.knowledge.own_decklist_known = true;
+                observation_config.own_deck.known = true;
+                observation_config.own_deck.main_deck = deck_a.main_deck;
+                const auto observation = ygo::observation::build_player_observation(host, 0, observation_config);
+                ygo::trace::attach_observation_metadata(terminal, observation);
                 terminal.engine_advanced = true;
                 terminal.terminal = true;
                 terminal.winner = decoded.winner;
@@ -310,8 +329,19 @@ int run(const Arguments& arguments) {
                 ygo::protocol::validate_candidate_set(request);
                 const auto& candidate = choose_candidate(request, config.seed);
                 const auto& selected = ygo::protocol::select_candidate(request, candidate.semantic_key);
+                ygo::observation::ObservationBuildConfig observation_config;
+                observation_config.decision_index = decision_index;
+                observation_config.engine_step_index = request.engine_step_index;
+                observation_config.visible_events = observation_sessions[request.player].visible_events();
+                observation_config.knowledge.own_decklist_known = true;
+                observation_config.own_deck.known = true;
+                observation_config.own_deck.main_deck = request.player == 0 ? deck_a.main_deck : deck_b.main_deck;
+                auto observation = ygo::observation::build_player_observation(host, request.player,
+                                                                               observation_config);
+                ygo::observation::attach_decision_context(observation, request);
                 auto step = ygo::trace::make_decision_step(index, result.message, request,
                                                            public_state_hash(host, request.player));
+                ygo::trace::attach_observation_metadata(step, observation);
                 step.decision_index = decision_index++;
                 step.selected_semantic_key = selected.semantic_key;
                 if (request.continuation.has_value()) {

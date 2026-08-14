@@ -3,6 +3,7 @@
 #include <array>
 #include <cstring>
 #include <fstream>
+#include <iterator>
 #include <memory>
 #include <string>
 #include <utility>
@@ -136,6 +137,19 @@ void CoreHost::load_fixture_card(std::uint8_t team, std::uint32_t code, std::uin
     throw_if_callback_error("OCG_DuelNewCard");
 }
 
+void CoreHost::load_fixture_script(const std::filesystem::path& path) {
+    std::ifstream stream(path, std::ios::binary);
+    if (!stream) {
+        throw CoreError(CoreErrorCode::Callback, "OCG_LoadScript", "cannot open fixture script: " + path.string());
+    }
+    const std::vector<char> bytes((std::istreambuf_iterator<char>(stream)), std::istreambuf_iterator<char>());
+    const auto name = path.filename().string();
+    if (OCG_LoadScript(impl_->duel, bytes.data(), static_cast<std::uint32_t>(bytes.size()), name.c_str()) == 0) {
+        throw CoreError(CoreErrorCode::Callback, "OCG_LoadScript", "fixture script rejected: " + path.string());
+    }
+    throw_if_callback_error("OCG_LoadScript");
+}
+
 void CoreHost::start_duel() {
     OCG_StartDuel(impl_->duel);
     throw_if_callback_error("OCG_StartDuel");
@@ -193,6 +207,10 @@ std::vector<std::uint8_t> CoreHost::query_field() const {
         throw CoreError(CoreErrorCode::Query, "OCG_DuelQueryField", "null result with nonzero length");
     }
     return raw == nullptr ? std::vector<std::uint8_t>{} : std::vector<std::uint8_t>(raw, raw + length);
+}
+
+std::optional<StaticCardData> CoreHost::static_card_data(std::uint32_t code) const {
+    return impl_->card_data.snapshot(code);
 }
 
 }  // namespace ygo::core

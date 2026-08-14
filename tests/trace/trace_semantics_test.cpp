@@ -41,6 +41,9 @@ ygo::trace::EngineTrace make_trace(const std::string& raw_hash, const std::strin
     step.selected_response_sha256 = response_hash;
     step.final_engine_response_hash = response_hash;
     step.public_state_hash = "public-state";
+    step.perspective_player = 0;
+    step.observation_schema = "ygo.player_observation.v1";
+    step.observation_hash = "observation-hash";
     step.decision_id = "raw-derived-decision-id" + raw_hash;
     step.continuation_id = "cont-id";
     step.continuation_state_hash = "continuation-state";
@@ -72,6 +75,10 @@ int run() {
                 serialized.find("\"peak_candidate_count\":2") != std::string::npos &&
                 serialized.find("\"terminal_solution_count\":1") != std::string::npos,
             "v2 trace serializer omitted continuation diagnostics");
+    require(serialized.find("\"observation_schema\":\"ygo.player_observation.v1\"") != std::string::npos &&
+                serialized.find("\"observation_hash\":\"observation-hash\"") != std::string::npos &&
+                serialized.find("\"perspective_player\":0") != std::string::npos,
+            "v2 trace serializer omitted perspective-safe observation metadata");
     auto intermediate = first;
     intermediate.steps.front().engine_advanced = false;
     intermediate.steps.front().selected_response_sha256.clear();

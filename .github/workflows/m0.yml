@@ -39,6 +39,10 @@ jobs:
         shell: pwsh
         run: python tests/protocol/decision_coverage_test.py
 
+      - name: Verify M2 observation coverage inventories
+        shell: pwsh
+        run: python tests/observation/observation_coverage_test.py
+
       - name: Configure
         shell: pwsh
         run: cmake --preset dev-windows
@@ -64,6 +68,14 @@ jobs:
       - name: Run hidden-information test
         shell: pwsh
         run: ctest --test-dir build/dev-windows --output-on-failure --tests-regex player_view_test
+
+      - name: Run M2 observation probe determinism
+        shell: pwsh
+        run: |
+          .\build\dev-windows\ygo_observation_probe.exe --fixture m2 --seed 123 --player 0 --output artifacts\m2-observation-a.json
+          .\build\dev-windows\ygo_observation_probe.exe --fixture m2 --seed 123 --player 0 --output artifacts\m2-observation-b.json
+          if ((Get-FileHash artifacts\m2-observation-a.json).Hash -ne (Get-FileHash artifacts\m2-observation-b.json).Hash) { throw "same-seed player-0 observations differ" }
+          .\build\dev-windows\ygo_observation_probe.exe --fixture m2 --seed 123 --player 1 --output artifacts\m2-observation-player1.json
 
       - name: Check generated lock artifacts
         shell: pwsh

@@ -33,6 +33,30 @@ complete semantic-key ordering for normal-summon ties and applies the first
 seed word only within that tie, so seed sensitivity is explicit without relying
 on pointer order, hash-map iteration, wall-clock time, or thread scheduling.
 
+## M2 player observation
+
+M2 adds a deterministic, perspective-safe `PlayerObservation` contract for
+zones, visible entities, relationships, mechanics state, chain/event history,
+decision context, and canonical observation hashes. Hidden hand, deck,
+face-down, Extra Deck, and knowledge-destroying transitions fail closed rather
+than exposing raw engine state. The observation probe is
+`build/dev-windows/ygo_observation_probe.exe` (or the equivalent
+`build/windows-zig` path).
+
+The pinned public OCG API exposes Xyz material counts and the parent query's
+aggregate ordered material-code vector, but it does not return an individual
+per-material query record or perspective-specific material visibility state.
+OCGForge therefore retains deterministic redacted overlay slots and typed
+`XYZ_MATERIAL` relationships without projecting material identities. This is a
+confirmed pinned-engine API limitation, not a private-core workaround or a
+missing OCGForge feature. See
+[M2.1 Xyz API investigation](docs/observation/M2_1_XYZ_API_INVESTIGATION.md)
+and the [player observation contract](docs/contracts/player-observation-v1.md).
+
+The current local M2 verification is 34/34 CTest tests and 3/3 Python tests.
+The hosted Windows workflow remains the repository integration gate and runs
+on pushes and pull requests.
+
 ## Reproducible rules bundle
 
 The exact runtime inputs and the deterministic `bundle_id` are recorded in

@@ -69,6 +69,31 @@ void CardDataStore::read(std::uint32_t code, OCG_CardData* output) {
     *output = it->second.data;
 }
 
+std::optional<StaticCardData> CardDataStore::snapshot(std::uint32_t code) const {
+    const auto it = records_.find(code);
+    if (it == records_.end()) {
+        return std::nullopt;
+    }
+    StaticCardData result;
+    result.code = it->second.data.code;
+    result.alias = it->second.data.alias;
+    result.type = it->second.data.type;
+    result.level = it->second.data.level;
+    result.attribute = it->second.data.attribute;
+    result.race = it->second.data.race;
+    result.attack = it->second.data.attack;
+    result.defense = it->second.data.defense;
+    result.left_scale = it->second.data.lscale;
+    result.right_scale = it->second.data.rscale;
+    result.link_marker = it->second.data.link_marker;
+    for (const auto setcode : it->second.setcodes) {
+        if (setcode != 0) {
+            result.setcodes.push_back(setcode);
+        }
+    }
+    return result;
+}
+
 void card_data_callback(void* payload, std::uint32_t code, OCG_CardData* output) {
     auto* context = static_cast<CardDataCallbackContext*>(payload);
     try {

@@ -22,6 +22,7 @@ add_custom_command(
             --deck "${CMAKE_SOURCE_DIR}/fixtures/decks/m1_tribute_a.deck"
             --deck "${CMAKE_SOURCE_DIR}/fixtures/decks/m1_tribute_b.deck"
             --deck "${CMAKE_SOURCE_DIR}/fixtures/m1_engine/cards.deck"
+            --deck "${CMAKE_SOURCE_DIR}/fixtures/m2_cards.deck"
     DEPENDS
         "${CMAKE_SOURCE_DIR}/tools/prepare_card_data.py"
         "${M0_BABELCDB_DIR}/cards.cdb"
@@ -30,6 +31,7 @@ add_custom_command(
         "${CMAKE_SOURCE_DIR}/fixtures/decks/m1_tribute_a.deck"
         "${CMAKE_SOURCE_DIR}/fixtures/decks/m1_tribute_b.deck"
         "${CMAKE_SOURCE_DIR}/fixtures/m1_engine/cards.deck"
+        "${CMAKE_SOURCE_DIR}/fixtures/m2_cards.deck"
     VERBATIM
 )
 add_custom_target(m0_fixture_data DEPENDS "${M0_CARD_DATA_TSV}")
@@ -107,6 +109,14 @@ add_library(ygo_m0 STATIC
     src/protocol/response_builder.cpp
     src/trace/engine_trace.cpp
     src/trace/sha256.cpp
+    src/observation/query_decoder.cpp
+    src/observation/serialization.cpp
+    src/observation/card_projection.cpp
+    src/observation/observation_builder.cpp
+    src/observation/observation_session.cpp
+    src/observation/event_projection.cpp
+    src/observation/decision_integration.cpp
+    src/observation/zone_projection.cpp
     src/view/player_view.cpp
 )
 add_dependencies(ygo_m0 m0_fixture_data)
@@ -133,6 +143,15 @@ target_compile_definitions(ygo_core_probe PRIVATE
     YGO_M0_PLAYER_A="${CMAKE_SOURCE_DIR}/fixtures/decks/player_a.deck"
     YGO_M0_PLAYER_B="${CMAKE_SOURCE_DIR}/fixtures/decks/player_b.deck"
     YGO_M0_CARDSCRIPTS="${M0_CARDSCRIPTS_DIR}"
+)
+
+add_executable(ygo_observation_probe tools/ygo_observation_probe/main.cpp)
+target_link_libraries(ygo_observation_probe PRIVATE ygo_m0)
+target_compile_definitions(ygo_observation_probe PRIVATE
+    YGO_M2_PLAYER_A="${CMAKE_SOURCE_DIR}/fixtures/decks/player_a.deck"
+    YGO_M2_PLAYER_B="${CMAKE_SOURCE_DIR}/fixtures/decks/player_b.deck"
+    YGO_M2_CARDSCRIPTS="${M0_CARDSCRIPTS_DIR}"
+    YGO_M2_SETUP="${CMAKE_SOURCE_DIR}/fixtures/m2_setup.lua"
 )
 
 enable_testing()
@@ -167,6 +186,79 @@ add_test(NAME trace_semantics_test COMMAND trace_semantics_test)
 add_executable(player_view_test tests/privacy/player_view_test.cpp)
 target_link_libraries(player_view_test PRIVATE ygo_m0)
 add_test(NAME player_view_test COMMAND player_view_test)
+
+add_executable(observation_contract_test tests/observation/observation_contract_test.cpp)
+target_link_libraries(observation_contract_test PRIVATE ygo_m0)
+add_test(NAME observation_contract_test COMMAND observation_contract_test)
+
+add_executable(card_catalog_test tests/observation/card_catalog_test.cpp)
+target_link_libraries(card_catalog_test PRIVATE ygo_m0)
+target_compile_definitions(card_catalog_test PRIVATE
+    YGO_M2_CARDSCRIPTS="${M0_CARDSCRIPTS_DIR}"
+)
+add_test(NAME card_catalog_test COMMAND card_catalog_test)
+
+add_executable(query_decoder_test tests/observation/query_decoder_test.cpp)
+target_link_libraries(query_decoder_test PRIVATE ygo_m0)
+target_include_directories(query_decoder_test PRIVATE "${CMAKE_SOURCE_DIR}/src/observation")
+add_test(NAME query_decoder_test COMMAND query_decoder_test)
+
+add_executable(zone_projection_test tests/observation/zone_projection_test.cpp)
+target_link_libraries(zone_projection_test PRIVATE ygo_m0)
+target_include_directories(zone_projection_test PRIVATE "${CMAKE_SOURCE_DIR}/src/observation")
+add_test(NAME zone_projection_test COMMAND zone_projection_test)
+
+add_executable(privacy_projection_test tests/observation/privacy_projection_test.cpp)
+target_link_libraries(privacy_projection_test PRIVATE ygo_m0)
+target_include_directories(privacy_projection_test PRIVATE "${CMAKE_SOURCE_DIR}/src/observation")
+add_test(NAME privacy_projection_test COMMAND privacy_projection_test)
+
+add_executable(observation_builder_test tests/observation/observation_builder_test.cpp)
+target_link_libraries(observation_builder_test PRIVATE ygo_m0)
+target_compile_definitions(observation_builder_test PRIVATE
+    YGO_M2_PLAYER_A="${CMAKE_SOURCE_DIR}/fixtures/decks/player_a.deck"
+    YGO_M2_PLAYER_B="${CMAKE_SOURCE_DIR}/fixtures/decks/player_b.deck"
+    YGO_M2_CARDSCRIPTS="${M0_CARDSCRIPTS_DIR}"
+)
+add_test(NAME observation_builder_test COMMAND observation_builder_test)
+
+add_executable(mechanics_projection_test tests/observation/mechanics_projection_test.cpp)
+target_link_libraries(mechanics_projection_test PRIVATE ygo_m0)
+target_include_directories(mechanics_projection_test PRIVATE "${CMAKE_SOURCE_DIR}/src/observation")
+target_compile_definitions(mechanics_projection_test PRIVATE
+    YGO_M2_PLAYER_A="${CMAKE_SOURCE_DIR}/fixtures/decks/player_a.deck"
+    YGO_M2_PLAYER_B="${CMAKE_SOURCE_DIR}/fixtures/decks/player_b.deck"
+    YGO_M2_CARDSCRIPTS="${M0_CARDSCRIPTS_DIR}"
+    YGO_M2_SETUP="${CMAKE_SOURCE_DIR}/fixtures/m2_setup.lua"
+)
+add_test(NAME mechanics_projection_test COMMAND mechanics_projection_test)
+
+add_executable(m2_1_xyz_api_test tests/observation/m2_1_xyz_api_test.cpp)
+target_link_libraries(m2_1_xyz_api_test PRIVATE ygo_m0)
+target_include_directories(m2_1_xyz_api_test PRIVATE "${CMAKE_SOURCE_DIR}/src/observation")
+target_compile_definitions(m2_1_xyz_api_test PRIVATE
+    YGO_M2_PLAYER_A="${CMAKE_SOURCE_DIR}/fixtures/decks/player_a.deck"
+    YGO_M2_PLAYER_B="${CMAKE_SOURCE_DIR}/fixtures/decks/player_b.deck"
+    YGO_M2_CARDSCRIPTS="${M0_CARDSCRIPTS_DIR}"
+    YGO_M2_SETUP="${CMAKE_SOURCE_DIR}/fixtures/m2_setup.lua"
+    YGO_M2_SETUP_XYZ_A="${CMAKE_SOURCE_DIR}/fixtures/m2_1_setup_xyz_a.lua"
+    YGO_M2_SETUP_XYZ_B="${CMAKE_SOURCE_DIR}/fixtures/m2_1_setup_xyz_b.lua"
+)
+add_test(NAME m2_1_xyz_api_test COMMAND m2_1_xyz_api_test)
+
+add_executable(event_projection_test tests/observation/event_projection_test.cpp)
+target_link_libraries(event_projection_test PRIVATE ygo_m0)
+target_include_directories(event_projection_test PRIVATE "${CMAKE_SOURCE_DIR}/src/observation")
+add_test(NAME event_projection_test COMMAND event_projection_test)
+
+add_test(NAME observation_probe_test COMMAND ygo_observation_probe --fixture m2 --seed 123 --player 0)
+
+add_test(NAME observation_coverage_test
+         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tests/observation/observation_coverage_test.py")
+
+add_executable(decision_observation_test tests/observation/decision_observation_test.cpp)
+target_link_libraries(decision_observation_test PRIVATE ygo_m0)
+add_test(NAME decision_observation_test COMMAND decision_observation_test)
 
 add_executable(continuation_privacy_test tests/privacy/continuation_privacy_test.cpp)
 target_link_libraries(continuation_privacy_test PRIVATE ygo_m0)

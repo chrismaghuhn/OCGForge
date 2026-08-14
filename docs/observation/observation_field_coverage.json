@@ -1,0 +1,38 @@
+{
+  "schema": "ygo.player_observation.v1",
+  "authority": {
+    "rules_bundle_id": "6fbbd212ae4be2df36170dcbfcdf5c46aaaa0e3091cf815c2d0261fd01640ea4",
+    "core_api_version": "11.0"
+  },
+  "classifications": [
+    {"field": "perspective_player", "classification": "DERIVED", "source": "caller", "rationale": "Every projection is explicitly relative to player 0 or player 1."},
+    {"field": "globals.duel_flags", "classification": "EXPOSED_PUBLIC", "source": "OCG_DuelQueryField", "rationale": "Duel option flags determine semantic zone projection and are public configuration."},
+    {"field": "globals.life_points", "classification": "EXPOSED_PUBLIC", "source": "OCG_DuelQueryField", "rationale": "Current LP is public game state."},
+    {"field": "globals.player_to_act/turn_player/turn_count/phase", "classification": "DERIVED", "source": "ObservationSession and DecisionRequest", "rationale": "Decision player and perspective-filtered turn/phase events populate these values; query-only callers retain explicit null."},
+    {"field": "zones.MainDeck.total_count", "classification": "EXPOSED_PUBLIC", "source": "OCG_DuelQueryField", "rationale": "Deck count is visible while current entries and order are never queried into entities."},
+    {"field": "zones.MainDeck.order", "classification": "INTENTIONALLY_NOT_EXPOSED", "source": "privacy boundary", "rationale": "Current hidden Deck order is not a player-observable fact."},
+    {"field": "zones.Hand.total_count", "classification": "EXPOSED_PUBLIC", "source": "OCG_DuelQueryField", "rationale": "Hand size is public."},
+    {"field": "zones.Hand.entities.opponent", "classification": "REDACTED_WHEN_HIDDEN", "source": "OCG_DuelQueryLocation", "rationale": "Opponent hidden Hand entities are omitted; own private Hand entities remain available."},
+    {"field": "zones.ExtraDeck.total_count", "classification": "EXPOSED_PUBLIC", "source": "OCG_DuelQueryField", "rationale": "Extra Deck count is visible."},
+    {"field": "zones.ExtraDeck.entities.face_up", "classification": "EXPOSED_PUBLIC", "source": "OCG_DuelQueryLocation", "rationale": "Public face-up Extra Deck cards are projected."},
+    {"field": "zones.ExtraDeck.entities.face_down_opponent", "classification": "REDACTED_WHEN_HIDDEN", "source": "OCG_DuelQueryLocation", "rationale": "Opponent hidden Extra Deck identities are omitted."},
+    {"field": "QUERY_CODE", "classification": "REDACTED_WHEN_HIDDEN", "source": "OCG_QueryInfo", "rationale": "Passcode is projected only when ownership/public/face-up semantics prove identity visibility."},
+    {"field": "QUERY_POSITION", "classification": "EXPOSED_PUBLIC", "source": "OCG_QueryInfo", "rationale": "Position and safe slot structure remain observable; hidden identity is not inferred from it."},
+    {"field": "QUERY_ALIAS", "classification": "INTENTIONALLY_NOT_EXPOSED", "source": "OCG_QueryInfo", "rationale": "Alias is not required for environment correctness and is absent from the semantic entity."},
+    {"field": "QUERY_TYPE/LEVEL/RANK/ATTRIBUTE/RACE/ATTACK/DEFENSE/BASE_ATTACK/BASE_DEFENSE", "classification": "REDACTED_WHEN_HIDDEN", "source": "OCG_QueryInfo plus CardProjection", "rationale": "Current and printed identity-derived properties are absent for hidden cards; Xyz rank and Link DEF semantics are typed."},
+    {"field": "QUERY_LSCALE/QUERY_RSCALE", "classification": "REDACTED_WHEN_HIDDEN", "source": "OCG_QueryInfo", "rationale": "Pendulum scales are current properties only when identity/features are visible."},
+    {"field": "QUERY_LINK", "classification": "REDACTED_WHEN_HIDDEN", "source": "OCG_QueryInfo", "rationale": "Link rating and marker bits are typed and exposed only for visible identity/features."},
+    {"field": "QUERY_COUNTERS", "classification": "EXPOSED_PUBLIC", "source": "OCG_QueryInfo", "rationale": "Typed counters are projected with type/count when the card is visible."},
+    {"field": "QUERY_OWNER", "classification": "EXPOSED_PUBLIC", "source": "OCG_QueryInfo", "rationale": "Ownership/controller relation is structural state and does not identify a hidden passcode."},
+    {"field": "QUERY_STATUS", "classification": "REDACTED_WHEN_HIDDEN", "source": "OCG_QueryInfo", "rationale": "Status is current card state and is withheld with hidden feature sets."},
+    {"field": "QUERY_IS_PUBLIC/QUERY_IS_HIDDEN/QUERY_COVER", "classification": "DERIVED", "source": "OCG_QueryInfo", "rationale": "These flags are used as visibility gates and are not copied as raw engine fields."},
+    {"field": "QUERY_EQUIP_CARD/QUERY_TARGET_CARD", "classification": "DERIVED", "source": "OCG_QueryInfo", "rationale": "Relationships are emitted only when both safe locators resolve."},
+    {"field": "QUERY_OVERLAY_CARD.count", "classification": "EXPOSED_PUBLIC", "source": "OCG_QueryInfo", "rationale": "Xyz material count is available from the parent query."},
+    {"field": "QUERY_OVERLAY_CARD.material_identity", "classification": "OUT_OF_SCOPE_M2", "source": "pinned public OCG API limitation confirmed by M2.1", "rationale": "Parent count/raw-code aggregate is available, but OCG_DuelQuery and OCG_DuelQueryLocation return no individual material record; M2 emits redacted material entities and explicit edges."},
+    {"field": "QUERY_REASON/QUERY_REASON_CARD", "classification": "INTENTIONALLY_NOT_EXPOSED", "source": "OCG_QueryInfo", "rationale": "Raw engine causality and related hidden-card locations are not needed for the player snapshot."},
+    {"field": "match_context.own_deck/opponent_deck", "classification": "STATIC_CONTEXT", "source": "ObservationBuildConfig", "rationale": "Configured composition knowledge is sorted and separated from current Deck order; opponent knowledge defaults false."},
+    {"field": "chain.links", "classification": "DERIVED", "source": "OCG_DuelQueryField plus visible relationships", "rationale": "Chain index, activating player, activation zone, visible source, effect description, and visible targets are structured without hidden source identity."},
+    {"field": "decision_context", "classification": "DERIVED", "source": "DecisionRequest", "rationale": "Only decision references and safe candidate locators are attached; complete candidates remain in DecisionRequest."},
+    {"field": "observation_hash", "classification": "DERIVED", "source": "canonical serialization", "rationale": "SHA-256 covers canonical perspective-safe bytes and excludes the stored hash itself."}
+  ]
+}

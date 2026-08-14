@@ -3,8 +3,10 @@
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <optional>
 #include <vector>
 
+#include "ygo/core/card_data.hpp"
 #include "ygo/core/rules_bundle.hpp"
 #include "ygo/core/seed_bundle.hpp"
 
@@ -39,6 +41,7 @@ public:
     void load_deck(std::uint8_t team, const FixtureDeck& deck);
     void load_fixture_card(std::uint8_t team, std::uint32_t code, std::uint32_t location,
                            std::uint32_t sequence, std::uint32_t position);
+    void load_fixture_script(const std::filesystem::path& path);
     void start_duel();
     ProcessResult process();
     void submit_response(const std::vector<std::uint8_t>& response);
@@ -47,6 +50,7 @@ public:
     std::vector<std::uint8_t> query(const OCG_QueryInfo& info) const;
     std::vector<std::uint8_t> query_location(const OCG_QueryInfo& info) const;
     std::vector<std::uint8_t> query_field() const;
+    std::optional<StaticCardData> static_card_data(std::uint32_t code) const;
 
     const CoreHostConfig& config() const noexcept { return config_; }
     std::size_t response_submission_count() const noexcept { return response_submission_count_; }

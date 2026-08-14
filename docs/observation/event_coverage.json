@@ -1,0 +1,32 @@
+{
+  "schema": "ygo.visible_event_coverage.v1",
+  "authority": {
+    "rules_bundle_id": "6fbbd212ae4be2df36170dcbfcdf5c46aaaa0e3091cf815c2d0261fd01640ea4",
+    "core_api_version": "11.0"
+  },
+  "families": [
+    {"message": "MSG_MOVE", "classification": "SUPPORTED", "projection": "CardMoved/CardDestroyed/CardBanished/CardReturned", "privacy": "identity only when face-up or explicitly proven; hidden Deck has no locator"},
+    {"message": "MSG_POS_CHANGE", "classification": "SUPPORTED", "projection": "PositionChanged", "privacy": "face-down identity/features are not copied"},
+    {"message": "MSG_SET", "classification": "SUPPORTED", "projection": "Set", "privacy": "passcode is withheld unless visibility is proven"},
+    {"message": "MSG_SUMMONING/MSG_SPSUMMONING/MSG_FLIPSUMMONING", "classification": "SUPPORTED", "projection": "Summoned", "privacy": "source identity follows the same boundary"},
+    {"message": "MSG_SUMMONED/MSG_SPSUMMONED/MSG_FLIPSUMMONED", "classification": "SUPPORTED", "projection": "Summoned", "privacy": "payload-free public event"},
+    {"message": "MSG_DRAW", "classification": "SUPPORTED", "projection": "Draw plus recipient-visible CardRevealed", "privacy": "opponent draw codes are not exposed"},
+    {"message": "MSG_CONFIRM_CARDS/MSG_CONFIRM_DECKTOP/MSG_CONFIRM_EXTRATOP", "classification": "SUPPORTED", "projection": "CardRevealed", "privacy": "only packet recipient receives passcode"},
+    {"message": "MSG_SHUFFLE_DECK/MSG_SHUFFLE_HAND/MSG_SHUFFLE_EXTRA", "classification": "SUPPORTED", "projection": "Shuffle plus RandomizationBoundary", "privacy": "embedded passcode list is discarded"},
+    {"message": "MSG_SHUFFLE_SET_CARD", "classification": "SUPPORTED", "projection": "Shuffle plus RandomizationBoundary", "privacy": "locations only; no card identities"},
+    {"message": "MSG_REVERSE_DECK", "classification": "SUPPORTED", "projection": "Shuffle plus RandomizationBoundary", "privacy": "no payload is interpreted as a player identity"},
+    {"message": "MSG_NEW_TURN/MSG_NEW_PHASE", "classification": "SUPPORTED", "projection": "TurnStarted/PhaseChanged", "privacy": "public timing facts"},
+    {"message": "MSG_LPUPDATE/MSG_DAMAGE/MSG_RECOVER", "classification": "SUPPORTED", "projection": "LifePointsChanged", "privacy": "public numeric amount"},
+    {"message": "MSG_CHAINING/MSG_CHAINED/MSG_CHAIN_SOLVING/MSG_CHAIN_SOLVED/MSG_CHAIN_END", "classification": "SUPPORTED", "projection": "ChainActivated/ChainResolved/ChainEnded", "privacy": "source code and effect metadata are retained only when source identity is visible"},
+    {"message": "MSG_EQUIP/MSG_UNEQUIP", "classification": "SUPPORTED", "projection": "Equipped/Unequipped", "privacy": "safe source/target locators only"},
+    {"message": "MSG_CARD_TARGET/MSG_CANCEL_TARGET/MSG_BECOME_TARGET", "classification": "SUPPORTED", "projection": "Targeted", "privacy": "safe target locators only"},
+    {"message": "MSG_ADD_COUNTER/MSG_REMOVE_COUNTER", "classification": "SUPPORTED", "projection": "CounterChanged", "privacy": "typed counter and visible slot"},
+    {"message": "MSG_WIN", "classification": "SUPPORTED", "projection": "Win", "privacy": "public terminal result"},
+    {"message": "MSG_START/MSG_UPDATE_DATA/MSG_UPDATE_CARD/MSG_WAITING/MSG_HINT", "classification": "NOT_NEEDED_FOR_M2_FIXTURES", "projection": "not copied", "privacy": "raw transport/UI payload is outside semantic history"},
+    {"message": "MSG_DECK_TOP/MSG_REFRESH_DECK/MSG_SWAP_GRAVE_DECK/MSG_TAG_SWAP", "classification": "DEFERRED", "projection": "not copied", "privacy": "requires additional pinned visibility/session semantics"},
+    {"message": "MSG_SWAP/MSG_FIELD_DISABLED/MSG_CARD_SELECTED/MSG_RANDOM_SELECTED/MSG_PAY_LPCOST", "classification": "DEFERRED", "projection": "not copied", "privacy": "not required by current M2 fixtures"},
+    {"message": "MSG_ATTACK/MSG_BATTLE/MSG_ATTACK_DISABLED/MSG_DAMAGE_STEP_START/MSG_DAMAGE_STEP_END", "classification": "DEFERRED", "projection": "not copied", "privacy": "combat event detail remains a later history slice"},
+    {"message": "MSG_TOSS_COIN/MSG_TOSS_DICE/MSG_HAND_RES/MSG_ANNOUNCE_*", "classification": "DEFERRED", "projection": "not copied", "privacy": "random-choice and announcement history is not needed by M2 fixtures"},
+    {"message": "MSG_CREATE_RELATION/MSG_RELEASE_RELATION/MSG_MISSED_EFFECT/MSG_CARD_HINT/MSG_CUSTOM_MSG", "classification": "PRIVATE_INTERNAL", "projection": "not copied", "privacy": "raw effect-engine relation or UI diagnostics are not model-facing events"}
+  ]
+}
