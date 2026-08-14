@@ -220,31 +220,38 @@ std::optional<ObservationLocator> find_locator(
 }
 
 std::optional<ObservationLocator> add_overlay_material(
-    PlayerObservation& observation, std::uint8_t controller,
-    std::uint32_t parent_sequence, std::uint32_t overlay_sequence, std::uint8_t perspective,
-    std::uint64_t duel_flags, std::map<EntityKey, ObservationLocator>& locator_index) {
+    PlayerObservation& observation, const ygo::core::CoreHost& host, std::uint8_t controller,
+    std::uint32_t parent_location, std::uint32_t parent_sequence, std::uint32_t overlay_sequence,
+    bool parent_identity_visible, std::map<EntityKey, ObservationLocator>& locator_index) {
+    OCG_QueryInfo info{};
+    info.flags = kCardQueryFlags;
+    info.con = controller;
+    info.loc = parent_location | LOCATION_OVERLAY;
+    info.seq = parent_sequence;
+    info.overlay_seq = overlay_sequence;
+    const auto bytes = host.query(info);
     detail::RawCardQuery query;
+    if (!bytes.empty()) {
+        query = detail::decode_card_query(bytes);
+    }
     detail::CardProjectionInput input;
     input.query = query;
-    input.owner = controller;
+    input.owner = query.owner.value_or(controller);
     input.controller = controller;
     input.zone = SemanticZone::Overlay;
     input.sequence = parent_sequence;
     input.overlay_sequence = overlay_sequence;
     input.locator = {player_prefix(controller) + ":OVERLAY:" + std::to_string(parent_sequence) + ":" +
                      std::to_string(overlay_sequence)};
-    // The pinned public overlay query exposes a count and raw material codes,
-    // but its per-material lookup returns no record. Keep the attachment
-    // graph while failing closed on identity/features until that visibility
-    // semantic is proven by a future pinned API.
-    input.identity_visible = false;
-    input.current_features_visible = false;
+    input.identity_visible = parent_identity_visible && query.code.has_value();
+    input.current_features_visible = input.identity_visible;
     input.sequence_visible = true;
+    if (input.identity_visible && query.code.has_value()) {
+        input.printed = host.static_card_data(*query.code);
+    }
     auto projected = detail::project_card(input);
     locator_index[entity_key(controller, SemanticZone::Overlay, parent_sequence, overlay_sequence)] = projected.locator;
     observation.entities.push_back(projected);
-    (void)perspective;
-    (void)duel_flags;
     return projected.locator;
 }
 
@@ -351,9 +358,11 @@ PlayerObservation build_player_observation(const ygo::core::CoreHost& host,
                 }
                 for (std::uint32_t overlay_sequence = 0;
                      overlay_sequence < query.overlay_codes.size(); ++overlay_sequence) {
-                    const auto material = add_overlay_material(observation, player, sequence,
-                                                               overlay_sequence, perspective_player,
-                                                               field.duel_options, locator_index);
+                    const auto material = add_overlay_material(observation, host, player, location, sequence,
+                                                               overlay_sequence,
+                                                               card_identity_visible(query, perspective_player, owner,
+                                                                                     projected_zone),
+                                                               locator_index);
                     if (material.has_value()) {
                         pending_relationships.push_back({RelationshipKind::XyzMaterial, *material, detail::RawLocation{
                                                                                                           player,

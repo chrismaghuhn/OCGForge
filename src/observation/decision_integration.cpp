@@ -26,8 +26,17 @@ std::optional<ObservationLocator> resolve_card(const PlayerObservation& observat
         if (entity.sequence.has_value() && *entity.sequence != sequence) {
             continue;
         }
-        if (code != 0 && (!entity.identity_known || entity.passcode.value_or(0) != code)) {
-            continue;
+        if (code != 0) {
+            if (entity.identity_known && entity.passcode.value_or(0) != code) {
+                continue;
+            }
+            if (!entity.identity_known) {
+                // The engine has disclosed this code in the legal candidate
+                // domain, but the privacy-safe field snapshot must remain
+                // redacted. Resolve the existing public locator without
+                // copying candidate identity into ObservedCard or its hash.
+                return entity.locator;
+            }
         }
         return entity.locator;
     }
@@ -74,11 +83,11 @@ void attach_decision_context(PlayerObservation& observation,
     observation.decision_context = std::move(context);
     observation.globals.player_to_act = request.player;
     for (const auto& candidate : request.candidates) {
-        if (candidate.source_card != 0) {
+        if (candidate.source_card != 0 && candidate.source_location != 0) {
             append_reference(observation, candidate.source_card, candidate.source_controller,
                              candidate.source_location, candidate.source_sequence);
         }
-        if (candidate.target_card != 0) {
+        if (candidate.target_card != 0 && candidate.target_location != 0) {
             append_reference(observation, candidate.target_card, candidate.target_controller,
                              candidate.target_location, candidate.target_sequence);
         }
@@ -90,12 +99,12 @@ void attach_decision_context(PlayerObservation& observation,
 
 bool candidate_observation_consistent(const PlayerObservation& observation,
                                       const ygo::protocol::ActionCandidate& candidate) {
-    if (candidate.source_card != 0 &&
+    if (candidate.source_card != 0 && candidate.source_location != 0 &&
         !card_reference_consistent(observation, candidate.source_card, candidate.source_controller,
                                    candidate.source_location, candidate.source_sequence)) {
         return false;
     }
-    if (candidate.target_card != 0 &&
+    if (candidate.target_card != 0 && candidate.target_location != 0 &&
         !card_reference_consistent(observation, candidate.target_card, candidate.target_controller,
                                    candidate.target_location, candidate.target_sequence)) {
         return false;

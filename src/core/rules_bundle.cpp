@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cctype>
 #include <cstddef>
 #include <cstdint>
 #include <fstream>
@@ -152,13 +153,51 @@ FixtureDeck load_fixture_deck(const std::filesystem::path& path) {
 
     FixtureDeck deck;
     std::string line;
+    const bool ydk_format = path.extension() == ".ydk";
+    enum class Section { None, Main, Extra, Side };
+    Section section = ydk_format ? Section::None : Section::Main;
     while (std::getline(stream, line)) {
-        const auto comment = line.find('#');
-        if (comment != std::string::npos) {
-            line.erase(comment);
+        while (!line.empty() && std::isspace(static_cast<unsigned char>(line.back())) != 0) {
+            line.pop_back();
         }
+        std::size_t first = 0;
+        while (first < line.size() && std::isspace(static_cast<unsigned char>(line[first])) != 0) {
+            ++first;
+        }
+        line.erase(0, first);
         if (line.empty()) {
             continue;
+        }
+        if (ydk_format) {
+            if (line == "#main") {
+                section = Section::Main;
+                continue;
+            }
+            if (line == "#extra") {
+                section = Section::Extra;
+                continue;
+            }
+            if (line == "!side") {
+                section = Section::Side;
+                continue;
+            }
+            if (line.front() == '#') {
+                continue;
+            }
+            if (section == Section::None) {
+                throw std::runtime_error("YDK card appears before a section: " + line);
+            }
+            if (section == Section::Side) {
+                throw std::runtime_error("fixture side deck must be empty: " + path.string());
+            }
+        } else {
+            const auto comment = line.find('#');
+            if (comment != std::string::npos) {
+                line.erase(comment);
+            }
+            if (line.empty()) {
+                continue;
+            }
         }
         std::uint32_t code = 0;
         std::stringstream parser(line);
@@ -166,7 +205,11 @@ FixtureDeck load_fixture_deck(const std::filesystem::path& path) {
         if (!parser || !parser.eof()) {
             throw std::runtime_error("invalid card passcode in fixture deck: " + line);
         }
-        deck.main_deck.push_back(code);
+        if (ydk_format && section == Section::Extra) {
+            deck.extra_deck.push_back(code);
+        } else {
+            deck.main_deck.push_back(code);
+        }
     }
     if (deck.main_deck.size() < 40) {
         throw std::runtime_error("fixture deck has fewer than 40 entries: " + path.string());

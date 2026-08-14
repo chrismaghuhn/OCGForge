@@ -1,0 +1,184 @@
+{
+  "api_capabilities": [
+    {
+      "behavior": "Existing loc=parent_location|LOCATION_OVERLAY, seq=parent_sequence, overlay_seq=material_index returns the requested public material; bounds fail closed.",
+      "capability": "INDIVIDUAL_XYZ_MATERIAL_QUERY",
+      "classification": "RESOLVED_BY_REPOSITORY_PATCHSET",
+      "evidence": [
+        "m35_xyz_material_query_test",
+        "m2_1_xyz_api_test",
+        "m3_fixture_test sg08_real",
+        "m3_fixture_test sg09_direct"
+      ],
+      "privacy": "Visible material identity is projected only under the existing parent visibility gate; paired hidden worlds remain equal and redacted."
+    },
+    {
+      "behavior": "OCG_DuelSetStartingPlayer accepts only 0 or 1 before OCG_StartDuel; default remains 0; invalid and post-start calls return failure.",
+      "capability": "START_PLAYER_SELECTION_CONTROL",
+      "classification": "RESOLVED_BY_REPOSITORY_PATCHSET",
+      "evidence": [
+        "m35_starting_player_api_test",
+        "m3 full-game matrix",
+        "m3 determinism matrix"
+      ],
+      "privacy": "No information projection or mid-duel turn mutation is introduced."
+    },
+    {
+      "behavior": "No general board-construction runtime API was added or required.",
+      "capability": "FIXTURE_RUNNER_PUBLIC_SETUP_SCOPE",
+      "classification": "OCGFORGE_TEST_INFRASTRUCTURE",
+      "evidence": [
+        "CoreHost::load_fixture_script",
+        "CoreHost::load_fixture_card"
+      ],
+      "privacy": "Future setup descriptors remain test-only and fail closed for hidden state."
+    }
+  ],
+  "bundle_identity": {
+    "changed": true,
+    "derivation": "SHA-256 of canonical rule_affecting_inputs including the ordered patchset id, names, and individual hashes",
+    "new_m3_5_bundle_id": "3adfe6b4cfe2c2805e50b389fc0eb4e70a3b0b6107436614d328fddc865e585f",
+    "old_m3_bundle_id": "ff8721aae1a17da6a72079e65ae75a05012c0c367b6f249651c1de713c1fbf91",
+    "pre_mr5_bundle_id": "6fbbd212ae4be2df36170dcbfcdf5c46aaaa0e3091cf815c2d0261fd01640ea4"
+  },
+  "canonical_environment": {
+    "babelcdb_commit": "89ad6837b0766a52984d8c715a7d5d4f8447946b",
+    "cardscripts_commit": "f337c87018ca723c1aded5143e616bb649555273",
+    "core_patchset_id": "ocgforge.ocgcore.api_hardening.v1",
+    "core_patchset_sha256": "6b5421b3a852085f48fa161a5ba1540f902aa00784a337694b21c9efc34f69bd",
+    "duel_flags": 190464,
+    "duel_mode_name": "DUEL_MODE_MR5",
+    "format_id": "TCG_ADVANCED_2026_05_18",
+    "ocg_api_version": "11.0",
+    "ocgcore_commit": "9a0c558c2d686542f7914a6d529fd7aa57746aed",
+    "rules_bundle_id": "3adfe6b4cfe2c2805e50b389fc0eb4e70a3b0b6107436614d328fddc865e585f"
+  },
+  "determinism": {
+    "bundle_id": "3adfe6b4cfe2c2805e50b389fc0eb4e70a3b0b6107436614d328fddc865e585f",
+    "crlf_replay": true,
+    "independent_process": true,
+    "partitions": {
+      "0": {
+        "action_replay_line_ending": "CRLF",
+        "crlf_semantic_replay_match": true,
+        "independent_process_match": true,
+        "independent_processes": 2,
+        "independent_trace": "artifacts\\m3\\canonical_mr5\\determinism\\start-0\\seed-2-independent.jsonl",
+        "replay_trace": "artifacts\\m3\\canonical_mr5\\determinism\\start-0\\seed-2-action-replay.jsonl",
+        "seed": 2,
+        "semantic_action_count": 612,
+        "semantic_action_reexecution_match": true,
+        "semantic_gameplay_hash": "e19349b22796b18eaf1fb35cf34b0b2c95cbb0ad36c161376c1d431dd9798320",
+        "source_trace": "artifacts\\m3\\canonical_mr5\\determinism\\start-0\\seed-2-source.jsonl",
+        "starting_player": 0,
+        "trace_hash": "afb6ee362c5cabf850c5ec4c7098a12981ce0d550be7658a28309090343457a8"
+      },
+      "1": {
+        "action_replay_line_ending": "CRLF",
+        "crlf_semantic_replay_match": true,
+        "independent_process_match": true,
+        "independent_processes": 2,
+        "independent_trace": "artifacts\\m3\\canonical_mr5\\determinism\\start-1\\seed-2-independent.jsonl",
+        "replay_trace": "artifacts\\m3\\canonical_mr5\\determinism\\start-1\\seed-2-action-replay.jsonl",
+        "seed": 2,
+        "semantic_action_count": 621,
+        "semantic_action_reexecution_match": true,
+        "semantic_gameplay_hash": "39df99786adc36af6c40aa6fc88f78c47947ea3861e01688eb4d8586cd46d680",
+        "source_trace": "artifacts\\m3\\canonical_mr5\\determinism\\start-1\\seed-2-source.jsonl",
+        "starting_player": 1,
+        "trace_hash": "7a252b56a5f4b22b9e9a58f17be1414137614fc5f7e8ff95e84ff4069f214a36"
+      }
+    },
+    "same_process_repeat": true,
+    "semantic_replay": true
+  },
+  "full_games": {
+    "attempted": 16,
+    "bundle_id": "3adfe6b4cfe2c2805e50b389fc0eb4e70a3b0b6107436614d328fddc865e585f",
+    "effective_duel_flags": 190464,
+    "errors": {
+      "automatic": 0,
+      "core_errors": 0,
+      "retries": 0,
+      "truncated": 0,
+      "unsupported": 0
+    },
+    "partition_seeds": [
+      1,
+      2,
+      3,
+      4
+    ],
+    "seat_partitions": [
+      "normal",
+      "mirror"
+    ],
+    "start_player_partitions": [
+      0,
+      1
+    ],
+    "terminal": 16
+  },
+  "historical_evidence": {
+    "canonical_for_m3_5": false,
+    "classification": "PRE_M3_5_CONFIGURATION_AND_API_EVIDENCE",
+    "old_m3_bundle_id": "ff8721aae1a17da6a72079e65ae75a05012c0c367b6f249651c1de713c1fbf91",
+    "retained_under": "artifacts/m3/pre_mr5_configuration_correction, artifacts/m3/pre_m35_noncanonical, and explicitly named prior reports"
+  },
+  "mechanics": {
+    "counts": {
+      "ENGINE_VERIFIED": 38,
+      "NOT_APPLICABLE_FIXED_MATCHUP": 0,
+      "PENDING": 0,
+      "PROTOCOL_VERIFIED": 7,
+      "PUBLIC_API_LIMITATION": 0
+    },
+    "m3_document": "docs/m3/mechanics_coverage.json",
+    "pending": 0,
+    "total": 45
+  },
+  "patchset": {
+    "base_checkout_sha256": "161849049d34de7ea60b2f370cc35f903262c14769e399d0bf43a381d295d7f3",
+    "base_core_commit": "9a0c558c2d686542f7914a6d529fd7aa57746aed",
+    "derived_checkout": ".cache/derived/ocgcore",
+    "id": "ocgforge.ocgcore.api_hardening.v1",
+    "immutable_base": true,
+    "ordered_patches": [
+      {
+        "name": "0001-fix-overlay-seq-parent-query.patch",
+        "sha256": "5238201c1b5fbce6623432f87ec0b39dbc2639bae107549c02c5e756e4180dd8"
+      },
+      {
+        "name": "0002-add-starting-player-control.patch",
+        "sha256": "85e4e725c351609816277a93af7f281e488e6c15cb218bbc821f649eaf4fe0ad"
+      }
+    ],
+    "sha256": "6b5421b3a852085f48fa161a5ba1540f902aa00784a337694b21c9efc34f69bd"
+  },
+  "privacy": {
+    "candidate_observation_consistency": "PASS",
+    "paired_worlds": "PASS",
+    "status": "PASS"
+  },
+  "recommendation": "M3.5 FINAL PASS",
+  "regression": {
+    "build": "PASS",
+    "ctest_failed": 0,
+    "ctest_passed": 84,
+    "ctest_total": 84,
+    "legacy_python_passed": 3,
+    "legacy_python_total": 3,
+    "m3_5_python_passed": 5,
+    "m3_5_python_total": 5,
+    "m3_python_passed": 17,
+    "m3_python_total": 17
+  },
+  "schema_version": "ocgforge.m3_5.acceptance.v1",
+  "scope": "OCGCORE_PUBLIC_API_HARDENING",
+  "upstream_handoff": {
+    "ocgcore_source_patch_in_repository": false,
+    "ocgforge_base_cache_modified": false,
+    "patches": "prepare for upstream review; no upstream fetch or modification performed",
+    "submitted": false
+  }
+}

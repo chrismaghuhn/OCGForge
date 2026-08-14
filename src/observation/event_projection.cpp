@@ -86,6 +86,18 @@ MessageLocation read_location(Reader& reader) {
     return result;
 }
 
+// MSG_CONFIRM_* carries a compact controller/location/sequence tuple and no
+// position field. It is distinct from get_info_location(), which is the
+// ten-byte wire shape used by movement and chain messages.
+MessageLocation read_confirm_location(Reader& reader) {
+    MessageLocation result;
+    result.controller = reader.u8();
+    result.location = reader.u8();
+    result.sequence = reader.u32();
+    result.position = POS_FACEUP;
+    return result;
+}
+
 SemanticZone project_event_zone(const MessageLocation& location, std::uint32_t duel_flags) {
     return project_zone(location.location, location.controller, location.sequence, duel_flags).zone;
 }
@@ -320,13 +332,32 @@ std::vector<VisibleGameEvent> project_visible_events(const std::vector<std::uint
         case MSG_CONFIRM_EXTRATOP: {
             const auto recipient = reader.u8();
             const auto count = reader.u32();
-            const auto entry_size = type == MSG_CONFIRM_DECKTOP || type == MSG_CONFIRM_EXTRATOP ? 10u : 10u;
-            if (count > reader.remaining() / entry_size) {
+            // The pinned bundle emits the compact six-byte location for the
+            // real confirm path.  The existing public event contract also
+            // accepts the older ten-byte location used by the M0-M2 tests.
+            // Select the shape from the exact framed byte count so malformed
+            // packets remain fail-closed instead of being partially parsed.
+            constexpr std::size_t compact_entry_size = sizeof(std::uint32_t) + 6u;
+            constexpr std::size_t extended_entry_size = sizeof(std::uint32_t) + 10u;
+            const auto payload_size = reader.remaining();
+            enum class ConfirmLocationShape { Compact, Extended };
+            ConfirmLocationShape shape;
+            if (count == 0 && payload_size == 0) {
+                shape = ConfirmLocationShape::Compact;
+            } else if (count > 0 && count <= payload_size / extended_entry_size &&
+                       payload_size == static_cast<std::size_t>(count) * extended_entry_size) {
+                shape = ConfirmLocationShape::Extended;
+            } else if (count > 0 && count <= payload_size / compact_entry_size &&
+                       payload_size == static_cast<std::size_t>(count) * compact_entry_size) {
+                shape = ConfirmLocationShape::Compact;
+            } else {
                 throw EventDecodeError("confirm count exceeds event");
             }
             for (std::uint32_t index = 0; index < count; ++index) {
                 const auto code = reader.u32();
-                MessageLocation location = read_location(reader);
+                MessageLocation location = shape == ConfirmLocationShape::Extended
+                                                ? read_location(reader)
+                                                : read_confirm_location(reader);
                 auto& event = emit(VisibleEventKind::CardRevealed);
                 event.player = location.controller;
                 event.to_zone = project_event_zone(location, duel_flags);

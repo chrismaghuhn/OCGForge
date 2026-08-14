@@ -9,6 +9,8 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+from tools.ocgcore_patchset import PatchsetError, validate_patchset_metadata
+
 
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
@@ -87,8 +89,9 @@ def _git_head(path: Path) -> str:
 
 
 def validate_lock_shape(lock: dict[str, Any]) -> None:
-    if lock.get("schema_version") != 1:
-        raise BundleVerificationError("rules bundle schema_version must be 1")
+    schema_version = lock.get("schema_version")
+    if schema_version not in {1, 2}:
+        raise BundleVerificationError("rules bundle schema_version must be 1 or 2")
     bundle_id = lock.get("bundle_id")
     if not isinstance(bundle_id, str) or not SHA256_RE.fullmatch(bundle_id):
         raise BundleVerificationError("bundle_id must be a lowercase SHA-256 hex digest")
@@ -127,6 +130,15 @@ def validate_lock_shape(lock: dict[str, Any]) -> None:
     core = sources.get("core")
     if not isinstance(core, dict) or core.get("expected_api_version") != "11.0":
         raise BundleVerificationError("core expected_api_version must be 11.0")
+    if schema_version >= 2:
+        input_core = inputs.get("core")
+        patchset = input_core.get("patchset") if isinstance(input_core, dict) else None
+        if not isinstance(patchset, dict):
+            raise BundleVerificationError("schema v2 requires rule_affecting_inputs.core.patchset")
+        try:
+            validate_patchset_metadata(patchset)
+        except PatchsetError as exc:
+            raise BundleVerificationError(f"invalid ocgcore patchset: {exc}") from exc
 
     artifact = lock.get("database_artifact")
     if not isinstance(artifact, dict) or not SHA256_RE.fullmatch(str(artifact.get("sha256", ""))):
@@ -135,6 +147,20 @@ def validate_lock_shape(lock: dict[str, Any]) -> None:
     duel_flags = lock.get("duel_flags")
     if not isinstance(duel_flags, dict) or not isinstance(duel_flags.get("value"), int):
         raise BundleVerificationError("duel_flags.value must be an integer")
+
+    format_id = lock.get("format_id")
+    duel_mode = lock.get("duel_mode")
+    input_format_id = inputs.get("format_id")
+    input_duel_mode = inputs.get("duel_mode")
+    input_duel_flags = inputs.get("duel_flags")
+    if not isinstance(format_id, str) or not format_id:
+        raise BundleVerificationError("format_id must be a non-empty string")
+    if not isinstance(duel_mode, str) or not duel_mode:
+        raise BundleVerificationError("duel_mode must be a non-empty string")
+    if input_format_id != format_id or input_duel_mode != duel_mode:
+        raise BundleVerificationError("top-level format/mode does not match rule_affecting_inputs")
+    if input_duel_flags != duel_flags:
+        raise BundleVerificationError("top-level duel_flags does not match rule_affecting_inputs")
 
 
 def load_lock(path: Path) -> dict[str, Any]:

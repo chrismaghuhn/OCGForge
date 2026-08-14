@@ -1,0 +1,5156 @@
+{
+  "manifest": {
+    "babelcdb_commit": "89ad6837b0766a52984d8c715a7d5d4f8447946b",
+    "cardscripts_commit": "f337c87018ca723c1aded5143e616bb649555273",
+    "core_patchset_id": "ocgforge.ocgcore.api_hardening.v1",
+    "core_patchset_sha256": "6b5421b3a852085f48fa161a5ba1540f902aa00784a337694b21c9efc34f69bd",
+    "deck_a_id": "ocgforge.swordsoul_tenyi.ml_v1",
+    "deck_a_sha256": "8ee4b699de19ff256e388d46f35b8696a60ff6ec59f0324f060a2468876711b7",
+    "deck_b_id": "ocgforge.salamangreat.ml_v1",
+    "deck_b_sha256": "6041abe0a59463d0715ae1da9100090ad487de02a02794e8ec0686d4c0513188",
+    "duel_flags": 190464,
+    "duel_mode": "DUEL_MODE_MR5",
+    "extra_deck_count": {
+      "deck_a": 15,
+      "deck_b": 15
+    },
+    "extra_deck_passcodes": {
+      "deck_a": [
+        32519092,
+        32519092,
+        32519092,
+        78917791,
+        69248256,
+        69248256,
+        83755611,
+        83755611,
+        5041348,
+        5041348,
+        43202238,
+        9464441,
+        19048328,
+        47710198,
+        96633955
+      ],
+      "deck_b": [
+        14812471,
+        14812471,
+        14812471,
+        87871125,
+        87871125,
+        87871125,
+        57134592,
+        57134592,
+        31313405,
+        31313405,
+        41463181,
+        87327776,
+        87327776,
+        2772337,
+        48815792
+      ]
+    },
+    "format_id": "TCG_ADVANCED_2026_05_18",
+    "main_deck_count": {
+      "deck_a": 40,
+      "deck_b": 40
+    },
+    "main_deck_passcodes": {
+      "deck_a": [
+        20001443,
+        20001443,
+        20001443,
+        93490856,
+        93490856,
+        93490856,
+        56495147,
+        56495147,
+        56495147,
+        55273560,
+        55273560,
+        55273560,
+        87052196,
+        87052196,
+        87052196,
+        23431858,
+        23431858,
+        23431858,
+        98159737,
+        98159737,
+        98159737,
+        24557335,
+        14558127,
+        14558127,
+        14558127,
+        97268402,
+        97268402,
+        97268402,
+        56465981,
+        56465981,
+        56465981,
+        51684157,
+        51684157,
+        51684157,
+        93850690,
+        24224830,
+        10045474,
+        10045474,
+        10045474,
+        14821890
+      ],
+      "deck_b": [
+        11962031,
+        11962031,
+        11962031,
+        26889158,
+        26889158,
+        26889158,
+        52277807,
+        52277807,
+        94620082,
+        94620082,
+        56003780,
+        56003780,
+        57357130,
+        20618081,
+        74652966,
+        14558127,
+        14558127,
+        14558127,
+        73642296,
+        73642296,
+        73642296,
+        97268402,
+        97268402,
+        97268402,
+        52155219,
+        52155219,
+        52155219,
+        57160136,
+        57160136,
+        57160136,
+        64178424,
+        64178424,
+        1295111,
+        83533296,
+        24224830,
+        10045474,
+        10045474,
+        10045474,
+        51339637,
+        14934922
+      ]
+    },
+    "matchup_id": "ocgforge.matchup.swordsoul_salamangreat.v1",
+    "ocg_api_version": "11.0",
+    "ocgcore_commit": "9a0c558c2d686542f7914a6d529fd7aa57746aed",
+    "rules_bundle_id": "3adfe6b4cfe2c2805e50b389fc0eb4e70a3b0b6107436614d328fddc865e585f",
+    "side_deck_policy": "none",
+    "unique_passcodes": [
+      1295111,
+      2772337,
+      5041348,
+      9464441,
+      10045474,
+      11962031,
+      14558127,
+      14812471,
+      14821890,
+      14934922,
+      19048328,
+      20001443,
+      20618081,
+      23431858,
+      24224830,
+      24557335,
+      26889158,
+      31313405,
+      32519092,
+      41463181,
+      43202238,
+      47710198,
+      48815792,
+      51339637,
+      51684157,
+      52155219,
+      52277807,
+      55273560,
+      56003780,
+      56465981,
+      56495147,
+      57134592,
+      57160136,
+      57357130,
+      64178424,
+      69248256,
+      73642296,
+      74652966,
+      78917791,
+      83533296,
+      83755611,
+      87052196,
+      87327776,
+      87871125,
+      93490856,
+      93850690,
+      94620082,
+      96633955,
+      97268402,
+      98159737
+    ]
+  },
+  "slots": [
+    {
+      "cdb_name": "Swordsoul of Mo Ye",
+      "cdb_row_exists": true,
+      "deck_id": "deck_a",
+      "declared_name": "Swordsoul of Mo Ye",
+      "passcode": 20001443,
+      "slot": 0,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 1700,
+          "attribute": 2,
+          "def": 1800,
+          "level": 4,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 8388608,
+          "rank": null,
+          "type": 33
+        },
+        "name": "Swordsoul of Mo Ye",
+        "passcode": 20001443,
+        "setcode": 365,
+        "type": 33
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Swordsoul of Mo Ye",
+      "cdb_row_exists": true,
+      "deck_id": "deck_a",
+      "declared_name": "Swordsoul of Mo Ye",
+      "passcode": 20001443,
+      "slot": 1,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 1700,
+          "attribute": 2,
+          "def": 1800,
+          "level": 4,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 8388608,
+          "rank": null,
+          "type": 33
+        },
+        "name": "Swordsoul of Mo Ye",
+        "passcode": 20001443,
+        "setcode": 365,
+        "type": 33
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Swordsoul of Mo Ye",
+      "cdb_row_exists": true,
+      "deck_id": "deck_a",
+      "declared_name": "Swordsoul of Mo Ye",
+      "passcode": 20001443,
+      "slot": 2,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 1700,
+          "attribute": 2,
+          "def": 1800,
+          "level": 4,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 8388608,
+          "rank": null,
+          "type": 33
+        },
+        "name": "Swordsoul of Mo Ye",
+        "passcode": 20001443,
+        "setcode": 365,
+        "type": 33
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Swordsoul Strategist Longyuan",
+      "cdb_row_exists": true,
+      "deck_id": "deck_a",
+      "declared_name": "Swordsoul Strategist Longyuan",
+      "passcode": 93490856,
+      "slot": 3,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 1200,
+          "attribute": 4,
+          "def": 2300,
+          "level": 6,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 8388608,
+          "rank": null,
+          "type": 33
+        },
+        "name": "Swordsoul Strategist Longyuan",
+        "passcode": 93490856,
+        "setcode": 365,
+        "type": 33
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Swordsoul Strategist Longyuan",
+      "cdb_row_exists": true,
+      "deck_id": "deck_a",
+      "declared_name": "Swordsoul Strategist Longyuan",
+      "passcode": 93490856,
+      "slot": 4,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 1200,
+          "attribute": 4,
+          "def": 2300,
+          "level": 6,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 8388608,
+          "rank": null,
+          "type": 33
+        },
+        "name": "Swordsoul Strategist Longyuan",
+        "passcode": 93490856,
+        "setcode": 365,
+        "type": 33
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Swordsoul Strategist Longyuan",
+      "cdb_row_exists": true,
+      "deck_id": "deck_a",
+      "declared_name": "Swordsoul Strategist Longyuan",
+      "passcode": 93490856,
+      "slot": 5,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 1200,
+          "attribute": 4,
+          "def": 2300,
+          "level": 6,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 8388608,
+          "rank": null,
+          "type": 33
+        },
+        "name": "Swordsoul Strategist Longyuan",
+        "passcode": 93490856,
+        "setcode": 365,
+        "type": 33
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Swordsoul of Taia",
+      "cdb_row_exists": true,
+      "deck_id": "deck_a",
+      "declared_name": "Swordsoul of Taia",
+      "passcode": 56495147,
+      "slot": 6,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 1800,
+          "attribute": 8,
+          "def": 1500,
+          "level": 4,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 8388608,
+          "rank": null,
+          "type": 33
+        },
+        "name": "Swordsoul of Taia",
+        "passcode": 56495147,
+        "setcode": 365,
+        "type": 33
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Swordsoul of Taia",
+      "cdb_row_exists": true,
+      "deck_id": "deck_a",
+      "declared_name": "Swordsoul of Taia",
+      "passcode": 56495147,
+      "slot": 7,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 1800,
+          "attribute": 8,
+          "def": 1500,
+          "level": 4,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 8388608,
+          "rank": null,
+          "type": 33
+        },
+        "name": "Swordsoul of Taia",
+        "passcode": 56495147,
+        "setcode": 365,
+        "type": 33
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Swordsoul of Taia",
+      "cdb_row_exists": true,
+      "deck_id": "deck_a",
+      "declared_name": "Swordsoul of Taia",
+      "passcode": 56495147,
+      "slot": 8,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 1800,
+          "attribute": 8,
+          "def": 1500,
+          "level": 4,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 8388608,
+          "rank": null,
+          "type": 33
+        },
+        "name": "Swordsoul of Taia",
+        "passcode": 56495147,
+        "setcode": 365,
+        "type": 33
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Incredible Ecclesia, the Virtuous",
+      "cdb_row_exists": true,
+      "deck_id": "deck_a",
+      "declared_name": "Incredible Ecclesia, the Virtuous",
+      "passcode": 55273560,
+      "slot": 9,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 1500,
+          "attribute": 16,
+          "def": 1500,
+          "level": 4,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 2,
+          "rank": null,
+          "type": 4129
+        },
+        "name": "Incredible Ecclesia, the Virtuous",
+        "passcode": 55273560,
+        "setcode": 463,
+        "type": 4129
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Incredible Ecclesia, the Virtuous",
+      "cdb_row_exists": true,
+      "deck_id": "deck_a",
+      "declared_name": "Incredible Ecclesia, the Virtuous",
+      "passcode": 55273560,
+      "slot": 10,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 1500,
+          "attribute": 16,
+          "def": 1500,
+          "level": 4,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 2,
+          "rank": null,
+          "type": 4129
+        },
+        "name": "Incredible Ecclesia, the Virtuous",
+        "passcode": 55273560,
+        "setcode": 463,
+        "type": 4129
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Incredible Ecclesia, the Virtuous",
+      "cdb_row_exists": true,
+      "deck_id": "deck_a",
+      "declared_name": "Incredible Ecclesia, the Virtuous",
+      "passcode": 55273560,
+      "slot": 11,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 1500,
+          "attribute": 16,
+          "def": 1500,
+          "level": 4,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 2,
+          "rank": null,
+          "type": 4129
+        },
+        "name": "Incredible Ecclesia, the Virtuous",
+        "passcode": 55273560,
+        "setcode": 463,
+        "type": 4129
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Tenyi Spirit - Ashuna",
+      "cdb_row_exists": true,
+      "deck_id": "deck_a",
+      "declared_name": "Tenyi Spirit - Ashuna",
+      "passcode": 87052196,
+      "slot": 12,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 1600,
+          "attribute": 16,
+          "def": 2600,
+          "level": 7,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 8388608,
+          "rank": null,
+          "type": 33
+        },
+        "name": "Tenyi Spirit - Ashuna",
+        "passcode": 87052196,
+        "setcode": 300,
+        "type": 33
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Tenyi Spirit - Ashuna",
+      "cdb_row_exists": true,
+      "deck_id": "deck_a",
+      "declared_name": "Tenyi Spirit - Ashuna",
+      "passcode": 87052196,
+      "slot": 13,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 1600,
+          "attribute": 16,
+          "def": 2600,
+          "level": 7,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 8388608,
+          "rank": null,
+          "type": 33
+        },
+        "name": "Tenyi Spirit - Ashuna",
+        "passcode": 87052196,
+        "setcode": 300,
+        "type": 33
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Tenyi Spirit - Ashuna",
+      "cdb_row_exists": true,
+      "deck_id": "deck_a",
+      "declared_name": "Tenyi Spirit - Ashuna",
+      "passcode": 87052196,
+      "slot": 14,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 1600,
+          "attribute": 16,
+          "def": 2600,
+          "level": 7,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 8388608,
+          "rank": null,
+          "type": 33
+        },
+        "name": "Tenyi Spirit - Ashuna",
+        "passcode": 87052196,
+        "setcode": 300,
+        "type": 33
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Tenyi Spirit - Vishuda",
+      "cdb_row_exists": true,
+      "deck_id": "deck_a",
+      "declared_name": "Tenyi Spirit - Vishuda",
+      "passcode": 23431858,
+      "slot": 15,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 1500,
+          "attribute": 32,
+          "def": 2500,
+          "level": 7,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 8388608,
+          "rank": null,
+          "type": 33
+        },
+        "name": "Tenyi Spirit - Vishuda",
+        "passcode": 23431858,
+        "setcode": 300,
+        "type": 33
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Tenyi Spirit - Vishuda",
+      "cdb_row_exists": true,
+      "deck_id": "deck_a",
+      "declared_name": "Tenyi Spirit - Vishuda",
+      "passcode": 23431858,
+      "slot": 16,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 1500,
+          "attribute": 32,
+          "def": 2500,
+          "level": 7,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 8388608,
+          "rank": null,
+          "type": 33
+        },
+        "name": "Tenyi Spirit - Vishuda",
+        "passcode": 23431858,
+        "setcode": 300,
+        "type": 33
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Tenyi Spirit - Vishuda",
+      "cdb_row_exists": true,
+      "deck_id": "deck_a",
+      "declared_name": "Tenyi Spirit - Vishuda",
+      "passcode": 23431858,
+      "slot": 17,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 1500,
+          "attribute": 32,
+          "def": 2500,
+          "level": 7,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 8388608,
+          "rank": null,
+          "type": 33
+        },
+        "name": "Tenyi Spirit - Vishuda",
+        "passcode": 23431858,
+        "setcode": 300,
+        "type": 33
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Tenyi Spirit - Adhara",
+      "cdb_row_exists": true,
+      "deck_id": "deck_a",
+      "declared_name": "Tenyi Spirit - Adhara",
+      "passcode": 98159737,
+      "slot": 18,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 0,
+          "attribute": 1,
+          "def": 0,
+          "level": 1,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 8388608,
+          "rank": null,
+          "type": 4129
+        },
+        "name": "Tenyi Spirit - Adhara",
+        "passcode": 98159737,
+        "setcode": 300,
+        "type": 4129
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Tenyi Spirit - Adhara",
+      "cdb_row_exists": true,
+      "deck_id": "deck_a",
+      "declared_name": "Tenyi Spirit - Adhara",
+      "passcode": 98159737,
+      "slot": 19,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 0,
+          "attribute": 1,
+          "def": 0,
+          "level": 1,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 8388608,
+          "rank": null,
+          "type": 4129
+        },
+        "name": "Tenyi Spirit - Adhara",
+        "passcode": 98159737,
+        "setcode": 300,
+        "type": 4129
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Tenyi Spirit - Adhara",
+      "cdb_row_exists": true,
+      "deck_id": "deck_a",
+      "declared_name": "Tenyi Spirit - Adhara",
+      "passcode": 98159737,
+      "slot": 20,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 0,
+          "attribute": 1,
+          "def": 0,
+          "level": 1,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 8388608,
+          "rank": null,
+          "type": 4129
+        },
+        "name": "Tenyi Spirit - Adhara",
+        "passcode": 98159737,
+        "setcode": 300,
+        "type": 4129
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Tenyi Spirit - Shthana",
+      "cdb_row_exists": true,
+      "deck_id": "deck_a",
+      "declared_name": "Tenyi Spirit - Shthana",
+      "passcode": 24557335,
+      "slot": 21,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 400,
+          "attribute": 2,
+          "def": 2000,
+          "level": 4,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 8388608,
+          "rank": null,
+          "type": 33
+        },
+        "name": "Tenyi Spirit - Shthana",
+        "passcode": 24557335,
+        "setcode": 300,
+        "type": 33
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Ash Blossom & Joyous Spring",
+      "cdb_row_exists": true,
+      "deck_id": "deck_a",
+      "declared_name": "Ash Blossom & Joyous Spring",
+      "passcode": 14558127,
+      "slot": 22,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 0,
+          "attribute": 4,
+          "def": 1800,
+          "level": 3,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 16,
+          "rank": null,
+          "type": 4129
+        },
+        "name": "Ash Blossom & Joyous Spring",
+        "passcode": 14558127,
+        "setcode": 0,
+        "type": 4129
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Ash Blossom & Joyous Spring",
+      "cdb_row_exists": true,
+      "deck_id": "deck_a",
+      "declared_name": "Ash Blossom & Joyous Spring",
+      "passcode": 14558127,
+      "slot": 23,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 0,
+          "attribute": 4,
+          "def": 1800,
+          "level": 3,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 16,
+          "rank": null,
+          "type": 4129
+        },
+        "name": "Ash Blossom & Joyous Spring",
+        "passcode": 14558127,
+        "setcode": 0,
+        "type": 4129
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Ash Blossom & Joyous Spring",
+      "cdb_row_exists": true,
+      "deck_id": "deck_a",
+      "declared_name": "Ash Blossom & Joyous Spring",
+      "passcode": 14558127,
+      "slot": 24,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 0,
+          "attribute": 4,
+          "def": 1800,
+          "level": 3,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 16,
+          "rank": null,
+          "type": 4129
+        },
+        "name": "Ash Blossom & Joyous Spring",
+        "passcode": 14558127,
+        "setcode": 0,
+        "type": 4129
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Effect Veiler",
+      "cdb_row_exists": true,
+      "deck_id": "deck_a",
+      "declared_name": "Effect Veiler",
+      "passcode": 97268402,
+      "slot": 25,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 0,
+          "attribute": 16,
+          "def": 0,
+          "level": 1,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 2,
+          "rank": null,
+          "type": 4129
+        },
+        "name": "Effect Veiler",
+        "passcode": 97268402,
+        "setcode": 0,
+        "type": 4129
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Effect Veiler",
+      "cdb_row_exists": true,
+      "deck_id": "deck_a",
+      "declared_name": "Effect Veiler",
+      "passcode": 97268402,
+      "slot": 26,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 0,
+          "attribute": 16,
+          "def": 0,
+          "level": 1,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 2,
+          "rank": null,
+          "type": 4129
+        },
+        "name": "Effect Veiler",
+        "passcode": 97268402,
+        "setcode": 0,
+        "type": 4129
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Effect Veiler",
+      "cdb_row_exists": true,
+      "deck_id": "deck_a",
+      "declared_name": "Effect Veiler",
+      "passcode": 97268402,
+      "slot": 27,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 0,
+          "attribute": 16,
+          "def": 0,
+          "level": 1,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 2,
+          "rank": null,
+          "type": 4129
+        },
+        "name": "Effect Veiler",
+        "passcode": 97268402,
+        "setcode": 0,
+        "type": 4129
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Swordsoul Emergence",
+      "cdb_row_exists": true,
+      "deck_id": "deck_a",
+      "declared_name": "Swordsoul Emergence",
+      "passcode": 56465981,
+      "slot": 28,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 0,
+          "attribute": 0,
+          "def": 0,
+          "level": 0,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 0,
+          "rank": null,
+          "type": 2
+        },
+        "name": "Swordsoul Emergence",
+        "passcode": 56465981,
+        "setcode": 365,
+        "type": 2
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Swordsoul Emergence",
+      "cdb_row_exists": true,
+      "deck_id": "deck_a",
+      "declared_name": "Swordsoul Emergence",
+      "passcode": 56465981,
+      "slot": 29,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 0,
+          "attribute": 0,
+          "def": 0,
+          "level": 0,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 0,
+          "rank": null,
+          "type": 2
+        },
+        "name": "Swordsoul Emergence",
+        "passcode": 56465981,
+        "setcode": 365,
+        "type": 2
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Swordsoul Emergence",
+      "cdb_row_exists": true,
+      "deck_id": "deck_a",
+      "declared_name": "Swordsoul Emergence",
+      "passcode": 56465981,
+      "slot": 30,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 0,
+          "attribute": 0,
+          "def": 0,
+          "level": 0,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 0,
+          "rank": null,
+          "type": 2
+        },
+        "name": "Swordsoul Emergence",
+        "passcode": 56465981,
+        "setcode": 365,
+        "type": 2
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Heavenly Dragon Circle",
+      "cdb_row_exists": true,
+      "deck_id": "deck_a",
+      "declared_name": "Heavenly Dragon Circle",
+      "passcode": 51684157,
+      "slot": 31,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 0,
+          "attribute": 0,
+          "def": 0,
+          "level": 0,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 0,
+          "rank": null,
+          "type": 65538
+        },
+        "name": "Heavenly Dragon Circle",
+        "passcode": 51684157,
+        "setcode": 0,
+        "type": 65538
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Heavenly Dragon Circle",
+      "cdb_row_exists": true,
+      "deck_id": "deck_a",
+      "declared_name": "Heavenly Dragon Circle",
+      "passcode": 51684157,
+      "slot": 32,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 0,
+          "attribute": 0,
+          "def": 0,
+          "level": 0,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 0,
+          "rank": null,
+          "type": 65538
+        },
+        "name": "Heavenly Dragon Circle",
+        "passcode": 51684157,
+        "setcode": 0,
+        "type": 65538
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Heavenly Dragon Circle",
+      "cdb_row_exists": true,
+      "deck_id": "deck_a",
+      "declared_name": "Heavenly Dragon Circle",
+      "passcode": 51684157,
+      "slot": 33,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 0,
+          "attribute": 0,
+          "def": 0,
+          "level": 0,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 0,
+          "rank": null,
+          "type": 65538
+        },
+        "name": "Heavenly Dragon Circle",
+        "passcode": 51684157,
+        "setcode": 0,
+        "type": 65538
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Swordsoul Sacred Summit",
+      "cdb_row_exists": true,
+      "deck_id": "deck_a",
+      "declared_name": "Swordsoul Sacred Summit",
+      "passcode": 93850690,
+      "slot": 34,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 0,
+          "attribute": 0,
+          "def": 0,
+          "level": 0,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 0,
+          "rank": null,
+          "type": 2
+        },
+        "name": "Swordsoul Sacred Summit",
+        "passcode": 93850690,
+        "setcode": 365,
+        "type": 2
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Called by the Grave",
+      "cdb_row_exists": true,
+      "deck_id": "deck_a",
+      "declared_name": "Called by the Grave",
+      "passcode": 24224830,
+      "slot": 35,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 0,
+          "attribute": 0,
+          "def": 0,
+          "level": 0,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 0,
+          "rank": null,
+          "type": 65538
+        },
+        "name": "Called by the Grave",
+        "passcode": 24224830,
+        "setcode": 0,
+        "type": 65538
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Infinite Impermanence",
+      "cdb_row_exists": true,
+      "deck_id": "deck_a",
+      "declared_name": "Infinite Impermanence",
+      "passcode": 10045474,
+      "slot": 36,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 0,
+          "attribute": 0,
+          "def": 0,
+          "level": 0,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 0,
+          "rank": null,
+          "type": 4
+        },
+        "name": "Infinite Impermanence",
+        "passcode": 10045474,
+        "setcode": 0,
+        "type": 4
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Infinite Impermanence",
+      "cdb_row_exists": true,
+      "deck_id": "deck_a",
+      "declared_name": "Infinite Impermanence",
+      "passcode": 10045474,
+      "slot": 37,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 0,
+          "attribute": 0,
+          "def": 0,
+          "level": 0,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 0,
+          "rank": null,
+          "type": 4
+        },
+        "name": "Infinite Impermanence",
+        "passcode": 10045474,
+        "setcode": 0,
+        "type": 4
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Infinite Impermanence",
+      "cdb_row_exists": true,
+      "deck_id": "deck_a",
+      "declared_name": "Infinite Impermanence",
+      "passcode": 10045474,
+      "slot": 38,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 0,
+          "attribute": 0,
+          "def": 0,
+          "level": 0,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 0,
+          "rank": null,
+          "type": 4
+        },
+        "name": "Infinite Impermanence",
+        "passcode": 10045474,
+        "setcode": 0,
+        "type": 4
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Swordsoul Blackout",
+      "cdb_row_exists": true,
+      "deck_id": "deck_a",
+      "declared_name": "Swordsoul Blackout",
+      "passcode": 14821890,
+      "slot": 39,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 0,
+          "attribute": 0,
+          "def": 0,
+          "level": 0,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 0,
+          "rank": null,
+          "type": 4
+        },
+        "name": "Swordsoul Blackout",
+        "passcode": 14821890,
+        "setcode": 365,
+        "type": 4
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Monk of the Tenyi",
+      "cdb_row_exists": true,
+      "deck_id": "deck_a",
+      "declared_name": "Monk of the Tenyi",
+      "passcode": 32519092,
+      "slot": 0,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 1000,
+          "attribute": 1,
+          "def": null,
+          "level": 1,
+          "link_markers": 2,
+          "link_rating": 1,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 8388608,
+          "rank": null,
+          "type": 67108865
+        },
+        "name": "Monk of the Tenyi",
+        "passcode": 32519092,
+        "setcode": 300,
+        "type": 67108865
+      },
+      "zone": "extra",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Monk of the Tenyi",
+      "cdb_row_exists": true,
+      "deck_id": "deck_a",
+      "declared_name": "Monk of the Tenyi",
+      "passcode": 32519092,
+      "slot": 1,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 1000,
+          "attribute": 1,
+          "def": null,
+          "level": 1,
+          "link_markers": 2,
+          "link_rating": 1,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 8388608,
+          "rank": null,
+          "type": 67108865
+        },
+        "name": "Monk of the Tenyi",
+        "passcode": 32519092,
+        "setcode": 300,
+        "type": 67108865
+      },
+      "zone": "extra",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Monk of the Tenyi",
+      "cdb_row_exists": true,
+      "deck_id": "deck_a",
+      "declared_name": "Monk of the Tenyi",
+      "passcode": 32519092,
+      "slot": 2,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 1000,
+          "attribute": 1,
+          "def": null,
+          "level": 1,
+          "link_markers": 2,
+          "link_rating": 1,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 8388608,
+          "rank": null,
+          "type": 67108865
+        },
+        "name": "Monk of the Tenyi",
+        "passcode": 32519092,
+        "setcode": 300,
+        "type": 67108865
+      },
+      "zone": "extra",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Shaman of the Tenyi",
+      "cdb_row_exists": true,
+      "deck_id": "deck_a",
+      "declared_name": "Shaman of the Tenyi",
+      "passcode": 78917791,
+      "slot": 3,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 1600,
+          "attribute": 4,
+          "def": null,
+          "level": 2,
+          "link_markers": 5,
+          "link_rating": 2,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 8388608,
+          "rank": null,
+          "type": 67108897
+        },
+        "name": "Shaman of the Tenyi",
+        "passcode": 78917791,
+        "setcode": 300,
+        "type": 67108897
+      },
+      "zone": "extra",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Swordsoul Grandmaster - Chixiao",
+      "cdb_row_exists": true,
+      "deck_id": "deck_a",
+      "declared_name": "Swordsoul Grandmaster - Chixiao",
+      "passcode": 69248256,
+      "slot": 4,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 2800,
+          "attribute": 16,
+          "def": 1000,
+          "level": 8,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 8388608,
+          "rank": null,
+          "type": 8225
+        },
+        "name": "Swordsoul Grandmaster - Chixiao",
+        "passcode": 69248256,
+        "setcode": 365,
+        "type": 8225
+      },
+      "zone": "extra",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Swordsoul Grandmaster - Chixiao",
+      "cdb_row_exists": true,
+      "deck_id": "deck_a",
+      "declared_name": "Swordsoul Grandmaster - Chixiao",
+      "passcode": 69248256,
+      "slot": 5,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 2800,
+          "attribute": 16,
+          "def": 1000,
+          "level": 8,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 8388608,
+          "rank": null,
+          "type": 8225
+        },
+        "name": "Swordsoul Grandmaster - Chixiao",
+        "passcode": 69248256,
+        "setcode": 365,
+        "type": 8225
+      },
+      "zone": "extra",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Baxia, Brightness of the Yang Zing",
+      "cdb_row_exists": true,
+      "deck_id": "deck_a",
+      "declared_name": "Baxia, Brightness of the Yang Zing",
+      "passcode": 83755611,
+      "slot": 6,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 2300,
+          "attribute": 16,
+          "def": 2600,
+          "level": 8,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 8388608,
+          "rank": null,
+          "type": 8225
+        },
+        "name": "Baxia, Brightness of the Yang Zing",
+        "passcode": 83755611,
+        "setcode": 158,
+        "type": 8225
+      },
+      "zone": "extra",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Baxia, Brightness of the Yang Zing",
+      "cdb_row_exists": true,
+      "deck_id": "deck_a",
+      "declared_name": "Baxia, Brightness of the Yang Zing",
+      "passcode": 83755611,
+      "slot": 7,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 2300,
+          "attribute": 16,
+          "def": 2600,
+          "level": 8,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 8388608,
+          "rank": null,
+          "type": 8225
+        },
+        "name": "Baxia, Brightness of the Yang Zing",
+        "passcode": 83755611,
+        "setcode": 158,
+        "type": 8225
+      },
+      "zone": "extra",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Draco Berserker of the Tenyi",
+      "cdb_row_exists": true,
+      "deck_id": "deck_a",
+      "declared_name": "Draco Berserker of the Tenyi",
+      "passcode": 5041348,
+      "slot": 8,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 3000,
+          "attribute": 32,
+          "def": 0,
+          "level": 8,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 8388608,
+          "rank": null,
+          "type": 8225
+        },
+        "name": "Draco Berserker of the Tenyi",
+        "passcode": 5041348,
+        "setcode": 300,
+        "type": 8225
+      },
+      "zone": "extra",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Draco Berserker of the Tenyi",
+      "cdb_row_exists": true,
+      "deck_id": "deck_a",
+      "declared_name": "Draco Berserker of the Tenyi",
+      "passcode": 5041348,
+      "slot": 9,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 3000,
+          "attribute": 32,
+          "def": 0,
+          "level": 8,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 8388608,
+          "rank": null,
+          "type": 8225
+        },
+        "name": "Draco Berserker of the Tenyi",
+        "passcode": 5041348,
+        "setcode": 300,
+        "type": 8225
+      },
+      "zone": "extra",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Yazi, Evil of the Yang Zing",
+      "cdb_row_exists": true,
+      "deck_id": "deck_a",
+      "declared_name": "Yazi, Evil of the Yang Zing",
+      "passcode": 43202238,
+      "slot": 10,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 2600,
+          "attribute": 32,
+          "def": 2100,
+          "level": 7,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 8388608,
+          "rank": null,
+          "type": 8225
+        },
+        "name": "Yazi, Evil of the Yang Zing",
+        "passcode": 43202238,
+        "setcode": 158,
+        "type": 8225
+      },
+      "zone": "extra",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Adamancipator Risen - Dragite",
+      "cdb_row_exists": true,
+      "deck_id": "deck_a",
+      "declared_name": "Adamancipator Risen - Dragite",
+      "passcode": 9464441,
+      "slot": 11,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 3000,
+          "attribute": 2,
+          "def": 2200,
+          "level": 8,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 256,
+          "rank": null,
+          "type": 8225
+        },
+        "name": "Adamancipator Risen - Dragite",
+        "passcode": 9464441,
+        "setcode": 320,
+        "type": 8225
+      },
+      "zone": "extra",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Chaofeng, Phantom of the Yang Zing",
+      "cdb_row_exists": true,
+      "deck_id": "deck_a",
+      "declared_name": "Chaofeng, Phantom of the Yang Zing",
+      "passcode": 19048328,
+      "slot": 12,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 2800,
+          "attribute": 16,
+          "def": 2200,
+          "level": 9,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 8388608,
+          "rank": null,
+          "type": 8225
+        },
+        "name": "Chaofeng, Phantom of the Yang Zing",
+        "passcode": 19048328,
+        "setcode": 158,
+        "type": 8225
+      },
+      "zone": "extra",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Swordsoul Sinister Sovereign - Qixing Longyuan",
+      "cdb_row_exists": true,
+      "deck_id": "deck_a",
+      "declared_name": "Swordsoul Sinister Sovereign - Qixing Longyuan",
+      "passcode": 47710198,
+      "slot": 13,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 2900,
+          "attribute": 4,
+          "def": 2300,
+          "level": 10,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 8388608,
+          "rank": null,
+          "type": 8225
+        },
+        "name": "Swordsoul Sinister Sovereign - Qixing Longyuan",
+        "passcode": 47710198,
+        "setcode": 365,
+        "type": 8225
+      },
+      "zone": "extra",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Swordsoul Supreme Sovereign - Chengying",
+      "cdb_row_exists": true,
+      "deck_id": "deck_a",
+      "declared_name": "Swordsoul Supreme Sovereign - Chengying",
+      "passcode": 96633955,
+      "slot": 14,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 3000,
+          "attribute": 2,
+          "def": 3000,
+          "level": 10,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 8388608,
+          "rank": null,
+          "type": 8225
+        },
+        "name": "Swordsoul Supreme Sovereign - Chengying",
+        "passcode": 96633955,
+        "setcode": 365,
+        "type": 8225
+      },
+      "zone": "extra",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Salamangreat of Fire",
+      "cdb_row_exists": true,
+      "deck_id": "deck_b",
+      "declared_name": "Salamangreat of Fire",
+      "passcode": 11962031,
+      "slot": 0,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 800,
+          "attribute": 4,
+          "def": 800,
+          "level": 2,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 16777216,
+          "rank": null,
+          "type": 33
+        },
+        "name": "Salamangreat of Fire",
+        "passcode": 11962031,
+        "setcode": 281,
+        "type": 33
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Salamangreat of Fire",
+      "cdb_row_exists": true,
+      "deck_id": "deck_b",
+      "declared_name": "Salamangreat of Fire",
+      "passcode": 11962031,
+      "slot": 1,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 800,
+          "attribute": 4,
+          "def": 800,
+          "level": 2,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 16777216,
+          "rank": null,
+          "type": 33
+        },
+        "name": "Salamangreat of Fire",
+        "passcode": 11962031,
+        "setcode": 281,
+        "type": 33
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Salamangreat of Fire",
+      "cdb_row_exists": true,
+      "deck_id": "deck_b",
+      "declared_name": "Salamangreat of Fire",
+      "passcode": 11962031,
+      "slot": 2,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 800,
+          "attribute": 4,
+          "def": 800,
+          "level": 2,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 16777216,
+          "rank": null,
+          "type": 33
+        },
+        "name": "Salamangreat of Fire",
+        "passcode": 11962031,
+        "setcode": 281,
+        "type": 33
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Salamangreat Gazelle",
+      "cdb_row_exists": true,
+      "deck_id": "deck_b",
+      "declared_name": "Salamangreat Gazelle",
+      "passcode": 26889158,
+      "slot": 3,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 1500,
+          "attribute": 4,
+          "def": 1000,
+          "level": 3,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 16777216,
+          "rank": null,
+          "type": 33
+        },
+        "name": "Salamangreat Gazelle",
+        "passcode": 26889158,
+        "setcode": 281,
+        "type": 33
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Salamangreat Gazelle",
+      "cdb_row_exists": true,
+      "deck_id": "deck_b",
+      "declared_name": "Salamangreat Gazelle",
+      "passcode": 26889158,
+      "slot": 4,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 1500,
+          "attribute": 4,
+          "def": 1000,
+          "level": 3,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 16777216,
+          "rank": null,
+          "type": 33
+        },
+        "name": "Salamangreat Gazelle",
+        "passcode": 26889158,
+        "setcode": 281,
+        "type": 33
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Salamangreat Gazelle",
+      "cdb_row_exists": true,
+      "deck_id": "deck_b",
+      "declared_name": "Salamangreat Gazelle",
+      "passcode": 26889158,
+      "slot": 5,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 1500,
+          "attribute": 4,
+          "def": 1000,
+          "level": 3,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 16777216,
+          "rank": null,
+          "type": 33
+        },
+        "name": "Salamangreat Gazelle",
+        "passcode": 26889158,
+        "setcode": 281,
+        "type": 33
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Salamangreat Spinny",
+      "cdb_row_exists": true,
+      "deck_id": "deck_b",
+      "declared_name": "Salamangreat Spinny",
+      "passcode": 52277807,
+      "slot": 6,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 1000,
+          "attribute": 4,
+          "def": 1500,
+          "level": 3,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 16777216,
+          "rank": null,
+          "type": 33
+        },
+        "name": "Salamangreat Spinny",
+        "passcode": 52277807,
+        "setcode": 281,
+        "type": 33
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Salamangreat Spinny",
+      "cdb_row_exists": true,
+      "deck_id": "deck_b",
+      "declared_name": "Salamangreat Spinny",
+      "passcode": 52277807,
+      "slot": 7,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 1000,
+          "attribute": 4,
+          "def": 1500,
+          "level": 3,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 16777216,
+          "rank": null,
+          "type": 33
+        },
+        "name": "Salamangreat Spinny",
+        "passcode": 52277807,
+        "setcode": 281,
+        "type": 33
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Salamangreat Foxy",
+      "cdb_row_exists": true,
+      "deck_id": "deck_b",
+      "declared_name": "Salamangreat Foxy",
+      "passcode": 94620082,
+      "slot": 8,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 1000,
+          "attribute": 4,
+          "def": 1200,
+          "level": 3,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 16777216,
+          "rank": null,
+          "type": 33
+        },
+        "name": "Salamangreat Foxy",
+        "passcode": 94620082,
+        "setcode": 281,
+        "type": 33
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Salamangreat Foxy",
+      "cdb_row_exists": true,
+      "deck_id": "deck_b",
+      "declared_name": "Salamangreat Foxy",
+      "passcode": 94620082,
+      "slot": 9,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 1000,
+          "attribute": 4,
+          "def": 1200,
+          "level": 3,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 16777216,
+          "rank": null,
+          "type": 33
+        },
+        "name": "Salamangreat Foxy",
+        "passcode": 94620082,
+        "setcode": 281,
+        "type": 33
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Salamangreat Jack Jaguar",
+      "cdb_row_exists": true,
+      "deck_id": "deck_b",
+      "declared_name": "Salamangreat Jack Jaguar",
+      "passcode": 56003780,
+      "slot": 10,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 1800,
+          "attribute": 4,
+          "def": 1200,
+          "level": 4,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 16777216,
+          "rank": null,
+          "type": 33
+        },
+        "name": "Salamangreat Jack Jaguar",
+        "passcode": 56003780,
+        "setcode": 281,
+        "type": 33
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Salamangreat Jack Jaguar",
+      "cdb_row_exists": true,
+      "deck_id": "deck_b",
+      "declared_name": "Salamangreat Jack Jaguar",
+      "passcode": 56003780,
+      "slot": 11,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 1800,
+          "attribute": 4,
+          "def": 1200,
+          "level": 4,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 16777216,
+          "rank": null,
+          "type": 33
+        },
+        "name": "Salamangreat Jack Jaguar",
+        "passcode": 56003780,
+        "setcode": 281,
+        "type": 33
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Salamangreat Weasel",
+      "cdb_row_exists": true,
+      "deck_id": "deck_b",
+      "declared_name": "Salamangreat Weasel",
+      "passcode": 57357130,
+      "slot": 12,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 700,
+          "attribute": 4,
+          "def": 1400,
+          "level": 3,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 16777216,
+          "rank": null,
+          "type": 4129
+        },
+        "name": "Salamangreat Weasel",
+        "passcode": 57357130,
+        "setcode": 281,
+        "type": 4129
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Salamangreat Falco",
+      "cdb_row_exists": true,
+      "deck_id": "deck_b",
+      "declared_name": "Salamangreat Falco",
+      "passcode": 20618081,
+      "slot": 13,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 1200,
+          "attribute": 4,
+          "def": 1600,
+          "level": 4,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 16777216,
+          "rank": null,
+          "type": 33
+        },
+        "name": "Salamangreat Falco",
+        "passcode": 20618081,
+        "setcode": 281,
+        "type": 33
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Code of Soul",
+      "cdb_row_exists": true,
+      "deck_id": "deck_b",
+      "declared_name": "Code of Soul",
+      "passcode": 74652966,
+      "slot": 14,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 500,
+          "attribute": 4,
+          "def": 500,
+          "level": 3,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 16777216,
+          "rank": null,
+          "type": 33
+        },
+        "name": "Code of Soul",
+        "passcode": 74652966,
+        "setcode": 0,
+        "type": 33
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Ash Blossom & Joyous Spring",
+      "cdb_row_exists": true,
+      "deck_id": "deck_b",
+      "declared_name": "Ash Blossom & Joyous Spring",
+      "passcode": 14558127,
+      "slot": 15,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 0,
+          "attribute": 4,
+          "def": 1800,
+          "level": 3,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 16,
+          "rank": null,
+          "type": 4129
+        },
+        "name": "Ash Blossom & Joyous Spring",
+        "passcode": 14558127,
+        "setcode": 0,
+        "type": 4129
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Ash Blossom & Joyous Spring",
+      "cdb_row_exists": true,
+      "deck_id": "deck_b",
+      "declared_name": "Ash Blossom & Joyous Spring",
+      "passcode": 14558127,
+      "slot": 16,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 0,
+          "attribute": 4,
+          "def": 1800,
+          "level": 3,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 16,
+          "rank": null,
+          "type": 4129
+        },
+        "name": "Ash Blossom & Joyous Spring",
+        "passcode": 14558127,
+        "setcode": 0,
+        "type": 4129
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Ash Blossom & Joyous Spring",
+      "cdb_row_exists": true,
+      "deck_id": "deck_b",
+      "declared_name": "Ash Blossom & Joyous Spring",
+      "passcode": 14558127,
+      "slot": 17,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 0,
+          "attribute": 4,
+          "def": 1800,
+          "level": 3,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 16,
+          "rank": null,
+          "type": 4129
+        },
+        "name": "Ash Blossom & Joyous Spring",
+        "passcode": 14558127,
+        "setcode": 0,
+        "type": 4129
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Ghost Belle & Haunted Mansion",
+      "cdb_row_exists": true,
+      "deck_id": "deck_b",
+      "declared_name": "Ghost Belle & Haunted Mansion",
+      "passcode": 73642296,
+      "slot": 18,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 0,
+          "attribute": 1,
+          "def": 1800,
+          "level": 3,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 16,
+          "rank": null,
+          "type": 4129
+        },
+        "name": "Ghost Belle & Haunted Mansion",
+        "passcode": 73642296,
+        "setcode": 0,
+        "type": 4129
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Ghost Belle & Haunted Mansion",
+      "cdb_row_exists": true,
+      "deck_id": "deck_b",
+      "declared_name": "Ghost Belle & Haunted Mansion",
+      "passcode": 73642296,
+      "slot": 19,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 0,
+          "attribute": 1,
+          "def": 1800,
+          "level": 3,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 16,
+          "rank": null,
+          "type": 4129
+        },
+        "name": "Ghost Belle & Haunted Mansion",
+        "passcode": 73642296,
+        "setcode": 0,
+        "type": 4129
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Ghost Belle & Haunted Mansion",
+      "cdb_row_exists": true,
+      "deck_id": "deck_b",
+      "declared_name": "Ghost Belle & Haunted Mansion",
+      "passcode": 73642296,
+      "slot": 20,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 0,
+          "attribute": 1,
+          "def": 1800,
+          "level": 3,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 16,
+          "rank": null,
+          "type": 4129
+        },
+        "name": "Ghost Belle & Haunted Mansion",
+        "passcode": 73642296,
+        "setcode": 0,
+        "type": 4129
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Effect Veiler",
+      "cdb_row_exists": true,
+      "deck_id": "deck_b",
+      "declared_name": "Effect Veiler",
+      "passcode": 97268402,
+      "slot": 21,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 0,
+          "attribute": 16,
+          "def": 0,
+          "level": 1,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 2,
+          "rank": null,
+          "type": 4129
+        },
+        "name": "Effect Veiler",
+        "passcode": 97268402,
+        "setcode": 0,
+        "type": 4129
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Effect Veiler",
+      "cdb_row_exists": true,
+      "deck_id": "deck_b",
+      "declared_name": "Effect Veiler",
+      "passcode": 97268402,
+      "slot": 22,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 0,
+          "attribute": 16,
+          "def": 0,
+          "level": 1,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 2,
+          "rank": null,
+          "type": 4129
+        },
+        "name": "Effect Veiler",
+        "passcode": 97268402,
+        "setcode": 0,
+        "type": 4129
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Effect Veiler",
+      "cdb_row_exists": true,
+      "deck_id": "deck_b",
+      "declared_name": "Effect Veiler",
+      "passcode": 97268402,
+      "slot": 23,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 0,
+          "attribute": 16,
+          "def": 0,
+          "level": 1,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 2,
+          "rank": null,
+          "type": 4129
+        },
+        "name": "Effect Veiler",
+        "passcode": 97268402,
+        "setcode": 0,
+        "type": 4129
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Salamangreat Circle",
+      "cdb_row_exists": true,
+      "deck_id": "deck_b",
+      "declared_name": "Salamangreat Circle",
+      "passcode": 52155219,
+      "slot": 24,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 2000,
+          "attribute": 0,
+          "def": 900,
+          "level": 0,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 0,
+          "rank": null,
+          "type": 65538
+        },
+        "name": "Salamangreat Circle",
+        "passcode": 52155219,
+        "setcode": 281,
+        "type": 65538
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Salamangreat Circle",
+      "cdb_row_exists": true,
+      "deck_id": "deck_b",
+      "declared_name": "Salamangreat Circle",
+      "passcode": 52155219,
+      "slot": 25,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 2000,
+          "attribute": 0,
+          "def": 900,
+          "level": 0,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 0,
+          "rank": null,
+          "type": 65538
+        },
+        "name": "Salamangreat Circle",
+        "passcode": 52155219,
+        "setcode": 281,
+        "type": 65538
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Salamangreat Circle",
+      "cdb_row_exists": true,
+      "deck_id": "deck_b",
+      "declared_name": "Salamangreat Circle",
+      "passcode": 52155219,
+      "slot": 26,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 2000,
+          "attribute": 0,
+          "def": 900,
+          "level": 0,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 0,
+          "rank": null,
+          "type": 65538
+        },
+        "name": "Salamangreat Circle",
+        "passcode": 52155219,
+        "setcode": 281,
+        "type": 65538
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Cynet Mining",
+      "cdb_row_exists": true,
+      "deck_id": "deck_b",
+      "declared_name": "Cynet Mining",
+      "passcode": 57160136,
+      "slot": 27,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 0,
+          "attribute": 0,
+          "def": 0,
+          "level": 0,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 0,
+          "rank": null,
+          "type": 2
+        },
+        "name": "Cynet Mining",
+        "passcode": 57160136,
+        "setcode": 280,
+        "type": 2
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Cynet Mining",
+      "cdb_row_exists": true,
+      "deck_id": "deck_b",
+      "declared_name": "Cynet Mining",
+      "passcode": 57160136,
+      "slot": 28,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 0,
+          "attribute": 0,
+          "def": 0,
+          "level": 0,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 0,
+          "rank": null,
+          "type": 2
+        },
+        "name": "Cynet Mining",
+        "passcode": 57160136,
+        "setcode": 280,
+        "type": 2
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Cynet Mining",
+      "cdb_row_exists": true,
+      "deck_id": "deck_b",
+      "declared_name": "Cynet Mining",
+      "passcode": 57160136,
+      "slot": 29,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 0,
+          "attribute": 0,
+          "def": 0,
+          "level": 0,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 0,
+          "rank": null,
+          "type": 2
+        },
+        "name": "Cynet Mining",
+        "passcode": 57160136,
+        "setcode": 280,
+        "type": 2
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Will of the Salamangreat",
+      "cdb_row_exists": true,
+      "deck_id": "deck_b",
+      "declared_name": "Will of the Salamangreat",
+      "passcode": 64178424,
+      "slot": 30,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 0,
+          "attribute": 0,
+          "def": 0,
+          "level": 0,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 0,
+          "rank": null,
+          "type": 131074
+        },
+        "name": "Will of the Salamangreat",
+        "passcode": 64178424,
+        "setcode": 281,
+        "type": 131074
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Will of the Salamangreat",
+      "cdb_row_exists": true,
+      "deck_id": "deck_b",
+      "declared_name": "Will of the Salamangreat",
+      "passcode": 64178424,
+      "slot": 31,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 0,
+          "attribute": 0,
+          "def": 0,
+          "level": 0,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 0,
+          "rank": null,
+          "type": 131074
+        },
+        "name": "Will of the Salamangreat",
+        "passcode": 64178424,
+        "setcode": 281,
+        "type": 131074
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Salamangreat Sanctuary",
+      "cdb_row_exists": true,
+      "deck_id": "deck_b",
+      "declared_name": "Salamangreat Sanctuary",
+      "passcode": 1295111,
+      "slot": 32,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 0,
+          "attribute": 0,
+          "def": 0,
+          "level": 0,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 0,
+          "rank": null,
+          "type": 524290
+        },
+        "name": "Salamangreat Sanctuary",
+        "passcode": 1295111,
+        "setcode": 281,
+        "type": 524290
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Salamangreat Charge",
+      "cdb_row_exists": true,
+      "deck_id": "deck_b",
+      "declared_name": "Salamangreat Charge",
+      "passcode": 83533296,
+      "slot": 33,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 0,
+          "attribute": 0,
+          "def": 0,
+          "level": 0,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 0,
+          "rank": null,
+          "type": 65538
+        },
+        "name": "Salamangreat Charge",
+        "passcode": 83533296,
+        "setcode": 281,
+        "type": 65538
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Called by the Grave",
+      "cdb_row_exists": true,
+      "deck_id": "deck_b",
+      "declared_name": "Called by the Grave",
+      "passcode": 24224830,
+      "slot": 34,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 0,
+          "attribute": 0,
+          "def": 0,
+          "level": 0,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 0,
+          "rank": null,
+          "type": 65538
+        },
+        "name": "Called by the Grave",
+        "passcode": 24224830,
+        "setcode": 0,
+        "type": 65538
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Infinite Impermanence",
+      "cdb_row_exists": true,
+      "deck_id": "deck_b",
+      "declared_name": "Infinite Impermanence",
+      "passcode": 10045474,
+      "slot": 35,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 0,
+          "attribute": 0,
+          "def": 0,
+          "level": 0,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 0,
+          "rank": null,
+          "type": 4
+        },
+        "name": "Infinite Impermanence",
+        "passcode": 10045474,
+        "setcode": 0,
+        "type": 4
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Infinite Impermanence",
+      "cdb_row_exists": true,
+      "deck_id": "deck_b",
+      "declared_name": "Infinite Impermanence",
+      "passcode": 10045474,
+      "slot": 36,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 0,
+          "attribute": 0,
+          "def": 0,
+          "level": 0,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 0,
+          "rank": null,
+          "type": 4
+        },
+        "name": "Infinite Impermanence",
+        "passcode": 10045474,
+        "setcode": 0,
+        "type": 4
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Infinite Impermanence",
+      "cdb_row_exists": true,
+      "deck_id": "deck_b",
+      "declared_name": "Infinite Impermanence",
+      "passcode": 10045474,
+      "slot": 37,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 0,
+          "attribute": 0,
+          "def": 0,
+          "level": 0,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 0,
+          "rank": null,
+          "type": 4
+        },
+        "name": "Infinite Impermanence",
+        "passcode": 10045474,
+        "setcode": 0,
+        "type": 4
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Salamangreat Roar",
+      "cdb_row_exists": true,
+      "deck_id": "deck_b",
+      "declared_name": "Salamangreat Roar",
+      "passcode": 51339637,
+      "slot": 38,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 0,
+          "attribute": 0,
+          "def": 0,
+          "level": 0,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 0,
+          "rank": null,
+          "type": 1048580
+        },
+        "name": "Salamangreat Roar",
+        "passcode": 51339637,
+        "setcode": 281,
+        "type": 1048580
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Salamangreat Rage",
+      "cdb_row_exists": true,
+      "deck_id": "deck_b",
+      "declared_name": "Salamangreat Rage",
+      "passcode": 14934922,
+      "slot": 39,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 0,
+          "attribute": 0,
+          "def": 0,
+          "level": 0,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 0,
+          "rank": null,
+          "type": 4
+        },
+        "name": "Salamangreat Rage",
+        "passcode": 14934922,
+        "setcode": 281,
+        "type": 4
+      },
+      "zone": "main",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Salamangreat Balelynx",
+      "cdb_row_exists": true,
+      "deck_id": "deck_b",
+      "declared_name": "Salamangreat Balelynx",
+      "passcode": 14812471,
+      "slot": 0,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 500,
+          "attribute": 4,
+          "def": null,
+          "level": 1,
+          "link_markers": 2,
+          "link_rating": 1,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 16777216,
+          "rank": null,
+          "type": 67108897
+        },
+        "name": "Salamangreat Balelynx",
+        "passcode": 14812471,
+        "setcode": 281,
+        "type": 67108897
+      },
+      "zone": "extra",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Salamangreat Balelynx",
+      "cdb_row_exists": true,
+      "deck_id": "deck_b",
+      "declared_name": "Salamangreat Balelynx",
+      "passcode": 14812471,
+      "slot": 1,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 500,
+          "attribute": 4,
+          "def": null,
+          "level": 1,
+          "link_markers": 2,
+          "link_rating": 1,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 16777216,
+          "rank": null,
+          "type": 67108897
+        },
+        "name": "Salamangreat Balelynx",
+        "passcode": 14812471,
+        "setcode": 281,
+        "type": 67108897
+      },
+      "zone": "extra",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Salamangreat Balelynx",
+      "cdb_row_exists": true,
+      "deck_id": "deck_b",
+      "declared_name": "Salamangreat Balelynx",
+      "passcode": 14812471,
+      "slot": 2,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 500,
+          "attribute": 4,
+          "def": null,
+          "level": 1,
+          "link_markers": 2,
+          "link_rating": 1,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 16777216,
+          "rank": null,
+          "type": 67108897
+        },
+        "name": "Salamangreat Balelynx",
+        "passcode": 14812471,
+        "setcode": 281,
+        "type": 67108897
+      },
+      "zone": "extra",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Salamangreat Sunlight Wolf",
+      "cdb_row_exists": true,
+      "deck_id": "deck_b",
+      "declared_name": "Salamangreat Sunlight Wolf",
+      "passcode": 87871125,
+      "slot": 3,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 1800,
+          "attribute": 4,
+          "def": null,
+          "level": 2,
+          "link_markers": 130,
+          "link_rating": 2,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 16777216,
+          "rank": null,
+          "type": 67108897
+        },
+        "name": "Salamangreat Sunlight Wolf",
+        "passcode": 87871125,
+        "setcode": 281,
+        "type": 67108897
+      },
+      "zone": "extra",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Salamangreat Sunlight Wolf",
+      "cdb_row_exists": true,
+      "deck_id": "deck_b",
+      "declared_name": "Salamangreat Sunlight Wolf",
+      "passcode": 87871125,
+      "slot": 4,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 1800,
+          "attribute": 4,
+          "def": null,
+          "level": 2,
+          "link_markers": 130,
+          "link_rating": 2,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 16777216,
+          "rank": null,
+          "type": 67108897
+        },
+        "name": "Salamangreat Sunlight Wolf",
+        "passcode": 87871125,
+        "setcode": 281,
+        "type": 67108897
+      },
+      "zone": "extra",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Salamangreat Sunlight Wolf",
+      "cdb_row_exists": true,
+      "deck_id": "deck_b",
+      "declared_name": "Salamangreat Sunlight Wolf",
+      "passcode": 87871125,
+      "slot": 5,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 1800,
+          "attribute": 4,
+          "def": null,
+          "level": 2,
+          "link_markers": 130,
+          "link_rating": 2,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 16777216,
+          "rank": null,
+          "type": 67108897
+        },
+        "name": "Salamangreat Sunlight Wolf",
+        "passcode": 87871125,
+        "setcode": 281,
+        "type": 67108897
+      },
+      "zone": "extra",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Salamangreat Raging Phoenix",
+      "cdb_row_exists": true,
+      "deck_id": "deck_b",
+      "declared_name": "Salamangreat Raging Phoenix",
+      "passcode": 57134592,
+      "slot": 6,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 2800,
+          "attribute": 4,
+          "def": null,
+          "level": 4,
+          "link_markers": 135,
+          "link_rating": 4,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 16777216,
+          "rank": null,
+          "type": 67108897
+        },
+        "name": "Salamangreat Raging Phoenix",
+        "passcode": 57134592,
+        "setcode": 281,
+        "type": 67108897
+      },
+      "zone": "extra",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Salamangreat Raging Phoenix",
+      "cdb_row_exists": true,
+      "deck_id": "deck_b",
+      "declared_name": "Salamangreat Raging Phoenix",
+      "passcode": 57134592,
+      "slot": 7,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 2800,
+          "attribute": 4,
+          "def": null,
+          "level": 4,
+          "link_markers": 135,
+          "link_rating": 4,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 16777216,
+          "rank": null,
+          "type": 67108897
+        },
+        "name": "Salamangreat Raging Phoenix",
+        "passcode": 57134592,
+        "setcode": 281,
+        "type": 67108897
+      },
+      "zone": "extra",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Salamangreat Pyro Phoenix",
+      "cdb_row_exists": true,
+      "deck_id": "deck_b",
+      "declared_name": "Salamangreat Pyro Phoenix",
+      "passcode": 31313405,
+      "slot": 8,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 2800,
+          "attribute": 4,
+          "def": null,
+          "level": 4,
+          "link_markers": 170,
+          "link_rating": 4,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 16777216,
+          "rank": null,
+          "type": 67108897
+        },
+        "name": "Salamangreat Pyro Phoenix",
+        "passcode": 31313405,
+        "setcode": 281,
+        "type": 67108897
+      },
+      "zone": "extra",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Salamangreat Pyro Phoenix",
+      "cdb_row_exists": true,
+      "deck_id": "deck_b",
+      "declared_name": "Salamangreat Pyro Phoenix",
+      "passcode": 31313405,
+      "slot": 9,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 2800,
+          "attribute": 4,
+          "def": null,
+          "level": 4,
+          "link_markers": 170,
+          "link_rating": 4,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 16777216,
+          "rank": null,
+          "type": 67108897
+        },
+        "name": "Salamangreat Pyro Phoenix",
+        "passcode": 31313405,
+        "setcode": 281,
+        "type": 67108897
+      },
+      "zone": "extra",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Salamangreat Heatleo",
+      "cdb_row_exists": true,
+      "deck_id": "deck_b",
+      "declared_name": "Salamangreat Heatleo",
+      "passcode": 41463181,
+      "slot": 10,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 2300,
+          "attribute": 4,
+          "def": null,
+          "level": 3,
+          "link_markers": 133,
+          "link_rating": 3,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 16777216,
+          "rank": null,
+          "type": 67108897
+        },
+        "name": "Salamangreat Heatleo",
+        "passcode": 41463181,
+        "setcode": 281,
+        "type": 67108897
+      },
+      "zone": "extra",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Salamangreat Miragestallio",
+      "cdb_row_exists": true,
+      "deck_id": "deck_b",
+      "declared_name": "Salamangreat Miragestallio",
+      "passcode": 87327776,
+      "slot": 11,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 2000,
+          "attribute": 4,
+          "def": 900,
+          "level": null,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 16777216,
+          "rank": 3,
+          "type": 8388641
+        },
+        "name": "Salamangreat Miragestallio",
+        "passcode": 87327776,
+        "setcode": 281,
+        "type": 8388641
+      },
+      "zone": "extra",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Salamangreat Miragestallio",
+      "cdb_row_exists": true,
+      "deck_id": "deck_b",
+      "declared_name": "Salamangreat Miragestallio",
+      "passcode": 87327776,
+      "slot": 12,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 2000,
+          "attribute": 4,
+          "def": 900,
+          "level": null,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 16777216,
+          "rank": 3,
+          "type": 8388641
+        },
+        "name": "Salamangreat Miragestallio",
+        "passcode": 87327776,
+        "setcode": 281,
+        "type": 8388641
+      },
+      "zone": "extra",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Promethean Princess, Bestower of Flames",
+      "cdb_row_exists": true,
+      "deck_id": "deck_b",
+      "declared_name": "Promethean Princess, Bestower of Flames",
+      "passcode": 2772337,
+      "slot": 13,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 2700,
+          "attribute": 4,
+          "def": null,
+          "level": 3,
+          "link_markers": 42,
+          "link_rating": 3,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 8,
+          "rank": null,
+          "type": 67108897
+        },
+        "name": "Promethean Princess, Bestower of Flames",
+        "passcode": 2772337,
+        "setcode": 0,
+        "type": 67108897
+      },
+      "zone": "extra",
+      "zone_type_valid": true
+    },
+    {
+      "cdb_name": "Hiita the Fire Charmer, Ablaze",
+      "cdb_row_exists": true,
+      "deck_id": "deck_b",
+      "declared_name": "Hiita the Fire Charmer, Ablaze",
+      "passcode": 48815792,
+      "slot": 14,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 1850,
+          "attribute": 4,
+          "def": null,
+          "level": 2,
+          "link_markers": 5,
+          "link_rating": 2,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 2,
+          "rank": null,
+          "type": 67108897
+        },
+        "name": "Hiita the Fire Charmer, Ablaze",
+        "passcode": 48815792,
+        "setcode": 281018559,
+        "type": 67108897
+      },
+      "zone": "extra",
+      "zone_type_valid": true
+    }
+  ],
+  "unique_cards": [
+    {
+      "cdb_name": "Salamangreat Sanctuary",
+      "cdb_row_exists": true,
+      "passcode": 1295111,
+      "script": {
+        "implementation": "official",
+        "load_result": "PASS",
+        "passcode": 1295111,
+        "path": ".cache\\rules_bundle\\cardscripts\\official\\c1295111.lua"
+      },
+      "script_required": true,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 0,
+          "attribute": 0,
+          "def": 0,
+          "level": 0,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 0,
+          "rank": null,
+          "type": 524290
+        },
+        "name": "Salamangreat Sanctuary",
+        "passcode": 1295111,
+        "setcode": 281,
+        "type": 524290
+      },
+      "status": "PASS_STATIC_ONLY"
+    },
+    {
+      "cdb_name": "Promethean Princess, Bestower of Flames",
+      "cdb_row_exists": true,
+      "passcode": 2772337,
+      "script": {
+        "implementation": "official",
+        "load_result": "PASS",
+        "passcode": 2772337,
+        "path": ".cache\\rules_bundle\\cardscripts\\official\\c2772337.lua"
+      },
+      "script_required": true,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 2700,
+          "attribute": 4,
+          "def": null,
+          "level": 3,
+          "link_markers": 42,
+          "link_rating": 3,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 8,
+          "rank": null,
+          "type": 67108897
+        },
+        "name": "Promethean Princess, Bestower of Flames",
+        "passcode": 2772337,
+        "setcode": 0,
+        "type": 67108897
+      },
+      "status": "PASS_STATIC_ONLY"
+    },
+    {
+      "cdb_name": "Draco Berserker of the Tenyi",
+      "cdb_row_exists": true,
+      "passcode": 5041348,
+      "script": {
+        "implementation": "official",
+        "load_result": "PASS",
+        "passcode": 5041348,
+        "path": ".cache\\rules_bundle\\cardscripts\\official\\c5041348.lua"
+      },
+      "script_required": true,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 3000,
+          "attribute": 32,
+          "def": 0,
+          "level": 8,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 8388608,
+          "rank": null,
+          "type": 8225
+        },
+        "name": "Draco Berserker of the Tenyi",
+        "passcode": 5041348,
+        "setcode": 300,
+        "type": 8225
+      },
+      "status": "PASS_STATIC_ONLY"
+    },
+    {
+      "cdb_name": "Adamancipator Risen - Dragite",
+      "cdb_row_exists": true,
+      "passcode": 9464441,
+      "script": {
+        "implementation": "official",
+        "load_result": "PASS",
+        "passcode": 9464441,
+        "path": ".cache\\rules_bundle\\cardscripts\\official\\c9464441.lua"
+      },
+      "script_required": true,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 3000,
+          "attribute": 2,
+          "def": 2200,
+          "level": 8,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 256,
+          "rank": null,
+          "type": 8225
+        },
+        "name": "Adamancipator Risen - Dragite",
+        "passcode": 9464441,
+        "setcode": 320,
+        "type": 8225
+      },
+      "status": "PASS_STATIC_ONLY"
+    },
+    {
+      "cdb_name": "Infinite Impermanence",
+      "cdb_row_exists": true,
+      "passcode": 10045474,
+      "script": {
+        "implementation": "official",
+        "load_result": "PASS",
+        "passcode": 10045474,
+        "path": ".cache\\rules_bundle\\cardscripts\\official\\c10045474.lua"
+      },
+      "script_required": true,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 0,
+          "attribute": 0,
+          "def": 0,
+          "level": 0,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 0,
+          "rank": null,
+          "type": 4
+        },
+        "name": "Infinite Impermanence",
+        "passcode": 10045474,
+        "setcode": 0,
+        "type": 4
+      },
+      "status": "PASS_STATIC_ONLY"
+    },
+    {
+      "cdb_name": "Salamangreat of Fire",
+      "cdb_row_exists": true,
+      "passcode": 11962031,
+      "script": {
+        "implementation": "official",
+        "load_result": "PASS",
+        "passcode": 11962031,
+        "path": ".cache\\rules_bundle\\cardscripts\\official\\c11962031.lua"
+      },
+      "script_required": true,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 800,
+          "attribute": 4,
+          "def": 800,
+          "level": 2,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 16777216,
+          "rank": null,
+          "type": 33
+        },
+        "name": "Salamangreat of Fire",
+        "passcode": 11962031,
+        "setcode": 281,
+        "type": 33
+      },
+      "status": "PASS_STATIC_ONLY"
+    },
+    {
+      "cdb_name": "Ash Blossom & Joyous Spring",
+      "cdb_row_exists": true,
+      "passcode": 14558127,
+      "script": {
+        "implementation": "official",
+        "load_result": "PASS",
+        "passcode": 14558127,
+        "path": ".cache\\rules_bundle\\cardscripts\\official\\c14558127.lua"
+      },
+      "script_required": true,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 0,
+          "attribute": 4,
+          "def": 1800,
+          "level": 3,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 16,
+          "rank": null,
+          "type": 4129
+        },
+        "name": "Ash Blossom & Joyous Spring",
+        "passcode": 14558127,
+        "setcode": 0,
+        "type": 4129
+      },
+      "status": "PASS_STATIC_ONLY"
+    },
+    {
+      "cdb_name": "Salamangreat Balelynx",
+      "cdb_row_exists": true,
+      "passcode": 14812471,
+      "script": {
+        "implementation": "official",
+        "load_result": "PASS",
+        "passcode": 14812471,
+        "path": ".cache\\rules_bundle\\cardscripts\\official\\c14812471.lua"
+      },
+      "script_required": true,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 500,
+          "attribute": 4,
+          "def": null,
+          "level": 1,
+          "link_markers": 2,
+          "link_rating": 1,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 16777216,
+          "rank": null,
+          "type": 67108897
+        },
+        "name": "Salamangreat Balelynx",
+        "passcode": 14812471,
+        "setcode": 281,
+        "type": 67108897
+      },
+      "status": "PASS_STATIC_ONLY"
+    },
+    {
+      "cdb_name": "Swordsoul Blackout",
+      "cdb_row_exists": true,
+      "passcode": 14821890,
+      "script": {
+        "implementation": "official",
+        "load_result": "PASS",
+        "passcode": 14821890,
+        "path": ".cache\\rules_bundle\\cardscripts\\official\\c14821890.lua"
+      },
+      "script_required": true,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 0,
+          "attribute": 0,
+          "def": 0,
+          "level": 0,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 0,
+          "rank": null,
+          "type": 4
+        },
+        "name": "Swordsoul Blackout",
+        "passcode": 14821890,
+        "setcode": 365,
+        "type": 4
+      },
+      "status": "PASS_STATIC_ONLY"
+    },
+    {
+      "cdb_name": "Salamangreat Rage",
+      "cdb_row_exists": true,
+      "passcode": 14934922,
+      "script": {
+        "implementation": "official",
+        "load_result": "PASS",
+        "passcode": 14934922,
+        "path": ".cache\\rules_bundle\\cardscripts\\official\\c14934922.lua"
+      },
+      "script_required": true,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 0,
+          "attribute": 0,
+          "def": 0,
+          "level": 0,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 0,
+          "rank": null,
+          "type": 4
+        },
+        "name": "Salamangreat Rage",
+        "passcode": 14934922,
+        "setcode": 281,
+        "type": 4
+      },
+      "status": "PASS_STATIC_ONLY"
+    },
+    {
+      "cdb_name": "Chaofeng, Phantom of the Yang Zing",
+      "cdb_row_exists": true,
+      "passcode": 19048328,
+      "script": {
+        "implementation": "official",
+        "load_result": "PASS",
+        "passcode": 19048328,
+        "path": ".cache\\rules_bundle\\cardscripts\\official\\c19048328.lua"
+      },
+      "script_required": true,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 2800,
+          "attribute": 16,
+          "def": 2200,
+          "level": 9,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 8388608,
+          "rank": null,
+          "type": 8225
+        },
+        "name": "Chaofeng, Phantom of the Yang Zing",
+        "passcode": 19048328,
+        "setcode": 158,
+        "type": 8225
+      },
+      "status": "PASS_STATIC_ONLY"
+    },
+    {
+      "cdb_name": "Swordsoul of Mo Ye",
+      "cdb_row_exists": true,
+      "passcode": 20001443,
+      "script": {
+        "implementation": "official",
+        "load_result": "PASS",
+        "passcode": 20001443,
+        "path": ".cache\\rules_bundle\\cardscripts\\official\\c20001443.lua"
+      },
+      "script_required": true,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 1700,
+          "attribute": 2,
+          "def": 1800,
+          "level": 4,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 8388608,
+          "rank": null,
+          "type": 33
+        },
+        "name": "Swordsoul of Mo Ye",
+        "passcode": 20001443,
+        "setcode": 365,
+        "type": 33
+      },
+      "status": "PASS_STATIC_ONLY"
+    },
+    {
+      "cdb_name": "Salamangreat Falco",
+      "cdb_row_exists": true,
+      "passcode": 20618081,
+      "script": {
+        "implementation": "official",
+        "load_result": "PASS",
+        "passcode": 20618081,
+        "path": ".cache\\rules_bundle\\cardscripts\\official\\c20618081.lua"
+      },
+      "script_required": true,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 1200,
+          "attribute": 4,
+          "def": 1600,
+          "level": 4,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 16777216,
+          "rank": null,
+          "type": 33
+        },
+        "name": "Salamangreat Falco",
+        "passcode": 20618081,
+        "setcode": 281,
+        "type": 33
+      },
+      "status": "PASS_STATIC_ONLY"
+    },
+    {
+      "cdb_name": "Tenyi Spirit - Vishuda",
+      "cdb_row_exists": true,
+      "passcode": 23431858,
+      "script": {
+        "implementation": "official",
+        "load_result": "PASS",
+        "passcode": 23431858,
+        "path": ".cache\\rules_bundle\\cardscripts\\official\\c23431858.lua"
+      },
+      "script_required": true,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 1500,
+          "attribute": 32,
+          "def": 2500,
+          "level": 7,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 8388608,
+          "rank": null,
+          "type": 33
+        },
+        "name": "Tenyi Spirit - Vishuda",
+        "passcode": 23431858,
+        "setcode": 300,
+        "type": 33
+      },
+      "status": "PASS_STATIC_ONLY"
+    },
+    {
+      "cdb_name": "Called by the Grave",
+      "cdb_row_exists": true,
+      "passcode": 24224830,
+      "script": {
+        "implementation": "official",
+        "load_result": "PASS",
+        "passcode": 24224830,
+        "path": ".cache\\rules_bundle\\cardscripts\\official\\c24224830.lua"
+      },
+      "script_required": true,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 0,
+          "attribute": 0,
+          "def": 0,
+          "level": 0,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 0,
+          "rank": null,
+          "type": 65538
+        },
+        "name": "Called by the Grave",
+        "passcode": 24224830,
+        "setcode": 0,
+        "type": 65538
+      },
+      "status": "PASS_STATIC_ONLY"
+    },
+    {
+      "cdb_name": "Tenyi Spirit - Shthana",
+      "cdb_row_exists": true,
+      "passcode": 24557335,
+      "script": {
+        "implementation": "official",
+        "load_result": "PASS",
+        "passcode": 24557335,
+        "path": ".cache\\rules_bundle\\cardscripts\\official\\c24557335.lua"
+      },
+      "script_required": true,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 400,
+          "attribute": 2,
+          "def": 2000,
+          "level": 4,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 8388608,
+          "rank": null,
+          "type": 33
+        },
+        "name": "Tenyi Spirit - Shthana",
+        "passcode": 24557335,
+        "setcode": 300,
+        "type": 33
+      },
+      "status": "PASS_STATIC_ONLY"
+    },
+    {
+      "cdb_name": "Salamangreat Gazelle",
+      "cdb_row_exists": true,
+      "passcode": 26889158,
+      "script": {
+        "implementation": "official",
+        "load_result": "PASS",
+        "passcode": 26889158,
+        "path": ".cache\\rules_bundle\\cardscripts\\official\\c26889158.lua"
+      },
+      "script_required": true,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 1500,
+          "attribute": 4,
+          "def": 1000,
+          "level": 3,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 16777216,
+          "rank": null,
+          "type": 33
+        },
+        "name": "Salamangreat Gazelle",
+        "passcode": 26889158,
+        "setcode": 281,
+        "type": 33
+      },
+      "status": "PASS_STATIC_ONLY"
+    },
+    {
+      "cdb_name": "Salamangreat Pyro Phoenix",
+      "cdb_row_exists": true,
+      "passcode": 31313405,
+      "script": {
+        "implementation": "official",
+        "load_result": "PASS",
+        "passcode": 31313405,
+        "path": ".cache\\rules_bundle\\cardscripts\\official\\c31313405.lua"
+      },
+      "script_required": true,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 2800,
+          "attribute": 4,
+          "def": null,
+          "level": 4,
+          "link_markers": 170,
+          "link_rating": 4,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 16777216,
+          "rank": null,
+          "type": 67108897
+        },
+        "name": "Salamangreat Pyro Phoenix",
+        "passcode": 31313405,
+        "setcode": 281,
+        "type": 67108897
+      },
+      "status": "PASS_STATIC_ONLY"
+    },
+    {
+      "cdb_name": "Monk of the Tenyi",
+      "cdb_row_exists": true,
+      "passcode": 32519092,
+      "script": {
+        "implementation": "official",
+        "load_result": "PASS",
+        "passcode": 32519092,
+        "path": ".cache\\rules_bundle\\cardscripts\\official\\c32519092.lua"
+      },
+      "script_required": true,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 1000,
+          "attribute": 1,
+          "def": null,
+          "level": 1,
+          "link_markers": 2,
+          "link_rating": 1,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 8388608,
+          "rank": null,
+          "type": 67108865
+        },
+        "name": "Monk of the Tenyi",
+        "passcode": 32519092,
+        "setcode": 300,
+        "type": 67108865
+      },
+      "status": "PASS_STATIC_ONLY"
+    },
+    {
+      "cdb_name": "Salamangreat Heatleo",
+      "cdb_row_exists": true,
+      "passcode": 41463181,
+      "script": {
+        "implementation": "official",
+        "load_result": "PASS",
+        "passcode": 41463181,
+        "path": ".cache\\rules_bundle\\cardscripts\\official\\c41463181.lua"
+      },
+      "script_required": true,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 2300,
+          "attribute": 4,
+          "def": null,
+          "level": 3,
+          "link_markers": 133,
+          "link_rating": 3,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 16777216,
+          "rank": null,
+          "type": 67108897
+        },
+        "name": "Salamangreat Heatleo",
+        "passcode": 41463181,
+        "setcode": 281,
+        "type": 67108897
+      },
+      "status": "PASS_STATIC_ONLY"
+    },
+    {
+      "cdb_name": "Yazi, Evil of the Yang Zing",
+      "cdb_row_exists": true,
+      "passcode": 43202238,
+      "script": {
+        "implementation": "official",
+        "load_result": "PASS",
+        "passcode": 43202238,
+        "path": ".cache\\rules_bundle\\cardscripts\\official\\c43202238.lua"
+      },
+      "script_required": true,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 2600,
+          "attribute": 32,
+          "def": 2100,
+          "level": 7,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 8388608,
+          "rank": null,
+          "type": 8225
+        },
+        "name": "Yazi, Evil of the Yang Zing",
+        "passcode": 43202238,
+        "setcode": 158,
+        "type": 8225
+      },
+      "status": "PASS_STATIC_ONLY"
+    },
+    {
+      "cdb_name": "Swordsoul Sinister Sovereign - Qixing Longyuan",
+      "cdb_row_exists": true,
+      "passcode": 47710198,
+      "script": {
+        "implementation": "official",
+        "load_result": "PASS",
+        "passcode": 47710198,
+        "path": ".cache\\rules_bundle\\cardscripts\\official\\c47710198.lua"
+      },
+      "script_required": true,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 2900,
+          "attribute": 4,
+          "def": 2300,
+          "level": 10,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 8388608,
+          "rank": null,
+          "type": 8225
+        },
+        "name": "Swordsoul Sinister Sovereign - Qixing Longyuan",
+        "passcode": 47710198,
+        "setcode": 365,
+        "type": 8225
+      },
+      "status": "PASS_STATIC_ONLY"
+    },
+    {
+      "cdb_name": "Hiita the Fire Charmer, Ablaze",
+      "cdb_row_exists": true,
+      "passcode": 48815792,
+      "script": {
+        "implementation": "official",
+        "load_result": "PASS",
+        "passcode": 48815792,
+        "path": ".cache\\rules_bundle\\cardscripts\\official\\c48815792.lua"
+      },
+      "script_required": true,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 1850,
+          "attribute": 4,
+          "def": null,
+          "level": 2,
+          "link_markers": 5,
+          "link_rating": 2,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 2,
+          "rank": null,
+          "type": 67108897
+        },
+        "name": "Hiita the Fire Charmer, Ablaze",
+        "passcode": 48815792,
+        "setcode": 281018559,
+        "type": 67108897
+      },
+      "status": "PASS_STATIC_ONLY"
+    },
+    {
+      "cdb_name": "Salamangreat Roar",
+      "cdb_row_exists": true,
+      "passcode": 51339637,
+      "script": {
+        "implementation": "official",
+        "load_result": "PASS",
+        "passcode": 51339637,
+        "path": ".cache\\rules_bundle\\cardscripts\\official\\c51339637.lua"
+      },
+      "script_required": true,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 0,
+          "attribute": 0,
+          "def": 0,
+          "level": 0,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 0,
+          "rank": null,
+          "type": 1048580
+        },
+        "name": "Salamangreat Roar",
+        "passcode": 51339637,
+        "setcode": 281,
+        "type": 1048580
+      },
+      "status": "PASS_STATIC_ONLY"
+    },
+    {
+      "cdb_name": "Heavenly Dragon Circle",
+      "cdb_row_exists": true,
+      "passcode": 51684157,
+      "script": {
+        "implementation": "official",
+        "load_result": "PASS",
+        "passcode": 51684157,
+        "path": ".cache\\rules_bundle\\cardscripts\\official\\c51684157.lua"
+      },
+      "script_required": true,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 0,
+          "attribute": 0,
+          "def": 0,
+          "level": 0,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 0,
+          "rank": null,
+          "type": 65538
+        },
+        "name": "Heavenly Dragon Circle",
+        "passcode": 51684157,
+        "setcode": 0,
+        "type": 65538
+      },
+      "status": "PASS_STATIC_ONLY"
+    },
+    {
+      "cdb_name": "Salamangreat Circle",
+      "cdb_row_exists": true,
+      "passcode": 52155219,
+      "script": {
+        "implementation": "official",
+        "load_result": "PASS",
+        "passcode": 52155219,
+        "path": ".cache\\rules_bundle\\cardscripts\\official\\c52155219.lua"
+      },
+      "script_required": true,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 2000,
+          "attribute": 0,
+          "def": 900,
+          "level": 0,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 0,
+          "rank": null,
+          "type": 65538
+        },
+        "name": "Salamangreat Circle",
+        "passcode": 52155219,
+        "setcode": 281,
+        "type": 65538
+      },
+      "status": "PASS_STATIC_ONLY"
+    },
+    {
+      "cdb_name": "Salamangreat Spinny",
+      "cdb_row_exists": true,
+      "passcode": 52277807,
+      "script": {
+        "implementation": "official",
+        "load_result": "PASS",
+        "passcode": 52277807,
+        "path": ".cache\\rules_bundle\\cardscripts\\official\\c52277807.lua"
+      },
+      "script_required": true,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 1000,
+          "attribute": 4,
+          "def": 1500,
+          "level": 3,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 16777216,
+          "rank": null,
+          "type": 33
+        },
+        "name": "Salamangreat Spinny",
+        "passcode": 52277807,
+        "setcode": 281,
+        "type": 33
+      },
+      "status": "PASS_STATIC_ONLY"
+    },
+    {
+      "cdb_name": "Incredible Ecclesia, the Virtuous",
+      "cdb_row_exists": true,
+      "passcode": 55273560,
+      "script": {
+        "implementation": "official",
+        "load_result": "PASS",
+        "passcode": 55273560,
+        "path": ".cache\\rules_bundle\\cardscripts\\official\\c55273560.lua"
+      },
+      "script_required": true,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 1500,
+          "attribute": 16,
+          "def": 1500,
+          "level": 4,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 2,
+          "rank": null,
+          "type": 4129
+        },
+        "name": "Incredible Ecclesia, the Virtuous",
+        "passcode": 55273560,
+        "setcode": 463,
+        "type": 4129
+      },
+      "status": "PASS_STATIC_ONLY"
+    },
+    {
+      "cdb_name": "Salamangreat Jack Jaguar",
+      "cdb_row_exists": true,
+      "passcode": 56003780,
+      "script": {
+        "implementation": "official",
+        "load_result": "PASS",
+        "passcode": 56003780,
+        "path": ".cache\\rules_bundle\\cardscripts\\official\\c56003780.lua"
+      },
+      "script_required": true,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 1800,
+          "attribute": 4,
+          "def": 1200,
+          "level": 4,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 16777216,
+          "rank": null,
+          "type": 33
+        },
+        "name": "Salamangreat Jack Jaguar",
+        "passcode": 56003780,
+        "setcode": 281,
+        "type": 33
+      },
+      "status": "PASS_STATIC_ONLY"
+    },
+    {
+      "cdb_name": "Swordsoul Emergence",
+      "cdb_row_exists": true,
+      "passcode": 56465981,
+      "script": {
+        "implementation": "official",
+        "load_result": "PASS",
+        "passcode": 56465981,
+        "path": ".cache\\rules_bundle\\cardscripts\\official\\c56465981.lua"
+      },
+      "script_required": true,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 0,
+          "attribute": 0,
+          "def": 0,
+          "level": 0,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 0,
+          "rank": null,
+          "type": 2
+        },
+        "name": "Swordsoul Emergence",
+        "passcode": 56465981,
+        "setcode": 365,
+        "type": 2
+      },
+      "status": "PASS_STATIC_ONLY"
+    },
+    {
+      "cdb_name": "Swordsoul of Taia",
+      "cdb_row_exists": true,
+      "passcode": 56495147,
+      "script": {
+        "implementation": "official",
+        "load_result": "PASS",
+        "passcode": 56495147,
+        "path": ".cache\\rules_bundle\\cardscripts\\official\\c56495147.lua"
+      },
+      "script_required": true,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 1800,
+          "attribute": 8,
+          "def": 1500,
+          "level": 4,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 8388608,
+          "rank": null,
+          "type": 33
+        },
+        "name": "Swordsoul of Taia",
+        "passcode": 56495147,
+        "setcode": 365,
+        "type": 33
+      },
+      "status": "PASS_STATIC_ONLY"
+    },
+    {
+      "cdb_name": "Salamangreat Raging Phoenix",
+      "cdb_row_exists": true,
+      "passcode": 57134592,
+      "script": {
+        "implementation": "official",
+        "load_result": "PASS",
+        "passcode": 57134592,
+        "path": ".cache\\rules_bundle\\cardscripts\\official\\c57134592.lua"
+      },
+      "script_required": true,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 2800,
+          "attribute": 4,
+          "def": null,
+          "level": 4,
+          "link_markers": 135,
+          "link_rating": 4,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 16777216,
+          "rank": null,
+          "type": 67108897
+        },
+        "name": "Salamangreat Raging Phoenix",
+        "passcode": 57134592,
+        "setcode": 281,
+        "type": 67108897
+      },
+      "status": "PASS_STATIC_ONLY"
+    },
+    {
+      "cdb_name": "Cynet Mining",
+      "cdb_row_exists": true,
+      "passcode": 57160136,
+      "script": {
+        "implementation": "official",
+        "load_result": "PASS",
+        "passcode": 57160136,
+        "path": ".cache\\rules_bundle\\cardscripts\\official\\c57160136.lua"
+      },
+      "script_required": true,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 0,
+          "attribute": 0,
+          "def": 0,
+          "level": 0,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 0,
+          "rank": null,
+          "type": 2
+        },
+        "name": "Cynet Mining",
+        "passcode": 57160136,
+        "setcode": 280,
+        "type": 2
+      },
+      "status": "PASS_STATIC_ONLY"
+    },
+    {
+      "cdb_name": "Salamangreat Weasel",
+      "cdb_row_exists": true,
+      "passcode": 57357130,
+      "script": {
+        "implementation": "official",
+        "load_result": "PASS",
+        "passcode": 57357130,
+        "path": ".cache\\rules_bundle\\cardscripts\\official\\c57357130.lua"
+      },
+      "script_required": true,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 700,
+          "attribute": 4,
+          "def": 1400,
+          "level": 3,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 16777216,
+          "rank": null,
+          "type": 4129
+        },
+        "name": "Salamangreat Weasel",
+        "passcode": 57357130,
+        "setcode": 281,
+        "type": 4129
+      },
+      "status": "PASS_STATIC_ONLY"
+    },
+    {
+      "cdb_name": "Will of the Salamangreat",
+      "cdb_row_exists": true,
+      "passcode": 64178424,
+      "script": {
+        "implementation": "official",
+        "load_result": "PASS",
+        "passcode": 64178424,
+        "path": ".cache\\rules_bundle\\cardscripts\\official\\c64178424.lua"
+      },
+      "script_required": true,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 0,
+          "attribute": 0,
+          "def": 0,
+          "level": 0,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 0,
+          "rank": null,
+          "type": 131074
+        },
+        "name": "Will of the Salamangreat",
+        "passcode": 64178424,
+        "setcode": 281,
+        "type": 131074
+      },
+      "status": "PASS_STATIC_ONLY"
+    },
+    {
+      "cdb_name": "Swordsoul Grandmaster - Chixiao",
+      "cdb_row_exists": true,
+      "passcode": 69248256,
+      "script": {
+        "implementation": "official",
+        "load_result": "PASS",
+        "passcode": 69248256,
+        "path": ".cache\\rules_bundle\\cardscripts\\official\\c69248256.lua"
+      },
+      "script_required": true,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 2800,
+          "attribute": 16,
+          "def": 1000,
+          "level": 8,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 8388608,
+          "rank": null,
+          "type": 8225
+        },
+        "name": "Swordsoul Grandmaster - Chixiao",
+        "passcode": 69248256,
+        "setcode": 365,
+        "type": 8225
+      },
+      "status": "PASS_STATIC_ONLY"
+    },
+    {
+      "cdb_name": "Ghost Belle & Haunted Mansion",
+      "cdb_row_exists": true,
+      "passcode": 73642296,
+      "script": {
+        "implementation": "official",
+        "load_result": "PASS",
+        "passcode": 73642296,
+        "path": ".cache\\rules_bundle\\cardscripts\\official\\c73642296.lua"
+      },
+      "script_required": true,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 0,
+          "attribute": 1,
+          "def": 1800,
+          "level": 3,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 16,
+          "rank": null,
+          "type": 4129
+        },
+        "name": "Ghost Belle & Haunted Mansion",
+        "passcode": 73642296,
+        "setcode": 0,
+        "type": 4129
+      },
+      "status": "PASS_STATIC_ONLY"
+    },
+    {
+      "cdb_name": "Code of Soul",
+      "cdb_row_exists": true,
+      "passcode": 74652966,
+      "script": {
+        "implementation": "official",
+        "load_result": "PASS",
+        "passcode": 74652966,
+        "path": ".cache\\rules_bundle\\cardscripts\\official\\c74652966.lua"
+      },
+      "script_required": true,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 500,
+          "attribute": 4,
+          "def": 500,
+          "level": 3,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 16777216,
+          "rank": null,
+          "type": 33
+        },
+        "name": "Code of Soul",
+        "passcode": 74652966,
+        "setcode": 0,
+        "type": 33
+      },
+      "status": "PASS_STATIC_ONLY"
+    },
+    {
+      "cdb_name": "Shaman of the Tenyi",
+      "cdb_row_exists": true,
+      "passcode": 78917791,
+      "script": {
+        "implementation": "official",
+        "load_result": "PASS",
+        "passcode": 78917791,
+        "path": ".cache\\rules_bundle\\cardscripts\\official\\c78917791.lua"
+      },
+      "script_required": true,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 1600,
+          "attribute": 4,
+          "def": null,
+          "level": 2,
+          "link_markers": 5,
+          "link_rating": 2,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 8388608,
+          "rank": null,
+          "type": 67108897
+        },
+        "name": "Shaman of the Tenyi",
+        "passcode": 78917791,
+        "setcode": 300,
+        "type": 67108897
+      },
+      "status": "PASS_STATIC_ONLY"
+    },
+    {
+      "cdb_name": "Salamangreat Charge",
+      "cdb_row_exists": true,
+      "passcode": 83533296,
+      "script": {
+        "implementation": "official",
+        "load_result": "PASS",
+        "passcode": 83533296,
+        "path": ".cache\\rules_bundle\\cardscripts\\official\\c83533296.lua"
+      },
+      "script_required": true,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 0,
+          "attribute": 0,
+          "def": 0,
+          "level": 0,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 0,
+          "rank": null,
+          "type": 65538
+        },
+        "name": "Salamangreat Charge",
+        "passcode": 83533296,
+        "setcode": 281,
+        "type": 65538
+      },
+      "status": "PASS_STATIC_ONLY"
+    },
+    {
+      "cdb_name": "Baxia, Brightness of the Yang Zing",
+      "cdb_row_exists": true,
+      "passcode": 83755611,
+      "script": {
+        "implementation": "official",
+        "load_result": "PASS",
+        "passcode": 83755611,
+        "path": ".cache\\rules_bundle\\cardscripts\\official\\c83755611.lua"
+      },
+      "script_required": true,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 2300,
+          "attribute": 16,
+          "def": 2600,
+          "level": 8,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 8388608,
+          "rank": null,
+          "type": 8225
+        },
+        "name": "Baxia, Brightness of the Yang Zing",
+        "passcode": 83755611,
+        "setcode": 158,
+        "type": 8225
+      },
+      "status": "PASS_STATIC_ONLY"
+    },
+    {
+      "cdb_name": "Tenyi Spirit - Ashuna",
+      "cdb_row_exists": true,
+      "passcode": 87052196,
+      "script": {
+        "implementation": "official",
+        "load_result": "PASS",
+        "passcode": 87052196,
+        "path": ".cache\\rules_bundle\\cardscripts\\official\\c87052196.lua"
+      },
+      "script_required": true,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 1600,
+          "attribute": 16,
+          "def": 2600,
+          "level": 7,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 8388608,
+          "rank": null,
+          "type": 33
+        },
+        "name": "Tenyi Spirit - Ashuna",
+        "passcode": 87052196,
+        "setcode": 300,
+        "type": 33
+      },
+      "status": "PASS_STATIC_ONLY"
+    },
+    {
+      "cdb_name": "Salamangreat Miragestallio",
+      "cdb_row_exists": true,
+      "passcode": 87327776,
+      "script": {
+        "implementation": "official",
+        "load_result": "PASS",
+        "passcode": 87327776,
+        "path": ".cache\\rules_bundle\\cardscripts\\official\\c87327776.lua"
+      },
+      "script_required": true,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 2000,
+          "attribute": 4,
+          "def": 900,
+          "level": null,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 16777216,
+          "rank": 3,
+          "type": 8388641
+        },
+        "name": "Salamangreat Miragestallio",
+        "passcode": 87327776,
+        "setcode": 281,
+        "type": 8388641
+      },
+      "status": "PASS_STATIC_ONLY"
+    },
+    {
+      "cdb_name": "Salamangreat Sunlight Wolf",
+      "cdb_row_exists": true,
+      "passcode": 87871125,
+      "script": {
+        "implementation": "official",
+        "load_result": "PASS",
+        "passcode": 87871125,
+        "path": ".cache\\rules_bundle\\cardscripts\\official\\c87871125.lua"
+      },
+      "script_required": true,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 1800,
+          "attribute": 4,
+          "def": null,
+          "level": 2,
+          "link_markers": 130,
+          "link_rating": 2,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 16777216,
+          "rank": null,
+          "type": 67108897
+        },
+        "name": "Salamangreat Sunlight Wolf",
+        "passcode": 87871125,
+        "setcode": 281,
+        "type": 67108897
+      },
+      "status": "PASS_STATIC_ONLY"
+    },
+    {
+      "cdb_name": "Swordsoul Strategist Longyuan",
+      "cdb_row_exists": true,
+      "passcode": 93490856,
+      "script": {
+        "implementation": "official",
+        "load_result": "PASS",
+        "passcode": 93490856,
+        "path": ".cache\\rules_bundle\\cardscripts\\official\\c93490856.lua"
+      },
+      "script_required": true,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 1200,
+          "attribute": 4,
+          "def": 2300,
+          "level": 6,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 8388608,
+          "rank": null,
+          "type": 33
+        },
+        "name": "Swordsoul Strategist Longyuan",
+        "passcode": 93490856,
+        "setcode": 365,
+        "type": 33
+      },
+      "status": "PASS_STATIC_ONLY"
+    },
+    {
+      "cdb_name": "Swordsoul Sacred Summit",
+      "cdb_row_exists": true,
+      "passcode": 93850690,
+      "script": {
+        "implementation": "official",
+        "load_result": "PASS",
+        "passcode": 93850690,
+        "path": ".cache\\rules_bundle\\cardscripts\\official\\c93850690.lua"
+      },
+      "script_required": true,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 0,
+          "attribute": 0,
+          "def": 0,
+          "level": 0,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 0,
+          "rank": null,
+          "type": 2
+        },
+        "name": "Swordsoul Sacred Summit",
+        "passcode": 93850690,
+        "setcode": 365,
+        "type": 2
+      },
+      "status": "PASS_STATIC_ONLY"
+    },
+    {
+      "cdb_name": "Salamangreat Foxy",
+      "cdb_row_exists": true,
+      "passcode": 94620082,
+      "script": {
+        "implementation": "official",
+        "load_result": "PASS",
+        "passcode": 94620082,
+        "path": ".cache\\rules_bundle\\cardscripts\\official\\c94620082.lua"
+      },
+      "script_required": true,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 1000,
+          "attribute": 4,
+          "def": 1200,
+          "level": 3,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 16777216,
+          "rank": null,
+          "type": 33
+        },
+        "name": "Salamangreat Foxy",
+        "passcode": 94620082,
+        "setcode": 281,
+        "type": 33
+      },
+      "status": "PASS_STATIC_ONLY"
+    },
+    {
+      "cdb_name": "Swordsoul Supreme Sovereign - Chengying",
+      "cdb_row_exists": true,
+      "passcode": 96633955,
+      "script": {
+        "implementation": "official",
+        "load_result": "PASS",
+        "passcode": 96633955,
+        "path": ".cache\\rules_bundle\\cardscripts\\official\\c96633955.lua"
+      },
+      "script_required": true,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 3000,
+          "attribute": 2,
+          "def": 3000,
+          "level": 10,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 8388608,
+          "rank": null,
+          "type": 8225
+        },
+        "name": "Swordsoul Supreme Sovereign - Chengying",
+        "passcode": 96633955,
+        "setcode": 365,
+        "type": 8225
+      },
+      "status": "PASS_STATIC_ONLY"
+    },
+    {
+      "cdb_name": "Effect Veiler",
+      "cdb_row_exists": true,
+      "passcode": 97268402,
+      "script": {
+        "implementation": "official",
+        "load_result": "PASS",
+        "passcode": 97268402,
+        "path": ".cache\\rules_bundle\\cardscripts\\official\\c97268402.lua"
+      },
+      "script_required": true,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 0,
+          "attribute": 16,
+          "def": 0,
+          "level": 1,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 2,
+          "rank": null,
+          "type": 4129
+        },
+        "name": "Effect Veiler",
+        "passcode": 97268402,
+        "setcode": 0,
+        "type": 4129
+      },
+      "status": "PASS_STATIC_ONLY"
+    },
+    {
+      "cdb_name": "Tenyi Spirit - Adhara",
+      "cdb_row_exists": true,
+      "passcode": 98159737,
+      "script": {
+        "implementation": "official",
+        "load_result": "PASS",
+        "passcode": 98159737,
+        "path": ".cache\\rules_bundle\\cardscripts\\official\\c98159737.lua"
+      },
+      "script_required": true,
+      "static": {
+        "alias": 0,
+        "metadata": {
+          "atk": 0,
+          "attribute": 1,
+          "def": 0,
+          "level": 1,
+          "link_markers": null,
+          "link_rating": null,
+          "pendulum_left_scale": null,
+          "pendulum_right_scale": null,
+          "race": 8388608,
+          "rank": null,
+          "type": 4129
+        },
+        "name": "Tenyi Spirit - Adhara",
+        "passcode": 98159737,
+        "setcode": 300,
+        "type": 4129
+      },
+      "status": "PASS_STATIC_ONLY"
+    }
+  ]
+}

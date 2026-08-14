@@ -147,14 +147,19 @@ std::string canonical_trace_jsonl(const EngineTrace& trace) {
         << ",\"compiler_identity\":" << json_escape(manifest.compiler_identity)
         << ",\"core_api_version\":" << json_escape(manifest.core_api_version)
         << ",\"core_commit\":" << json_escape(manifest.core_commit)
+        << ",\"core_patchset_id\":" << json_escape(manifest.core_patchset_id)
+        << ",\"core_patchset_sha256\":" << json_escape(manifest.core_patchset_sha256)
         << ",\"core_repository\":" << json_escape(manifest.core_repository)
         << ",\"database_commit\":" << json_escape(manifest.database_commit)
         << ",\"database_repository\":" << json_escape(manifest.database_repository)
-        << ",\"duel_flags\":" << manifest.duel_flags << ",\"fixture_deck_hashes\":";
+        << ",\"duel_mode_name\":" << json_escape(manifest.duel_mode_name)
+        << ",\"duel_flags\":" << manifest.duel_flags << ",\"starting_player\":"
+        << static_cast<unsigned>(manifest.starting_player) << ",\"fixture_deck_hashes\":";
     write_string_array(out, manifest.fixture_deck_hashes);
     out << ",\"platform_identity\":" << json_escape(manifest.platform_identity)
         << ",\"policy_identifier\":" << json_escape(manifest.policy_identifier)
         << ",\"rules_bundle_id\":" << json_escape(manifest.rules_bundle_id)
+        << ",\"format_id\":" << json_escape(manifest.format_id)
         << ",\"seed_bundle\":";
     write_seed_array(out, manifest.seed_bundle);
     out << ",\"trace_schema_version\":" << json_escape(manifest.trace_schema_version) << "}\n";
@@ -202,14 +207,19 @@ std::string canonical_trace_jsonl_v2(const EngineTrace& trace) {
         << ",\"compiler_identity\":" << json_escape(manifest.compiler_identity)
         << ",\"core_api_version\":" << json_escape(manifest.core_api_version)
         << ",\"core_commit\":" << json_escape(manifest.core_commit)
+        << ",\"core_patchset_id\":" << json_escape(manifest.core_patchset_id)
+        << ",\"core_patchset_sha256\":" << json_escape(manifest.core_patchset_sha256)
         << ",\"core_repository\":" << json_escape(manifest.core_repository)
         << ",\"database_commit\":" << json_escape(manifest.database_commit)
         << ",\"database_repository\":" << json_escape(manifest.database_repository)
-        << ",\"duel_flags\":" << manifest.duel_flags << ",\"fixture_deck_hashes\":";
+        << ",\"duel_mode_name\":" << json_escape(manifest.duel_mode_name)
+        << ",\"duel_flags\":" << manifest.duel_flags << ",\"starting_player\":"
+        << static_cast<unsigned>(manifest.starting_player) << ",\"fixture_deck_hashes\":";
     write_string_array(out, manifest.fixture_deck_hashes);
     out << ",\"platform_identity\":" << json_escape(manifest.platform_identity)
         << ",\"policy_identifier\":" << json_escape(manifest.policy_identifier)
         << ",\"rules_bundle_id\":" << json_escape(manifest.rules_bundle_id)
+        << ",\"format_id\":" << json_escape(manifest.format_id)
         << ",\"seed_bundle\":";
     write_seed_array(out, manifest.seed_bundle);
     out << ",\"trace_schema_version\":" << json_escape("ygo.engine_trace.v2") << "}\n";
@@ -273,11 +283,16 @@ std::string semantic_gameplay_jsonl(const EngineTrace& trace) {
     out << "{\"cardscripts_commit\":" << json_escape(manifest.cardscripts_commit)
         << ",\"core_api_version\":" << json_escape(manifest.core_api_version)
         << ",\"core_commit\":" << json_escape(manifest.core_commit)
+        << ",\"core_patchset_id\":" << json_escape(manifest.core_patchset_id)
+        << ",\"core_patchset_sha256\":" << json_escape(manifest.core_patchset_sha256)
         << ",\"database_commit\":" << json_escape(manifest.database_commit)
-        << ",\"duel_flags\":" << manifest.duel_flags << ",\"fixture_deck_hashes\":";
+        << ",\"duel_mode_name\":" << json_escape(manifest.duel_mode_name)
+        << ",\"duel_flags\":" << manifest.duel_flags << ",\"starting_player\":"
+        << static_cast<unsigned>(manifest.starting_player) << ",\"fixture_deck_hashes\":";
     write_string_array(out, manifest.fixture_deck_hashes);
     out << ",\"policy_identifier\":" << json_escape(manifest.policy_identifier)
         << ",\"rules_bundle_id\":" << json_escape(manifest.rules_bundle_id)
+        << ",\"format_id\":" << json_escape(manifest.format_id)
         << ",\"seed_bundle\":";
     write_seed_array(out, manifest.seed_bundle);
     out << ",\"schema\":\"ygo.semantic_gameplay.v1\"}\n";

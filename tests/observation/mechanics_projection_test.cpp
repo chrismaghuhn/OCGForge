@@ -91,12 +91,15 @@ int run() {
     }
     require(saw_xyz_material && saw_equip && saw_target,
             "overlay/equip/target relationship graph was not projected");
-    const auto redacted_material = std::find_if(
-        observation.entities.begin(), observation.entities.end(), [](const auto& entity) {
-            return entity.zone == ygo::observation::SemanticZone::Overlay && !entity.identity_known;
-        });
-    require(redacted_material != observation.entities.end(),
-            "Xyz material relationship lacked a safe redacted material entity");
+    std::size_t known_material_count = 0;
+    for (const auto& entity : observation.entities) {
+        if (entity.zone == ygo::observation::SemanticZone::Overlay && entity.identity_known &&
+            entity.passcode.has_value()) {
+            ++known_material_count;
+        }
+    }
+    require(known_material_count == 2,
+            "public Xyz material query did not resolve both visible material identities");
     require(observation.observation_hash.size() == 64, "mechanics observation hash was not produced");
     std::cout << "mechanics_projection=ok\n"
               << "observation_hash=" << observation.observation_hash << '\n';
