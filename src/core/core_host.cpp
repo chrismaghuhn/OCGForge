@@ -119,12 +119,30 @@ void CoreHost::load_deck(std::uint8_t team, const FixtureDeck& deck) {
     }
 }
 
+void CoreHost::load_fixture_card(std::uint8_t team, std::uint32_t code, std::uint32_t location,
+                                 std::uint32_t sequence, std::uint32_t position) {
+    if (team > 1 || code == 0 || location == 0) {
+        throw CoreError(CoreErrorCode::Lifecycle, "OCG_DuelNewCard", "invalid fixture card setup");
+    }
+    OCG_NewCardInfo info{};
+    info.team = team;
+    info.duelist = 0;
+    info.code = code;
+    info.con = team;
+    info.loc = location;
+    info.seq = sequence;
+    info.pos = position;
+    OCG_DuelNewCard(impl_->duel, &info);
+    throw_if_callback_error("OCG_DuelNewCard");
+}
+
 void CoreHost::start_duel() {
     OCG_StartDuel(impl_->duel);
     throw_if_callback_error("OCG_StartDuel");
 }
 
 ProcessResult CoreHost::process() {
+    ++process_call_count_;
     const int status = OCG_DuelProcess(impl_->duel);
     throw_if_callback_error("OCG_DuelProcess");
     std::uint32_t length = 0;
@@ -142,6 +160,7 @@ void CoreHost::submit_response(const std::vector<std::uint8_t>& response) {
         throw CoreError(CoreErrorCode::Response, "OCG_DuelSetResponse", "empty response");
     }
     OCG_DuelSetResponse(impl_->duel, response.data(), static_cast<std::uint32_t>(response.size()));
+    ++response_submission_count_;
     throw_if_callback_error("OCG_DuelSetResponse");
 }
 

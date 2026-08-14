@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <vector>
@@ -36,6 +37,8 @@ public:
     CoreHost& operator=(CoreHost&&) = delete;
 
     void load_deck(std::uint8_t team, const FixtureDeck& deck);
+    void load_fixture_card(std::uint8_t team, std::uint32_t code, std::uint32_t location,
+                           std::uint32_t sequence, std::uint32_t position);
     void start_duel();
     ProcessResult process();
     void submit_response(const std::vector<std::uint8_t>& response);
@@ -46,6 +49,8 @@ public:
     std::vector<std::uint8_t> query_field() const;
 
     const CoreHostConfig& config() const noexcept { return config_; }
+    std::size_t response_submission_count() const noexcept { return response_submission_count_; }
+    std::size_t process_call_count() const noexcept { return process_call_count_; }
     int api_major() const noexcept { return api_major_; }
     int api_minor() const noexcept { return api_minor_; }
 
@@ -54,6 +59,8 @@ private:
     void throw_if_callback_error(const char* operation) const;
     CoreHostConfig config_;
     Impl* impl_ = nullptr;
+    std::size_t response_submission_count_ = 0;
+    std::size_t process_call_count_ = 0;
     int api_major_ = 0;
     int api_minor_ = 0;
 };

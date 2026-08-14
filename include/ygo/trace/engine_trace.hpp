@@ -31,6 +31,8 @@ struct TraceManifest {
 
 struct TraceStep {
     std::uint32_t step_index = 0;
+    std::uint32_t decision_index = 0;
+    std::uint64_t engine_step_index = 0;
     std::uint8_t player_to_act = 255;
     std::uint8_t engine_message_type = 0;
     std::uint32_t raw_message_length = 0;
@@ -41,6 +43,15 @@ struct TraceStep {
     std::string selected_semantic_key;
     std::string selected_response_sha256;
     std::string public_state_hash;
+    std::string decision_id;
+    std::string continuation_id;
+    std::uint32_t continuation_step = 0;
+    std::string continuation_state_hash;
+    std::string final_engine_response_hash;
+    std::uint32_t continuation_steps = 0;
+    std::size_t peak_candidate_count = 0;
+    std::uint64_t terminal_solution_count = 0;
+    bool engine_advanced = false;
     bool terminal = false;
     std::uint8_t winner = 255;
     std::uint8_t win_reason = 255;
@@ -53,6 +64,10 @@ struct EngineTrace {
 
 std::string canonical_trace_jsonl(const EngineTrace& trace);
 std::string canonical_trace_hash(const EngineTrace& trace);
+std::string canonical_trace_jsonl_v2(const EngineTrace& trace);
+std::string canonical_trace_hash_v2(const EngineTrace& trace);
+std::string semantic_gameplay_jsonl(const EngineTrace& trace);
+std::string semantic_gameplay_hash(const EngineTrace& trace);
 
 TraceStep make_decision_step(std::uint32_t step_index, const std::vector<std::uint8_t>& raw_message,
                              const ygo::protocol::DecisionRequest& request,

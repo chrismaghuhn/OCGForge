@@ -1,4 +1,4 @@
-name: M0 native conformance
+name: M1 Windows native conformance (M0 gate)
 
 on:
   push:
@@ -35,6 +35,10 @@ jobs:
         shell: pwsh
         run: python -m unittest discover -s tests/python -v
 
+      - name: Verify M1 decision coverage inventory
+        shell: pwsh
+        run: python tests/protocol/decision_coverage_test.py
+
       - name: Configure
         shell: pwsh
         run: cmake --preset dev-windows
@@ -51,7 +55,7 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force artifacts | Out-Null
-          .\build\dev-windows\ygo_core_probe.exe --max-steps 1000 --output artifacts\controlled-duel-trace.jsonl
+          .\build\dev-windows\ygo_core_probe.exe --max-steps 1000 --output artifacts\m1-controlled-duel-trace.jsonl
 
       - name: Run independent-process determinism test
         shell: pwsh
@@ -71,7 +75,7 @@ jobs:
         if: ${{ failure() }}
         uses: actions/upload-artifact@v4
         with:
-          name: m0-diagnostics
+          name: m1-diagnostics
           if-no-files-found: ignore
           path: |
             artifacts/*.jsonl

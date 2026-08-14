@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cstdint>
 #include <exception>
 #include <fstream>
@@ -259,6 +260,7 @@ int run(const Arguments& arguments) {
 
     ygo::trace::EngineTrace trace;
     trace.manifest = manifest(host, deck_a, deck_b, "m0.deterministic_priority.seeded_tie.v1");
+    trace.manifest.trace_schema_version = "ygo.engine_trace.v2";
     if (arguments.force_unsupported) {
         const std::vector<std::uint8_t> raw_message = {
             3, 0, 0, 0, MSG_SELECT_OPTION, 0, 0,
@@ -271,16 +273,25 @@ int run(const Arguments& arguments) {
             return 3;
         }
     }
+    std::uint32_t decision_index = 0;
+    std::uint64_t response_build_time_us_total = 0;
+    std::uint64_t response_build_time_us_max = 0;
     for (std::uint32_t index = 0; index < arguments.max_steps; ++index) {
         const auto result = host.process();
         try {
-            const auto decoded = ygo::protocol::decode_messages(result.message);
+            const auto decoded = ygo::protocol::decode_messages(result.message, index);
+            if (decoded.retry) {
+                throw std::runtime_error("pinned core emitted MSG_RETRY after a submitted response");
+            }
             if (decoded.terminal) {
                 ygo::trace::TraceStep terminal;
                 terminal.step_index = index;
+                terminal.decision_index = decision_index++;
+                terminal.engine_step_index = index;
                 terminal.raw_message_length = static_cast<std::uint32_t>(result.message.size());
                 terminal.raw_message_sha256 = ygo::trace::sha256_bytes(result.message);
                 terminal.public_state_hash = public_state_hash(host, 0);
+                terminal.engine_advanced = true;
                 terminal.terminal = true;
                 terminal.winner = decoded.winner;
                 terminal.win_reason = decoded.win_reason;
@@ -294,26 +305,57 @@ int run(const Arguments& arguments) {
                 throw ygo::protocol::ProtocolError(ygo::protocol::ProtocolErrorCode::UnsupportedDecision,
                                                     "more than one interactive message in a process result");
             }
-            const auto& request = decoded.decisions.front();
-            ygo::protocol::validate_candidate_set(request);
-            const auto& candidate = choose_candidate(request, config.seed);
-            const auto& selected = ygo::protocol::select_candidate(request, candidate.semantic_key);
-            auto step = ygo::trace::make_decision_step(index, result.message, request,
-                                                       public_state_hash(host, request.player));
-            step.selected_semantic_key = selected.semantic_key;
-            step.selected_response_sha256 = ygo::trace::sha256_bytes(selected.exact_response_bytes);
-            trace.steps.push_back(std::move(step));
-            host.submit_response(selected.exact_response_bytes);
+            auto request = decoded.decisions.front();
+            for (;;) {
+                ygo::protocol::validate_candidate_set(request);
+                const auto& candidate = choose_candidate(request, config.seed);
+                const auto& selected = ygo::protocol::select_candidate(request, candidate.semantic_key);
+                auto step = ygo::trace::make_decision_step(index, result.message, request,
+                                                           public_state_hash(host, request.player));
+                step.decision_index = decision_index++;
+                step.selected_semantic_key = selected.semantic_key;
+                if (request.continuation.has_value()) {
+                    const auto response_start = std::chrono::steady_clock::now();
+                    const auto transition = ygo::protocol::apply_continuation_action(request, selected.semantic_key);
+                    const auto response_end = std::chrono::steady_clock::now();
+                    const auto response_build_time_us = static_cast<std::uint64_t>(
+                        std::chrono::duration_cast<std::chrono::microseconds>(response_end - response_start).count());
+                    response_build_time_us_total += response_build_time_us;
+                    response_build_time_us_max = std::max(response_build_time_us_max, response_build_time_us);
+                    step.engine_advanced = transition.engine_advanced;
+                    if (!transition.engine_response.empty()) {
+                        step.selected_response_sha256 = ygo::trace::sha256_bytes(transition.engine_response);
+                    }
+                    if (!transition.terminal) {
+                        trace.steps.push_back(std::move(step));
+                        request = std::move(transition.request);
+                        continue;
+                    }
+                    step.final_engine_response_hash = ygo::trace::sha256_bytes(transition.engine_response);
+                    step.selected_response_sha256 = step.final_engine_response_hash;
+                    trace.steps.push_back(std::move(step));
+                    host.submit_response(transition.engine_response);
+                } else {
+                    step.engine_advanced = true;
+                    step.selected_response_sha256 = ygo::trace::sha256_bytes(selected.exact_response_bytes);
+                    step.final_engine_response_hash = step.selected_response_sha256;
+                    trace.steps.push_back(std::move(step));
+                    host.submit_response(selected.exact_response_bytes);
+                }
+                break;
+            }
         } catch (const ygo::protocol::ProtocolError& error) {
             emit_unsupported_diagnostic(error, index, result.message, config, deck_a, deck_b, trace);
             return 3;
         }
     }
 
-    const auto serialized = ygo::trace::canonical_trace_jsonl(trace);
-    const auto hash = ygo::trace::canonical_trace_hash(trace);
+    const auto serialized = ygo::trace::canonical_trace_jsonl_v2(trace);
+    const auto hash = ygo::trace::canonical_trace_hash_v2(trace);
+    const auto semantic_hash = ygo::trace::semantic_gameplay_hash(trace);
     if (arguments.output.empty()) {
         std::cout << serialized;
+        std::cout << "SEMANTIC_GAMEPLAY_HASH " << semantic_hash << "\n";
         std::cout << "TRACE_HASH " << hash << "\n";
     } else {
         std::ofstream stream(arguments.output, std::ios::binary);
@@ -321,9 +363,13 @@ int run(const Arguments& arguments) {
             throw std::runtime_error("cannot open trace output: " + arguments.output);
         }
         stream << serialized;
+        stream << "# semantic_gameplay_hash=" << semantic_hash << "\n";
         stream << "# trace_hash=" << hash << "\n";
     }
+    std::cerr << "SEMANTIC_GAMEPLAY_HASH " << semantic_hash << "\n";
     std::cerr << "TRACE_HASH " << hash << "\n";
+    std::cerr << "CONTINUATION_RESPONSE_BUILD_TIME_US total=" << response_build_time_us_total
+              << " max=" << response_build_time_us_max << "\n";
     return 0;
 }
 

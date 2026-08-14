@@ -10,10 +10,16 @@ enum class ActionKind {
     IdleCommand,
     BattleCommand,
     Chain,
+    Option,
     CardSelection,
+    Announcement,
     Place,
     Position,
     YesNo,
+    Pick,
+    Finish,
+    Cancel,
+    AssignAmount,
 };
 
 struct ActionCandidate {
@@ -29,6 +35,11 @@ struct ActionCandidate {
     std::uint32_t target_sequence = 0;
     std::uint32_t phase = 0;
     std::uint8_t position = 0;
+    std::uint32_t source_position = 0;
+    std::uint32_t source_index = 0;
+    std::int32_t amount = -1;
+    std::string continuation_id;
+    bool submits_engine_response = true;
     std::vector<std::uint8_t> exact_response_bytes;
 };
 

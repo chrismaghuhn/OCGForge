@@ -11,6 +11,8 @@
 
 #include "ocgapi_constants.h"
 #include "ygo/protocol/protocol_error.hpp"
+#include "ygo/protocol/response_builder.hpp"
+#include "ygo/trace/sha256.hpp"
 
 namespace ygo::protocol {
 namespace {
@@ -91,6 +93,52 @@ std::string command_key(const char* family, std::uint32_t command, std::uint32_t
     std::ostringstream key;
     key << family << "." << command << "." << index;
     return key.str();
+}
+
+ContinuationItem read_card_item(ByteReader& reader, std::uint32_t source_index, bool include_position,
+                                bool include_contribution, bool include_tribute_value) {
+    ContinuationItem item;
+    item.card.code = reader.u32();
+    item.card.controller = reader.u8();
+    item.card.location = reader.u8();
+    item.card.sequence = reader.u32();
+    item.card.position = include_position ? reader.u32() : 0;
+    item.source_index = source_index;
+    if (include_contribution) {
+        const auto packed = reader.u32();
+        item.primary_value = packed & 0xffffu;
+        const auto signed_packed = static_cast<std::int32_t>(packed);
+        const auto secondary = signed_packed >> 16;
+        item.secondary_value = secondary > 0 ? static_cast<std::uint32_t>(secondary) : 0;
+    }
+    if (include_tribute_value) {
+        item.primary_value = reader.u8();
+    }
+    return item;
+}
+
+void validate_count_against_remaining(const ByteReader& reader, std::uint32_t count, std::size_t entry_size,
+                                      const char* context) {
+    if (entry_size == 0 || count > reader.remaining() / entry_size) {
+        throw ProtocolError(ProtocolErrorCode::MalformedMessage,
+                            std::string(context) + " list exceeds message");
+    }
+}
+
+DecisionRequest finalize_request(DecisionRequest request, const std::vector<std::uint8_t>& frame,
+                                 std::uint64_t engine_step_index) {
+    const auto hash = ygo::trace::sha256_bytes(frame);
+    if (request.continuation.has_value()) {
+        auto continuation = *request.continuation;
+        continuation.raw_message_hash = hash;
+        return make_continuation_request(request.kind, request.player, request.engine_message_type,
+                                         request.engine_message_name, engine_step_index,
+                                         std::move(continuation));
+    }
+    request.raw_message_hash = hash;
+    request.engine_step_index = engine_step_index;
+    request.decision_id = hash + ".decision." + std::to_string(engine_step_index);
+    return request;
 }
 
 void add_idle_card(DecisionRequest& request, std::uint32_t command, std::uint32_t index,
@@ -354,76 +402,6 @@ DecisionRequest decode_position(const std::vector<std::uint8_t>& frame) {
     return request;
 }
 
-DecisionRequest decode_place(const std::vector<std::uint8_t>& frame) {
-    ByteReader reader(frame);
-    if (reader.u8() != MSG_SELECT_PLACE) {
-        throw ProtocolError(ProtocolErrorCode::MalformedMessage, "place decoder received another message type");
-    }
-    DecisionRequest request;
-    request.kind = DecisionRequestKind::Place;
-    request.engine_message_type = MSG_SELECT_PLACE;
-    request.engine_message_name = "MSG_SELECT_PLACE";
-    request.player = reader.u8();
-    const auto count = reader.u8();
-    const auto flag = reader.u32();
-    if (count != 1) {
-        throw ProtocolError(ProtocolErrorCode::UnsupportedDecision,
-                            "M0 place probe only supports one simultaneous zone placement", MSG_SELECT_PLACE,
-                            request.player, frame);
-    }
-
-    const auto add_zone = [&request, count](std::uint8_t player, std::uint8_t location, std::uint8_t sequence,
-                                            std::uint32_t bit) {
-        (void)count;
-        ActionCandidate candidate;
-        candidate.action_kind = ActionKind::Place;
-        candidate.semantic_key = "place." + std::to_string(player) + "." + std::to_string(location) + "." +
-                                 std::to_string(sequence);
-        candidate.source_controller = player;
-        candidate.source_location = location;
-        candidate.source_sequence = sequence;
-        candidate.exact_response_bytes = {player, location, sequence};
-        (void)bit;
-        request.candidates.push_back(std::move(candidate));
-    };
-    for (std::uint8_t sequence = 0; sequence < 7; ++sequence) {
-        if ((flag & (1u << sequence)) == 0) {
-            add_zone(request.player, LOCATION_MZONE, sequence, sequence);
-        }
-    }
-    for (std::uint8_t sequence = 0; sequence < 6; ++sequence) {
-        if ((flag & (1u << (8 + sequence))) == 0) {
-            add_zone(request.player, LOCATION_SZONE, sequence, 8 + sequence);
-        }
-    }
-    if ((flag & (1u << 14)) == 0) {
-        add_zone(request.player, LOCATION_SZONE, 6, 14);
-    }
-    if ((flag & (1u << 15)) == 0) {
-        add_zone(request.player, LOCATION_SZONE, 7, 15);
-    }
-    const auto opponent = static_cast<std::uint8_t>(1 - request.player);
-    for (std::uint8_t sequence = 0; sequence < 7; ++sequence) {
-        if ((flag & (1u << (16 + sequence))) == 0) {
-            add_zone(opponent, LOCATION_MZONE, sequence, 16 + sequence);
-        }
-    }
-    for (std::uint8_t sequence = 0; sequence < 6; ++sequence) {
-        if ((flag & (1u << (24 + sequence))) == 0) {
-            add_zone(opponent, LOCATION_SZONE, sequence, 24 + sequence);
-        }
-    }
-    if ((flag & (1u << 30)) == 0) {
-        add_zone(opponent, LOCATION_SZONE, 6, 30);
-    }
-    if ((flag & (1u << 31)) == 0) {
-        add_zone(opponent, LOCATION_SZONE, 7, 31);
-    }
-    reader.finish();
-    validate_candidate_set(request);
-    return request;
-}
-
 DecisionRequest decode_chain(const std::vector<std::uint8_t>& frame) {
     ByteReader reader(frame);
     if (reader.u8() != MSG_SELECT_CHAIN) {
@@ -488,64 +466,511 @@ DecisionRequest decode_card_selection(const std::vector<std::uint8_t>& frame) {
     const auto min = reader.u32();
     const auto max = reader.u32();
     const auto count = reader.u32();
-    if (min != 1 || max != 1) {
-        throw ProtocolError(ProtocolErrorCode::UnsupportedDecision,
-                            "M0 card-selection probe only supports exactly one selected card",
-                            MSG_SELECT_CARD, request.player, frame);
+    validate_count_against_remaining(reader, count, 14, "card-selection");
+    if (count == 0 || min > max || max > count) {
+        throw ProtocolError(ProtocolErrorCode::MalformedMessage,
+                            "card-selection cardinality is outside the pinned wire domain", MSG_SELECT_CARD,
+                            request.player, frame);
     }
-    if (count > reader.remaining() / 14) {
-        throw ProtocolError(ProtocolErrorCode::MalformedMessage, "card-selection list exceeds message");
-    }
+    std::vector<ContinuationItem> items;
+    items.reserve(count);
     for (std::uint32_t index = 0; index < count; ++index) {
-        const auto code = reader.u32();
-        const auto controller = reader.u8();
-        const auto location = reader.u8();
-        const auto sequence = reader.u32();
-        (void)reader.u32();
-        ActionCandidate candidate;
-        candidate.action_kind = ActionKind::CardSelection;
-        candidate.semantic_key = card_key("card", 0, index, code, controller, location, sequence);
-        candidate.source_card = code;
-        candidate.source_controller = controller;
-        candidate.source_location = location;
-        candidate.source_sequence = sequence;
-        candidate.exact_response_bytes = response_i32(0);
-        candidate.exact_response_bytes.insert(candidate.exact_response_bytes.end(), {1, 0, 0, 0,
-                                                                                       static_cast<std::uint8_t>(index & 0xffu),
-                                                                                       static_cast<std::uint8_t>((index >> 8) & 0xffu),
-                                                                                       static_cast<std::uint8_t>((index >> 16) & 0xffu),
-                                                                                       static_cast<std::uint8_t>((index >> 24) & 0xffu)});
-        request.candidates.push_back(std::move(candidate));
+        items.push_back(read_card_item(reader, index, true, false, false));
     }
-    if (cancelable) {
-        ActionCandidate cancel;
-        cancel.action_kind = ActionKind::CardSelection;
-        cancel.semantic_key = "card.cancel";
-        cancel.exact_response_bytes = response_i32(std::numeric_limits<std::uint32_t>::max());
-        request.candidates.push_back(std::move(cancel));
+    reader.finish();
+    if (min == 1 && max == 1) {
+        for (const auto& item : items) {
+            ActionCandidate candidate;
+            candidate.action_kind = ActionKind::CardSelection;
+            candidate.semantic_key = card_key("card", 0, item.source_index, item.card.code, item.card.controller,
+                                              item.card.location, item.card.sequence);
+            candidate.source_card = item.card.code;
+            candidate.source_controller = item.card.controller;
+            candidate.source_location = item.card.location;
+            candidate.source_sequence = item.card.sequence;
+            candidate.source_position = item.card.position;
+            candidate.source_index = item.source_index;
+            candidate.exact_response_bytes = encode_card_index_response({item.source_index});
+            request.candidates.push_back(std::move(candidate));
+        }
+        if (cancelable) {
+            ActionCandidate cancel;
+            cancel.action_kind = ActionKind::Cancel;
+            cancel.semantic_key = "card.cancel";
+            cancel.exact_response_bytes = encode_int32_response(-1);
+            request.candidates.push_back(std::move(cancel));
+        }
+        validate_candidate_set(request);
+        return request;
+    }
+    SelectionContinuation continuation;
+    continuation.continuation_kind = ContinuationKind::UnorderedSelection;
+    continuation.original_message_type = MSG_SELECT_CARD;
+    continuation.items = std::move(items);
+    continuation.min_count = min;
+    continuation.max_count = max;
+    continuation.can_cancel = cancelable;
+    request.continuation = std::move(continuation);
+    return request;
+}
+
+DecisionRequest decode_select_option(const std::vector<std::uint8_t>& frame) {
+    ByteReader reader(frame);
+    if (reader.u8() != MSG_SELECT_OPTION) {
+        throw ProtocolError(ProtocolErrorCode::MalformedMessage,
+                            "option decoder received another message type");
+    }
+    DecisionRequest request;
+    request.kind = DecisionRequestKind::Option;
+    request.engine_message_type = MSG_SELECT_OPTION;
+    request.engine_message_name = "MSG_SELECT_OPTION";
+    request.player = reader.u8();
+    const auto count = reader.u8();
+    if (count == 0) {
+        throw ProtocolError(ProtocolErrorCode::UnsupportedDecision,
+                            "MSG_SELECT_OPTION has no selectable options", MSG_SELECT_OPTION, request.player, frame);
+    }
+    validate_count_against_remaining(reader, count, 8, "option");
+    for (std::uint32_t index = 0; index < count; ++index) {
+        const auto value = reader.u64();
+        ActionCandidate candidate;
+        candidate.action_kind = ActionKind::Option;
+        candidate.semantic_key = "option." + std::to_string(index) + "." + std::to_string(value);
+        candidate.phase = index;
+        candidate.exact_response_bytes = encode_int32_response(static_cast<std::int32_t>(index));
+        request.candidates.push_back(std::move(candidate));
     }
     reader.finish();
     validate_candidate_set(request);
     return request;
 }
 
+DecisionRequest decode_tribute(const std::vector<std::uint8_t>& frame) {
+    ByteReader reader(frame);
+    if (reader.u8() != MSG_SELECT_TRIBUTE) {
+        throw ProtocolError(ProtocolErrorCode::MalformedMessage,
+                            "tribute decoder received another message type");
+    }
+    DecisionRequest request;
+    request.kind = DecisionRequestKind::Tribute;
+    request.engine_message_type = MSG_SELECT_TRIBUTE;
+    request.engine_message_name = "MSG_SELECT_TRIBUTE";
+    request.player = reader.u8();
+    const auto cancelable = reader.u8() != 0;
+    const auto min = reader.u32();
+    const auto max = reader.u32();
+    const auto count = reader.u32();
+    validate_count_against_remaining(reader, count, 11, "tribute");
+    if (count == 0 || max == 0 || min > max) {
+        throw ProtocolError(ProtocolErrorCode::MalformedMessage,
+                            "tribute cardinality is outside the pinned wire domain", MSG_SELECT_TRIBUTE,
+                            request.player, frame);
+    }
+    SelectionContinuation continuation;
+    continuation.continuation_kind = ContinuationKind::Tribute;
+    continuation.original_message_type = MSG_SELECT_TRIBUTE;
+    continuation.required_amount = min;
+    continuation.max_count = max;
+    continuation.can_cancel = cancelable;
+    continuation.items.reserve(count);
+    for (std::uint32_t index = 0; index < count; ++index) {
+        continuation.items.push_back(read_card_item(reader, index, false, false, true));
+    }
+    reader.finish();
+    request.continuation = std::move(continuation);
+    return request;
+}
+
+DecisionRequest decode_sum(const std::vector<std::uint8_t>& frame) {
+    ByteReader reader(frame);
+    if (reader.u8() != MSG_SELECT_SUM) {
+        throw ProtocolError(ProtocolErrorCode::MalformedMessage,
+                            "sum decoder received another message type");
+    }
+    DecisionRequest request;
+    request.kind = DecisionRequestKind::Sum;
+    request.engine_message_type = MSG_SELECT_SUM;
+    request.engine_message_name = "MSG_SELECT_SUM";
+    request.player = reader.u8();
+    const auto mode = reader.u8();
+    if (mode > 1) {
+        throw ProtocolError(ProtocolErrorCode::UnsupportedDecision,
+                            "MSG_SELECT_SUM mode is not implemented by the pinned core contract", MSG_SELECT_SUM,
+                            request.player, frame);
+    }
+    const auto target = reader.u32();
+    const auto min = reader.u32();
+    const auto max = reader.u32();
+    const auto mandatory_count = reader.u32();
+    validate_count_against_remaining(reader, mandatory_count, 18, "sum mandatory");
+    SelectionContinuation continuation;
+    continuation.continuation_kind = ContinuationKind::Sum;
+    continuation.original_message_type = MSG_SELECT_SUM;
+    continuation.target_sum = target;
+    continuation.min_count = min;
+    continuation.max_count = max;
+    continuation.exact_sum = mode == 0;
+    continuation.greater_sum = mode == 1;
+    continuation.mandatory_items.reserve(mandatory_count);
+    for (std::uint32_t index = 0; index < mandatory_count; ++index) {
+        continuation.mandatory_items.push_back(read_card_item(reader, index, true, true, false));
+    }
+    const auto optional_count = reader.u32();
+    validate_count_against_remaining(reader, optional_count, 18, "sum optional");
+    if (optional_count == 0) {
+        throw ProtocolError(ProtocolErrorCode::MalformedMessage,
+                            "sum message contains no optional candidates", MSG_SELECT_SUM, request.player, frame);
+    }
+    continuation.items.reserve(optional_count);
+    for (std::uint32_t index = 0; index < optional_count; ++index) {
+        continuation.items.push_back(read_card_item(reader, index, true, true, false));
+    }
+    reader.finish();
+    request.continuation = std::move(continuation);
+    return request;
+}
+
+std::vector<ContinuationItem> decode_zone_items(std::uint8_t player, std::uint32_t flag) {
+    std::vector<ContinuationItem> items;
+    for (std::uint32_t bit = 0; bit < 32; ++bit) {
+        std::uint8_t controller = player;
+        std::uint8_t location = LOCATION_SZONE;
+        std::uint8_t sequence = 0;
+        bool valid = true;
+        if (bit <= 6) {
+            location = LOCATION_MZONE;
+            sequence = static_cast<std::uint8_t>(bit);
+        } else if (bit >= 8 && bit <= 15) {
+            sequence = static_cast<std::uint8_t>(bit - 8);
+        } else if (bit >= 16 && bit <= 22) {
+            controller = static_cast<std::uint8_t>(1 - player);
+            location = LOCATION_MZONE;
+            sequence = static_cast<std::uint8_t>(bit - 16);
+        } else if (bit >= 24 && bit <= 31) {
+            controller = static_cast<std::uint8_t>(1 - player);
+            sequence = static_cast<std::uint8_t>(bit - 24);
+        } else {
+            valid = false;
+        }
+        if (valid && (flag & (1u << bit)) == 0) {
+            ContinuationItem item;
+            item.source_index = bit;
+            item.card.controller = controller;
+            item.card.location = location;
+            item.card.sequence = sequence;
+            item.mask_value = 1ull << bit;
+            items.push_back(std::move(item));
+        }
+    }
+    return items;
+}
+
+DecisionRequest decode_place(const std::vector<std::uint8_t>& frame, bool disfield) {
+    ByteReader reader(frame);
+    const auto expected = disfield ? MSG_SELECT_DISFIELD : MSG_SELECT_PLACE;
+    if (reader.u8() != expected) {
+        throw ProtocolError(ProtocolErrorCode::MalformedMessage,
+                            "place decoder received another message type");
+    }
+    DecisionRequest request;
+    request.kind = DecisionRequestKind::Place;
+    request.engine_message_type = expected;
+    request.engine_message_name = disfield ? "MSG_SELECT_DISFIELD" : "MSG_SELECT_PLACE";
+    request.player = reader.u8();
+    const auto count = reader.u8();
+    const auto flag = reader.u32();
+    if (count == 0) {
+        throw ProtocolError(ProtocolErrorCode::MalformedMessage,
+                            "zero-count place message should not be interactive", expected, request.player, frame);
+    }
+    auto items = decode_zone_items(request.player, flag);
+    if (count > items.size()) {
+        throw ProtocolError(ProtocolErrorCode::MalformedMessage,
+                            "place count exceeds the complete free-zone domain", expected, request.player, frame);
+    }
+    reader.finish();
+    if (count == 1) {
+        for (const auto& item : items) {
+            ActionCandidate candidate;
+            candidate.action_kind = ActionKind::Place;
+            candidate.semantic_key = "place." + std::to_string(item.card.controller) + "." +
+                                     std::to_string(item.card.location) + "." + std::to_string(item.card.sequence);
+            candidate.source_controller = item.card.controller;
+            candidate.source_location = item.card.location;
+            candidate.source_sequence = item.card.sequence;
+            candidate.source_index = item.source_index;
+            candidate.exact_response_bytes = encode_zone_response(
+                {{item.card.controller, static_cast<std::uint8_t>(item.card.location),
+                  static_cast<std::uint8_t>(item.card.sequence)}});
+            request.candidates.push_back(std::move(candidate));
+        }
+        validate_candidate_set(request);
+        return request;
+    }
+    SelectionContinuation continuation;
+    continuation.continuation_kind = ContinuationKind::ZonePlacement;
+    continuation.original_message_type = expected;
+    continuation.items = std::move(items);
+    continuation.min_count = count;
+    continuation.max_count = count;
+    request.continuation = std::move(continuation);
+    return request;
+}
+
+DecisionRequest decode_counter(const std::vector<std::uint8_t>& frame) {
+    ByteReader reader(frame);
+    if (reader.u8() != MSG_SELECT_COUNTER) {
+        throw ProtocolError(ProtocolErrorCode::MalformedMessage,
+                            "counter decoder received another message type");
+    }
+    DecisionRequest request;
+    request.kind = DecisionRequestKind::Counter;
+    request.engine_message_type = MSG_SELECT_COUNTER;
+    request.engine_message_name = "MSG_SELECT_COUNTER";
+    request.player = reader.u8();
+    (void)reader.u16();
+    const auto required = reader.u16();
+    const auto count = reader.u32();
+    validate_count_against_remaining(reader, count, 9, "counter");
+    if (count == 0) {
+        throw ProtocolError(ProtocolErrorCode::MalformedMessage,
+                            "zero-card counter message should not be interactive", MSG_SELECT_COUNTER,
+                            request.player, frame);
+    }
+    SelectionContinuation continuation;
+    continuation.continuation_kind = ContinuationKind::CounterAllocation;
+    continuation.original_message_type = MSG_SELECT_COUNTER;
+    continuation.required_amount = required;
+    continuation.items.reserve(count);
+    std::uint32_t total_capacity = 0;
+    for (std::uint32_t index = 0; index < count; ++index) {
+        ContinuationItem item;
+        item.card.code = reader.u32();
+        item.card.controller = reader.u8();
+        item.card.location = reader.u8();
+        item.card.sequence = reader.u8();
+        item.source_index = index;
+        item.capacity = reader.u16();
+        if (item.capacity > static_cast<std::uint32_t>(std::numeric_limits<std::int16_t>::max())) {
+            throw ProtocolError(ProtocolErrorCode::UnsupportedDecision,
+                                "counter capacity exceeds the pinned signed response domain", MSG_SELECT_COUNTER,
+                                request.player, frame);
+        }
+        total_capacity += item.capacity;
+        continuation.items.push_back(std::move(item));
+    }
+    reader.finish();
+    if (required > total_capacity) {
+        throw ProtocolError(ProtocolErrorCode::MalformedMessage,
+                            "counter requirement exceeds the complete capacity domain", MSG_SELECT_COUNTER,
+                            request.player, frame);
+    }
+    request.continuation = std::move(continuation);
+    return request;
+}
+
+DecisionRequest decode_ordering(const std::vector<std::uint8_t>& frame, bool chain) {
+    ByteReader reader(frame);
+    const auto expected = chain ? MSG_SORT_CHAIN : MSG_SORT_CARD;
+    if (reader.u8() != expected) {
+        throw ProtocolError(ProtocolErrorCode::MalformedMessage,
+                            "ordering decoder received another message type");
+    }
+    DecisionRequest request;
+    request.kind = DecisionRequestKind::Ordering;
+    request.engine_message_type = expected;
+    request.engine_message_name = chain ? "MSG_SORT_CHAIN" : "MSG_SORT_CARD";
+    request.player = reader.u8();
+    const auto count = reader.u32();
+    validate_count_against_remaining(reader, count, 13, "ordering");
+    if (count == 0 || count > 128) {
+        throw ProtocolError(ProtocolErrorCode::UnsupportedDecision,
+                            "ordering count is outside the pinned signed-byte response domain", expected,
+                            request.player, frame);
+    }
+    SelectionContinuation continuation;
+    continuation.continuation_kind = ContinuationKind::Ordering;
+    continuation.original_message_type = expected;
+    continuation.items.reserve(count);
+    for (std::uint32_t index = 0; index < count; ++index) {
+        ContinuationItem item;
+        item.card.code = reader.u32();
+        item.card.controller = reader.u8();
+        item.card.location = reader.u32();
+        item.card.sequence = reader.u32();
+        item.source_index = index;
+        continuation.items.push_back(std::move(item));
+    }
+    reader.finish();
+    request.continuation = std::move(continuation);
+    return request;
+}
+
+DecisionRequest decode_unselect(const std::vector<std::uint8_t>& frame) {
+    ByteReader reader(frame);
+    if (reader.u8() != MSG_SELECT_UNSELECT_CARD) {
+        throw ProtocolError(ProtocolErrorCode::MalformedMessage,
+                            "unselect decoder received another message type");
+    }
+    DecisionRequest request;
+    request.kind = DecisionRequestKind::UnselectCard;
+    request.engine_message_type = MSG_SELECT_UNSELECT_CARD;
+    request.engine_message_name = "MSG_SELECT_UNSELECT_CARD";
+    request.player = reader.u8();
+    const auto finishable = reader.u8() != 0;
+    const auto cancelable = reader.u8() != 0;
+    (void)reader.u32();
+    (void)reader.u32();
+    const auto selected_count = reader.u32();
+    validate_count_against_remaining(reader, selected_count, 14, "selected-card");
+    std::uint32_t combined_index = 0;
+    for (std::uint32_t index = 0; index < selected_count; ++index, ++combined_index) {
+        const auto item = read_card_item(reader, index, true, false, false);
+        ActionCandidate candidate;
+        candidate.action_kind = ActionKind::CardSelection;
+        candidate.semantic_key = "unselect.selected." + std::to_string(item.source_index) + "." +
+                                 std::to_string(item.card.code) + "." + std::to_string(item.card.controller) + "." +
+                                 std::to_string(item.card.location) + "." + std::to_string(item.card.sequence);
+        candidate.source_card = item.card.code;
+        candidate.source_controller = item.card.controller;
+        candidate.source_location = item.card.location;
+        candidate.source_sequence = item.card.sequence;
+        candidate.source_position = item.card.position;
+        candidate.source_index = combined_index;
+        candidate.exact_response_bytes = encode_int32_response(1);
+        const auto index_response = encode_int32_response(static_cast<std::int32_t>(combined_index));
+        candidate.exact_response_bytes.insert(candidate.exact_response_bytes.end(), index_response.begin(),
+                                              index_response.end());
+        request.candidates.push_back(std::move(candidate));
+    }
+    const auto unselected_count = reader.u32();
+    validate_count_against_remaining(reader, unselected_count, 14, "unselected-card");
+    for (std::uint32_t index = 0; index < unselected_count; ++index, ++combined_index) {
+        const auto item = read_card_item(reader, index, true, false, false);
+        ActionCandidate candidate;
+        candidate.action_kind = ActionKind::CardSelection;
+        candidate.semantic_key = "unselect.unselected." + std::to_string(item.source_index) + "." +
+                                 std::to_string(item.card.code) + "." + std::to_string(item.card.controller) + "." +
+                                 std::to_string(item.card.location) + "." + std::to_string(item.card.sequence);
+        candidate.source_card = item.card.code;
+        candidate.source_controller = item.card.controller;
+        candidate.source_location = item.card.location;
+        candidate.source_sequence = item.card.sequence;
+        candidate.source_position = item.card.position;
+        candidate.source_index = combined_index;
+        candidate.exact_response_bytes = encode_int32_response(1);
+        const auto index_response = encode_int32_response(static_cast<std::int32_t>(combined_index));
+        candidate.exact_response_bytes.insert(candidate.exact_response_bytes.end(), index_response.begin(),
+                                              index_response.end());
+        request.candidates.push_back(std::move(candidate));
+    }
+    reader.finish();
+    if (finishable || cancelable) {
+        ActionCandidate finish;
+        finish.action_kind = finishable ? ActionKind::Finish : ActionKind::Cancel;
+        finish.semantic_key = finishable ? "unselect.finish" : "unselect.cancel";
+        finish.exact_response_bytes = encode_int32_response(-1);
+        request.candidates.push_back(std::move(finish));
+    }
+    validate_candidate_set(request);
+    return request;
+}
+
+DecisionRequest decode_announce_number(const std::vector<std::uint8_t>& frame) {
+    ByteReader reader(frame);
+    if (reader.u8() != MSG_ANNOUNCE_NUMBER) {
+        throw ProtocolError(ProtocolErrorCode::MalformedMessage,
+                            "announce-number decoder received another message type");
+    }
+    DecisionRequest request;
+    request.kind = DecisionRequestKind::Announcement;
+    request.engine_message_type = MSG_ANNOUNCE_NUMBER;
+    request.engine_message_name = "MSG_ANNOUNCE_NUMBER";
+    request.player = reader.u8();
+    const auto count = reader.u8();
+    validate_count_against_remaining(reader, count, 8, "announce-number");
+    for (std::uint32_t index = 0; index < count; ++index) {
+        const auto value = reader.u64();
+        ActionCandidate candidate;
+        candidate.action_kind = ActionKind::Announcement;
+        candidate.semantic_key = "announce_number." + std::to_string(index) + "." + std::to_string(value);
+        candidate.phase = index;
+        candidate.exact_response_bytes = encode_int32_response(static_cast<std::int32_t>(index));
+        request.candidates.push_back(std::move(candidate));
+    }
+    reader.finish();
+    validate_candidate_set(request);
+    return request;
+}
+
+std::uint32_t popcount64(std::uint64_t value) {
+    std::uint32_t count = 0;
+    while (value != 0) {
+        value &= value - 1;
+        ++count;
+    }
+    return count;
+}
+
+DecisionRequest decode_announce_mask(const std::vector<std::uint8_t>& frame, bool race) {
+    ByteReader reader(frame);
+    const auto expected = race ? MSG_ANNOUNCE_RACE : MSG_ANNOUNCE_ATTRIB;
+    if (reader.u8() != expected) {
+        throw ProtocolError(ProtocolErrorCode::MalformedMessage,
+                            "announcement-mask decoder received another message type");
+    }
+    DecisionRequest request;
+    request.kind = DecisionRequestKind::Announcement;
+    request.engine_message_type = expected;
+    request.engine_message_name = race ? "MSG_ANNOUNCE_RACE" : "MSG_ANNOUNCE_ATTRIB";
+    request.player = reader.u8();
+    const auto count = reader.u8();
+    const auto available = race ? reader.u64() : reader.u32();
+    if (count == 0 || count > popcount64(available)) {
+        throw ProtocolError(ProtocolErrorCode::MalformedMessage,
+                            "announcement count exceeds the engine-provided mask domain", expected,
+                            request.player, frame);
+    }
+    std::vector<ContinuationItem> items;
+    for (std::uint32_t bit = 0; bit < (race ? 64u : 32u); ++bit) {
+        if ((available & (1ull << bit)) == 0) {
+            continue;
+        }
+        ContinuationItem item;
+        item.source_index = bit;
+        item.mask_value = 1ull << bit;
+        items.push_back(std::move(item));
+    }
+    reader.finish();
+    if (count == 1) {
+        for (const auto& item : items) {
+            ActionCandidate candidate;
+            candidate.action_kind = ActionKind::Announcement;
+            candidate.semantic_key = "announce_mask." + std::to_string(item.source_index);
+            candidate.source_index = item.source_index;
+            candidate.exact_response_bytes = race ? encode_uint64_response(item.mask_value)
+                                                  : encode_uint32_response(static_cast<std::uint32_t>(item.mask_value));
+            request.candidates.push_back(std::move(candidate));
+        }
+        validate_candidate_set(request);
+        return request;
+    }
+    SelectionContinuation continuation;
+    continuation.continuation_kind = ContinuationKind::AnnouncementMask;
+    continuation.original_message_type = expected;
+    continuation.items = std::move(items);
+    continuation.min_count = count;
+    continuation.max_count = count;
+    continuation.available_mask = available;
+    request.continuation = std::move(continuation);
+    return request;
+}
+
 bool is_unsupported_interactive(std::uint8_t type) {
     switch (type) {
     case MSG_REQUEST_DECK:
-    case MSG_SELECT_OPTION:
-    case MSG_SELECT_CHAIN:
-    case MSG_SELECT_TRIBUTE:
-    case MSG_SORT_CHAIN:
-    case MSG_SELECT_COUNTER:
-    case MSG_SELECT_SUM:
-    case MSG_SELECT_DISFIELD:
-    case MSG_SORT_CARD:
-    case MSG_SELECT_UNSELECT_CARD:
     case MSG_ROCK_PAPER_SCISSORS:
-    case MSG_ANNOUNCE_RACE:
-    case MSG_ANNOUNCE_ATTRIB:
     case MSG_ANNOUNCE_CARD:
-    case MSG_ANNOUNCE_NUMBER:
         return true;
     default:
         return false;
@@ -658,13 +1083,17 @@ std::vector<std::uint8_t> read_frame(const std::vector<std::uint8_t>& bytes, std
 
 }  // namespace
 
-DecodedMessage decode_messages(const std::vector<std::uint8_t>& bytes) {
+DecodedMessage decode_messages(const std::vector<std::uint8_t>& bytes, std::uint64_t engine_step_index) {
     DecodedMessage decoded;
     std::size_t offset = 0;
     while (offset < bytes.size()) {
         auto frame = read_frame(bytes, offset);
         const auto type = frame.front();
         decoded.message_type = type;
+        if (type == MSG_RETRY) {
+            decoded.retry = true;
+            continue;
+        }
         if (type == MSG_WIN) {
             if (frame.size() != 3) {
                 throw ProtocolError(ProtocolErrorCode::MalformedMessage, "MSG_WIN has unexpected length", type);
@@ -675,42 +1104,97 @@ DecodedMessage decode_messages(const std::vector<std::uint8_t>& bytes) {
             continue;
         }
         if (type == MSG_SELECT_IDLECMD) {
-            decoded.decisions.push_back(decode_idle(frame));
+            decoded.decisions.push_back(finalize_request(decode_idle(frame), frame, engine_step_index));
             decoded.interactive = true;
             continue;
         }
         if (type == MSG_SELECT_BATTLECMD) {
-            decoded.decisions.push_back(decode_battle(frame));
+            decoded.decisions.push_back(finalize_request(decode_battle(frame), frame, engine_step_index));
             decoded.interactive = true;
             continue;
         }
         if (type == MSG_SELECT_EFFECTYN) {
-            decoded.decisions.push_back(decode_yes_no(frame, true));
+            decoded.decisions.push_back(finalize_request(decode_yes_no(frame, true), frame, engine_step_index));
             decoded.interactive = true;
             continue;
         }
         if (type == MSG_SELECT_YESNO) {
-            decoded.decisions.push_back(decode_yes_no(frame, false));
+            decoded.decisions.push_back(finalize_request(decode_yes_no(frame, false), frame, engine_step_index));
             decoded.interactive = true;
             continue;
         }
         if (type == MSG_SELECT_POSITION) {
-            decoded.decisions.push_back(decode_position(frame));
+            decoded.decisions.push_back(finalize_request(decode_position(frame), frame, engine_step_index));
             decoded.interactive = true;
             continue;
         }
         if (type == MSG_SELECT_PLACE) {
-            decoded.decisions.push_back(decode_place(frame));
+            decoded.decisions.push_back(finalize_request(decode_place(frame, false), frame, engine_step_index));
+            decoded.interactive = true;
+            continue;
+        }
+        if (type == MSG_SELECT_DISFIELD) {
+            decoded.decisions.push_back(finalize_request(decode_place(frame, true), frame, engine_step_index));
             decoded.interactive = true;
             continue;
         }
         if (type == MSG_SELECT_CHAIN) {
-            decoded.decisions.push_back(decode_chain(frame));
+            decoded.decisions.push_back(finalize_request(decode_chain(frame), frame, engine_step_index));
             decoded.interactive = true;
             continue;
         }
         if (type == MSG_SELECT_CARD) {
-            decoded.decisions.push_back(decode_card_selection(frame));
+            decoded.decisions.push_back(finalize_request(decode_card_selection(frame), frame, engine_step_index));
+            decoded.interactive = true;
+            continue;
+        }
+        if (type == MSG_SELECT_OPTION) {
+            decoded.decisions.push_back(finalize_request(decode_select_option(frame), frame, engine_step_index));
+            decoded.interactive = true;
+            continue;
+        }
+        if (type == MSG_SELECT_TRIBUTE) {
+            decoded.decisions.push_back(finalize_request(decode_tribute(frame), frame, engine_step_index));
+            decoded.interactive = true;
+            continue;
+        }
+        if (type == MSG_SELECT_SUM) {
+            decoded.decisions.push_back(finalize_request(decode_sum(frame), frame, engine_step_index));
+            decoded.interactive = true;
+            continue;
+        }
+        if (type == MSG_SELECT_COUNTER) {
+            decoded.decisions.push_back(finalize_request(decode_counter(frame), frame, engine_step_index));
+            decoded.interactive = true;
+            continue;
+        }
+        if (type == MSG_SORT_CARD) {
+            decoded.decisions.push_back(finalize_request(decode_ordering(frame, false), frame, engine_step_index));
+            decoded.interactive = true;
+            continue;
+        }
+        if (type == MSG_SORT_CHAIN) {
+            decoded.decisions.push_back(finalize_request(decode_ordering(frame, true), frame, engine_step_index));
+            decoded.interactive = true;
+            continue;
+        }
+        if (type == MSG_SELECT_UNSELECT_CARD) {
+            decoded.decisions.push_back(finalize_request(decode_unselect(frame), frame, engine_step_index));
+            decoded.interactive = true;
+            continue;
+        }
+        if (type == MSG_ANNOUNCE_NUMBER) {
+            decoded.decisions.push_back(finalize_request(decode_announce_number(frame), frame, engine_step_index));
+            decoded.interactive = true;
+            continue;
+        }
+        if (type == MSG_ANNOUNCE_RACE) {
+            decoded.decisions.push_back(finalize_request(decode_announce_mask(frame, true), frame, engine_step_index));
+            decoded.interactive = true;
+            continue;
+        }
+        if (type == MSG_ANNOUNCE_ATTRIB) {
+            decoded.decisions.push_back(finalize_request(decode_announce_mask(frame, false), frame, engine_step_index));
             decoded.interactive = true;
             continue;
         }
@@ -733,14 +1217,26 @@ std::string action_kind_name(ActionKind kind) {
         return "battle_command";
     case ActionKind::Chain:
         return "chain";
+    case ActionKind::Option:
+        return "option";
     case ActionKind::CardSelection:
         return "card_selection";
+    case ActionKind::Announcement:
+        return "announcement";
     case ActionKind::Place:
         return "place";
     case ActionKind::Position:
         return "position";
     case ActionKind::YesNo:
         return "yes_no";
+    case ActionKind::Pick:
+        return "pick";
+    case ActionKind::Finish:
+        return "finish";
+    case ActionKind::Cancel:
+        return "cancel";
+    case ActionKind::AssignAmount:
+        return "assign_amount";
     }
     return "unknown";
 }
@@ -753,10 +1249,24 @@ std::string decision_kind_name(DecisionRequestKind kind) {
         return "battle_command";
     case DecisionRequestKind::Chain:
         return "chain";
+    case DecisionRequestKind::Option:
+        return "option";
     case DecisionRequestKind::CardSelection:
         return "card_selection";
+    case DecisionRequestKind::Tribute:
+        return "tribute";
+    case DecisionRequestKind::Sum:
+        return "sum";
     case DecisionRequestKind::Place:
         return "place";
+    case DecisionRequestKind::Counter:
+        return "counter";
+    case DecisionRequestKind::Ordering:
+        return "ordering";
+    case DecisionRequestKind::Announcement:
+        return "announcement";
+    case DecisionRequestKind::UnselectCard:
+        return "unselect_card";
     case DecisionRequestKind::Position:
         return "position";
     case DecisionRequestKind::YesNo:
@@ -774,9 +1284,17 @@ void validate_candidate_set(const DecisionRequest& request) {
     }
     for (std::size_t i = 0; i < request.candidates.size(); ++i) {
         const auto& candidate = request.candidates[i];
-        if (candidate.semantic_key.empty() || candidate.exact_response_bytes.empty()) {
+        if (candidate.semantic_key.empty()) {
             throw ProtocolError(ProtocolErrorCode::IncompleteCandidates,
-                                "interactive candidate is missing a semantic key or exact response");
+                                "interactive candidate is missing a semantic key");
+        }
+        if (candidate.submits_engine_response && candidate.exact_response_bytes.empty()) {
+            throw ProtocolError(ProtocolErrorCode::IncompleteCandidates,
+                                "terminal interactive candidate is missing an exact response");
+        }
+        if (!candidate.submits_engine_response && !candidate.exact_response_bytes.empty()) {
+            throw ProtocolError(ProtocolErrorCode::IncompleteCandidates,
+                                "intermediate interactive candidate unexpectedly contains a response");
         }
         for (std::size_t j = 0; j < i; ++j) {
             if (candidate.semantic_key == request.candidates[j].semantic_key) {
