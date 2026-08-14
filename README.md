@@ -1,9 +1,10 @@
 # OCGForge
 
-OCGForge is a correctness-focused M0 spike for a deterministic Yu-Gi-Oh!
-environment. It builds a thin C++ adapter over the public C API of one pinned
-OCG core snapshot. It is not a general Yu-Gi-Oh! environment and it does not
-contain machine-learning code.
+OCGForge is a deterministic Yu-Gi-Oh! simulation and game-AI research
+environment for reproducible engine, decision-protocol, observation/privacy,
+and fixed-deck conformance experiments. It builds a thin C++ adapter over the
+public C API of one pinned OCG core snapshot. It is not yet a general all-deck
+Yu-Gi-Oh! environment and it does not contain machine-learning code.
 
 ## M0 result
 
@@ -54,7 +55,7 @@ material. Visibility gates still redact hidden identities. See
 the [player observation contract](docs/contracts/player-observation-v1.md),
 and the [M3.5 API-hardening acceptance](docs/m3_5/M3_5_ACCEPTANCE.md).
 
-The current local M3/M3.5 verification is 84/84 CTest tests, 8/8 repository
+The current local M3/M3.5 verification is 85/85 CTest tests, 8/8 repository
 Python tests, and 17/17 M3 Python tests. The hosted Windows workflow remains
 the repository integration gate and runs on pushes and pull requests.
 
