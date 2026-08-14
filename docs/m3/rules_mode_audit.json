@@ -1,0 +1,67 @@
+{
+  "schema_version": "ocgforge.m3.rules_mode_audit.v2",
+  "format_id": "TCG_ADVANCED_2026_05_18",
+  "status": "RESOLVED_CONFIGURATION_CORRECTION",
+  "before": {
+    "format_id": "TCG_ADVANCED_2026_05_18",
+    "duel_mode": "DEFAULT_UNSPECIFIED",
+    "duel_flags": {"value": 0, "hex": "0x0", "names": []},
+    "rules_bundle_id": "6fbbd212ae4be2df36170dcbfcdf5c46aaaa0e3091cf815c2d0261fd01640ea4",
+    "status": "CONFIGURATION_BLOCKER"
+  },
+  "after": {
+    "format_id": "TCG_ADVANCED_2026_05_18",
+    "duel_mode": "DUEL_MODE_MR5",
+    "duel_flags": {
+      "value": 190464,
+      "hex": "0x2E800",
+      "names": ["DUEL_PZONE", "DUEL_EMZONE", "DUEL_FSX_MMZONE", "DUEL_TRAP_MONSTERS_NOT_USE_ZONE", "DUEL_TRIGGER_ONLY_IN_LOCATION"]
+    },
+    "rules_bundle_id": "3adfe6b4cfe2c2805e50b389fc0eb4e70a3b0b6107436614d328fddc865e585f",
+    "status": "RESOLVED_CONFIGURATION_CORRECTION"
+  },
+  "canonical": {
+    "format_id": "TCG_ADVANCED_2026_05_18",
+    "duel_mode": "DUEL_MODE_MR5",
+    "duel_flags": {
+      "value": 190464,
+      "hex": "0x2E800",
+      "names": ["DUEL_PZONE", "DUEL_EMZONE", "DUEL_FSX_MMZONE", "DUEL_TRAP_MONSTERS_NOT_USE_ZONE", "DUEL_TRIGGER_ONLY_IN_LOCATION"]
+    },
+    "rules_bundle_id": "3adfe6b4cfe2c2805e50b389fc0eb4e70a3b0b6107436614d328fddc865e585f",
+    "mapping_source": "third_party/rules_bundle.lock.json rule_affecting_inputs"
+  },
+  "required_modern_mode": {
+    "name": "DUEL_MODE_MR5",
+    "value": 190464,
+    "hex": "0x2E800",
+    "flags": ["DUEL_PZONE", "DUEL_EMZONE", "DUEL_FSX_MMZONE", "DUEL_TRAP_MONSTERS_NOT_USE_ZONE", "DUEL_TRIGGER_ONLY_IN_LOCATION"]
+  },
+  "identity_change": {
+    "old_rules_bundle_id": "ff8721aae1a17da6a72079e65ae75a05012c0c367b6f249651c1de713c1fbf91",
+    "new_rules_bundle_id": "3adfe6b4cfe2c2805e50b389fc0eb4e70a3b0b6107436614d328fddc865e585f",
+    "derivation": "SHA-256 of stable canonical rule_affecting_inputs including format_id, duel_mode, duel_flags, and the ordered ocgcore patchset file hashes",
+    "schema_bump": true,
+    "previous_m3_2_bundle_id": "ff8721aae1a17da6a72079e65ae75a05012c0c367b6f249651c1de713c1fbf91"
+  },
+  "pinned_components_unchanged": true,
+  "patchset": {
+    "id": "ocgforge.ocgcore.api_hardening.v1",
+    "sha256": "6b5421b3a852085f48fa161a5ba1540f902aa00784a337694b21c9efc34f69bd",
+    "ordered_patches": [
+      "0001-fix-overlay-seq-parent-query.patch",
+      "0002-add-starting-player-control.patch"
+    ]
+  },
+  "evidence": [
+    "fixtures/decks/ocgforge.matchup.swordsoul_salamangreat.v1.json",
+    "third_party/rules_bundle.lock.json",
+    ".cache/rules_bundle/ocgcore/ocgapi_constants.h",
+    ".cache/rules_bundle/ocgcore/field.cpp",
+    ".cache/rules_bundle/ocgcore/libdebug.cpp",
+    "cmake/RulesBundle.cmake",
+    "include/ygo/m3/canonical_rules.hpp",
+    "src/core/core_host.cpp",
+    "tests/m3/runtime/rules_mode_test.cpp"
+  ]
+}

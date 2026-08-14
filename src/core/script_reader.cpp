@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <fstream>
 #include <iterator>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -10,6 +11,29 @@
 #include "ocgapi.h"
 
 namespace ygo::core::detail {
+
+namespace {
+
+std::optional<std::uint32_t> card_code_from_script_name(const std::string& name) {
+    const auto separator = name.find_last_of("/\\");
+    const auto base = separator == std::string::npos ? name : name.substr(separator + 1);
+    if (base.size() < 6 || base.front() != 'c' || base.substr(base.size() - 4) != ".lua") {
+        return std::nullopt;
+    }
+    const auto digits = base.substr(1, base.size() - 5);
+    try {
+        std::size_t consumed = 0;
+        const auto value = std::stoull(digits, &consumed, 10);
+        if (consumed != digits.size() || value > 0xffffffffULL) {
+            return std::nullopt;
+        }
+        return static_cast<std::uint32_t>(value);
+    } catch (...) {
+        return std::nullopt;
+    }
+}
+
+}  // namespace
 
 int ScriptStore::load(OCG_Duel duel, const char* name, std::string* error) {
     if (name == nullptr) {
@@ -39,8 +63,14 @@ int ScriptStore::load(OCG_Duel duel, const char* name, std::string* error) {
         stream.open(path, std::ios::binary);
     }
     if (!stream) {
-        // Normal monsters intentionally have no cXXXX.lua script.
-        if (requested.rfind("c", 0) == 0) {
+        // Normal monsters intentionally have no cXXXX.lua script. Required
+        // effect/procedure cards must fail closed when their script is absent,
+        // including requests that carry an official/ subdirectory prefix.
+        const auto code = card_code_from_script_name(requested);
+        if (code.has_value()) {
+            if (required_codes_.find(*code) != required_codes_.end() && error != nullptr) {
+                *error = "required card script not found: " + requested;
+            }
             return 0;
         }
         if (error != nullptr) {

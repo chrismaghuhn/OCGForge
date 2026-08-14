@@ -23,6 +23,9 @@ add_custom_command(
             --deck "${CMAKE_SOURCE_DIR}/fixtures/decks/m1_tribute_b.deck"
             --deck "${CMAKE_SOURCE_DIR}/fixtures/m1_engine/cards.deck"
             --deck "${CMAKE_SOURCE_DIR}/fixtures/m2_cards.deck"
+            --deck "${CMAKE_SOURCE_DIR}/fixtures/decks/swordsoul_tenyi_ml_v1.ydk"
+            --deck "${CMAKE_SOURCE_DIR}/fixtures/decks/salamangreat_ml_v1.ydk"
+            --code 20001444
     DEPENDS
         "${CMAKE_SOURCE_DIR}/tools/prepare_card_data.py"
         "${M0_BABELCDB_DIR}/cards.cdb"
@@ -32,6 +35,8 @@ add_custom_command(
         "${CMAKE_SOURCE_DIR}/fixtures/decks/m1_tribute_b.deck"
         "${CMAKE_SOURCE_DIR}/fixtures/m1_engine/cards.deck"
         "${CMAKE_SOURCE_DIR}/fixtures/m2_cards.deck"
+        "${CMAKE_SOURCE_DIR}/fixtures/decks/swordsoul_tenyi_ml_v1.ydk"
+        "${CMAKE_SOURCE_DIR}/fixtures/decks/salamangreat_ml_v1.ydk"
     VERBATIM
 )
 add_custom_target(m0_fixture_data DEPENDS "${M0_CARD_DATA_TSV}")
@@ -104,6 +109,7 @@ add_library(ygo_m0 STATIC
     src/core/core_host.cpp
     src/core/rules_bundle.cpp
     src/core/script_reader.cpp
+    src/m3/conformance_policy.cpp
     src/protocol/continuation.cpp
     src/protocol/message_decoder.cpp
     src/protocol/response_builder.cpp
@@ -130,6 +136,12 @@ target_compile_definitions(ygo_m0 PUBLIC
     YGO_M0_CARD_DATA_TSV="${M0_CARD_DATA_TSV}"
     YGO_M0_COMPILER_ID="${CMAKE_CXX_COMPILER_ID}-${CMAKE_CXX_COMPILER_VERSION}"
     YGO_M0_BUILD_TYPE="$<CONFIG>"
+    YGO_M3_FORMAT_ID="${M0_RULES_FORMAT_ID}"
+    YGO_M3_DUEL_MODE_NAME="${M0_RULES_DUEL_MODE}"
+    YGO_M3_DUEL_FLAGS_VALUE=${M0_RULES_DUEL_FLAGS}
+    YGO_M3_RULES_BUNDLE_ID="${M0_RULES_BUNDLE_ID}"
+    YGO_M3_CORE_PATCHSET_ID="${M0_RULES_CORE_PATCHSET_ID}"
+    YGO_M3_CORE_PATCHSET_SHA256="${M0_RULES_CORE_PATCHSET_SHA256}"
 )
 if(MSVC)
     target_compile_options(ygo_m0 PRIVATE /W4 /permissive-)
@@ -143,6 +155,9 @@ target_compile_definitions(ygo_core_probe PRIVATE
     YGO_M0_PLAYER_A="${CMAKE_SOURCE_DIR}/fixtures/decks/player_a.deck"
     YGO_M0_PLAYER_B="${CMAKE_SOURCE_DIR}/fixtures/decks/player_b.deck"
     YGO_M0_CARDSCRIPTS="${M0_CARDSCRIPTS_DIR}"
+    YGO_M3_DECK_A="${CMAKE_SOURCE_DIR}/fixtures/decks/swordsoul_tenyi_ml_v1.ydk"
+    YGO_M3_DECK_B="${CMAKE_SOURCE_DIR}/fixtures/decks/salamangreat_ml_v1.ydk"
+    YGO_M3_CARDSCRIPTS="${M0_CARDSCRIPTS_DIR}"
 )
 
 add_executable(ygo_observation_probe tools/ygo_observation_probe/main.cpp)
@@ -182,6 +197,10 @@ add_test(NAME decision_fail_closed_test COMMAND decision_fail_closed_test)
 add_executable(trace_semantics_test tests/trace/trace_semantics_test.cpp)
 target_link_libraries(trace_semantics_test PRIVATE ygo_m0)
 add_test(NAME trace_semantics_test COMMAND trace_semantics_test)
+
+add_test(NAME m35_probe_trace_starting_player_test
+         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tests/m3_5/probe_trace_starting_player_test.py"
+                 "$<TARGET_FILE:ygo_core_probe>")
 
 add_executable(player_view_test tests/privacy/player_view_test.cpp)
 target_link_libraries(player_view_test PRIVATE ygo_m0)
@@ -246,6 +265,41 @@ target_compile_definitions(m2_1_xyz_api_test PRIVATE
 )
 add_test(NAME m2_1_xyz_api_test COMMAND m2_1_xyz_api_test)
 
+add_executable(m35_xyz_material_query_test
+    tests/m3_5/core/public_core_harness.cpp
+    tests/m3_5/core/xyz_material_query_test.cpp
+)
+target_link_libraries(m35_xyz_material_query_test PRIVATE ygo_m0)
+target_include_directories(m35_xyz_material_query_test PRIVATE
+    "${CMAKE_SOURCE_DIR}/src/core"
+    "${CMAKE_SOURCE_DIR}/src/observation"
+)
+target_compile_definitions(m35_xyz_material_query_test PRIVATE
+    YGO_M35_PLAYER_A="${CMAKE_SOURCE_DIR}/fixtures/decks/player_a.deck"
+    YGO_M35_PLAYER_B="${CMAKE_SOURCE_DIR}/fixtures/decks/player_b.deck"
+    YGO_M35_CARDSCRIPTS="${M0_CARDSCRIPTS_DIR}"
+    YGO_M35_XYZ_SETUP="${CMAKE_SOURCE_DIR}/fixtures/m2_setup.lua"
+    YGO_M35_XYZ_EMPTY_SETUP="${CMAKE_SOURCE_DIR}/fixtures/m35_xyz_empty.lua"
+)
+add_test(NAME m35_xyz_material_query_test COMMAND m35_xyz_material_query_test)
+
+add_executable(m35_starting_player_api_test
+    tests/m3_5/core/public_core_harness.cpp
+    tests/m3_5/core/public_core_starting_api.cpp
+    tests/m3_5/core/starting_player_api_test.cpp
+)
+target_link_libraries(m35_starting_player_api_test PRIVATE ygo_m0)
+target_include_directories(m35_starting_player_api_test PRIVATE
+    "${CMAKE_SOURCE_DIR}/src/core"
+    "${CMAKE_SOURCE_DIR}/src/observation"
+)
+target_compile_definitions(m35_starting_player_api_test PRIVATE
+    YGO_M35_PLAYER_A="${CMAKE_SOURCE_DIR}/fixtures/decks/player_a.deck"
+    YGO_M35_PLAYER_B="${CMAKE_SOURCE_DIR}/fixtures/decks/player_b.deck"
+    YGO_M35_CARDSCRIPTS="${M0_CARDSCRIPTS_DIR}"
+)
+add_test(NAME m35_starting_player_api_test COMMAND m35_starting_player_api_test)
+
 add_executable(event_projection_test tests/observation/event_projection_test.cpp)
 target_link_libraries(event_projection_test PRIVATE ygo_m0)
 target_include_directories(event_projection_test PRIVATE "${CMAKE_SOURCE_DIR}/src/observation")
@@ -272,6 +326,142 @@ target_compile_definitions(core_lifecycle_test PRIVATE
     YGO_M0_CARDSCRIPTS="${M0_CARDSCRIPTS_DIR}"
 )
 add_test(NAME core_lifecycle_test COMMAND core_lifecycle_test)
+
+add_executable(m3_rules_mode_test tests/m3/runtime/rules_mode_test.cpp)
+target_link_libraries(m3_rules_mode_test PRIVATE ygo_m0)
+target_compile_definitions(m3_rules_mode_test PRIVATE
+    YGO_M0_PLAYER_A="${CMAKE_SOURCE_DIR}/fixtures/decks/player_a.deck"
+    YGO_M0_PLAYER_B="${CMAKE_SOURCE_DIR}/fixtures/decks/player_b.deck"
+    YGO_M0_CARDSCRIPTS="${M0_CARDSCRIPTS_DIR}"
+)
+add_test(NAME m3_rules_mode_test COMMAND m3_rules_mode_test)
+
+add_executable(deck_loader_test tests/m3/runtime/deck_loader_test.cpp)
+target_link_libraries(deck_loader_test PRIVATE ygo_m0)
+target_compile_definitions(deck_loader_test PRIVATE
+    YGO_M3_DECK_A="${CMAKE_SOURCE_DIR}/fixtures/decks/swordsoul_tenyi_ml_v1.ydk"
+    YGO_M3_DECK_B="${CMAKE_SOURCE_DIR}/fixtures/decks/salamangreat_ml_v1.ydk"
+    YGO_M3_CARDSCRIPTS="${M0_CARDSCRIPTS_DIR}"
+    YGO_M0_PLAYER_A="${CMAKE_SOURCE_DIR}/fixtures/decks/player_a.deck"
+)
+add_test(NAME deck_loader_test COMMAND deck_loader_test)
+
+add_executable(card_instantiation_test tests/m3/runtime/card_instantiation_test.cpp)
+target_link_libraries(card_instantiation_test PRIVATE ygo_m0)
+target_compile_definitions(card_instantiation_test PRIVATE
+    YGO_M3_DECK_A="${CMAKE_SOURCE_DIR}/fixtures/decks/swordsoul_tenyi_ml_v1.ydk"
+    YGO_M3_DECK_B="${CMAKE_SOURCE_DIR}/fixtures/decks/salamangreat_ml_v1.ydk"
+    YGO_M3_CARDSCRIPTS="${M0_CARDSCRIPTS_DIR}"
+)
+add_test(NAME card_instantiation_test COMMAND card_instantiation_test)
+
+add_executable(m3_fixture_test tests/m3/runtime/m3_fixture_test.cpp)
+target_link_libraries(m3_fixture_test PRIVATE ygo_m0)
+target_include_directories(m3_fixture_test PRIVATE
+    "${CMAKE_SOURCE_DIR}/src/observation"
+)
+target_compile_definitions(m3_fixture_test PRIVATE
+    YGO_M3_DECK_A="${CMAKE_SOURCE_DIR}/fixtures/decks/swordsoul_tenyi_ml_v1.ydk"
+    YGO_M3_DECK_B="${CMAKE_SOURCE_DIR}/fixtures/decks/salamangreat_ml_v1.ydk"
+    YGO_M3_CARDSCRIPTS="${M0_CARDSCRIPTS_DIR}"
+    YGO_M3_SS01_SETUP="${CMAKE_SOURCE_DIR}/fixtures/m3_ss01_moye_token.lua"
+    YGO_M3_SS07_SETUP="${CMAKE_SOURCE_DIR}/fixtures/m3_ss07_token_restriction.lua"
+    YGO_M3_SS08_SETUP="${CMAKE_SOURCE_DIR}/fixtures/m3_ss08_baxia_real.lua"
+    YGO_M3_SS12_CONDITION_SETUP="${CMAKE_SOURCE_DIR}/fixtures/m3_ss12_tenyi_condition.lua"
+    YGO_M3_SS05_SETUP="${CMAKE_SOURCE_DIR}/fixtures/m3_ss05_chixiao_negate.lua"
+    YGO_M3_SS06_SETUP="${CMAKE_SOURCE_DIR}/fixtures/m3_ss06_longyuan.lua"
+    YGO_M3_INT01_SETUP="${CMAKE_SOURCE_DIR}/fixtures/m3_int01_ash_blossom.lua"
+    YGO_M3_INT02_SETUP="${CMAKE_SOURCE_DIR}/fixtures/m3_int02_effect_veiler.lua"
+    YGO_M3_INT03_SETUP="${CMAKE_SOURCE_DIR}/fixtures/m3_int03_impermanence.lua"
+    YGO_M3_INT04_SETUP="${CMAKE_SOURCE_DIR}/fixtures/m3_int04_ghost_belle.lua"
+    YGO_M3_INT05_SETUP="${CMAKE_SOURCE_DIR}/fixtures/m3_int05_called_by.lua"
+    YGO_M3_SG01_SETUP="${CMAKE_SOURCE_DIR}/fixtures/m3_sg01_fire_balelynx.lua"
+    YGO_M3_SG02_SETUP="${CMAKE_SOURCE_DIR}/fixtures/m3_sg02_deck_link.lua"
+    YGO_M3_SG03_SETUP="${CMAKE_SOURCE_DIR}/fixtures/m3_sg02_deck_link.lua"
+    YGO_M3_SG04_SETUP="${CMAKE_SOURCE_DIR}/fixtures/m3_sg02_deck_link.lua"
+    YGO_M3_SS10_SETUP="${CMAKE_SOURCE_DIR}/fixtures/m3_ss10_blackout.lua"
+    YGO_M3_SS10_BANISH_SETUP="${CMAKE_SOURCE_DIR}/fixtures/m3_ss10_blackout_banish_chengying.lua"
+    YGO_M3_SS12_SETUP="${CMAKE_SOURCE_DIR}/fixtures/m3_ss12_heavenly_dragon_circle.lua"
+    YGO_M3_SS14_SETUP="${CMAKE_SOURCE_DIR}/fixtures/m3_ss14_ashuna_restriction.lua"
+    YGO_M3_SS15_SETUP="${CMAKE_SOURCE_DIR}/fixtures/m3_ss15_vishuda_return.lua"
+    YGO_M3_SS16_SETUP="${CMAKE_SOURCE_DIR}/fixtures/m3_ss16_adhara_recovery.lua"
+    YGO_M3_SS16_CHENGYING_SETUP="${CMAKE_SOURCE_DIR}/fixtures/m3_ss10_blackout_banish_chengying.lua"
+    YGO_M3_SS17_SETUP="${CMAKE_SOURCE_DIR}/fixtures/m3_ss17_qixing_interaction.lua"
+    YGO_M3_SG05_SETUP="${CMAKE_SOURCE_DIR}/fixtures/m3_sg05_gazelle_gy.lua"
+    YGO_M3_SG06_SETUP="${CMAKE_SOURCE_DIR}/fixtures/m3_sg06_gazelle_gy.lua"
+    YGO_M3_SG07_JACK_SETUP="${CMAKE_SOURCE_DIR}/fixtures/m3_sg07_jack_jaguar.lua"
+    YGO_M3_SG07_WEASEL_SETUP="${CMAKE_SOURCE_DIR}/fixtures/m3_sg07_weasel.lua"
+    YGO_M3_SG07_FALCO_SETUP="${CMAKE_SOURCE_DIR}/fixtures/m3_sg07_falco.lua"
+    YGO_M3_SG08_REAL_SETUP="${CMAKE_SOURCE_DIR}/fixtures/m3_sg08_miragestallio_real.lua"
+    YGO_M3_SG09_DIRECT_SETUP="${CMAKE_SOURCE_DIR}/fixtures/m3_sg08_miragestallio.lua"
+    YGO_M3_SG11_SETUP="${CMAKE_SOURCE_DIR}/fixtures/m3_sg11_sunlight_wolf_link.lua"
+    YGO_M3_SG11_PLAYER0_SETUP="${CMAKE_SOURCE_DIR}/fixtures/m3_sg11_sunlight_wolf_link_player0.lua"
+    YGO_M3_SG12_SETUP="${CMAKE_SOURCE_DIR}/fixtures/m3_sg12_sunlight_wolf_st.lua"
+    YGO_M3_SG13_SETUP="${CMAKE_SOURCE_DIR}/fixtures/m3_sg13_raging_phoenix.lua"
+    YGO_M3_SG14_SETUP="${CMAKE_SOURCE_DIR}/fixtures/m3_sg14_pyro_phoenix.lua"
+    YGO_M3_SG15_SETUP="${CMAKE_SOURCE_DIR}/fixtures/m3_sg15_heatleo.lua"
+    YGO_M3_SG18_SETUP="${CMAKE_SOURCE_DIR}/fixtures/m3_sg18_promethean.lua"
+    YGO_M3_SG19_SETUP="${CMAKE_SOURCE_DIR}/fixtures/m3_sg19_hiita.lua"
+    YGO_M3_SG19_NO_TARGET_SETUP="${CMAKE_SOURCE_DIR}/fixtures/m3_sg19_hiita_no_target.lua"
+    YGO_M3_SG16_NEGATE_SETUP="${CMAKE_SOURCE_DIR}/fixtures/m3_sg16_roar.lua"
+    YGO_M3_SG16_RECOVERY_SETUP="${CMAKE_SOURCE_DIR}/fixtures/m3_sg16_roar_recovery.lua"
+    YGO_M3_SG17_SETUP="${CMAKE_SOURCE_DIR}/fixtures/m3_sg17_rage.lua"
+    YGO_M3_BTL01_SETUP="${CMAKE_SOURCE_DIR}/fixtures/m3_btl01_battle_phase.lua"
+    YGO_M3_SG20_SETUP="${CMAKE_SOURCE_DIR}/fixtures/m3_sg11_sunlight_wolf_link.lua"
+)
+add_test(NAME m3_ss01_fixture COMMAND m3_fixture_test ss01)
+add_test(NAME m3_ss07_fixture COMMAND m3_fixture_test ss07)
+add_test(NAME m3_ss08_fixture COMMAND m3_fixture_test ss08)
+add_test(NAME m3_ss12_condition_fixture COMMAND m3_fixture_test ss12_condition)
+add_test(NAME m3_ss18_fixture COMMAND m3_fixture_test ss18)
+add_test(NAME m3_ss05_fixture COMMAND m3_fixture_test ss05)
+add_test(NAME m3_ss06_fixture COMMAND m3_fixture_test ss06)
+add_test(NAME m3_int01_fixture COMMAND m3_fixture_test int01)
+add_test(NAME m3_int02_fixture COMMAND m3_fixture_test int02)
+add_test(NAME m3_int03_fixture COMMAND m3_fixture_test int03)
+add_test(NAME m3_int04_fixture COMMAND m3_fixture_test int04)
+add_test(NAME m3_int05_fixture COMMAND m3_fixture_test int05)
+add_test(NAME m3_sg01_fixture COMMAND m3_fixture_test sg01)
+add_test(NAME m3_sg02_fixture COMMAND m3_fixture_test sg02)
+add_test(NAME m3_sg03_fixture COMMAND m3_fixture_test sg03)
+add_test(NAME m3_sg04_fixture COMMAND m3_fixture_test sg04)
+add_test(NAME m3_ss10_fixture COMMAND m3_fixture_test ss10)
+add_test(NAME m3_ss10_banish_fixture COMMAND m3_fixture_test ss10_banish)
+add_test(NAME m3_ss12_fixture COMMAND m3_fixture_test ss12)
+add_test(NAME m3_ss14_fixture COMMAND m3_fixture_test ss14)
+add_test(NAME m3_ss15_fixture COMMAND m3_fixture_test ss15)
+add_test(NAME m3_ss16_fixture COMMAND m3_fixture_test ss16)
+add_test(NAME m3_ss16_chengying_fixture COMMAND m3_fixture_test ss16_chengying)
+add_test(NAME m3_ss17_fixture COMMAND m3_fixture_test ss17)
+add_test(NAME m3_sg05_fixture COMMAND m3_fixture_test sg05)
+add_test(NAME m3_sg06_fixture COMMAND m3_fixture_test sg06)
+add_test(NAME m3_sg07_jack_fixture COMMAND m3_fixture_test sg07_jack)
+add_test(NAME m3_sg07_weasel_fixture COMMAND m3_fixture_test sg07_weasel)
+add_test(NAME m3_sg07_falco_fixture COMMAND m3_fixture_test sg07_falco)
+add_test(NAME m3_sg08_real_fixture COMMAND m3_fixture_test sg08_real)
+add_test(NAME m3_sg09_direct_fixture COMMAND m3_fixture_test sg09_direct)
+add_test(NAME m3_sg11_fixture COMMAND m3_fixture_test sg11)
+add_test(NAME m3_sg12_fixture COMMAND m3_fixture_test sg12)
+add_test(NAME m3_sg13_fixture COMMAND m3_fixture_test sg13)
+add_test(NAME m3_sg14_fixture COMMAND m3_fixture_test sg14)
+add_test(NAME m3_sg15_fixture COMMAND m3_fixture_test sg15)
+add_test(NAME m3_sg18_fixture COMMAND m3_fixture_test sg18)
+add_test(NAME m3_sg19_fixture COMMAND m3_fixture_test sg19)
+add_test(NAME m3_sg19_no_target_fixture COMMAND m3_fixture_test sg19_no_target)
+add_test(NAME m3_sg16_negate_fixture COMMAND m3_fixture_test sg16_negate)
+add_test(NAME m3_sg16_recovery_fixture COMMAND m3_fixture_test sg16_recovery)
+add_test(NAME m3_sg17_fixture COMMAND m3_fixture_test sg17)
+add_test(NAME m3_btl01_fixture COMMAND m3_fixture_test btl01)
+add_test(NAME m3_sg20_fixture COMMAND m3_fixture_test sg20)
+
+add_executable(m3_real_deck_privacy_test tests/m3/runtime/real_deck_privacy_test.cpp)
+target_link_libraries(m3_real_deck_privacy_test PRIVATE ygo_m0)
+target_compile_definitions(m3_real_deck_privacy_test PRIVATE
+    YGO_M3_DECK_A="${CMAKE_SOURCE_DIR}/fixtures/decks/swordsoul_tenyi_ml_v1.ydk"
+    YGO_M3_DECK_B="${CMAKE_SOURCE_DIR}/fixtures/decks/salamangreat_ml_v1.ydk"
+    YGO_M3_CARDSCRIPTS="${M0_CARDSCRIPTS_DIR}"
+)
+add_test(NAME m3_real_deck_privacy_test COMMAND m3_real_deck_privacy_test)
 
 add_executable(m1_engine_fixture_test tests/core/m1_engine_fixture_test.cpp)
 target_link_libraries(m1_engine_fixture_test PRIVATE ygo_m0)

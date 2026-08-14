@@ -1,9 +1,10 @@
 # OCGForge
 
-OCGForge is a correctness-focused M0 spike for a deterministic Yu-Gi-Oh!
-environment. It builds a thin C++ adapter over the public C API of one pinned
-OCG core snapshot. It is not a general Yu-Gi-Oh! environment and it does not
-contain machine-learning code.
+OCGForge is a deterministic Yu-Gi-Oh! simulation and game-AI research
+environment for reproducible engine, decision-protocol, observation/privacy,
+and fixed-deck conformance experiments. It builds a thin C++ adapter over the
+public C API of one pinned OCG core snapshot. It is not yet a general all-deck
+Yu-Gi-Oh! environment and it does not contain machine-learning code.
 
 ## M0 result
 
@@ -43,19 +44,57 @@ than exposing raw engine state. The observation probe is
 `build/dev-windows/ygo_observation_probe.exe` (or the equivalent
 `build/windows-zig` path).
 
-The pinned public OCG API exposes Xyz material counts and the parent query's
-aggregate ordered material-code vector, but it does not return an individual
-per-material query record or perspective-specific material visibility state.
-OCGForge therefore retains deterministic redacted overlay slots and typed
-`XYZ_MATERIAL` relationships without projecting material identities. This is a
-confirmed pinned-engine API limitation, not a private-core workaround or a
-missing OCGForge feature. See
+The unmodified pinned base API exposes Xyz material counts and the parent
+query's aggregate ordered material-code vector, but its existing
+`overlay_seq` path did not resolve the individual public material record
+correctly. M3.5 keeps the existing public contract and supplies a narrow,
+repository-versioned core patch so that
+`LOCATION_OVERLAY + parent sequence + overlay_seq` resolves the requested
+material. Visibility gates still redact hidden identities. See
 [M2.1 Xyz API investigation](docs/observation/M2_1_XYZ_API_INVESTIGATION.md)
-and the [player observation contract](docs/contracts/player-observation-v1.md).
+the [player observation contract](docs/contracts/player-observation-v1.md),
+and the [M3.5 API-hardening acceptance](docs/m3_5/M3_5_ACCEPTANCE.md).
 
-The current local M2 verification is 34/34 CTest tests and 3/3 Python tests.
-The hosted Windows workflow remains the repository integration gate and runs
-on pushes and pull requests.
+The current local M3/M3.5 verification is 85/85 CTest tests, 8/8 repository
+Python tests, and 17/17 M3 Python tests. The hosted Windows workflow remains
+the repository integration gate and runs on pushes and pull requests.
+
+## M3 fixed-deck conformance and M3.5 API hardening
+
+The locked matchup is now validated end to end:
+
+- `ocgforge.swordsoul_tenyi.ml_v1` versus
+  `ocgforge.salamangreat.ml_v1`
+- exact 40-card Main Decks and 15-card Extra Decks, with 110 valid slots and
+  50 unique cards
+- canonical `TCG_ADVANCED_2026_05_18` configuration using
+  `DUEL_MODE_MR5 = 0x2E800`
+- mechanics matrix: 38 engine-verified, 7 protocol-verified, 0 pending
+- 16/16 complete deterministic games across both start-player and mirrored
+  deck-seat partitions
+- zero retries, unsupported required decisions, automatic decisions,
+  candidate truncation, and core errors
+
+The canonical rules environment is recorded in
+[third_party/rules_bundle.lock.json](third_party/rules_bundle.lock.json) as
+bundle `3adfe6b4cfe2c2805e50b389fc0eb4e70a3b0b6107436614d328fddc865e585f`.
+The pinned ocgcore, OCG API, CardScripts, and BabelCDB versions remain
+unchanged. The runtime uses an immutable pinned base core plus the ordered,
+repository-versioned `ocgforge.ocgcore.api_hardening.v1` patchset; no upstream
+source checkout is modified.
+
+M3.5 adds two narrow public API capabilities:
+
+- the existing `overlay_seq` query contract resolves the correct individual
+  Xyz material while preserving the existing privacy projection;
+- `OCG_DuelSetStartingPlayer` accepts only player 0 or 1 before duel start,
+  preserves default player 0 behavior, and rejects invalid or post-start calls.
+
+It does not add a general mid-duel turn-player mutation API, a second Xyz query
+mechanism, machine-learning code, or a general board-construction runtime API.
+The complete acceptance evidence is in
+[docs/m3/M3_ACCEPTANCE_MATRIX.md](docs/m3/M3_ACCEPTANCE_MATRIX.md) and
+[docs/m3_5/M3_5_ACCEPTANCE.md](docs/m3_5/M3_5_ACCEPTANCE.md).
 
 ## Reproducible rules bundle
 

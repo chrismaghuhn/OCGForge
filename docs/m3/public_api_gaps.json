@@ -1,0 +1,52 @@
+{
+  "rows": [
+    {
+      "evidence": "The unmodified base checkout reproduced the empty overlay query; repository patch 0001 fixes only the existing parent-location plus overlay_seq lookup, and m35_xyz_material_query_test plus m2_1_xyz_api_test prove the real public query and privacy projections.",
+      "gap_id": "INDIVIDUAL_XYZ_MATERIAL_QUERY",
+      "impact": "Canonical M3.5 observations expose visible material identity through the existing overlay_seq contract and continue to redact opponent face-down material identity.",
+      "m3_5_action": "retain the patch as an ordered repository input and prepare an upstream-compatible change if accepted; until then the base cached core remains immutable",
+      "m3_action": "M3.1 limitation closed by the narrow repository-versioned ocgcore patchset; no second overlay-query mechanism was added.",
+      "m3_can_proceed": true,
+      "privacy_implications": "Identity is exposed only after the same parent visibility gate used for the visible Xyz card; hidden paired-world material identities remain redacted and hash-equal.",
+      "public_api_calls_inspected": [
+        "OCG_DuelQuery",
+        "OCG_DuelQueryLocation",
+        "OCG_DuelQueryFieldCard"
+      ],
+      "scope": "pinned ocgcore public API 11.0 plus the OCGForge derived patchset",
+      "status": "RESOLVED_BY_REPOSITORY_PATCHSET"
+    },
+    {
+      "evidence": "Current fixture setup is intentionally script-backed; no general board-construction API is required by the closed fixtures and no missing ocgcore capability has been proven.",
+      "gap_id": "FIXTURE_RUNNER_PUBLIC_SETUP_SCOPE",
+      "impact": "M3 does not add a general public board-construction API or private core access.",
+      "m3_5_action": "evaluate a descriptor-backed fixture setup projection if more coverage requires it",
+      "m3_action": "no change during M3",
+      "m3_can_proceed": true,
+      "privacy_implications": "Any future setup projection must remain test-only and must not widen runtime hidden-information access.",
+      "public_api_calls_inspected": [
+        "CoreHost::load_fixture_script",
+        "CoreHost::load_fixture_card"
+      ],
+      "scope": "OCGForge test infrastructure, not an upstream ocgcore gap",
+      "status": "RECORDED_FOR_M3_5"
+    },
+    {
+      "evidence": "The unmodified base API had no starting-player setter and always initialized player 0; repository patch 0002 adds only OCG_DuelSetStartingPlayer before duel start, preserves default 0, rejects invalid values and post-start calls, and is proven by m35_starting_player_api_test plus canonical full-game partitions.",
+      "gap_id": "START_PLAYER_SELECTION_CONTROL",
+      "impact": "Canonical M3.5 runners can deterministically exercise starting-player 0 and 1 while retaining the same default behavior and deck-seat semantics.",
+      "m3_5_action": "retain the additive setter as an ordered repository input and prepare an upstream-compatible change with regression tests if accepted",
+      "m3_action": "M3.1 limitation closed by the narrow repository-versioned ocgcore patchset; no mid-duel turn-player mutation API was added.",
+      "m3_can_proceed": true,
+      "privacy_implications": "No hidden card information is exposed; the patch changes only pre-duel turn-player selection and acceptance coverage.",
+      "public_api_calls_inspected": [
+        "OCG_DuelOptions",
+        "OCG_StartDuel",
+        "OCG_DuelQueryFieldCard"
+      ],
+      "scope": "pinned ocgcore public API 11.0 plus the OCGForge derived patchset",
+      "status": "RESOLVED_BY_REPOSITORY_PATCHSET"
+    }
+  ],
+  "schema_version": "ocgforge.m3.public_api_gaps.v1"
+}

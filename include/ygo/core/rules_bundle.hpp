@@ -18,10 +18,13 @@ struct RulesBundlePaths {
     std::string database_repository = "https://github.com/ProjectIgnis/BabelCDB.git";
     std::string database_commit = "89ad6837b0766a52984d8c715a7d5d4f8447946b";
     std::string core_api_version = "11.0";
+    std::string core_patchset_id;
+    std::string core_patchset_sha256;
 };
 
 struct FixtureDeck {
     std::vector<std::uint32_t> main_deck;
+    std::vector<std::uint32_t> extra_deck;
     std::string sha256;
 };
 

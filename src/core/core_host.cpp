@@ -26,8 +26,11 @@ struct CoreHost::Impl {
     std::pair<detail::ScriptStore*, std::string*> script_payload;
     OCG_Duel duel = nullptr;
 
-    explicit Impl(const std::filesystem::path& script_root)
-        : card_data_payload{&card_data, &callback_error}, scripts(script_root), script_payload(&scripts, &callback_error) {}
+    explicit Impl(const std::filesystem::path& script_root,
+                  const std::vector<std::uint32_t>& required_script_codes)
+        : card_data_payload{&card_data, &callback_error},
+          scripts(script_root, required_script_codes),
+          script_payload(&scripts, &callback_error) {}
 };
 
 void CoreHost::throw_if_callback_error(const char* operation) const {
@@ -42,7 +45,7 @@ CoreHost::CoreHost(CoreHostConfig config) : config_(std::move(config)) {
         throw CoreError(CoreErrorCode::Lifecycle, "OCG_GetVersion",
                         "expected 11.0, got " + std::to_string(api_major_) + "." + std::to_string(api_minor_));
     }
-    impl_ = new Impl(config_.rules.card_scripts_root);
+    impl_ = new Impl(config_.rules.card_scripts_root, config_.required_script_codes);
     try {
         impl_->card_data.load(config_.rules.card_data_tsv);
         auto& options = impl_->options;
@@ -118,6 +121,19 @@ void CoreHost::load_deck(std::uint8_t team, const FixtureDeck& deck) {
         OCG_DuelNewCard(impl_->duel, &info);
         throw_if_callback_error("OCG_DuelNewCard");
     }
+    sequence = 0;
+    for (const std::uint32_t code : deck.extra_deck) {
+        OCG_NewCardInfo info{};
+        info.team = team;
+        info.duelist = 0;
+        info.code = code;
+        info.con = team;
+        info.loc = LOCATION_EXTRA;
+        info.seq = sequence++;
+        info.pos = POS_FACEDOWN_DEFENSE;
+        OCG_DuelNewCard(impl_->duel, &info);
+        throw_if_callback_error("OCG_DuelNewCard");
+    }
 }
 
 void CoreHost::load_fixture_card(std::uint8_t team, std::uint32_t code, std::uint32_t location,
@@ -151,6 +167,13 @@ void CoreHost::load_fixture_script(const std::filesystem::path& path) {
 }
 
 void CoreHost::start_duel() {
+    if (config_.starting_player.has_value()) {
+        const int status = OCG_DuelSetStartingPlayer(impl_->duel, *config_.starting_player);
+        if (status != 1) {
+            throw CoreError(CoreErrorCode::Lifecycle, "OCG_DuelSetStartingPlayer",
+                            "starting player was rejected before duel start");
+        }
+    }
     OCG_StartDuel(impl_->duel);
     throw_if_callback_error("OCG_StartDuel");
 }

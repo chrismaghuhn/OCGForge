@@ -1,7 +1,7 @@
 {
   "schema": "ygo.visible_event_coverage.v1",
   "authority": {
-    "rules_bundle_id": "6fbbd212ae4be2df36170dcbfcdf5c46aaaa0e3091cf815c2d0261fd01640ea4",
+    "rules_bundle_id": "3adfe6b4cfe2c2805e50b389fc0eb4e70a3b0b6107436614d328fddc865e585f",
     "core_api_version": "11.0"
   },
   "families": [

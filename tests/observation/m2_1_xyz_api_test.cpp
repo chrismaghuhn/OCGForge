@@ -40,6 +40,17 @@ void require(bool condition, const char* message) {
     }
 }
 
+const ygo::observation::ObservedZone* find_zone(const ygo::observation::PlayerObservation& observation,
+                                                std::uint8_t player,
+                                                ygo::observation::SemanticZone kind) {
+    for (const auto& zone : observation.zones) {
+        if (zone.player == player && zone.kind == kind) {
+            return &zone;
+        }
+    }
+    return nullptr;
+}
+
 ygo::observation::PlayerObservation build_observation(const char* setup_path) {
     ygo::core::CoreHostConfig core_config;
     core_config.rules.card_data_tsv = YGO_M0_CARD_DATA_TSV;
@@ -93,7 +104,7 @@ int run() {
     material_info.seq = 0;
     std::vector<std::size_t> individual_lengths;
     std::vector<std::size_t> location_lengths;
-    bool all_individual_queries_empty = true;
+    bool all_individual_queries_match_overlay_codes = true;
     bool all_location_queries_null = true;
     for (std::uint32_t overlay_sequence = 0; overlay_sequence < parent.overlay_codes.size(); ++overlay_sequence) {
         material_info.overlay_seq = overlay_sequence;
@@ -103,7 +114,12 @@ int run() {
         individual_lengths.push_back(individual_bytes.size());
         location_lengths.push_back(location_bytes.size());
         const bool location_is_null = location.entries.size() == 1 && !location.entries.front().has_value();
-        all_individual_queries_empty = all_individual_queries_empty && individual_bytes.empty();
+        const auto material = individual_bytes.empty()
+                                  ? ygo::observation::detail::RawCardQuery{}
+                                  : ygo::observation::detail::decode_card_query(individual_bytes);
+        all_individual_queries_match_overlay_codes =
+            all_individual_queries_match_overlay_codes &&
+            material.code.value_or(0) == parent.overlay_codes[overlay_sequence];
         all_location_queries_null = all_location_queries_null && location_is_null;
     }
 
@@ -115,8 +131,8 @@ int run() {
                   << " location_query_bytes=" << location_lengths[index] << '\n';
     }
 
-    require(all_individual_queries_empty,
-            "pinned public OCG_DuelQuery unexpectedly returned an individual Xyz material record");
+    require(all_individual_queries_match_overlay_codes,
+            "pinned public OCG_DuelQuery did not resolve each overlay_seq to the expected material");
     require(all_location_queries_null,
             "pinned public OCG_DuelQueryLocation unexpectedly returned an individual Xyz material record");
 
@@ -138,6 +154,10 @@ int run() {
                     "Xyz material paired-world fixture exposed identity-derived metadata");
         }
         require(redacted_material_count == 2, "paired-world fixture did not retain both material slots safely");
+        const auto* overlay_zone = find_zone(observation, 1, ygo::observation::SemanticZone::Overlay);
+        require(overlay_zone != nullptr && overlay_zone->total_count == 2 &&
+                    overlay_zone->public_identity_count == 0 && overlay_zone->hidden_count == 2,
+                "paired hidden Xyz material aggregate visibility was not conservative");
     }
     std::cout << "paired_observation_hash=" << world_a.observation_hash << '\n';
     return 0;

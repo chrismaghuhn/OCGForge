@@ -15,10 +15,25 @@ TYPE_PENDULUM = 0x01000000
 def read_codes(paths: list[Path]) -> list[int]:
     codes: list[int] = []
     for path in paths:
+        section: str | None = None
         for raw_line in path.read_text(encoding="utf-8").splitlines():
-            line = raw_line.split("#", 1)[0].strip()
-            if line:
-                codes.append(int(line, 10))
+            line = raw_line.strip()
+            if not line:
+                continue
+            if line == "#main":
+                section = "main"
+                continue
+            if line == "#extra":
+                section = "extra"
+                continue
+            if line == "!side":
+                section = "side"
+                continue
+            if line.startswith("#"):
+                continue
+            if section == "side":
+                raise ValueError(f"fixture side deck must be empty: {path}")
+            codes.append(int(line, 10))
     return sorted(set(codes))
 
 
@@ -27,8 +42,9 @@ def main() -> int:
     parser.add_argument("--database", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--deck", type=Path, action="append", required=True)
+    parser.add_argument("--code", type=int, action="append", default=[])
     args = parser.parse_args()
-    codes = read_codes(args.deck)
+    codes = sorted(set(read_codes(args.deck)) | set(args.code))
     if not codes:
         raise SystemExit("fixture decks contain no card passcodes")
 
