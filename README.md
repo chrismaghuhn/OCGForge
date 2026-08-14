@@ -129,10 +129,3 @@ a fabricated response.
 The pinned `sbl1996/ygo-agent` snapshot is read-only audit material. The
 project does not fork its ygoenv implementation.
 
-## Scope boundary
-
-M0 excludes PPO, R2D2, IMPALA, behavior cloning, neural networks, JAX,
-PyTorch, MCTS, self-play, web or GUI integration, online multiplayer, full
-card support, full engine-message support, EnvPool, and performance
-optimization. Later work must extend the typed protocol and privacy boundary
-with new tests rather than silently broadening this slice.
