@@ -128,4 +128,3 @@ a fabricated response.
 
 The pinned `sbl1996/ygo-agent` snapshot is read-only audit material. The
 project does not fork its ygoenv implementation.
-
