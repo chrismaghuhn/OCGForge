@@ -8,9 +8,10 @@ ROOT = Path(__file__).resolve().parents[2]
 
 class M35DeterminismMatrixTests(unittest.TestCase):
     def test_canonical_determinism_covers_both_start_players(self):
-        path = ROOT / "artifacts" / "m3" / "canonical_mr5" / "determinism" / "m3_determinism_results.json"
-        report = json.loads(path.read_text(encoding="utf-8"))
-        self.assertEqual(report["starting_player_partitions"], [0, 1])
+        path = ROOT / "docs" / "m3_5" / "m35_acceptance.json"
+        acceptance = json.loads(path.read_text(encoding="utf-8"))
+        report = acceptance["determinism"]
+        self.assertEqual(acceptance["full_games"]["start_player_partitions"], [0, 1])
         self.assertEqual(sorted(report["partitions"]), ["0", "1"])
         for player in ("0", "1"):
             partition = report["partitions"][player]
