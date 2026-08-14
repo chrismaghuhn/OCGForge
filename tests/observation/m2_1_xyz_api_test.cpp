@@ -40,6 +40,17 @@ void require(bool condition, const char* message) {
     }
 }
 
+const ygo::observation::ObservedZone* find_zone(const ygo::observation::PlayerObservation& observation,
+                                                std::uint8_t player,
+                                                ygo::observation::SemanticZone kind) {
+    for (const auto& zone : observation.zones) {
+        if (zone.player == player && zone.kind == kind) {
+            return &zone;
+        }
+    }
+    return nullptr;
+}
+
 ygo::observation::PlayerObservation build_observation(const char* setup_path) {
     ygo::core::CoreHostConfig core_config;
     core_config.rules.card_data_tsv = YGO_M0_CARD_DATA_TSV;
@@ -143,6 +154,10 @@ int run() {
                     "Xyz material paired-world fixture exposed identity-derived metadata");
         }
         require(redacted_material_count == 2, "paired-world fixture did not retain both material slots safely");
+        const auto* overlay_zone = find_zone(observation, 1, ygo::observation::SemanticZone::Overlay);
+        require(overlay_zone != nullptr && overlay_zone->total_count == 2 &&
+                    overlay_zone->public_identity_count == 0 && overlay_zone->hidden_count == 2,
+                "paired hidden Xyz material aggregate visibility was not conservative");
     }
     std::cout << "paired_observation_hash=" << world_a.observation_hash << '\n';
     return 0;

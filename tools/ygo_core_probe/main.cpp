@@ -279,7 +279,7 @@ ygo::trace::TraceManifest manifest(const ygo::core::CoreHost& host,
     result.platform_identity = "unknown";
 #endif
     result.duel_flags = host.config().duel_flags;
-    result.starting_player = host.config().starting_player.value_or(255);
+    result.starting_player = host.config().effective_starting_player();
     if (canonical_m3) {
         result.format_id = std::string(ygo::m3::canonical_rules().format_id);
         result.duel_mode_name = std::string(ygo::m3::canonical_rules().duel_mode_name);
@@ -627,7 +627,7 @@ int run(const Arguments& arguments) {
                                           ? 0.0
                                           : static_cast<double>(candidate_count_total) /
                                                 static_cast<double>(interactive_decision_count);
-    const auto effective_starting_player = config.starting_player.value_or(first_player.value_or(255));
+    const auto effective_starting_player = config.effective_starting_player();
     std::ostringstream summary;
     summary << "{\"schema_version\":\"ocgforge.m3.game_summary.v1\",\"format_id\":"
             << json_escape(trace.manifest.format_id) << ",\"duel_mode_name\":"

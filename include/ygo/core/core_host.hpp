@@ -23,6 +23,10 @@ struct CoreHostConfig {
     std::uint32_t draw_count_per_turn = 1;
     std::optional<std::uint8_t> starting_player;
     std::vector<std::uint32_t> required_script_codes;
+
+    std::uint8_t effective_starting_player() const noexcept {
+        return starting_player.value_or(0);
+    }
 };
 
 struct ProcessResult {

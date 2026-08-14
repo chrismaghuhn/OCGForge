@@ -143,6 +143,26 @@ def build_acceptance(root: Path) -> dict[str, Any]:
                 "privacy": "Future setup descriptors remain test-only and fail closed for hidden state.",
             },
         ],
+        "test_boundaries": {
+            "xyz_material_detach": {
+                "direct_core_test": False,
+                "direct_core_test_status": "NOT_IMPLEMENTED",
+                "integration_test": "m3_fixture_test sg09_direct",
+                "integration_status": "PASS",
+                "integration_evidence": [
+                    "real Miragestallio detach cost accepted",
+                    "overlay material count decremented",
+                    "overlay_seq 0 resolved the remaining material",
+                    "overlay_seq 1 failed closed after detach",
+                ],
+                "reason": "The minimal public-core harness has no action/chain response orchestration. A synthetic registered effect did not execute through the public startup/process boundary, so no private setup API or artificial direct detach path was added.",
+            },
+            "starting_player_seat_ownership": {
+                "direct_core_test": True,
+                "direct_core_test_status": "PASS",
+                "evidence": "m35_starting_player_api_test",
+            },
+        },
         "mechanics": {
             "total": mechanics["fixture_count"],
             "counts": mechanics["classification_counts"],
@@ -232,6 +252,11 @@ def write_acceptance(root: Path, docs: Path) -> dict[str, Any]:
         lines.append(f"| {item['capability']} | {item['classification']} | {'; '.join(item['evidence'])} |")
     lines.extend([
         "",
+        "## Direct regression boundaries",
+        "",
+        "- Direct core query coverage: two-material ordering, bounds, zero-material behavior, default/explicit starting player, invalid/post-start calls, seat ownership, and opening state.",
+        "- Direct Xyz detach test: not implemented in the minimal public-core harness because it has no action/chain response orchestration; the real `m3_fixture_test sg09_direct` integration proves detach acceptance, material-count decrement, remaining-material query, and fail-closed detached-slot query.",
+        "",
         "## Mechanics and games",
         "",
         f"- Mechanics: {counts.get('ENGINE_VERIFIED', 0)} ENGINE_VERIFIED, {counts.get('PROTOCOL_VERIFIED', 0)} PROTOCOL_VERIFIED, {counts.get('PUBLIC_API_LIMITATION', 0)} PUBLIC_API_LIMITATION, {counts.get('NOT_APPLICABLE_FIXED_MATCHUP', 0)} NOT_APPLICABLE_FIXED_MATCHUP, {acceptance['mechanics']['pending']} PENDING.",
@@ -242,7 +267,7 @@ def write_acceptance(root: Path, docs: Path) -> dict[str, Any]:
         "",
         "## Scope boundary",
         "",
-        "The individual Xyz query and starting-player control are repository-patched capabilities prepared for upstream review. No upstream PR, commit, push, tag, or external dependency update is part of this milestone. The fixture-runner setup item remains OCGForge test infrastructure, not an ocgcore API claim.",
+        "The individual Xyz query and starting-player control are repository-patched capabilities prepared for upstream review. The local capability identity remains OCG API `11.0`; whether upstream assigns an API minor-version bump for the additive public C function is an upstream-maintainer decision and is not changed in this PR. No upstream PR, commit, push, tag, or external dependency update is part of this milestone. The fixture-runner setup item remains OCGForge test infrastructure, not an ocgcore API claim.",
         "",
     ])
     (docs / "M3_5_ACCEPTANCE.md").write_text("\n".join(lines), encoding="utf-8", newline="\n")

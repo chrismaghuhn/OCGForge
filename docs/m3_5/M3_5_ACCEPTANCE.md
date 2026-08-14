@@ -18,6 +18,11 @@ This milestone uses two ordered repository-versioned patches against an immutabl
 | START_PLAYER_SELECTION_CONTROL | RESOLVED_BY_REPOSITORY_PATCHSET | m35_starting_player_api_test; m3 full-game matrix; m3 determinism matrix |
 | FIXTURE_RUNNER_PUBLIC_SETUP_SCOPE | OCGFORGE_TEST_INFRASTRUCTURE | CoreHost::load_fixture_script; CoreHost::load_fixture_card |
 
+## Direct regression boundaries
+
+- Direct core query coverage: two-material ordering, bounds, zero-material behavior, default/explicit starting player, invalid/post-start calls, seat ownership, and opening state.
+- Direct Xyz detach test: not implemented in the minimal public-core harness because it has no action/chain response orchestration; the real `m3_fixture_test sg09_direct` integration proves detach acceptance, material-count decrement, remaining-material query, and fail-closed detached-slot query.
+
 ## Mechanics and games
 
 - Mechanics: 38 ENGINE_VERIFIED, 7 PROTOCOL_VERIFIED, 0 PUBLIC_API_LIMITATION, 0 NOT_APPLICABLE_FIXED_MATCHUP, 0 PENDING.
@@ -28,4 +33,4 @@ This milestone uses two ordered repository-versioned patches against an immutabl
 
 ## Scope boundary
 
-The individual Xyz query and starting-player control are repository-patched capabilities prepared for upstream review. No upstream PR, commit, push, tag, or external dependency update is part of this milestone. The fixture-runner setup item remains OCGForge test infrastructure, not an ocgcore API claim.
+The individual Xyz query and starting-player control are repository-patched capabilities prepared for upstream review. The local capability identity remains OCG API `11.0`; whether upstream assigns an API minor-version bump for the additive public C function is an upstream-maintainer decision and is not changed in this PR. No upstream PR, commit, push, tag, or external dependency update is part of this milestone. The fixture-runner setup item remains OCGForge test infrastructure, not an ocgcore API claim.

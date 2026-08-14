@@ -28,7 +28,7 @@ Fixed games: 16 complete / 16 requested; start-player partitions: `[0, 1]`.
 | M3-DETERMINISM-REPLAY | Semantic-action re-execution | PASS | artifacts/m3/canonical_mr5/determinism/m3_determinism_results.json | start-0 actions=612; start-1 actions=621; CRLF replay verified for both partitions. |  |
 | M3-BATTLE-PHASE | Complete Battle Phase execution | PASS | m3_fixture_test btl01; artifacts/m3/canonical_mr5/full_games/full_fixed_deck_results.json | Dedicated Battle Phase fixture proves attack target, damage, destruction, lethal, and MSG_WIN as one pinned-core path. |  |
 | M3-RULES-BUNDLE | Canonical rules environment | PASS | third_party/rules_bundle.lock.json; verify_rules_bundle.py | The canonical rules environment includes the deterministic M3.5 repository patchset; ocgcore base commit, OCG API, CardScripts and BabelCDB pins remain unchanged, and no upstream checkout was modified. |  |
-| M3-REGRESSION | M0/M1/M2 regression suite | PASS | artifacts/m3/final_verification.json | Build=PASS; CTest=84/84 passed; failed=0. |  |
+| M3-REGRESSION | M0/M1/M2 regression suite | PASS | artifacts/m3/final_verification.json | Build=PASS; CTest=85/85 passed; failed=0. |  |
 | M3-XYZ-LIMITATION | Known Xyz material identity limitation | RESOLVED_BY_REPOSITORY_PATCHSET | m35_xyz_material_query_test; m2_1_xyz_api_test; public_api_gaps.json | The existing overlay_seq public contract resolves visible individual material identity; hidden paired-world material identities remain redacted. |  |
 
 ## Mechanics rows

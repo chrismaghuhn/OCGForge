@@ -198,6 +198,10 @@ add_executable(trace_semantics_test tests/trace/trace_semantics_test.cpp)
 target_link_libraries(trace_semantics_test PRIVATE ygo_m0)
 add_test(NAME trace_semantics_test COMMAND trace_semantics_test)
 
+add_test(NAME m35_probe_trace_starting_player_test
+         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tests/m3_5/probe_trace_starting_player_test.py"
+                 "$<TARGET_FILE:ygo_core_probe>")
+
 add_executable(player_view_test tests/privacy/player_view_test.cpp)
 target_link_libraries(player_view_test PRIVATE ygo_m0)
 add_test(NAME player_view_test COMMAND player_view_test)
@@ -285,7 +289,10 @@ add_executable(m35_starting_player_api_test
     tests/m3_5/core/starting_player_api_test.cpp
 )
 target_link_libraries(m35_starting_player_api_test PRIVATE ygo_m0)
-target_include_directories(m35_starting_player_api_test PRIVATE "${CMAKE_SOURCE_DIR}/src/core")
+target_include_directories(m35_starting_player_api_test PRIVATE
+    "${CMAKE_SOURCE_DIR}/src/core"
+    "${CMAKE_SOURCE_DIR}/src/observation"
+)
 target_compile_definitions(m35_starting_player_api_test PRIVATE
     YGO_M35_PLAYER_A="${CMAKE_SOURCE_DIR}/fixtures/decks/player_a.deck"
     YGO_M35_PLAYER_B="${CMAKE_SOURCE_DIR}/fixtures/decks/player_b.deck"

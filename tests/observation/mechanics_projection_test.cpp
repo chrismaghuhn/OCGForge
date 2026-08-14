@@ -43,6 +43,17 @@ const ygo::observation::ObservedCard* find_card(const ygo::observation::PlayerOb
     return nullptr;
 }
 
+const ygo::observation::ObservedZone* find_zone(const ygo::observation::PlayerObservation& observation,
+                                                std::uint8_t player,
+                                                ygo::observation::SemanticZone kind) {
+    for (const auto& zone : observation.zones) {
+        if (zone.player == player && zone.kind == kind) {
+            return &zone;
+        }
+    }
+    return nullptr;
+}
+
 int run() {
     ygo::core::CoreHostConfig core_config;
     core_config.rules.card_data_tsv = YGO_M0_CARD_DATA_TSV;
@@ -100,6 +111,10 @@ int run() {
     }
     require(known_material_count == 2,
             "public Xyz material query did not resolve both visible material identities");
+    const auto* overlay_zone = find_zone(observation, 0, ygo::observation::SemanticZone::Overlay);
+    require(overlay_zone != nullptr && overlay_zone->total_count == 2 &&
+                overlay_zone->public_identity_count == 2 && overlay_zone->hidden_count == 0,
+            "visible Xyz material entities disagreed with aggregate overlay visibility");
     require(observation.observation_hash.size() == 64, "mechanics observation hash was not produced");
     std::cout << "mechanics_projection=ok\n"
               << "observation_hash=" << observation.observation_hash << '\n';

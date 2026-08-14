@@ -2,8 +2,9 @@
 
 #include <algorithm>
 #include <array>
-#include <map>
 #include <limits>
+#include <map>
+#include <optional>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -49,6 +50,11 @@ bool card_identity_visible(const detail::RawCardQuery& query, std::uint8_t persp
     return false;
 }
 
+bool overlay_material_identity_visible(const detail::RawCardQuery& material,
+                                       bool parent_identity_visible) {
+    return parent_identity_visible && material.code.has_value();
+}
+
 bool keep_entity(const detail::RawCardQuery& query, std::uint8_t perspective,
                  std::uint8_t owner, SemanticZone zone) {
     if (zone == SemanticZone::MainDeck) {
@@ -70,6 +76,22 @@ constexpr std::uint32_t kNoOverlaySequence = std::numeric_limits<std::uint32_t>:
 EntityKey entity_key(std::uint8_t controller, SemanticZone zone, std::uint32_t sequence,
                      std::uint32_t overlay_sequence = kNoOverlaySequence) {
     return {controller, zone, sequence, overlay_sequence};
+}
+
+detail::RawCardQuery query_card(const ygo::core::CoreHost& host, std::uint8_t controller,
+                                std::uint32_t location, std::uint32_t sequence,
+                                std::optional<std::uint32_t> overlay_sequence = std::nullopt) {
+    OCG_QueryInfo info{};
+    info.flags = kCardQueryFlags;
+    info.con = controller;
+    info.loc = location;
+    info.seq = sequence;
+    if (overlay_sequence.has_value()) {
+        info.loc |= LOCATION_OVERLAY;
+        info.overlay_seq = *overlay_sequence;
+    }
+    const auto bytes = host.query(info);
+    return bytes.empty() ? detail::RawCardQuery{} : detail::decode_card_query(bytes);
 }
 
 std::string locator_for(std::uint8_t controller, SemanticZone zone, std::uint32_t sequence,
@@ -101,8 +123,8 @@ bool sequence_is_visible(SemanticZone zone, std::uint8_t owner, std::uint8_t per
     return false;
 }
 
-void add_zone_counts(PlayerObservation& observation, const detail::RawFieldSnapshot& field,
-                     std::uint8_t perspective) {
+void add_zone_counts(PlayerObservation& observation, const ygo::core::CoreHost& host,
+                     const detail::RawFieldSnapshot& field, std::uint8_t perspective) {
     for (std::uint8_t player = 0; player < 2; ++player) {
         const auto& source = field.players[player];
         const auto add = [&observation, player](SemanticZone kind, std::uint32_t total,
@@ -129,13 +151,31 @@ void add_zone_counts(PlayerObservation& observation, const detail::RawFieldSnaps
         std::uint32_t pendulum_count = 0;
         std::uint32_t pendulum_public = 0;
         std::uint32_t overlay_count = 0;
-        for (const auto& slot : source.monster_slots) {
+        std::uint32_t overlay_public = 0;
+        for (std::uint32_t sequence = 0; sequence < source.monster_slots.size(); ++sequence) {
+            const auto& slot = source.monster_slots[sequence];
             if (slot.occupied) {
                 ++monster_count;
                 if (slot.position & POS_FACEUP) {
                     ++monster_public;
                 }
                 overlay_count += slot.overlay_count;
+                if (slot.overlay_count != 0) {
+                    const auto parent = query_card(host, player, LOCATION_MZONE, sequence);
+                    const auto owner = static_cast<std::uint8_t>(parent.owner.value_or(player));
+                    const bool parent_identity_visible =
+                        card_identity_visible(parent, perspective, owner, SemanticZone::MonsterZone);
+                    if (parent_identity_visible) {
+                        for (std::uint32_t overlay_sequence = 0;
+                             overlay_sequence < slot.overlay_count; ++overlay_sequence) {
+                            const auto material = query_card(host, player, LOCATION_MZONE, sequence,
+                                                             overlay_sequence);
+                            if (overlay_material_identity_visible(material, parent_identity_visible)) {
+                                ++overlay_public;
+                            }
+                        }
+                    }
+                }
             }
         }
         for (std::uint32_t sequence = 0; sequence < source.spell_trap_slots.size(); ++sequence) {
@@ -173,7 +213,7 @@ void add_zone_counts(PlayerObservation& observation, const detail::RawFieldSnaps
         add(SemanticZone::Banished, source.banished_count, source.banished_count, true);
         add(SemanticZone::ExtraDeck, source.extra_deck_count,
             player == perspective ? source.extra_deck_count : source.face_up_extra_deck_count, false);
-        add(SemanticZone::Overlay, overlay_count, 0, false);
+        add(SemanticZone::Overlay, overlay_count, overlay_public, false);
     }
 }
 
@@ -223,17 +263,7 @@ std::optional<ObservationLocator> add_overlay_material(
     PlayerObservation& observation, const ygo::core::CoreHost& host, std::uint8_t controller,
     std::uint32_t parent_location, std::uint32_t parent_sequence, std::uint32_t overlay_sequence,
     bool parent_identity_visible, std::map<EntityKey, ObservationLocator>& locator_index) {
-    OCG_QueryInfo info{};
-    info.flags = kCardQueryFlags;
-    info.con = controller;
-    info.loc = parent_location | LOCATION_OVERLAY;
-    info.seq = parent_sequence;
-    info.overlay_seq = overlay_sequence;
-    const auto bytes = host.query(info);
-    detail::RawCardQuery query;
-    if (!bytes.empty()) {
-        query = detail::decode_card_query(bytes);
-    }
+    const auto query = query_card(host, controller, parent_location, parent_sequence, overlay_sequence);
     detail::CardProjectionInput input;
     input.query = query;
     input.owner = query.owner.value_or(controller);
@@ -243,7 +273,7 @@ std::optional<ObservationLocator> add_overlay_material(
     input.overlay_sequence = overlay_sequence;
     input.locator = {player_prefix(controller) + ":OVERLAY:" + std::to_string(parent_sequence) + ":" +
                      std::to_string(overlay_sequence)};
-    input.identity_visible = parent_identity_visible && query.code.has_value();
+    input.identity_visible = overlay_material_identity_visible(query, parent_identity_visible);
     input.current_features_visible = input.identity_visible;
     input.sequence_visible = true;
     if (input.identity_visible && query.code.has_value()) {
@@ -319,7 +349,7 @@ PlayerObservation build_player_observation(const ygo::core::CoreHost& host,
         observation.match_context.opponent_deck = {};
     }
 
-    add_zone_counts(observation, field, perspective_player);
+    add_zone_counts(observation, host, field, perspective_player);
 
     const std::array<std::uint32_t, 5> locations = {
         LOCATION_HAND, LOCATION_MZONE, LOCATION_SZONE, LOCATION_GRAVE, LOCATION_REMOVED};

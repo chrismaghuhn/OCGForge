@@ -29,7 +29,7 @@ struct TraceManifest {
     std::string build_type;
     std::string platform_identity;
     std::uint64_t duel_flags = 0;
-    std::uint8_t starting_player = 255;
+    std::uint8_t starting_player = 0;
     std::array<std::uint64_t, 4> seed_bundle{};
     std::vector<std::string> fixture_deck_hashes;
     std::string policy_identifier;

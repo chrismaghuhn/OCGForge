@@ -50,6 +50,6 @@ The canonical rules lock records the base core commit, ordered patch filenames, 
 
 ## Verification
 
-Direct core tests cover two-material ordering, bounds, detach, default/explicit starting player, invalid and post-start setter calls, seat ownership, and opening state. OCGForge tests cover observation identity, privacy paired worlds, detach transitions, configuration equality, 45-row mechanics revalidation, the 16-game matrix, determinism for both starting-player partitions, replay, and all previous M0-M3 gates.
+Direct core tests cover two-material ordering, bounds, zero-material behavior, default/explicit starting player, invalid and post-start setter calls, seat ownership, and opening state. The minimal public-core harness does not provide action/chain response orchestration, so detach is proven through the real public-API `m3_fixture_test sg09_direct` integration: the official Miragestallio effect accepts the detach, decrements the material count, resolves the remaining `overlay_seq`, and fails closed for the detached slot. No private setup API or synthetic direct detach path is introduced. OCGForge tests cover observation identity, privacy paired worlds, detach transitions, configuration equality, 45-row mechanics revalidation, the 16-game matrix, determinism for both starting-player partitions, replay, and all previous M0-M3 gates.
 
 No commit, push, tag, PR, upstream fetch, CardScripts change, BabelCDB change, or locked-deck change is part of M3.5.

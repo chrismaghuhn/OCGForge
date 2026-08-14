@@ -164,8 +164,8 @@
   "regression": {
     "build": "PASS",
     "ctest_failed": 0,
-    "ctest_passed": 84,
-    "ctest_total": 84,
+    "ctest_passed": 85,
+    "ctest_total": 85,
     "legacy_python_passed": 3,
     "legacy_python_total": 3,
     "m3_5_python_passed": 5,
@@ -175,6 +175,26 @@
   },
   "schema_version": "ocgforge.m3_5.acceptance.v1",
   "scope": "OCGCORE_PUBLIC_API_HARDENING",
+  "test_boundaries": {
+    "starting_player_seat_ownership": {
+      "direct_core_test": true,
+      "direct_core_test_status": "PASS",
+      "evidence": "m35_starting_player_api_test"
+    },
+    "xyz_material_detach": {
+      "direct_core_test": false,
+      "direct_core_test_status": "NOT_IMPLEMENTED",
+      "integration_evidence": [
+        "real Miragestallio detach cost accepted",
+        "overlay material count decremented",
+        "overlay_seq 0 resolved the remaining material",
+        "overlay_seq 1 failed closed after detach"
+      ],
+      "integration_status": "PASS",
+      "integration_test": "m3_fixture_test sg09_direct",
+      "reason": "The minimal public-core harness has no action/chain response orchestration. A synthetic registered effect did not execute through the public startup/process boundary, so no private setup API or artificial direct detach path was added."
+    }
+  },
   "upstream_handoff": {
     "ocgcore_source_patch_in_repository": false,
     "ocgforge_base_cache_modified": false,

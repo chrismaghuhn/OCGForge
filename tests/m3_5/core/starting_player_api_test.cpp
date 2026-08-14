@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cstdint>
 #include <exception>
 #include <iomanip>
@@ -5,7 +6,9 @@
 #include <optional>
 #include <sstream>
 #include <stdexcept>
+#include <vector>
 
+#include "query_decoder.hpp"
 #include "ocgapi_constants.h"
 #include "public_core_harness.hpp"
 
@@ -31,9 +34,11 @@ struct OpeningState {
 };
 
 OpeningState run(std::optional<std::uint8_t> selected_player) {
+    const auto deck_a = ygo::core::load_fixture_deck(YGO_M35_PLAYER_A);
+    const auto deck_b = ygo::core::load_fixture_deck(YGO_M35_PLAYER_B);
     m35::core_test::PublicCoreDuel duel;
-    duel.load_deck(0, ygo::core::load_fixture_deck(YGO_M35_PLAYER_A));
-    duel.load_deck(1, ygo::core::load_fixture_deck(YGO_M35_PLAYER_B));
+    duel.load_deck(0, deck_a);
+    duel.load_deck(1, deck_b);
     if (selected_player.has_value()) {
         require(duel.set_starting_player(*selected_player) == 1,
                 "M3.5 valid starting-player selection was rejected");
@@ -51,6 +56,28 @@ OpeningState run(std::optional<std::uint8_t> selected_player) {
             raw << std::setw(2) << static_cast<unsigned>(byte);
         }
         throw std::runtime_error("M3.5 startup did not emit MSG_NEW_TURN; raw=" + raw.str());
+    }
+    if (selected_player == 1) {
+        for (std::uint8_t player = 0; player < 2; ++player) {
+            OCG_QueryInfo hand_info{};
+            hand_info.flags = QUERY_CODE | QUERY_OWNER | QUERY_END;
+            hand_info.con = player;
+            hand_info.loc = LOCATION_HAND;
+            std::uint32_t length = 0;
+            const auto* raw = static_cast<const std::uint8_t*>(
+                OCG_DuelQueryLocation(duel.handle(), &length, &hand_info));
+            require(raw != nullptr && length != 0, "M3.5 seat ownership hand query was empty");
+            const std::vector<std::uint8_t> bytes(raw, raw + length);
+            const auto hand = ygo::observation::detail::decode_location_query(bytes);
+            const auto& deck = player == 0 ? deck_a : deck_b;
+            require(hand.entries.size() == 5, "M3.5 seat ownership hand size changed");
+            for (const auto& entry : hand.entries) {
+                require(entry.has_value() && entry->owner.value_or(255) == player && entry->code.has_value(),
+                        "M3.5 starting-player selection changed card ownership");
+                require(std::find(deck.main_deck.begin(), deck.main_deck.end(), *entry->code) != deck.main_deck.end(),
+                        "M3.5 starting-player selection swapped deck/card ownership");
+            }
+        }
     }
     return {*first_turn, duel.query_count(0, LOCATION_HAND), duel.query_count(1, LOCATION_HAND)};
 }

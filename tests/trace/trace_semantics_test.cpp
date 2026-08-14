@@ -71,6 +71,8 @@ int run() {
     const auto serialized = ygo::trace::canonical_trace_jsonl_v2(first);
     require(serialized.find("ygo.engine_trace.v2") != std::string::npos,
             "v2 trace serializer did not version its manifest");
+    require(serialized.find("\"starting_player\":0") != std::string::npos,
+            "trace manifest default starting player was not the effective player 0");
     require(serialized.find("\"continuation_steps\":1") != std::string::npos &&
                 serialized.find("\"peak_candidate_count\":2") != std::string::npos &&
                 serialized.find("\"terminal_solution_count\":1") != std::string::npos,

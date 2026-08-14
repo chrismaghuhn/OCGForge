@@ -302,7 +302,7 @@
       "area": "M0/M1/M2 regression suite",
       "blocker": "",
       "criterion_id": "M3-REGRESSION",
-      "details": "Build=PASS; CTest=84/84 passed; failed=0.",
+      "details": "Build=PASS; CTest=85/85 passed; failed=0.",
       "evidence": "artifacts/m3/final_verification.json",
       "status": "PASS"
     },
