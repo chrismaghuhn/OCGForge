@@ -303,6 +303,30 @@ class WorkerProtocolContractTests(unittest.TestCase):
         parsed = parse_json_line(encoded)
         self.assertEqual(parsed["canonical_rules_id"], CANONICAL_RULES_BUNDLE_ID)
 
+    def test_outgoing_trace_output_matches_native_optional_string_contract(self) -> None:
+        job = {
+            "job_id": "m4-trace-output",
+            "seed": 1,
+            "starting_player": 0,
+            "max_steps": 2200,
+            "focus_codes": [],
+        }
+
+        self.assertNotIn("trace_output", job_to_message(job))
+        self.assertNotIn("trace_output", job_to_message({**job, "trace_output": None}))
+
+        empty = job_to_message({**job, "trace_output": ""})
+        self.assertIn("trace_output", empty)
+        self.assertEqual(empty["trace_output"], "")
+        self.assertEqual(
+            parse_json_line(encode_job({**job, "trace_output": ""}))["trace_output"],
+            "",
+        )
+
+        for value in (False, 0, 0.0, [], {}, Path("trace.json"), object()):
+            with self.subTest(value=repr(value)), self.assertRaises(ValueError):
+                encode_job({**job, "trace_output": value})
+
     def test_native_uint32_boundaries_are_enforced(self) -> None:
         ready = ready_fixture()
         ready["pid"] = UINT32_MAX
@@ -421,6 +445,39 @@ class WorkerProtocolContractTests(unittest.TestCase):
         with self.assertRaises(ProtocolContractError):
             parse_json_line(malformed)
         self.assertIsNone(recover_job_id(malformed))
+
+    def test_malformed_json_recovers_only_root_job_id_read_before_failure(self) -> None:
+        root_id_then_nested_failure = (
+            '{"type":"job","job_id":"root-id",'
+            '"nested":{"job_id":"nested-id","broken":'
+        )
+        nested_id_only_then_failure = (
+            '{"type":"job","nested":{"job_id":"nested-id","broken":'
+        )
+        invalid_root_types = (
+            '{"type":"job","job_id":123,"broken":',
+            '{"type":"job","job_id":null,"broken":',
+            '{"type":"job","job_id":[],"broken":',
+        )
+        late_root_id = '{"type":"job","broken":,"job_id":"late-id"}'
+
+        for malformed in (
+            root_id_then_nested_failure,
+            nested_id_only_then_failure,
+            *invalid_root_types,
+            late_root_id,
+        ):
+            with self.subTest(malformed=malformed), self.assertRaises(
+                ProtocolContractError
+            ):
+                parse_json_line(malformed)
+
+        self.assertEqual(recover_job_id(root_id_then_nested_failure), "root-id")
+        self.assertIsNone(recover_job_id(nested_id_only_then_failure))
+        for malformed in invalid_root_types:
+            with self.subTest(malformed=malformed):
+                self.assertIsNone(recover_job_id(malformed))
+        self.assertIsNone(recover_job_id(late_root_id))
 
     def test_deep_malformed_json_is_a_protocol_error(self) -> None:
         deep = "[" * 3000 + "0" + "]" * 3000

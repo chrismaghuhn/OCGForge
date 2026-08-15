@@ -267,10 +267,10 @@ def job_to_message(job: Mapping[str, Any]) -> dict[str, Any]:
         **required,
     }
     trace_output = job.get("trace_output")
-    if trace_output:
-        if not isinstance(trace_output, (str, Path)):
-            raise ValueError("trace_output must be a string or path")
-        message["trace_output"] = str(Path(trace_output))
+    if trace_output is not None:
+        if not isinstance(trace_output, str):
+            raise ValueError("trace_output must be a string when present")
+        message["trace_output"] = trace_output
     normalized_message = normalize_unicode_scalars(message)
     reject_unpaired_surrogates(normalized_message)
     return normalized_message

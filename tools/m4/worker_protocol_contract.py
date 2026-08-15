@@ -216,14 +216,67 @@ def parse_json_line(line: str) -> dict[str, Any]:
 
 
 def recover_job_id(line: str) -> str | None:
-    """Recover a string job ID only when the complete JSON object is valid."""
+    """Recover a root job ID read before a JSON parse failure, if any."""
 
-    try:
-        value = parse_json_line(line)
-    except ProtocolContractError:
+    if not isinstance(line, str):
         return None
-    job_id = value.get("job_id")
-    return job_id if isinstance(job_id, str) and job_id else None
+
+    decoder = json.JSONDecoder(
+        object_pairs_hook=_duplicate_key_check,
+        parse_int=_parse_nonnegative_int,
+        parse_float=_parse_nonnegative_float,
+        parse_constant=lambda value: (_ for _ in ()).throw(
+            ProtocolContractError(f"non-finite JSON constant: {value}")
+        ),
+    )
+
+    def skip_space(index: int) -> int:
+        while index < len(line) and line[index] in " \t\n\r":
+            index += 1
+        return index
+
+    recovered_job_id: str | None = None
+    try:
+        index = skip_space(0)
+        if index >= len(line) or line[index] != "{":
+            return None
+        index += 1
+        seen_keys: set[str] = set()
+
+        while True:
+            index = skip_space(index)
+            if index >= len(line):
+                return recovered_job_id
+            if line[index] == "}":
+                return recovered_job_id
+
+            key, index = decoder.raw_decode(line, index)
+            if not isinstance(key, str):
+                return recovered_job_id
+            _reject_unpaired_surrogates(key)
+            if key in seen_keys:
+                return recovered_job_id
+            seen_keys.add(key)
+
+            index = skip_space(index)
+            if index >= len(line) or line[index] != ":":
+                return recovered_job_id
+            index = skip_space(index + 1)
+            child, index = decoder.raw_decode(line, index)
+            _reject_unpaired_surrogates(child)
+            if key == "job_id" and isinstance(child, str) and child:
+                recovered_job_id = normalize_unicode_scalars(child)
+
+            index = skip_space(index)
+            if index >= len(line):
+                return recovered_job_id
+            if line[index] == "}":
+                return recovered_job_id
+            if line[index] != ",":
+                return recovered_job_id
+            index += 1
+    except Exception:
+        return recovered_job_id
 
 
 def _require_keys(message: dict[str, Any], required: set[str]) -> None:
