@@ -331,6 +331,15 @@ target_compile_definitions(core_lifecycle_test PRIVATE
 )
 add_test(NAME core_lifecycle_test COMMAND core_lifecycle_test)
 
+add_executable(core_metrics_test tests/core/core_metrics_test.cpp)
+target_link_libraries(core_metrics_test PRIVATE ygo_m0)
+target_compile_definitions(core_metrics_test PRIVATE
+    YGO_M0_PLAYER_A="${CMAKE_SOURCE_DIR}/fixtures/decks/player_a.deck"
+    YGO_M0_PLAYER_B="${CMAKE_SOURCE_DIR}/fixtures/decks/player_b.deck"
+    YGO_M0_CARDSCRIPTS="${M0_CARDSCRIPTS_DIR}"
+)
+add_test(NAME core_metrics_test COMMAND core_metrics_test)
+
 add_executable(m3_rules_mode_test tests/m3/runtime/rules_mode_test.cpp)
 target_link_libraries(m3_rules_mode_test PRIVATE ygo_m0)
 target_compile_definitions(m3_rules_mode_test PRIVATE
