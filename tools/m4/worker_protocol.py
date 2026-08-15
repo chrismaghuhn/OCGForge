@@ -117,7 +117,7 @@ def validate_ready(
                 raise ProtocolValidationError(f"worker ready identity mismatch: {key}")
     except ProtocolValidationError:
         raise
-    except (KeyError, TypeError, ProtocolContractError, ValueError) as error:
+    except Exception as error:
         raise _raise_protocol(error) from error
 
 
@@ -135,7 +135,7 @@ def validate_result(message: Mapping[str, Any], expected_job_id: str) -> None:
         _validate_contract_result(dict(message), expected_job_id=expected_job_id)
     except ProtocolValidationError:
         raise
-    except (KeyError, TypeError, ProtocolContractError, ValueError) as error:
+    except Exception as error:
         raise _raise_protocol(error) from error
 
 
@@ -243,6 +243,8 @@ def job_to_message(job: Mapping[str, Any]) -> dict[str, Any]:
         "setup_script": str(setup_script_value),
         "force_unsupported": job.get("force_unsupported", False),
     }
+    if not isinstance(required["canonical_rules_id"], str) or not required["canonical_rules_id"]:
+        raise ValueError("canonical_rules_id must be a nonempty string")
     _require_job_uint64(required["seed"], "seed")
     starting_player = require_uint8(required["starting_player"], "starting_player")
     if starting_player > 1:
@@ -277,7 +279,12 @@ def job_to_message(job: Mapping[str, Any]) -> dict[str, Any]:
 def encode_job(job: Mapping[str, Any]) -> str:
     """Serialize a job as one deterministic UTF-8 JSONL line."""
 
-    return json.dumps(job_to_message(job), ensure_ascii=False, separators=(",", ":"))
+    return json.dumps(
+        job_to_message(job),
+        ensure_ascii=False,
+        allow_nan=False,
+        separators=(",", ":"),
+    )
 
 
 def decode_line(line: str) -> dict[str, Any]:

@@ -286,6 +286,23 @@ class WorkerProtocolContractTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             job_to_message(invalid)
 
+    def test_outgoing_job_rejects_nonfinite_or_malformed_rules_identity(self) -> None:
+        job = {
+            "job_id": "m4-rules-identity",
+            "seed": 1,
+            "starting_player": 0,
+            "max_steps": 2200,
+            "focus_codes": [],
+        }
+        for value in (None, True, 1, "", float("nan"), float("inf"), float("-inf")):
+            invalid = {**job, "canonical_rules_id": value}
+            with self.subTest(value=repr(value)), self.assertRaises(ValueError):
+                encode_job(invalid)
+
+        encoded = encode_job({**job, "canonical_rules_id": CANONICAL_RULES_BUNDLE_ID})
+        parsed = parse_json_line(encoded)
+        self.assertEqual(parsed["canonical_rules_id"], CANONICAL_RULES_BUNDLE_ID)
+
     def test_native_uint32_boundaries_are_enforced(self) -> None:
         ready = ready_fixture()
         ready["pid"] = UINT32_MAX
@@ -404,6 +421,11 @@ class WorkerProtocolContractTests(unittest.TestCase):
         with self.assertRaises(ProtocolContractError):
             parse_json_line(malformed)
         self.assertIsNone(recover_job_id(malformed))
+
+    def test_deep_malformed_json_is_a_protocol_error(self) -> None:
+        deep = "[" * 3000 + "0" + "]" * 3000
+        with self.assertRaises(ProtocolContractError):
+            parse_json_line(deep)
 
 
 @unittest.skipUnless(WORKER.is_file(), f"native worker not found: {WORKER}")

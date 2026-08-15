@@ -316,6 +316,99 @@ class FailureIsolationTests(unittest.TestCase):
             self.assertTrue(stderr_path.is_file())
             self.assertGreaterEqual(metadata["workers"][0]["stderr_bytes"], 0)
 
+    def test_extra_worker_result_is_not_accepted_as_the_next_job(self) -> None:
+        workload = jobs(2)
+        with tempfile.TemporaryDirectory(prefix="ocgforge-m4-task5-extra-result-") as directory:
+            marker = Path(directory) / "extra-result.marker"
+            with PersistentWorkerPool(
+                fake_command("extra-first-job", marker),
+                worker_count=1,
+                output_dir=Path(directory),
+            ) as pool:
+                results = pool.run(workload)
+                metadata = pool.last_run_metadata
+                self.assertTrue(pool._states[0].alive)
+                self.assertIsNone(pool._states[0].in_flight)
+
+            self.assertEqual([result["status"] for result in results], ["passed", "passed"])
+            self.assertEqual([result["job_id"] for result in results], [job["job_id"] for job in workload])
+            self.assertEqual(metadata["malformed_protocol"], 1)
+            self.assertEqual(metadata["worker_errors"], 1)
+            self.assertEqual(metadata["worker_restarts"], 1)
+
+    def test_deep_malformed_json_is_explicit_and_retires_worker(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="ocgforge-m4-task5-deep-json-") as directory:
+            pool = PersistentWorkerPool(
+                fake_command("deep-malformed"),
+                worker_count=1,
+                output_dir=Path(directory),
+            )
+            try:
+                results = pool.run(jobs(1))
+
+                self.assertEqual(results[0]["status"], "failed")
+                self.assertEqual(results[0]["failure_code"], "malformed_protocol")
+                self.assertEqual(pool.last_run_metadata["malformed_protocol"], 1)
+                self.assertEqual(pool.last_run_metadata["worker_errors"], 1)
+                self.assertTrue(pool._states[0].retired)
+                self.assertTrue(pool._states[0].reaped)
+                self.assertIsNone(pool._states[0].in_flight)
+                self.assertIsNotNone(pool._states[0].process)
+                self.assertIsNotNone(pool._states[0].process.poll())
+            finally:
+                pool.close()
+
+    def test_timeout_uses_hung_job_deadline_despite_periodic_peer_results(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="ocgforge-m4-task5-deadline-") as directory:
+            pool = PersistentWorkerPool(
+                fake_command("one-hung-one-periodic", Path(directory) / "roles.marker"),
+                worker_count=2,
+                output_dir=Path(directory),
+                result_timeout_seconds=0.05,
+            )
+            pool.start()
+            started = time.monotonic()
+            try:
+                with self.assertRaisesRegex(
+                    WorkerRuntimeError, "timed out waiting for a worker result"
+                ):
+                    pool.run(jobs(8))
+                self.assertLess(time.monotonic() - started, 0.20)
+                self.assertTrue(pool._unusable)
+                self.assertTrue(all(state.in_flight is None for state in pool._states))
+                self.assertTrue(all(state.reaped for state in pool._states))
+                self.assertTrue(
+                    all(state.process is not None and state.process.poll() is not None for state in pool._states)
+                )
+            finally:
+                pool.close()
+
+    def test_replacement_handshake_failure_cleans_up_every_worker(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="ocgforge-m4-task5-replacement-") as directory:
+            pool = PersistentWorkerPool(
+                fake_command(
+                    "replacement-handshake-failure",
+                    Path(directory) / "replacement-starts.marker",
+                ),
+                worker_count=2,
+                output_dir=Path(directory),
+            )
+            pool.start()
+            try:
+                with self.assertRaisesRegex(
+                    WorkerRuntimeError, "replacement worker .* failed handshake"
+                ):
+                    pool.run(jobs(3))
+                self.assertTrue(pool._unusable)
+                self.assertTrue(all(state.in_flight is None for state in pool._states))
+                self.assertTrue(all(state.retired for state in pool._states))
+                self.assertTrue(all(state.reaped for state in pool._states))
+                self.assertTrue(
+                    all(state.process is not None and state.process.poll() is not None for state in pool._states)
+                )
+            finally:
+                pool.close()
+
     def test_worker_crash_is_failed_without_hidden_retry(self) -> None:
         workload = jobs(2)
         with tempfile.TemporaryDirectory(prefix="ocgforge-m4-task5-crash-") as directory:

@@ -101,6 +101,18 @@ def result_message(job: dict[str, object], *, passed: bool) -> dict[str, object]
     }
 
 
+def claim_start(marker: str | None) -> int:
+    if marker is None:
+        return 1
+    path = Path(os.path.abspath(marker))
+    try:
+        count = int(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        count = 0
+    path.write_text(str(count + 1), encoding="utf-8")
+    return count + 1
+
+
 def main() -> int:
     sys.stdin.reconfigure(encoding="utf-8", errors="strict")
     sys.stdout.reconfigure(encoding="utf-8", errors="strict")
@@ -109,7 +121,24 @@ def main() -> int:
     parser.add_argument("--marker", default=None)
     args = parser.parse_args()
 
-    print(json.dumps(ready_message(), separators=(",", ":")), flush=True)
+    role = None
+    if args.behavior == "one-hung-one-periodic":
+        if args.marker and not Path(os.path.abspath(args.marker)).exists():
+            Path(os.path.abspath(args.marker)).write_text("hung", encoding="utf-8")
+            role = "hang"
+        else:
+            role = "periodic"
+    elif args.behavior == "replacement-handshake-failure":
+        start_number = claim_start(args.marker)
+        role = {
+            1: "crash",
+            2: "hang",
+        }.get(start_number, "bad-handshake")
+
+    ready = ready_message()
+    if role == "bad-handshake":
+        ready["rules_bundle_id"] = "replacement-rules-mismatch"
+    print(json.dumps(ready, separators=(",", ":")), flush=True)
     if args.behavior == "crash-after-ready":
         print("fake worker crash after ready", file=sys.stderr, flush=True)
         return 17
@@ -123,18 +152,38 @@ def main() -> int:
                 with open(marker, "w", encoding="utf-8"):
                     pass
                 should_crash = True
+        if role == "crash":
+            should_crash = True
         if should_crash:
             print("fake worker crash after job", file=sys.stderr, flush=True)
             return 17
-        if args.behavior == "hang-first-job":
+        if args.behavior == "hang-first-job" or role == "hang":
             print("fake worker waiting without a result", file=sys.stderr, flush=True)
             time.sleep(30)
+        if role == "periodic":
+            time.sleep(0.04)
         if args.behavior == "invalid-utf8":
             sys.stdout.buffer.write(b'{"schema":"ocgforge.m4.worker.v1",\xff}\n')
             sys.stdout.buffer.flush()
             return 0
+        if args.behavior == "deep-malformed":
+            depth = 3000
+            sys.stdout.write("[" * depth + "0" + "]" * depth + "\n")
+            sys.stdout.flush()
+            return 0
         passed = not bool(job.get("force_unsupported", False))
-        print(json.dumps(result_message(job, passed=passed), separators=(",", ":")), flush=True)
+        result = result_message(job, passed=passed)
+        if args.behavior == "extra-first-job" and args.marker:
+            marker = os.path.abspath(args.marker)
+            if not os.path.exists(marker):
+                with open(marker, "w", encoding="utf-8"):
+                    pass
+                encoded = json.dumps(result, separators=(",", ":"))
+                sys.stdout.write(encoded + "\n" + encoded + "\n")
+                sys.stdout.flush()
+                time.sleep(0.02)
+                continue
+        print(json.dumps(result, separators=(",", ":")), flush=True)
     return 0
 
 

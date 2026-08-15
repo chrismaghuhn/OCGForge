@@ -205,11 +205,11 @@ def parse_json_line(line: str) -> dict[str, Any]:
                 ProtocolContractError(f"non-finite JSON constant: {value}")
             ),
         )
+        _reject_unpaired_surrogates(value)
     except ProtocolContractError:
         raise
-    except (TypeError, json.JSONDecodeError) as error:
+    except Exception as error:
         raise ProtocolContractError(f"malformed JSON: {error}") from error
-    _reject_unpaired_surrogates(value)
     if not isinstance(value, dict):
         raise ProtocolContractError("protocol message must be a JSON object")
     return value

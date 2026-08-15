@@ -351,6 +351,8 @@ class PersistentWorkerPool:
                         malformed=True,
                     )
 
+                if state.alive and state.in_flight is None:
+                    self._reject_pending_events(state)
                 if state.alive and state.in_flight is None and next_index < len(dispatchable_jobs):
                     job, encoded_job = dispatchable_jobs[next_index]
                     self._dispatch(state, job, encoded_job)
@@ -453,7 +455,7 @@ class PersistentWorkerPool:
             if message.get("type") != "ready":
                 raise ProtocolValidationError("first worker message was not ready")
             validate_ready(message, self.expected)
-        except (ProtocolValidationError, ValueError) as error:
+        except Exception as error:
             self.last_run_metadata["handshake_errors"] += 1
             raise WorkerStartupError(str(error)) from error
         state.ready = message
@@ -499,8 +501,24 @@ class PersistentWorkerPool:
             raise WorkerStartupError(f"worker {state.index} ready timeout") from error
 
     def _next_event(self) -> tuple[_WorkerState, tuple[str, str | None]]:
-        deadline = time.perf_counter() + self.result_timeout_seconds
-        while time.perf_counter() < deadline:
+        timeout_ns = max(0, int(self.result_timeout_seconds * 1_000_000_000))
+        while True:
+            now_ns = time.perf_counter_ns()
+            outstanding = [
+                state
+                for state in self._states
+                if state.alive and state.in_flight is not None
+            ]
+            expired = [
+                state
+                for state in outstanding
+                if now_ns - state.in_flight.dispatched_ns >= timeout_ns
+            ]
+            if expired:
+                workers = ", ".join(str(state.index) for state in expired)
+                message = f"timed out waiting for a worker result (worker(s): {workers})"
+                self._fail_closed(message, code="worker_timeout")
+                raise WorkerRuntimeError(message)
             for state in self._states:
                 if state.events is None:
                     continue
@@ -511,10 +529,16 @@ class PersistentWorkerPool:
             for state in self._states:
                 if state.alive and state.process is not None and state.process.poll() is not None:
                     return state, ("eof", None)
-            time.sleep(0.001)
-        message = "timed out waiting for a worker result"
-        self._fail_closed(message, code="worker_timeout")
-        raise WorkerRuntimeError(message)
+            if not outstanding:
+                raise CoordinatorError("no in-flight worker job while waiting for an event")
+            next_deadline_ns = min(
+                state.in_flight.dispatched_ns + timeout_ns for state in outstanding
+            )
+            remaining_seconds = max(
+                0.0,
+                (next_deadline_ns - time.perf_counter_ns()) / 1_000_000_000,
+            )
+            time.sleep(min(0.001, remaining_seconds))
 
     def _dispatch(self, state: _WorkerState, job: dict[str, Any], encoded_job: str) -> None:
         if not state.alive or state.process is None or state.process.stdin is None:
@@ -546,7 +570,7 @@ class PersistentWorkerPool:
             if message.get("type") != "result":
                 raise ProtocolValidationError("worker emitted a non-result message for a job")
             validate_result(message, str(job["job_id"]))
-        except (ProtocolValidationError, ValueError) as error:
+        except Exception as error:
             self._worker_failed(
                 state,
                 code="malformed_protocol",
@@ -574,6 +598,40 @@ class PersistentWorkerPool:
         result["coordinator_errors"] = coordinator_errors
         self._results[str(job["job_id"])] = result
         state.in_flight = None
+
+    def _reject_pending_events(self, state: _WorkerState) -> None:
+        if state.events is None:
+            raise CoordinatorError(f"worker {state.index} has no event queue")
+        # The reader thread may be between queueing the accepted line and
+        # reading the next already-buffered line.  Give that read a bounded
+        # opportunity to publish before dispatching another job.
+        deadline = time.perf_counter() + 0.01
+        pending: list[tuple[str, str | None]] = []
+        while not pending and time.perf_counter() < deadline:
+            while True:
+                try:
+                    pending.append(state.events.get_nowait())
+                except queue.Empty:
+                    break
+            if not pending:
+                time.sleep(0.001)
+        if not pending:
+            return
+        kind, _payload = pending[0]
+        if kind == "eof":
+            self._worker_failed(
+                state,
+                code="worker_crash",
+                message=self._exit_message(state),
+                crashed=True,
+            )
+            return
+        self._worker_failed(
+            state,
+            code="malformed_protocol",
+            message=f"worker emitted an unexpected {kind} event without an in-flight job",
+            malformed=True,
+        )
 
     def _worker_failed(
         self,
@@ -754,10 +812,9 @@ class PersistentWorkerPool:
             self._read_ready(state)
         except Exception as error:
             self.last_run_metadata["handshake_errors"] += 1
-            self._shutdown_state(state)
-            raise WorkerRuntimeError(
-                f"replacement worker {state.index} failed handshake: {error}"
-            ) from error
+            message = f"replacement worker {state.index} failed handshake: {error}"
+            self._fail_closed(message, code="replacement_handshake_failure")
+            raise WorkerRuntimeError(message) from error
 
     def _exit_message(self, state: _WorkerState) -> str:
         returncode = state.process.returncode if state.process is not None else None
