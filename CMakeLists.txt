@@ -559,3 +559,10 @@ add_test(NAME m4_worker_protocol_test
 set_tests_properties(m4_worker_protocol_test PROPERTIES
     WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
 )
+
+add_test(NAME m4_failure_isolation_test
+    COMMAND "${Python3_EXECUTABLE}" -m unittest tests/m4/test_failure_isolation.py -v
+)
+set_tests_properties(m4_failure_isolation_test PROPERTIES
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+)
