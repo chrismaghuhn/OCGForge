@@ -383,6 +383,36 @@ class FailureIsolationTests(unittest.TestCase):
             self.assertTrue(pool._states[0].reaped)
             self.assertIsNone(pool._states[0].in_flight)
 
+    def test_result_then_exit_never_publishes_passed_under_repeated_scheduling(self) -> None:
+        workload = jobs(1)
+        observed: list[dict[str, object]] = []
+        repetitions = 100
+        with tempfile.TemporaryDirectory(prefix="ocgforge-m4-task5-result-exit-stress-") as directory:
+            root = Path(directory)
+            for repetition in range(repetitions):
+                iteration_dir = root / f"run-{repetition:03d}"
+                iteration_dir.mkdir()
+                with PersistentWorkerPool(
+                    fake_command("result-then-exit"),
+                    worker_count=1,
+                    output_dir=iteration_dir,
+                ) as pool:
+                    results = pool.run(workload)
+                    self.assertEqual(len(results), 1)
+                    self.assertEqual(pool.last_run_metadata["games_completed"], 1)
+                    self.assertEqual(pool.last_run_metadata["retries"], 0)
+                    observed.append(results[0])
+
+        self.assertEqual(len(observed), repetitions)
+        self.assertTrue(all(result["status"] == "failed" for result in observed))
+        self.assertTrue(
+            all(result["failure_code"] == "worker_crash" for result in observed)
+        )
+        self.assertTrue(
+            all(result["coordinator"]["worker_crashed"] for result in observed)
+        )
+        self.assertTrue(all(result["gameplay_hash"] is None for result in observed))
+
     def test_deep_malformed_json_is_explicit_and_retires_worker(self) -> None:
         with tempfile.TemporaryDirectory(prefix="ocgforge-m4-task5-deep-json-") as directory:
             pool = PersistentWorkerPool(

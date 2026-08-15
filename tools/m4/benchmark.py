@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import ctypes
+import math
 import os
 from pathlib import Path
 import queue
@@ -63,6 +64,7 @@ class _WorkerState:
     alive: bool = False
     restarted_for_job: bool = False
     in_flight: _InFlight | None = None
+    staged_result: dict[str, Any] | None = None
     retired: bool = False
     reaped: bool = False
     cleanup_error: str | None = None
@@ -133,7 +135,15 @@ def _job_sort_key(job_id: str) -> tuple[int, str]:
 
 
 class PersistentWorkerPool:
-    """One coordinator over persistent, single-threaded native workers."""
+    """One coordinator over persistent, single-threaded native workers.
+
+    A worker result is staged until a bounded lifecycle-settle interval has
+    elapsed or the worker's process state settles.  The interval is
+    coordinator wall-clock time and is included in ``coordinator_elapsed_us``;
+    worker-reported ``simulation_elapsed_us`` is unchanged.  This prevents a
+    result line racing an EOF/exit from becoming primary evidence while
+    keeping healthy persistent workers bounded rather than waiting forever.
+    """
 
     def __init__(
         self,
@@ -144,6 +154,7 @@ class PersistentWorkerPool:
         expected: HandshakeExpectation | Mapping[str, Any] | None = None,
         startup_timeout_seconds: float = 30.0,
         result_timeout_seconds: float = 120.0,
+        lifecycle_settle_timeout_seconds: float = 0.05,
         restart_workers: bool = True,
     ) -> None:
         if isinstance(worker_count, bool) or not isinstance(worker_count, int) or worker_count <= 0:
@@ -156,6 +167,18 @@ class PersistentWorkerPool:
         self.expected = HandshakeExpectation.canonical() if expected is None else expected
         self.startup_timeout_seconds = startup_timeout_seconds
         self.result_timeout_seconds = result_timeout_seconds
+        try:
+            settle_timeout = float(lifecycle_settle_timeout_seconds)
+        except (TypeError, ValueError, OverflowError) as error:
+            raise ValueError("lifecycle_settle_timeout_seconds must be positive") from error
+        if (
+            isinstance(lifecycle_settle_timeout_seconds, bool)
+            or not isinstance(lifecycle_settle_timeout_seconds, (int, float))
+            or not math.isfinite(settle_timeout)
+            or settle_timeout <= 0
+        ):
+            raise ValueError("lifecycle_settle_timeout_seconds must be positive")
+        self.lifecycle_settle_timeout_seconds = settle_timeout
         self.restart_workers = restart_workers
         self._states: list[_WorkerState] = []
         self._started = False
@@ -411,6 +434,7 @@ class PersistentWorkerPool:
         state.alive = True
         state.ready = None
         state.in_flight = None
+        state.staged_result = None
         state.retired = False
         state.reaped = False
         state.cleanup_error = None
@@ -603,6 +627,14 @@ class PersistentWorkerPool:
                 malformed=True,
             )
             return
+        if state.staged_result is not None:
+            self._worker_failed(
+                state,
+                code="malformed_protocol",
+                message="worker emitted more than one result before finalization",
+                malformed=True,
+            )
+            return
         job = state.in_flight.job
         try:
             message = decode_line(line)
@@ -618,9 +650,7 @@ class PersistentWorkerPool:
             )
             return
 
-        elapsed_us = max(0, (time.perf_counter_ns() - state.in_flight.dispatched_ns) // 1000)
         result = dict(message)
-        result["coordinator_elapsed_us"] = elapsed_us
         result["coordinator"] = {
             "worker_index": state.index,
             "worker_pid": state.pid,
@@ -633,14 +663,66 @@ class PersistentWorkerPool:
         coordinator_errors["worker_restarts"] = state.restart_index
         if result["status"] == "failed":
             coordinator_errors["failed_games"] = 1
-            self.last_run_metadata["failed_games"] += 1
         result["coordinator_errors"] = coordinator_errors
-        failure = self._queued_failure_event(state)
+        state.staged_result = result
+        self._finalize_staged_result(state)
+
+    def _finalize_staged_result(self, state: _WorkerState) -> None:
+        if state.staged_result is None:
+            return
+        failure = self._settle_staged_result(state)
         if failure is not None:
             self._handle_failure_event(state, failure)
             return
-        self._results[str(job["job_id"])] = result
+        if state.in_flight is None:
+            self._worker_failed(
+                state,
+                code="malformed_protocol",
+                message="staged result lost its in-flight job",
+                malformed=True,
+            )
+            return
+        state.staged_result["coordinator_elapsed_us"] = max(
+            0,
+            (time.perf_counter_ns() - state.in_flight.dispatched_ns) // 1000,
+        )
+        self._results[str(state.in_flight.job["job_id"])] = state.staged_result
+        if state.staged_result["status"] == "failed":
+            self.last_run_metadata["failed_games"] += 1
+        state.staged_result = None
         state.in_flight = None
+
+    def _settle_staged_result(
+        self, state: _WorkerState
+    ) -> tuple[str, str | None] | None:
+        """Wait for a bounded lifecycle barrier before publishing a result.
+
+        ``Popen.wait`` waits on the actual process handle rather than polling
+        once.  A healthy persistent worker reaches the explicit deadline and
+        remains reusable; EOF or a reader failure observed before that
+        deadline wins over the staged result.  The bounded interval is part
+        of coordinator timing, not worker simulation timing.
+        """
+
+        process = state.process
+        if process is None:
+            return ("eof", None)
+        deadline = time.perf_counter() + self.lifecycle_settle_timeout_seconds
+        while True:
+            failure = self._queued_failure_event(state)
+            if failure is not None:
+                return failure
+            remaining = deadline - time.perf_counter()
+            if remaining <= 0:
+                return self._queued_failure_event(state)
+            try:
+                process.wait(timeout=remaining)
+            except subprocess.TimeoutExpired:
+                return self._queued_failure_event(state)
+            except (OSError, ValueError) as error:
+                return ("reader_error", f"worker lifecycle wait failed: {error}")
+            else:
+                return ("eof", None)
 
     @staticmethod
     def _stdout_pending_status(state: _WorkerState) -> str:
@@ -751,6 +833,7 @@ class PersistentWorkerPool:
         malformed: bool = False,
     ) -> None:
         in_flight = state.in_flight
+        state.staged_result = None
         if in_flight is not None:
             result = self._failed_result(
                 state,
@@ -790,6 +873,7 @@ class PersistentWorkerPool:
                 )
                 state.in_flight = None
                 self.last_run_metadata["failed_games"] += 1
+            state.staged_result = None
             reaped = self._shutdown_state(state)
             if not reaped:
                 self._mark_unusable(
