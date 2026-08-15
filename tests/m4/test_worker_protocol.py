@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import json
+import os
+from pathlib import Path
+import subprocess
 import unittest
 
 from tools.m4.worker_protocol_contract import (
@@ -11,6 +15,12 @@ from tools.m4.worker_protocol_contract import (
     recover_job_id,
     validate_ready,
     validate_result,
+)
+
+
+ROOT = Path(__file__).resolve().parents[2]
+WORKER = Path(
+    os.environ.get("YGO_M4_WORKER", ROOT / "build" / "windows-zig" / "ygo_m4_worker.exe")
 )
 
 
@@ -132,6 +142,12 @@ class WorkerProtocolContractTests(unittest.TestCase):
         with self.assertRaises(ProtocolContractError):
             validate_ready(message)
 
+    def test_ready_rejects_wrong_worker_identity(self) -> None:
+        message = ready_fixture()
+        message["worker_identity"] = "ocgforge.m4.other_worker.v1"
+        with self.assertRaises(ProtocolContractError):
+            validate_ready(message)
+
     def test_result_rejects_job_id_mismatch(self) -> None:
         message = result_fixture()
         message["job_id"] = "m4-000002"
@@ -167,6 +183,22 @@ class WorkerProtocolContractTests(unittest.TestCase):
         with self.assertRaises(ProtocolContractError):
             validate_result(message, expected_job_id="m4-000001")
 
+    def test_passed_result_requires_winner_and_reason(self) -> None:
+        for key in ("winner", "win_reason"):
+            message = result_fixture()
+            message[key] = None
+            with self.subTest(key=key), self.assertRaises(ProtocolContractError):
+                validate_result(message, expected_job_id="m4-000001")
+
+    def test_passed_result_requires_64_hex_gameplay_hash(self) -> None:
+        message = result_fixture()
+        message["gameplay_hash"] = "not-a-sha256"
+        with self.assertRaises(ProtocolContractError):
+            validate_result(message, expected_job_id="m4-000001")
+        message = result_fixture()
+        message["trace_hash"] = None
+        validate_result(message, expected_job_id="m4-000001")
+
     def test_result_rejects_negative_unsigned_value(self) -> None:
         message = result_fixture()
         message["engine_steps"] = -1
@@ -184,6 +216,36 @@ class WorkerProtocolContractTests(unittest.TestCase):
         with self.assertRaises(ProtocolContractError):
             parse_json_line(malformed)
         self.assertIsNone(recover_job_id(malformed))
+
+
+@unittest.skipUnless(WORKER.is_file(), f"native worker not found: {WORKER}")
+class NativeWorkerProtocolRegressionTests(unittest.TestCase):
+    def test_recovery_is_root_job_id_only(self) -> None:
+        top_level_id_then_nested_failure = (
+            '{"schema":"ocgforge.m4.worker.v1","type":"job",'
+            '"job_id":"top-level","nested":{"job_id":"nested","broken":'
+        )
+        nested_id_only_then_failure = (
+            '{"schema":"ocgforge.m4.worker.v1","type":"job",'
+            '"nested":{"job_id":"nested","broken":'
+        )
+        completed = subprocess.run(
+            [str(WORKER)],
+            input=top_level_id_then_nested_failure + "\n" + nested_id_only_then_failure + "\n",
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        messages = [json.loads(line) for line in completed.stdout.splitlines()]
+        self.assertEqual(len(messages), 3, messages)
+        validate_ready(messages[0])
+        validate_result(messages[1], expected_job_id="top-level")
+        self.assertEqual(messages[1]["status"], "failed")
+        self.assertEqual(messages[2]["type"], "protocol_error")
+        self.assertIsNone(messages[2]["job_id"])
 
 
 if __name__ == "__main__":

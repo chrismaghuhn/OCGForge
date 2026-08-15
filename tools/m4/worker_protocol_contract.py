@@ -8,11 +8,13 @@ wire contract; the native worker remains the protocol implementation.
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 
 PROTOCOL_SCHEMA = "ocgforge.m4.worker.v1"
 PROTOCOL_VERSION = PROTOCOL_SCHEMA
+WORKER_IDENTITY = "ocgforge.m4.native_worker.v1"
 CANONICAL_RULES_BUNDLE_ID = (
     "3adfe6b4cfe2c2805e50b389fc0eb4e70a3b0b6107436614d328fddc865e585f"
 )
@@ -136,7 +138,8 @@ def validate_ready(message: dict[str, Any]) -> None:
         raise ProtocolContractError("wrong canonical duel flags")
     _require_string(message, "compiler_identity")
     _require_string(message, "build_type")
-    _require_string(message, "worker_identity")
+    if _require_string(message, "worker_identity") != WORKER_IDENTITY:
+        raise ProtocolContractError("wrong native worker identity")
 
 
 _ERROR_KEYS = {
@@ -182,6 +185,13 @@ def _validate_unsigned_object(message: dict[str, Any], key: str, keys: set[str])
         raise ProtocolContractError(f"wrong keys in {key}")
     for child_key in keys:
         _require_unsigned(message, child_key)
+
+
+def _is_sha256_hex(value: Any) -> bool:
+    return (
+        isinstance(value, str)
+        and re.fullmatch(r"[0-9a-f]{64}", value, re.IGNORECASE) is not None
+    )
 
 
 def validate_result(message: dict[str, Any], *, expected_job_id: str) -> None:
@@ -240,8 +250,14 @@ def validate_result(message: dict[str, Any], *, expected_job_id: str) -> None:
     _validate_unsigned_object(message["timing_us"], "timing_us", _TIMING_KEYS)
     _validate_unsigned_object(message["counters"], "counters", _COUNTER_KEYS)
     if message["status"] == "passed":
-        if not message["terminal"] or message["gameplay_hash"] is None:
+        if not message["terminal"]:
             raise ProtocolContractError("passed result lacks terminal gameplay evidence")
+        if message["winner"] is None or message["win_reason"] is None:
+            raise ProtocolContractError("passed result lacks terminal winner evidence")
+        if not _is_sha256_hex(message["gameplay_hash"]):
+            raise ProtocolContractError("passed result lacks a 64-hex gameplay hash")
+        if message["trace_hash"] is not None and not _is_sha256_hex(message["trace_hash"]):
+            raise ProtocolContractError("passed result has an invalid trace hash")
         if any(message["errors"].get(key) != 0 for key in _ERROR_KEYS):
             raise ProtocolContractError("passed result has nonzero integrity counters")
         if message["failure_code"] is not None or message["error_message"] is not None:

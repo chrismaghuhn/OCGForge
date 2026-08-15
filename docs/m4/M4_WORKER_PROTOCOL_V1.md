@@ -134,7 +134,8 @@ If a line is malformed or has no recoverable job ID, the worker emits a
 {"schema":"ocgforge.m4.worker.v1","type":"protocol_error","job_id":null,"failure_code":"malformed_request","error_message":"..."}
 ```
 
-If a malformed line contains a recoverable non-empty `job_id`, the worker
-emits a failed `result` for that ID. This preserves one-result-per-job
+If a malformed line contains a recoverable non-empty root-object `job_id`, the
+worker emits a failed `result` for that ID. A `job_id` nested in any other
+object is never treated as job identity. This preserves one-result-per-job
 accountability while keeping syntax errors distinguishable from normal
 simulation results.

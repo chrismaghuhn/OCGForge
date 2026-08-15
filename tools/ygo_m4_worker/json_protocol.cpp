@@ -132,7 +132,9 @@ public:
 
     JsonValue parse_document() {
         skip_space();
-        auto value = parse_value();
+        // Recovery is permitted only for a job_id directly owned by the
+        // document's root object. Nested objects are data, never job identity.
+        auto value = parse_value(true);
         skip_space();
         if (position_ != input_.size()) {
             fail("trailing data after JSON value");
@@ -168,7 +170,7 @@ private:
         }
     }
 
-    JsonValue parse_value() {
+    JsonValue parse_value(const bool recover_root_job_id = false) {
         skip_space();
         if (position_ >= input_.size()) {
             fail("expected JSON value");
@@ -200,7 +202,7 @@ private:
         case '[':
             return parse_array();
         case '{':
-            return parse_object();
+            return parse_object(recover_root_job_id);
         case '-':
             fail("negative unsigned values are not allowed");
         default:
@@ -345,7 +347,7 @@ private:
             return value;
         }
         while (true) {
-            value.array_value.push_back(parse_value());
+            value.array_value.push_back(parse_value(false));
             skip_space();
             if (position_ >= input_.size()) {
                 fail("unterminated array");
@@ -362,7 +364,7 @@ private:
         }
     }
 
-    JsonValue parse_object() {
+    JsonValue parse_object(const bool recover_job_id) {
         expect('{');
         JsonValue value;
         value.kind = JsonKind::Object;
@@ -382,8 +384,9 @@ private:
             }
             skip_space();
             expect(':');
-            auto child = parse_value();
-            if (key == "job_id" && child.kind == JsonKind::String && !child.string_value.empty()) {
+            auto child = parse_value(false);
+            if (recover_job_id && key == "job_id" && child.kind == JsonKind::String &&
+                !child.string_value.empty()) {
                 recovered_job_id_ = child.string_value;
             }
             value.object_value.emplace(key, std::move(child));
@@ -513,6 +516,15 @@ std::string json_escape(const std::string_view value) {
     return output.str();
 }
 
+bool is_sha256_hex(const std::string& value) {
+    if (value.size() != 64) {
+        return false;
+    }
+    return std::all_of(value.begin(), value.end(), [](const char character) {
+        return is_hex_digit(character);
+    });
+}
+
 void append_json_string(std::ostringstream& output, const std::string_view key,
                         const std::string_view value, const bool comma = true) {
     if (comma) {
@@ -629,19 +641,37 @@ std::string serialize_ready(const WorkerReadyInfo& worker,
 
 std::string serialize_result(const ygo::simulation::SimulationResult& result,
                              const WorkerReadyInfo& worker) {
+    const bool complete_pass =
+        result.pass && result.terminal && result.winner.has_value() && result.win_reason.has_value() &&
+        is_sha256_hex(result.gameplay_hash) &&
+        (!result.trace_hash.has_value() || is_sha256_hex(*result.trace_hash)) &&
+        result.failure_code.empty() && result.error_message.empty() && result.errors.retries == 0 &&
+        result.errors.unsupported == 0 && result.errors.automatic == 0 &&
+        result.errors.truncated == 0 && result.errors.core_errors == 0 &&
+        result.errors.worker_errors == 0;
+    const bool wire_pass = complete_pass;
+    auto wire_errors = result.errors;
+    std::string wire_failure_code = result.failure_code;
+    std::string wire_error_message = result.error_message;
+    if (result.pass && !complete_pass) {
+        wire_errors.worker_errors += 1;
+        wire_failure_code = "incomplete_result";
+        wire_error_message = "passed simulation result omitted complete terminal evidence";
+    }
+
     std::ostringstream output;
     output << '{';
     append_json_string(output, "schema", kProtocolSchema, false);
     append_json_string(output, "type", "result");
-    append_json_string(output, "status", result.pass ? "passed" : "failed");
+    append_json_string(output, "status", wire_pass ? "passed" : "failed");
     append_json_string(output, "job_id", result.job_id);
-    append_json_bool(output, "terminal", result.terminal);
-    if (result.winner.has_value() && result.pass) {
+    append_json_bool(output, "terminal", wire_pass && result.terminal);
+    if (result.winner.has_value() && wire_pass) {
         append_json_unsigned(output, "winner", *result.winner);
     } else {
         append_json_null(output, "winner");
     }
-    if (result.win_reason.has_value() && result.pass) {
+    if (result.win_reason.has_value() && wire_pass) {
         append_json_unsigned(output, "win_reason", *result.win_reason);
     } else {
         append_json_null(output, "win_reason");
@@ -649,29 +679,29 @@ std::string serialize_result(const ygo::simulation::SimulationResult& result,
     append_json_unsigned(output, "engine_steps", result.engine_steps);
     append_json_unsigned(output, "interactive_decisions", result.interactive_decisions);
     append_json_unsigned(output, "semantic_action_count", result.semantic_action_count);
-    if (result.pass && !result.gameplay_hash.empty()) {
+    if (wire_pass) {
         append_json_string(output, "gameplay_hash", result.gameplay_hash);
     } else {
         append_json_null(output, "gameplay_hash");
     }
-    if (result.pass && result.trace_hash.has_value()) {
+    if (wire_pass && result.trace_hash.has_value()) {
         append_json_string(output, "trace_hash", *result.trace_hash);
     } else {
         append_json_null(output, "trace_hash");
     }
     append_json_unsigned(output, "simulation_elapsed_us", result.simulation_elapsed_us);
     append_json_null(output, "coordinator_elapsed_us");
-    append_error_object(output, result.errors);
+    append_error_object(output, wire_errors);
     append_timing_object(output, result);
     append_counter_object(output, result.operations);
     append_worker_object(output, result, worker);
-    if (!result.failure_code.empty()) {
-        append_json_string(output, "failure_code", result.failure_code);
+    if (!wire_failure_code.empty()) {
+        append_json_string(output, "failure_code", wire_failure_code);
     } else {
         append_json_null(output, "failure_code");
     }
-    if (!result.error_message.empty()) {
-        append_json_string(output, "error_message", result.error_message);
+    if (!wire_error_message.empty()) {
+        append_json_string(output, "error_message", wire_error_message);
     } else {
         append_json_null(output, "error_message");
     }
