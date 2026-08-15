@@ -49,6 +49,8 @@ int run() {
     (void)host.query_field();
     (void)host.query_count(0, LOCATION_DECK);
 
+    require(host.response_submission_count() == 0,
+            "response_submission_count changed without submit_response");
     const auto metrics = host.metrics();
     require(metrics.duel_process_calls == 1, "duel_process_calls did not count the process call");
     require(metrics.duel_process_calls == host.process_call_count(),
