@@ -149,8 +149,19 @@ else()
     target_compile_options(ygo_m0 PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
+add_library(ygo_m4 STATIC
+    src/simulation/canonical_simulation.cpp
+)
+target_include_directories(ygo_m4 PUBLIC "${CMAKE_SOURCE_DIR}/include")
+target_link_libraries(ygo_m4 PUBLIC ygo_m0)
+if(MSVC)
+    target_compile_options(ygo_m4 PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(ygo_m4 PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
 add_executable(ygo_core_probe tools/ygo_core_probe/main.cpp)
-target_link_libraries(ygo_core_probe PRIVATE ygo_m0)
+target_link_libraries(ygo_core_probe PRIVATE ygo_m4)
 target_compile_definitions(ygo_core_probe PRIVATE
     YGO_M0_PLAYER_A="${CMAKE_SOURCE_DIR}/fixtures/decks/player_a.deck"
     YGO_M0_PLAYER_B="${CMAKE_SOURCE_DIR}/fixtures/decks/player_b.deck"
