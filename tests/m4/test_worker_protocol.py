@@ -18,6 +18,7 @@ from tools.m4.worker_protocol_contract import (
 )
 from tools.m4.worker_protocol import (
     ProtocolValidationError as CoordinatorProtocolValidationError,
+    job_to_message,
     validate_result as validate_coordinator_result,
 )
 
@@ -243,6 +244,53 @@ class WorkerProtocolContractTests(unittest.TestCase):
         message["engine_steps"] = -1
         with self.assertRaises(ProtocolContractError):
             validate_result(message, expected_job_id="m4-000001")
+
+    def test_unsigned_fields_reject_uint64_overflow(self) -> None:
+        ready = ready_fixture()
+        ready["pid"] = 2**64
+        with self.assertRaises(ProtocolContractError):
+            validate_ready(ready)
+
+        result = result_fixture()
+        result["engine_steps"] = 2**64
+        with self.assertRaises(ProtocolContractError):
+            validate_result(result, expected_job_id="m4-000001")
+
+        result = result_fixture()
+        result["timing_us"]["core_process"] = 2**64
+        with self.assertRaises(ProtocolContractError):
+            validate_result(result, expected_job_id="m4-000001")
+
+        result = result_fixture()
+        result["counters"]["candidate_total"] = 2**64
+        with self.assertRaises(ProtocolContractError):
+            validate_result(result, expected_job_id="m4-000001")
+
+    def test_job_unsigned_fields_reject_uint64_overflow(self) -> None:
+        job = {
+            "job_id": "m4-unsigned",
+            "seed": 1,
+            "starting_player": 0,
+            "max_steps": 2200,
+            "focus_codes": [],
+        }
+        for key in ("seed", "starting_player", "max_steps"):
+            invalid = {**job, key: 2**64}
+            with self.subTest(key=key), self.assertRaises(ValueError):
+                job_to_message(invalid)
+
+        invalid = {**job, "focus_codes": [2**64]}
+        with self.assertRaises(ValueError):
+            job_to_message(invalid)
+
+    def test_json_fixture_rejects_unpaired_surrogates_but_accepts_valid_unicode(self) -> None:
+        unpaired = json.dumps({"nested": ["valid", "\ud800"]})
+        with self.assertRaises(ProtocolContractError):
+            parse_json_line(unpaired)
+
+        valid_unicode = json.dumps({"nested": ["\U0001f600", "\ud83d\ude00"]})
+        parsed = parse_json_line(valid_unicode)
+        self.assertEqual(parsed["nested"], ["\U0001f600", "\U0001f600"])
 
     def test_json_fixture_rejects_duplicate_and_trailing_data(self) -> None:
         with self.assertRaises(ProtocolContractError):

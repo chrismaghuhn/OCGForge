@@ -15,6 +15,8 @@ from typing import Any
 PROTOCOL_SCHEMA = "ocgforge.m4.worker.v1"
 PROTOCOL_VERSION = PROTOCOL_SCHEMA
 WORKER_IDENTITY = "ocgforge.m4.native_worker.v1"
+UINT64_MAX = (1 << 64) - 1
+UINT32_MAX = (1 << 32) - 1
 CANONICAL_RULES_BUNDLE_ID = (
     "3adfe6b4cfe2c2805e50b389fc0eb4e70a3b0b6107436614d328fddc865e585f"
 )
@@ -40,6 +42,60 @@ def _duplicate_key_check(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     return result
 
 
+def _reject_unpaired_surrogates(value: Any, path: str = "$") -> None:
+    """Reject lone UTF-16 surrogate code points in parsed JSON strings."""
+
+    if isinstance(value, str):
+        index = 0
+        while index < len(value):
+            codepoint = ord(value[index])
+            if 0xD800 <= codepoint <= 0xDBFF:
+                if index + 1 >= len(value) or not (
+                    0xDC00 <= ord(value[index + 1]) <= 0xDFFF
+                ):
+                    raise ProtocolContractError(
+                        f"unpaired Unicode surrogate in JSON string at {path}"
+                    )
+                index += 2
+                continue
+            if 0xDC00 <= codepoint <= 0xDFFF:
+                raise ProtocolContractError(
+                    f"unpaired Unicode surrogate in JSON string at {path}"
+                )
+            index += 1
+        return
+    if isinstance(value, dict):
+        for key, child in value.items():
+            _reject_unpaired_surrogates(key, f"{path}.<key>")
+            _reject_unpaired_surrogates(child, f"{path}.{key}")
+        return
+    if isinstance(value, list):
+        for index, child in enumerate(value):
+            _reject_unpaired_surrogates(child, f"{path}[{index}]")
+
+
+def require_uint64(value: Any, key: str) -> int:
+    """Require a JSON-compatible unsigned integer representable as uint64."""
+
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, int)
+        or value < 0
+        or value > UINT64_MAX
+    ):
+        raise ProtocolContractError(f"{key} must be an unsigned uint64 integer")
+    return value
+
+
+def require_uint32(value: Any, key: str) -> int:
+    """Require an unsigned integer representable as the native uint32 field."""
+
+    value = require_uint64(value, key)
+    if value > UINT32_MAX:
+        raise ProtocolContractError(f"{key} exceeds uint32")
+    return value
+
+
 def parse_json_line(line: str) -> dict[str, Any]:
     """Parse one strict JSON object line without accepting duplicate keys."""
 
@@ -55,6 +111,7 @@ def parse_json_line(line: str) -> dict[str, Any]:
         raise
     except (TypeError, json.JSONDecodeError) as error:
         raise ProtocolContractError(f"malformed JSON: {error}") from error
+    _reject_unpaired_surrogates(value)
     if not isinstance(value, dict):
         raise ProtocolContractError("protocol message must be a JSON object")
     return value
@@ -83,18 +140,15 @@ def _require_keys(message: dict[str, Any], required: set[str]) -> None:
 
 def _require_type(message: dict[str, Any], key: str, expected: type[Any]) -> Any:
     value = message[key]
-    if expected is int and (isinstance(value, bool) or not isinstance(value, int)):
-        raise ProtocolContractError(f"{key} must be an unsigned integer")
+    if expected is int:
+        return require_uint64(value, key)
     if expected is not int and not isinstance(value, expected):
         raise ProtocolContractError(f"{key} has the wrong JSON type")
     return value
 
 
 def _require_unsigned(message: dict[str, Any], key: str) -> int:
-    value = _require_type(message, key, int)
-    if value < 0:
-        raise ProtocolContractError(f"{key} must not be negative")
-    return value
+    return require_uint64(message[key], key)
 
 
 def _require_string(message: dict[str, Any], key: str) -> str:
@@ -102,6 +156,7 @@ def _require_string(message: dict[str, Any], key: str) -> str:
 
 
 def validate_ready(message: dict[str, Any]) -> None:
+    _reject_unpaired_surrogates(message)
     required = {
         "schema",
         "type",
@@ -134,7 +189,7 @@ def validate_ready(message: dict[str, Any]) -> None:
         raise ProtocolContractError("wrong canonical format")
     if message["duel_mode_name"] != "DUEL_MODE_MR5":
         raise ProtocolContractError("wrong canonical duel mode")
-    if message["duel_flags"] != 190464:
+    if require_uint64(message["duel_flags"], "duel_flags") != 190464:
         raise ProtocolContractError("wrong canonical duel flags")
     _require_string(message, "compiler_identity")
     _require_string(message, "build_type")
@@ -195,6 +250,7 @@ def _is_sha256_hex(value: Any) -> bool:
 
 
 def validate_result(message: dict[str, Any], *, expected_job_id: str) -> None:
+    _reject_unpaired_surrogates(message)
     required = {
         "schema",
         "type",
@@ -227,12 +283,7 @@ def validate_result(message: dict[str, Any], *, expected_job_id: str) -> None:
     if not isinstance(message["terminal"], bool):
         raise ProtocolContractError("terminal must be a boolean")
     for key in ("winner", "win_reason"):
-        if message[key] is not None and (
-            isinstance(message[key], bool)
-            or not isinstance(message[key], int)
-            or message[key] < 0
-            or message[key] > 255
-        ):
+        if message[key] is not None and require_uint64(message[key], key) > 255:
             raise ProtocolContractError(f"{key} must be an unsigned integer or null")
     for key in (
         "engine_steps",

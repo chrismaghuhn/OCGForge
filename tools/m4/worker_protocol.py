@@ -19,6 +19,8 @@ from .worker_protocol_contract import (
     CANONICAL_RULES_BUNDLE_ID,
     PROTOCOL_SCHEMA,
     PROTOCOL_VERSION,
+    require_uint32,
+    require_uint64,
     WORKER_IDENTITY,
     ProtocolContractError,
     parse_json_line,
@@ -224,12 +226,11 @@ def job_to_message(job: Mapping[str, Any]) -> dict[str, Any]:
     }
     if not isinstance(required["job_id"], str) or not required["job_id"]:
         raise ValueError("job_id must be a nonempty string")
-    if isinstance(required["seed"], bool) or not isinstance(required["seed"], int) or required["seed"] < 0:
-        raise ValueError("seed must be a nonnegative integer")
-    for key in ("starting_player", "max_steps"):
-        value = required[key]
-        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
-            raise ValueError(f"{key} must be a nonnegative integer")
+    _require_job_uint64(required["seed"], "seed")
+    starting_player = _require_job_uint64(required["starting_player"], "starting_player")
+    if starting_player > 1:
+        raise ValueError("starting_player must be 0 or 1")
+    require_uint32(required["max_steps"], "max_steps")
     if required["seat_assignment"] not in {"normal", "mirror"}:
         raise ValueError("seat_assignment must be normal or mirror")
     if required["mode"] not in {"conformance", "throughput"}:
@@ -239,6 +240,8 @@ def job_to_message(job: Mapping[str, Any]) -> dict[str, Any]:
     for key in ("instrumentation", "persist_trace", "force_unsupported"):
         if not isinstance(required[key], bool):
             raise ValueError(f"{key} must be boolean")
+    for index, code in enumerate(required["focus_codes"]):
+        require_uint32(code, f"focus_codes[{index}]")
     message = {
         "schema": PROTOCOL_SCHEMA,
         "type": "job",
@@ -271,6 +274,12 @@ def recover_line_job_id(line: str) -> str | None:
 
 def is_sha256(value: Any) -> bool:
     return isinstance(value, str) and re.fullmatch(r"[0-9a-fA-F]{64}", value) is not None
+
+
+def _require_job_uint64(value: Any, key: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise ValueError(f"{key} must be a nonnegative integer")
+    return require_uint64(value, key)
 
 
 __all__ = [
