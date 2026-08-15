@@ -171,6 +171,22 @@ target_compile_definitions(ygo_core_probe PRIVATE
     YGO_M3_CARDSCRIPTS="${M0_CARDSCRIPTS_DIR}"
 )
 
+add_executable(ygo_m4_worker
+    tools/ygo_m4_worker/json_protocol.cpp
+    tools/ygo_m4_worker/main.cpp
+)
+target_link_libraries(ygo_m4_worker PRIVATE ygo_m4)
+target_compile_definitions(ygo_m4_worker PRIVATE
+    YGO_M3_DECK_A="${CMAKE_SOURCE_DIR}/fixtures/decks/swordsoul_tenyi_ml_v1.ydk"
+    YGO_M3_DECK_B="${CMAKE_SOURCE_DIR}/fixtures/decks/salamangreat_ml_v1.ydk"
+    YGO_M3_CARDSCRIPTS="${M0_CARDSCRIPTS_DIR}"
+)
+if(MSVC)
+    target_compile_options(ygo_m4_worker PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(ygo_m4_worker PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
 add_executable(ygo_observation_probe tools/ygo_observation_probe/main.cpp)
 target_link_libraries(ygo_observation_probe PRIVATE ygo_m0)
 target_compile_definitions(ygo_observation_probe PRIVATE
@@ -535,4 +551,11 @@ add_test(NAME unsupported_diagnostic_test
 
 add_test(NAME decision_coverage_test
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tests/protocol/decision_coverage_test.py"
+)
+
+add_test(NAME m4_worker_protocol_test
+    COMMAND "${Python3_EXECUTABLE}" -m unittest tests/m4/test_worker_protocol.py -v
+)
+set_tests_properties(m4_worker_protocol_test PROPERTIES
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
 )
