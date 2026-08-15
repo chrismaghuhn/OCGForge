@@ -74,6 +74,66 @@ class SharedSimulationCompatibilityTest(unittest.TestCase):
         self.assertRegex(str(summary.get("semantic_gameplay_hash")), r"^[0-9a-f]{64}$")
         self.assertRegex(str(summary.get("trace_hash")), r"^[0-9a-f]{64}$")
 
+    def test_nonterminal_max_steps_preserves_legacy_success_exit(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="ocgforge-m4-task3-nonterminal-") as directory:
+            output = Path(directory) / "nonterminal.jsonl"
+            completed = subprocess.run(
+                [
+                    str(PROBE),
+                    "--m3-full-game",
+                    "--seed",
+                    "2",
+                    "--starting-player",
+                    "0",
+                    "--max-steps",
+                    "1",
+                    "--output",
+                    str(output),
+                ],
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+                timeout=300,
+                check=False,
+            )
+            self.assertEqual(completed.returncode, 0, msg=completed.stderr[-4000:])
+            summary = _read_summary(output)
+
+        self.assertFalse(summary.get("terminal"))
+        for field in ERROR_FIELDS:
+            self.assertEqual(summary.get(field), 0, msg=f"{field} was non-zero")
+        self.assertRegex(str(summary.get("semantic_gameplay_hash")), r"^[0-9a-f]{64}$")
+        self.assertRegex(str(summary.get("trace_hash")), r"^[0-9a-f]{64}$")
+
+    def test_force_unsupported_preserves_diagnostic_exit(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="ocgforge-m4-task3-force-") as directory:
+            output = Path(directory) / "must-not-be-written.jsonl"
+            completed = subprocess.run(
+                [
+                    str(PROBE),
+                    "--m3-full-game",
+                    "--seed",
+                    "2",
+                    "--starting-player",
+                    "0",
+                    "--max-steps",
+                    "1800",
+                    "--force-unsupported",
+                    "--output",
+                    str(output),
+                ],
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+                timeout=300,
+                check=False,
+            )
+            output_was_written = output.exists()
+
+        self.assertEqual(completed.returncode, 3, msg=completed.stderr[-4000:])
+        self.assertIn("UNSUPPORTED_OR_MALFORMED_DECISION", completed.stderr)
+        self.assertFalse(output_was_written)
+
 
 if __name__ == "__main__":
     unittest.main()

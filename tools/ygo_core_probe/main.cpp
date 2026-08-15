@@ -419,23 +419,47 @@ int run_canonical_full_game(const Arguments& arguments) {
                                                   : ygo::simulation::SeatAssignment::Normal;
     job.starting_player = arguments.starting_player.value_or(0);
     job.max_steps = arguments.max_steps;
+    job.focus_codes = arguments.focus_codes;
+    job.setup_script = arguments.setup_script;
+    job.force_unsupported = arguments.force_unsupported;
     job.mode = ygo::simulation::SimulationMode::Conformance;
     job.observation_mode = ygo::simulation::ObservationMode::Full;
     job.persist_trace = !arguments.output.empty();
     job.trace_output = arguments.output;
+    if (!arguments.replay_actions_path.empty()) {
+        std::ifstream replay_stream(arguments.replay_actions_path, std::ios::binary);
+        if (!replay_stream) {
+            throw std::runtime_error("cannot open replay actions: " + arguments.replay_actions_path);
+        }
+        std::string line;
+        while (std::getline(replay_stream, line)) {
+            line = trim_replay_action_line(std::move(line));
+            if (!line.empty() && line.front() != '#') {
+                job.replay_actions.push_back(std::move(line));
+            }
+        }
+    }
 
     const auto result = ygo::simulation::run_canonical_simulation(job, config);
     if (!result.pass) {
-        if (result.errors.core_errors != 0) {
+        if (result.failure_code == "nonterminal") {
+            // The legacy probe treats max_steps exhaustion as a valid, emitted
+            // partial trace rather than as a protocol failure.
+        } else if (result.failure_code == "forced_unsupported") {
+            return 3;
+        } else if (result.failure_code == "retry" || result.errors.retries != 0) {
+            std::cerr << "probe error: " << result.error_message << '\n';
+            return 5;
+        } else if (result.errors.core_errors != 0) {
             std::cerr << "core error: " << result.error_message << '\n';
             return 4;
-        }
-        if (result.errors.unsupported != 0 || result.errors.truncated != 0 || result.errors.retries != 0) {
+        } else if (result.errors.unsupported != 0 || result.errors.truncated != 0) {
             std::cerr << "protocol error: " << result.error_message << '\n';
             return 3;
+        } else {
+            std::cerr << "probe error: " << result.error_message << '\n';
+            return 5;
         }
-        std::cerr << "probe error: " << result.error_message << '\n';
-        return 5;
     }
     if (!result.trace_jsonl.has_value() || !result.trace_hash.has_value()) {
         std::cerr << "probe error: conformance result omitted canonical trace evidence\n";

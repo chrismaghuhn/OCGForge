@@ -50,6 +50,10 @@ struct SimulationJob {
     std::uint8_t starting_player = 0;
     std::uint32_t max_steps = 2200;
     std::string canonical_rules_id = kCanonicalRulesBundleId;
+    std::vector<std::string> replay_actions;
+    std::vector<std::uint32_t> focus_codes;
+    std::filesystem::path setup_script;
+    bool force_unsupported = false;
     SimulationMode mode = SimulationMode::Throughput;
     ObservationMode observation_mode = ObservationMode::Full;
     bool instrumentation = false;

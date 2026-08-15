@@ -254,6 +254,9 @@ SimulationResult run_canonical_simulation(const SimulationJob& job,
             host.load_deck(0, deck_a);
             host.load_deck(1, deck_b);
             host.start_duel();
+            if (!job.setup_script.empty()) {
+                host.load_fixture_script(job.setup_script);
+            }
 
             ygo::observation::ObservationSession observation_sessions[] = {
                 ygo::observation::ObservationSession(0, static_cast<std::uint32_t>(config.duel_flags)),
@@ -262,7 +265,9 @@ SimulationResult run_canonical_simulation(const SimulationJob& job,
 
             trace.manifest = manifest(host, deck_a, deck_b);
             trace.manifest.trace_schema_version = "ygo.engine_trace.v2";
-            const ygo::m3::DeterministicConformancePolicy m3_policy({}, true);
+            const ygo::m3::DeterministicConformancePolicy m3_policy(job.focus_codes, true);
+            std::size_t replay_action_index = 0;
+            bool forced_unsupported = false;
             std::uint32_t decision_index = 0;
             std::uint32_t interactive_decision_count = 0;
             std::uint32_t continuation_intermediate_count = 0;
@@ -275,7 +280,23 @@ SimulationResult run_canonical_simulation(const SimulationJob& job,
             std::uint64_t response_build_time_us_total = 0;
             std::uint64_t response_build_time_us_max = 0;
 
-            for (std::uint32_t index = 0; index < job.max_steps; ++index) {
+            if (job.force_unsupported) {
+                const std::vector<std::uint8_t> raw_message = {
+                    3, 0, 0, 0, MSG_SELECT_OPTION, 0, 0,
+                };
+                try {
+                    (void)ygo::protocol::decode_messages(raw_message);
+                    throw std::runtime_error("forced unsupported probe unexpectedly decoded successfully");
+                } catch (const ygo::protocol::ProtocolError& error) {
+                    emit_unsupported_diagnostic(error, 0, raw_message, host_config, deck_a, deck_b, trace);
+                    ++result.errors.unsupported;
+                    result.failure_code = "forced_unsupported";
+                    result.error_message = error.what();
+                    forced_unsupported = true;
+                }
+            }
+
+            for (std::uint32_t index = 0; index < job.max_steps && !forced_unsupported; ++index) {
                 const auto process_start = Clock::now();
                 const auto process_result = host.process();
                 add_timing(result.timing.core_process_us, process_start, Clock::now(), instrumentation);
@@ -346,7 +367,20 @@ SimulationResult run_canonical_simulation(const SimulationJob& job,
                         result.operations.candidate_total += request.candidates.size();
                         result.operations.candidate_max = std::max<std::uint64_t>(
                             result.operations.candidate_max, request.candidates.size());
-                        const auto& selected = m3_policy.choose(request);
+                        const ygo::protocol::ActionCandidate* selected_candidate = nullptr;
+                        if (!job.replay_actions.empty()) {
+                            if (replay_action_index >= job.replay_actions.size()) {
+                                throw ygo::protocol::ProtocolError(
+                                    ygo::protocol::ProtocolErrorCode::InvalidSemanticKey,
+                                    "replay action stream ended before the engine reached terminal state",
+                                    request.engine_message_type, request.player);
+                            }
+                            selected_candidate = &ygo::protocol::select_candidate(
+                                request, job.replay_actions[replay_action_index++]);
+                        } else {
+                            selected_candidate = &m3_policy.choose(request);
+                        }
+                        const auto& selected = *selected_candidate;
                         add_timing(result.timing.protocol_candidate_us, candidate_start, Clock::now(), instrumentation);
 
                         ygo::observation::PlayerObservation observation;
@@ -434,6 +468,12 @@ SimulationResult run_canonical_simulation(const SimulationJob& job,
                 }
             }
 
+            if (!forced_unsupported && !job.replay_actions.empty() &&
+                replay_action_index != job.replay_actions.size()) {
+                throw std::runtime_error("replay action stream contains unused semantic actions: " +
+                                         std::to_string(job.replay_actions.size() - replay_action_index));
+            }
+
             result.engine_steps = static_cast<std::uint32_t>(host.process_call_count());
             result.interactive_decisions = interactive_decision_count;
             result.semantic_action_count = interactive_decision_count;
@@ -441,9 +481,8 @@ SimulationResult run_canonical_simulation(const SimulationJob& job,
             if (terminal_reached) {
                 result.winner = terminal_winner;
                 result.win_reason = terminal_reason;
-            } else {
-                ++result.errors.truncated;
-                result.failure_code = "truncated";
+            } else if (!forced_unsupported) {
+                result.failure_code = "nonterminal";
                 result.error_message = "canonical simulation did not reach terminal state before max_steps";
             }
             result.turns = 0;
@@ -505,8 +544,12 @@ SimulationResult run_canonical_simulation(const SimulationJob& job,
         if (!result.pass && result.failure_code.empty()) {
             result.failure_code = "simulation_failed";
         }
-        if (result.pass && job.persist_trace && job.mode == SimulationMode::Conformance &&
-            !job.trace_output.empty()) {
+        const bool no_error_nonterminal =
+            result.failure_code == "nonterminal" && result.errors.retries == 0 &&
+            result.errors.unsupported == 0 && result.errors.automatic == 0 &&
+            result.errors.truncated == 0 && result.errors.core_errors == 0;
+        if ((result.pass || no_error_nonterminal) && job.persist_trace &&
+            job.mode == SimulationMode::Conformance && !job.trace_output.empty()) {
             const auto persistence_start = Clock::now();
             std::ofstream stream(job.trace_output, std::ios::binary);
             if (!stream) {
