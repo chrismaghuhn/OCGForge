@@ -175,6 +175,11 @@ def main() -> int:
             return 0
         passed = not bool(job.get("force_unsupported", False))
         result = result_message(job, passed=passed)
+        if args.behavior == "result-pid-mismatch" and args.marker:
+            marker = Path(os.path.abspath(args.marker))
+            if not marker.exists():
+                marker.write_text("mismatch", encoding="utf-8")
+                result["worker"]["pid"] = os.getpid() + 1
         if args.behavior == "extra-first-job" and args.marker:
             marker = os.path.abspath(args.marker)
             if not os.path.exists(marker):

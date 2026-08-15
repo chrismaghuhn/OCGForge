@@ -182,6 +182,43 @@ class WorkerProtocolContractTests(unittest.TestCase):
         }
         validate_result(message, expected_job_id="m4-000001")
 
+    def test_simulation_timing_requires_positive_pass_time_and_bounded_buckets(self) -> None:
+        zero_pass = result_fixture()
+        zero_pass["simulation_elapsed_us"] = 0
+        with self.assertRaises(ProtocolContractError):
+            validate_result(zero_pass, expected_job_id="m4-000001")
+
+        zero_with_bucket = result_fixture()
+        zero_with_bucket["simulation_elapsed_us"] = 0
+        zero_with_bucket["timing_us"]["core_process"] = 1
+        with self.assertRaises(ProtocolContractError):
+            validate_result(zero_with_bucket, expected_job_id="m4-000001")
+
+        over_budget = result_fixture()
+        over_budget["simulation_elapsed_us"] = 99
+        with self.assertRaises(ProtocolContractError):
+            validate_result(over_budget, expected_job_id="m4-000001")
+
+        failed_zero = result_fixture()
+        failed_zero.update(
+            {
+                "status": "failed",
+                "terminal": False,
+                "winner": None,
+                "win_reason": None,
+                "gameplay_hash": None,
+                "trace_hash": None,
+                "simulation_elapsed_us": 0,
+                "failure_code": "worker_validation",
+                "error_message": "invalid job",
+            }
+        )
+        failed_zero["errors"] = {**failed_zero["errors"], "worker_errors": 1}
+        failed_zero["timing_us"] = {
+            key: 0 for key in failed_zero["timing_us"]
+        }
+        validate_result(failed_zero, expected_job_id="m4-000001")
+
     def test_coordinator_rejects_worker_metadata_and_timing_overrides(self) -> None:
         for field, value in (
             ("coordinator", {}),

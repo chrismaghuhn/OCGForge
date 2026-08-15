@@ -138,11 +138,11 @@ class PersistentWorkerPool:
     """One coordinator over persistent, single-threaded native workers.
 
     A worker result is staged until a bounded lifecycle-settle interval has
-    elapsed or the worker's process state settles.  The interval is
-    coordinator wall-clock time and is included in ``coordinator_elapsed_us``;
-    worker-reported ``simulation_elapsed_us`` is unchanged.  This prevents a
-    result line racing an EOF/exit from becoming primary evidence while
-    keeping healthy persistent workers bounded rather than waiting forever.
+    elapsed or the worker's process state settles.  The interval is a
+    coordinator lifecycle barrier, not part of result-receipt latency or the
+    worker-reported ``simulation_elapsed_us``.  This prevents a result line
+    racing an EOF/exit from becoming primary evidence while keeping healthy
+    persistent workers bounded rather than waiting forever.
     """
 
     def __init__(
@@ -203,6 +203,29 @@ class PersistentWorkerPool:
             raise ValueError("worker command must not be empty")
         return command
 
+    @staticmethod
+    def _positive_finite_timeout(value: Any, name: str) -> float:
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ValueError(f"{name} must be a positive finite number")
+        try:
+            timeout = float(value)
+        except (TypeError, ValueError, OverflowError) as error:
+            raise ValueError(f"{name} must be a positive finite number") from error
+        if not math.isfinite(timeout) or timeout <= 0:
+            raise ValueError(f"{name} must be a positive finite number")
+        return timeout
+
+    def _validate_timeouts(self) -> None:
+        self.startup_timeout_seconds = self._positive_finite_timeout(
+            self.startup_timeout_seconds, "startup_timeout_seconds"
+        )
+        self.result_timeout_seconds = self._positive_finite_timeout(
+            self.result_timeout_seconds, "result_timeout_seconds"
+        )
+        self.lifecycle_settle_timeout_seconds = self._positive_finite_timeout(
+            self.lifecycle_settle_timeout_seconds, "lifecycle_settle_timeout_seconds"
+        )
+
     def _new_metadata(self) -> dict[str, Any]:
         return {
             "worker_count": self.worker_count,
@@ -234,10 +257,11 @@ class PersistentWorkerPool:
         return tuple(self._worker_metadata(state) for state in self._states)
 
     def start(self) -> None:
-        if self._started:
-            return
         if self._closed:
             raise CoordinatorError("worker pool is already closed")
+        self._validate_timeouts()
+        if self._started:
+            return
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.last_run_metadata = self._new_metadata()
         self._states = [_WorkerState(index=index) for index in range(self.worker_count)]
@@ -276,70 +300,73 @@ class PersistentWorkerPool:
                 "worker pool is not reusable after fail-closed shutdown: "
                 f"{self._unusable_reason or 'unknown coordinator failure'}"
             )
-        if not self._started:
-            self.start()
-        dead_workers = [
-            state.index
-            for state in self._states
-            if not state.alive or state.retired
-        ]
-        if dead_workers:
-            raise WorkerRuntimeError(
-                "worker pool is not reusable after worker failure; "
-                f"dead worker(s): {dead_workers}"
-            )
-        copied_jobs = [dict(job) for job in jobs]
-        job_ids: list[str] = []
-        for job in copied_jobs:
-            raw_job_id = job.get("job_id")
-            if not isinstance(raw_job_id, str) or not raw_job_id:
-                raise ValueError("every job must have a nonempty string job_id")
-            try:
-                canonical_job_id = normalize_job_id(raw_job_id)
-            except ProtocolContractError:
-                canonical_job_id = raw_job_id
-            else:
-                job["job_id"] = canonical_job_id
-            job_ids.append(canonical_job_id)
-        if any(not isinstance(job_id, str) or not job_id for job_id in job_ids):
-            raise ValueError("every job must have a nonempty string job_id")
-        if len(set(job_ids)) != len(job_ids):
-            raise ValueError("job IDs must be unique")
-
-        self._results = {}
-        self.last_run_metadata.update(
-            {
-                "games_requested": len(copied_jobs),
-                "games_completed": 0,
-                "result_order": [str(job_id) for job_id in job_ids],
-            }
-        )
-        if not copied_jobs:
-            return []
-
-        dispatchable_jobs: list[tuple[dict[str, Any], str]] = []
-        for job in copied_jobs:
-            try:
-                encoded_job = encode_job(job)
-            except (AttributeError, KeyError, TypeError, ValueError) as error:
-                job_id = str(job["job_id"])
-                self._results[job_id] = self._invalid_job_result(job, str(error))
-                continue
-            dispatchable_jobs.append((job, encoded_job))
-
-        if not dispatchable_jobs:
-            ordered = [self._results[key] for key in sorted(self._results, key=_job_sort_key)]
-            self.last_run_metadata["games_completed"] = len(ordered)
-            self.last_run_metadata["failed_games"] = len(ordered)
-            if require_primary_integrity:
-                for result in ordered:
-                    assert_primary_integrity(result)
-            return ordered
-
-        self._metrics = ProcessMetricsSampler(self._live_pids)
-        self._metrics.start()
-        next_index = 0
         try:
+            self._validate_timeouts()
+            if not self._started:
+                self.start()
+            dead_workers = [
+                state.index
+                for state in self._states
+                if not state.alive or state.retired
+            ]
+            if dead_workers:
+                raise WorkerRuntimeError(
+                    "worker pool is not reusable after worker failure; "
+                    f"dead worker(s): {dead_workers}"
+                )
+            copied_jobs = [dict(job) for job in jobs]
+            job_ids: list[str] = []
+            for job in copied_jobs:
+                raw_job_id = job.get("job_id")
+                if not isinstance(raw_job_id, str) or not raw_job_id:
+                    raise ValueError("every job must have a nonempty string job_id")
+                try:
+                    canonical_job_id = normalize_job_id(raw_job_id)
+                except ProtocolContractError:
+                    canonical_job_id = raw_job_id
+                else:
+                    job["job_id"] = canonical_job_id
+                job_ids.append(canonical_job_id)
+            if any(not isinstance(job_id, str) or not job_id for job_id in job_ids):
+                raise ValueError("every job must have a nonempty string job_id")
+            if len(set(job_ids)) != len(job_ids):
+                raise ValueError("job IDs must be unique")
+
+            self._results = {}
+            self.last_run_metadata.update(
+                {
+                    "games_requested": len(copied_jobs),
+                    "games_completed": 0,
+                    "result_order": [str(job_id) for job_id in job_ids],
+                }
+            )
+            if not copied_jobs:
+                return []
+
+            dispatchable_jobs: list[tuple[dict[str, Any], str]] = []
+            for job in copied_jobs:
+                try:
+                    encoded_job = encode_job(job)
+                except (AttributeError, KeyError, TypeError, ValueError) as error:
+                    job_id = str(job["job_id"])
+                    self._results[job_id] = self._invalid_job_result(job, str(error))
+                    continue
+                dispatchable_jobs.append((job, encoded_job))
+
+            if not dispatchable_jobs:
+                ordered = [
+                    self._results[key] for key in sorted(self._results, key=_job_sort_key)
+                ]
+                self.last_run_metadata["games_completed"] = len(ordered)
+                self.last_run_metadata["failed_games"] = len(ordered)
+                if require_primary_integrity:
+                    for result in ordered:
+                        assert_primary_integrity(result)
+                return ordered
+
+            self._metrics = ProcessMetricsSampler(self._live_pids)
+            self._metrics.start()
+            next_index = 0
             for state in self._states:
                 if state.alive and next_index < len(dispatchable_jobs):
                     job, encoded_job = dispatchable_jobs[next_index]
@@ -391,21 +418,27 @@ class PersistentWorkerPool:
                     job, encoded_job = dispatchable_jobs[next_index]
                     self._dispatch(state, job, encoded_job)
                     next_index += 1
+            ordered = [
+                self._results[key] for key in sorted(self._results, key=_job_sort_key)
+            ]
+            self.last_run_metadata["games_completed"] = len(ordered)
+            self.last_run_metadata["failed_games"] = sum(
+                result.get("status") == "failed" for result in ordered
+            )
+            if require_primary_integrity:
+                for result in ordered:
+                    assert_primary_integrity(result)
+            return ordered
+        except Exception as error:
+            self._fail_closed(
+                f"coordinator run failed: {error}", code="coordinator_exception"
+            )
+            raise
         finally:
             if self._metrics is not None:
                 self.last_run_metadata["memory"] = self._metrics.stop().__dict__
                 self._metrics = None
             self._refresh_worker_metadata()
-
-        ordered = [self._results[key] for key in sorted(self._results, key=_job_sort_key)]
-        self.last_run_metadata["games_completed"] = len(ordered)
-        self.last_run_metadata["failed_games"] = sum(
-            result.get("status") == "failed" for result in ordered
-        )
-        if require_primary_integrity:
-            for result in ordered:
-                assert_primary_integrity(result)
-        return ordered
 
     def _launch(self, state: _WorkerState) -> None:
         suffix = "" if state.restart_index == 0 else f"-restart-{state.restart_index:03d}"
@@ -615,6 +648,7 @@ class PersistentWorkerPool:
             )
 
     def _handle_line(self, state: _WorkerState, line: str) -> None:
+        receipt_ns = time.perf_counter_ns()
         failure = self._queued_failure_event(state)
         if failure is not None:
             self._handle_failure_event(state, failure)
@@ -641,6 +675,7 @@ class PersistentWorkerPool:
             if message.get("type") != "result":
                 raise ProtocolValidationError("worker emitted a non-result message for a job")
             validate_result(message, str(job["job_id"]))
+            actual_pid = self._validate_worker_result_identity(state, message)
         except Exception as error:
             self._worker_failed(
                 state,
@@ -653,7 +688,7 @@ class PersistentWorkerPool:
         result = dict(message)
         result["coordinator"] = {
             "worker_index": state.index,
-            "worker_pid": state.pid,
+            "worker_pid": actual_pid,
             "worker_crashed": False,
             "worker_restarted": state.restarted_for_job,
             "worker_restart_index": state.restart_index,
@@ -664,8 +699,41 @@ class PersistentWorkerPool:
         if result["status"] == "failed":
             coordinator_errors["failed_games"] = 1
         result["coordinator_errors"] = coordinator_errors
+        result["coordinator_elapsed_us"] = max(
+            0,
+            (receipt_ns - state.in_flight.dispatched_ns) // 1000,
+        )
         state.staged_result = result
         self._finalize_staged_result(state)
+
+    @staticmethod
+    def _validate_worker_result_identity(
+        state: _WorkerState, message: Mapping[str, Any]
+    ) -> int:
+        process = state.process
+        actual_pid = int(process.pid) if process is not None and process.pid else 0
+        if actual_pid <= 0 or state.pid != actual_pid:
+            raise ProtocolValidationError(
+                "coordinator worker slot PID is not bound to the Popen.pid"
+            )
+        if state.ready is None or state.ready.get("pid") != actual_pid:
+            raise ProtocolValidationError(
+                "worker ready PID is not bound to the Popen.pid"
+            )
+        worker = message["worker"]
+        if worker["pid"] != actual_pid:
+            raise ProtocolValidationError(
+                "worker result PID does not match the Popen.pid"
+            )
+        if (
+            worker["restart_index"] != 0
+            or worker["crashed"] is not False
+            or worker["restarted"] is not False
+        ):
+            raise ProtocolValidationError(
+                "worker result lifecycle metadata is inconsistent"
+            )
+        return actual_pid
 
     def _finalize_staged_result(self, state: _WorkerState) -> None:
         if state.staged_result is None:
@@ -682,10 +750,6 @@ class PersistentWorkerPool:
                 malformed=True,
             )
             return
-        state.staged_result["coordinator_elapsed_us"] = max(
-            0,
-            (time.perf_counter_ns() - state.in_flight.dispatched_ns) // 1000,
-        )
         self._results[str(state.in_flight.job["job_id"])] = state.staged_result
         if state.staged_result["status"] == "failed":
             self.last_run_metadata["failed_games"] += 1
@@ -700,8 +764,9 @@ class PersistentWorkerPool:
         ``Popen.wait`` waits on the actual process handle rather than polling
         once.  A healthy persistent worker reaches the explicit deadline and
         remains reusable; EOF or a reader failure observed before that
-        deadline wins over the staged result.  The bounded interval is part
-        of coordinator timing, not worker simulation timing.
+        deadline wins over the staged result.  The bounded interval is a
+        coordinator lifecycle barrier, not worker simulation timing or
+        result-receipt latency.
         """
 
         process = state.process
@@ -1017,7 +1082,14 @@ class PersistentWorkerPool:
         return f"worker {state.index} exited abnormally with code {returncode}"
 
     def _live_pids(self) -> list[int]:
-        return [state.pid for state in self._states if state.alive and state.pid > 0]
+        pids: list[int] = []
+        for state in self._states:
+            if not state.alive or state.process is None:
+                continue
+            pid = int(state.process.pid or 0)
+            if pid > 0:
+                pids.append(pid)
+        return pids
 
     def _worker_metadata(self, state: _WorkerState) -> dict[str, Any]:
         return {
@@ -1039,6 +1111,8 @@ class PersistentWorkerPool:
     def _shutdown_state(self, state: _WorkerState) -> bool:
         process = state.process
         state.retired = True
+        state.in_flight = None
+        state.staged_result = None
         if process is None:
             state.alive = False
             state.reaped = True

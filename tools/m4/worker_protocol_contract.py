@@ -366,6 +366,7 @@ _TIMING_KEYS = {
     "other",
     "trace_persistence",
 }
+_SIMULATION_TIMING_KEYS = _TIMING_KEYS - {"trace_persistence"}
 _COUNTER_KEYS = {
     "ocg_duel_process",
     "ocg_duel_query",
@@ -443,7 +444,9 @@ def validate_result(message: dict[str, Any], *, expected_job_id: str) -> None:
         "semantic_action_count",
     ):
         require_uint32(message[key], key)
-    require_uint64(message["simulation_elapsed_us"], "simulation_elapsed_us")
+    simulation_elapsed_us = require_uint64(
+        message["simulation_elapsed_us"], "simulation_elapsed_us"
+    )
     if message["coordinator_elapsed_us"] is not None:
         raise ProtocolContractError("worker result must leave coordinator_elapsed_us null")
     for key in ("gameplay_hash", "trace_hash"):
@@ -452,7 +455,22 @@ def validate_result(message: dict[str, Any], *, expected_job_id: str) -> None:
     _validate_unsigned_object(message["errors"], "errors", _ERROR_KEYS)
     _validate_unsigned_object(message["timing_us"], "timing_us", _TIMING_KEYS)
     _validate_unsigned_object(message["counters"], "counters", _COUNTER_KEYS)
+    simulation_timing_total = sum(
+        message["timing_us"][key] for key in _SIMULATION_TIMING_KEYS
+    )
+    if simulation_elapsed_us == 0 and simulation_timing_total != 0:
+        raise ProtocolContractError(
+            "simulation_elapsed_us is zero while simulation timing buckets are nonzero"
+        )
+    if simulation_timing_total > simulation_elapsed_us:
+        raise ProtocolContractError(
+            "simulation timing buckets exceed simulation_elapsed_us"
+        )
     if message["status"] == "passed":
+        if simulation_elapsed_us == 0:
+            raise ProtocolContractError(
+                "passed result must have positive simulation_elapsed_us"
+            )
         if not message["terminal"]:
             raise ProtocolContractError("passed result lacks terminal gameplay evidence")
         if message["winner"] is None or message["win_reason"] is None:

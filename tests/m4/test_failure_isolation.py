@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import json
+import math
 import os
 from pathlib import Path
 import subprocess
@@ -304,7 +305,11 @@ class FailureIsolationTests(unittest.TestCase):
                 self.assertEqual(results[0]["failure_code"], "invalid_job")
                 with self.assertRaises(ProtocolValidationError):
                     pool.run(workload, require_primary_integrity=True)
-                self.assertTrue(pool._states[0].alive)
+                self.assertTrue(pool._unusable)
+                self.assertTrue(all(state.retired for state in pool._states))
+                self.assertTrue(all(state.reaped for state in pool._states))
+                self.assertTrue(all(not state.alive for state in pool._states))
+                self.assertTrue(all(state.in_flight is None for state in pool._states))
 
     def test_valid_invalid_valid_jobs_are_explicit_and_sorted(self) -> None:
         workload = jobs()
@@ -348,6 +353,50 @@ class FailureIsolationTests(unittest.TestCase):
             self.assertEqual(metadata["malformed_protocol"], 1)
             self.assertEqual(metadata["worker_errors"], 1)
             self.assertEqual(metadata["worker_restarts"], 1)
+
+    def test_result_worker_pid_mismatch_is_rejected_before_publication(self) -> None:
+        workload = jobs(2)
+        with tempfile.TemporaryDirectory(prefix="ocgforge-m4-task5-result-pid-") as directory:
+            marker = Path(directory) / "pid-mismatch.marker"
+            with PersistentWorkerPool(
+                fake_command("result-pid-mismatch", marker),
+                worker_count=1,
+                output_dir=Path(directory),
+            ) as pool:
+                results = pool.run(workload)
+                metadata = pool.last_run_metadata
+
+                self.assertEqual(results[0]["status"], "failed")
+                self.assertEqual(results[0]["failure_code"], "malformed_protocol")
+                self.assertIsNone(results[0]["gameplay_hash"])
+                self.assertEqual(
+                    results[0]["worker"]["pid"],
+                    results[0]["coordinator"]["worker_pid"],
+                )
+                self.assertEqual(results[1]["status"], "passed")
+                self.assertEqual(
+                    results[1]["worker"]["pid"],
+                    results[1]["coordinator"]["worker_pid"],
+                )
+                self.assertIsNotNone(pool._states[0].process)
+                replacement_pid = pool._states[0].process.pid
+                self.assertEqual(results[1]["worker"]["pid"], replacement_pid)
+                self.assertEqual(pool._live_pids(), [replacement_pid])
+                self.assertEqual(metadata["malformed_protocol"], 1)
+                self.assertEqual(metadata["worker_restarts"], 1)
+
+    def test_coordinator_receipt_timing_excludes_lifecycle_settle_barrier(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="ocgforge-m4-task5-receipt-timing-") as directory:
+            with PersistentWorkerPool(
+                fake_command("normal"),
+                worker_count=1,
+                output_dir=Path(directory),
+                lifecycle_settle_timeout_seconds=0.20,
+            ) as pool:
+                results = pool.run(jobs(1))
+
+            self.assertEqual(results[0]["status"], "passed")
+            self.assertLess(results[0]["coordinator_elapsed_us"], 100_000)
 
     def test_result_then_exit_is_not_published_as_primary_evidence(self) -> None:
         class ExitObservedPool(PersistentWorkerPool):
@@ -538,6 +587,49 @@ class FailureIsolationTests(unittest.TestCase):
             self.assertEqual(metadata["worker_crashes"], 1)
             self.assertEqual(metadata["retries"], 0)
             self.assertGreaterEqual(metadata["worker_restarts"], 1)
+
+    def test_restart_disabled_failure_retires_and_reaps_every_worker(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="ocgforge-m4-task5-no-restart-cleanup-") as directory:
+            pool = PersistentWorkerPool(
+                fake_command("crash-first-job", Path(directory) / "crashed.marker"),
+                worker_count=1,
+                output_dir=Path(directory),
+                restart_workers=False,
+            )
+            try:
+                with self.assertRaisesRegex(
+                    WorkerRuntimeError, "restart disabled|unassigned jobs remaining"
+                ):
+                    pool.run(jobs(2))
+                self.assertTrue(pool._unusable)
+                self.assertTrue(all(state.retired for state in pool._states))
+                self.assertTrue(all(state.reaped for state in pool._states))
+                self.assertTrue(all(not state.alive for state in pool._states))
+                self.assertTrue(all(state.in_flight is None for state in pool._states))
+                self.assertTrue(
+                    all(state.process is not None and state.process.poll() is not None for state in pool._states)
+                )
+            finally:
+                pool.close()
+
+    def test_nan_result_timeout_fails_before_worker_launch(self) -> None:
+        for invalid_timeout in (math.nan, math.inf, -math.inf, 0, -1):
+            with self.subTest(invalid_timeout=invalid_timeout), tempfile.TemporaryDirectory(
+                prefix="ocgforge-m4-task5-invalid-timeout-"
+            ) as directory:
+                pool = PersistentWorkerPool(
+                    fake_command("normal"),
+                    worker_count=1,
+                    output_dir=Path(directory),
+                    result_timeout_seconds=invalid_timeout,
+                )
+                try:
+                    with self.assertRaisesRegex(ValueError, "result_timeout_seconds"):
+                        pool.run(jobs(1))
+                    self.assertTrue(pool._unusable)
+                    self.assertEqual(pool._states, [])
+                finally:
+                    pool.close()
 
     def test_pool_rejects_later_run_after_final_worker_crash_without_hanging(self) -> None:
         workload = jobs(1)
