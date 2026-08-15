@@ -175,6 +175,7 @@ struct SimulationResult {
     // worker owns no mutable engine object beyond the duration of a job.
     // Worker-local primary timing domain; coordinator timing is separate.
     std::uint64_t simulation_elapsed_us = 0;
+    std::uint64_t trace_persistence_us = 0;
     std::uint64_t coordinator_elapsed_us = 0;
     std::optional<std::uint64_t> peak_process_memory_bytes;
     std::optional<std::uint64_t> memory_per_environment_bytes;

@@ -70,6 +70,7 @@ class SharedSimulationCompatibilityTest(unittest.TestCase):
         self.assertEqual(summary.get("trace_hash"), EXPECTED_TRACE_HASH)
         for field in ERROR_FIELDS:
             self.assertEqual(summary.get(field), 0, msg=f"{field} was non-zero")
+        self.assertAlmostEqual(summary.get("candidate_count_mean"), 4.73203, places=5)
 
         self.assertRegex(str(summary.get("semantic_gameplay_hash")), r"^[0-9a-f]{64}$")
         self.assertRegex(str(summary.get("trace_hash")), r"^[0-9a-f]{64}$")

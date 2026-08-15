@@ -214,26 +214,39 @@ SimulationResult run_canonical_simulation(const SimulationJob& job,
                                           const CanonicalSimulationConfig& config) {
     SimulationResult result;
     result.job_id = job.job_id;
-    const auto simulation_start = Clock::now();
     const bool instrumentation = job.instrumentation || config.instrumentation;
     ygo::trace::EngineTrace trace;
     bool terminal_reached = false;
+    std::optional<Clock::time_point> simulation_start;
+    bool simulation_timing_recorded = false;
+    std::optional<Clock::time_point> persistence_start;
+    bool persistence_timing_recorded = false;
 
-    const auto finalize = [&]() {
-        result.simulation_elapsed_us = elapsed_us(simulation_start, Clock::now());
+    const auto record_simulation_timing = [&]() {
+        if (!simulation_start.has_value() || simulation_timing_recorded) {
+            return;
+        }
+        result.simulation_elapsed_us = elapsed_us(*simulation_start, Clock::now());
         const auto measured = result.timing.core_process_us + result.timing.protocol_candidate_us +
                               result.timing.continuation_us + result.timing.observation_us +
                               result.timing.trace_hash_us + result.timing.serialization_us;
         result.timing.other_us = result.simulation_elapsed_us >= measured
                                      ? result.simulation_elapsed_us - measured
                                      : 0;
-        return result;
+        simulation_timing_recorded = true;
+    };
+
+    const auto record_persistence_timing = [&]() {
+        if (persistence_start.has_value() && !persistence_timing_recorded) {
+            result.trace_persistence_us = elapsed_us(*persistence_start, Clock::now());
+            persistence_timing_recorded = true;
+        }
     };
 
     if (!is_canonical_identity(config) || job.canonical_rules_id != config.rules_bundle_id) {
         result = failed_result(job, "canonical_identity_mismatch",
                                "simulation configuration does not match the canonical M4 identity");
-        return finalize();
+        return result;
     }
 
     const auto& fixed_deck_a = config.deck_a;
@@ -249,6 +262,7 @@ SimulationResult run_canonical_simulation(const SimulationJob& job,
         host_config.seed = seed_bundle(job.seed);
         host_config.required_script_codes = config.required_script_codes;
 
+        simulation_start = Clock::now();
         {
             ygo::core::CoreHost host(host_config);
             host.load_deck(0, deck_a);
@@ -263,13 +277,16 @@ SimulationResult run_canonical_simulation(const SimulationJob& job,
                 ygo::observation::ObservationSession(1, static_cast<std::uint32_t>(config.duel_flags)),
             };
 
+            const auto trace_manifest_start = Clock::now();
             trace.manifest = manifest(host, deck_a, deck_b);
             trace.manifest.trace_schema_version = "ygo.engine_trace.v2";
+            add_timing(result.timing.trace_hash_us, trace_manifest_start, Clock::now(), instrumentation);
             const ygo::m3::DeterministicConformancePolicy m3_policy(job.focus_codes, true);
             std::size_t replay_action_index = 0;
             bool forced_unsupported = false;
             std::uint32_t decision_index = 0;
             std::uint32_t interactive_decision_count = 0;
+            std::uint32_t semantic_action_count = 0;
             std::uint32_t continuation_intermediate_count = 0;
             std::uint64_t candidate_count_total = 0;
             std::size_t candidate_count_max = 0;
@@ -313,6 +330,7 @@ SimulationResult run_canonical_simulation(const SimulationJob& job,
                         throw std::runtime_error("pinned core emitted MSG_RETRY after a submitted response");
                     }
                     if (decoded.terminal) {
+                        const auto trace_record_prefix_start = Clock::now();
                         ygo::trace::TraceStep terminal;
                         terminal.step_index = index;
                         terminal.decision_index = decision_index++;
@@ -320,6 +338,8 @@ SimulationResult run_canonical_simulation(const SimulationJob& job,
                         terminal.raw_message_length = static_cast<std::uint32_t>(process_result.message.size());
                         terminal.raw_message_sha256 = ygo::trace::sha256_bytes(process_result.message);
                         terminal.public_state_hash = public_state_hash(host, 0);
+                        add_timing(result.timing.trace_hash_us, trace_record_prefix_start, Clock::now(), instrumentation);
+                        Clock::time_point trace_record_suffix_start = Clock::now();
                         if (job.observation_mode == ObservationMode::Full) {
                             const auto observation_start = Clock::now();
                             ygo::observation::ObservationBuildConfig observation_config;
@@ -331,18 +351,20 @@ SimulationResult run_canonical_simulation(const SimulationJob& job,
                             observation_config.own_deck.main_deck = deck_a.main_deck;
                             const auto observation = ygo::observation::build_player_observation(
                                 host, 0, observation_config);
+                            add_timing(result.timing.observation_us, observation_start, Clock::now(), instrumentation);
+                            trace_record_suffix_start = Clock::now();
                             ygo::trace::attach_observation_metadata(terminal, observation);
                             observation_entity_total += observation.entities.size();
                             observation_event_total += observation.visible_events.size();
                             ++result.operations.observations;
                             result.operations.entities_projected += observation.entities.size();
-                            add_timing(result.timing.observation_us, observation_start, Clock::now(), instrumentation);
                         }
                         terminal.engine_advanced = true;
                         terminal.terminal = true;
                         terminal.winner = decoded.winner;
                         terminal.win_reason = decoded.win_reason;
                         trace.steps.push_back(std::move(terminal));
+                        add_timing(result.timing.trace_hash_us, trace_record_suffix_start, Clock::now(), instrumentation);
                         terminal_reached = true;
                         terminal_winner = decoded.winner;
                         terminal_reason = decoded.win_reason;
@@ -381,12 +403,14 @@ SimulationResult run_canonical_simulation(const SimulationJob& job,
                             selected_candidate = &m3_policy.choose(request);
                         }
                         const auto& selected = *selected_candidate;
+                        ++semantic_action_count;
                         add_timing(result.timing.protocol_candidate_us, candidate_start, Clock::now(), instrumentation);
 
                         ygo::observation::PlayerObservation observation;
+                        Clock::time_point observation_start{};
                         bool has_observation = false;
                         if (job.observation_mode == ObservationMode::Full) {
-                            const auto observation_start = Clock::now();
+                            observation_start = Clock::now();
                             ygo::observation::ObservationBuildConfig observation_config;
                             observation_config.decision_index = decision_index;
                             observation_config.engine_step_index = request.engine_step_index;
@@ -402,7 +426,6 @@ SimulationResult run_canonical_simulation(const SimulationJob& job,
                             observation_event_total += observation.visible_events.size();
                             ++result.operations.observations;
                             result.operations.entities_projected += observation.entities.size();
-                            add_timing(result.timing.observation_us, observation_start, Clock::now(), instrumentation);
                         }
                         if (has_observation) {
                             for (const auto& candidate_item : request.candidates) {
@@ -422,7 +445,9 @@ SimulationResult run_canonical_simulation(const SimulationJob& job,
                                         request.engine_message_type, request.player);
                                 }
                             }
+                            add_timing(result.timing.observation_us, observation_start, Clock::now(), instrumentation);
                         }
+                        const auto trace_record_prefix_start = Clock::now();
                         auto step = ygo::trace::make_decision_step(index, process_result.message, request,
                                                                    public_state_hash(host, request.player));
                         if (has_observation) {
@@ -430,6 +455,7 @@ SimulationResult run_canonical_simulation(const SimulationJob& job,
                         }
                         step.decision_index = decision_index++;
                         step.selected_semantic_key = selected.semantic_key;
+                        add_timing(result.timing.trace_hash_us, trace_record_prefix_start, Clock::now(), instrumentation);
                         if (request.continuation.has_value()) {
                             const auto response_start = Clock::now();
                             const auto transition = ygo::protocol::apply_continuation_action(request, selected.semantic_key);
@@ -438,6 +464,7 @@ SimulationResult run_canonical_simulation(const SimulationJob& job,
                             response_build_time_us_total += response_build_time_us;
                             response_build_time_us_max = std::max(response_build_time_us_max, response_build_time_us);
                             add_timing(result.timing.continuation_us, response_start, response_end, instrumentation);
+                            const auto trace_record_suffix_start = Clock::now();
                             step.engine_advanced = transition.engine_advanced;
                             if (!transition.engine_response.empty()) {
                                 step.selected_response_sha256 = ygo::trace::sha256_bytes(transition.engine_response);
@@ -445,18 +472,22 @@ SimulationResult run_canonical_simulation(const SimulationJob& job,
                             if (!transition.terminal) {
                                 ++continuation_intermediate_count;
                                 trace.steps.push_back(std::move(step));
+                                add_timing(result.timing.trace_hash_us, trace_record_suffix_start, Clock::now(), instrumentation);
                                 request = std::move(transition.request);
                                 continue;
                             }
                             step.final_engine_response_hash = ygo::trace::sha256_bytes(transition.engine_response);
                             step.selected_response_sha256 = step.final_engine_response_hash;
                             trace.steps.push_back(std::move(step));
+                            add_timing(result.timing.trace_hash_us, trace_record_suffix_start, Clock::now(), instrumentation);
                             host.submit_response(transition.engine_response);
                         } else {
+                            const auto trace_record_suffix_start = Clock::now();
                             step.engine_advanced = true;
                             step.selected_response_sha256 = ygo::trace::sha256_bytes(selected.exact_response_bytes);
                             step.final_engine_response_hash = step.selected_response_sha256;
                             trace.steps.push_back(std::move(step));
+                            add_timing(result.timing.trace_hash_us, trace_record_suffix_start, Clock::now(), instrumentation);
                             host.submit_response(selected.exact_response_bytes);
                         }
                         break;
@@ -476,7 +507,7 @@ SimulationResult run_canonical_simulation(const SimulationJob& job,
 
             result.engine_steps = static_cast<std::uint32_t>(host.process_call_count());
             result.interactive_decisions = interactive_decision_count;
-            result.semantic_action_count = interactive_decision_count;
+            result.semantic_action_count = semantic_action_count;
             result.terminal = terminal_reached;
             if (terminal_reached) {
                 result.winner = terminal_winner;
@@ -507,10 +538,10 @@ SimulationResult run_canonical_simulation(const SimulationJob& job,
             }
             result.observation_entity_total = observation_entity_total;
             result.observation_event_total = observation_event_total;
-            result.candidate_count_mean = interactive_decision_count == 0
+            result.candidate_count_mean = result.operations.candidate_sets == 0
                                               ? 0.0
                                               : static_cast<double>(candidate_count_total) /
-                                                    static_cast<double>(interactive_decision_count);
+                                                    static_cast<double>(result.operations.candidate_sets);
             result.response_build_time_us_total = response_build_time_us_total;
             result.response_build_time_us_max = response_build_time_us_max;
             result.continuation_intermediate_steps = continuation_intermediate_count;
@@ -544,40 +575,49 @@ SimulationResult run_canonical_simulation(const SimulationJob& job,
         if (!result.pass && result.failure_code.empty()) {
             result.failure_code = "simulation_failed";
         }
+        record_simulation_timing();
         const bool no_error_nonterminal =
             result.failure_code == "nonterminal" && result.errors.retries == 0 &&
             result.errors.unsupported == 0 && result.errors.automatic == 0 &&
             result.errors.truncated == 0 && result.errors.core_errors == 0;
         if ((result.pass || no_error_nonterminal) && job.persist_trace &&
             job.mode == SimulationMode::Conformance && !job.trace_output.empty()) {
-            const auto persistence_start = Clock::now();
-            std::ofstream stream(job.trace_output, std::ios::binary);
-            if (!stream) {
-                throw std::runtime_error("cannot open trace output: " + job.trace_output.string());
+            persistence_start = Clock::now();
+            {
+                std::ofstream stream(job.trace_output, std::ios::binary);
+                if (!stream) {
+                    throw std::runtime_error("cannot open trace output: " + job.trace_output.string());
+                }
+                stream << result.trace_jsonl.value_or("");
+                stream << "# semantic_gameplay_hash=" << result.gameplay_hash << "\n";
+                stream << "# trace_hash=" << result.trace_hash.value_or("") << "\n";
+                stream << "# m3_summary=" << m3_summary_json(result, config, job) << "\n";
             }
-            stream << result.trace_jsonl.value_or("");
-            stream << "# semantic_gameplay_hash=" << result.gameplay_hash << "\n";
-            stream << "# trace_hash=" << result.trace_hash.value_or("") << "\n";
-            stream << "# m3_summary=" << m3_summary_json(result, config, job) << "\n";
-            add_timing(result.timing.serialization_us, persistence_start, Clock::now(), instrumentation);
+            record_persistence_timing();
         }
     } catch (const ygo::protocol::ProtocolError& error) {
         result.pass = false;
         if (result.failure_code.empty()) {
             add_protocol_failure(result, error);
         }
+        record_simulation_timing();
+        record_persistence_timing();
     } catch (const ygo::core::CoreError& error) {
         result.pass = false;
         ++result.errors.core_errors;
         result.failure_code = "core_error";
         result.error_message = error.what();
+        record_simulation_timing();
+        record_persistence_timing();
     } catch (const std::exception& error) {
         result.pass = false;
         result.failure_code = result.failure_code.empty() ? "simulation_error" : result.failure_code;
         result.error_message = error.what();
+        record_simulation_timing();
+        record_persistence_timing();
     }
 
-    return finalize();
+    return result;
 }
 
 }  // namespace ygo::simulation
