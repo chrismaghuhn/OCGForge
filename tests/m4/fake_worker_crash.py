@@ -136,6 +136,8 @@ def main() -> int:
         }.get(start_number, "bad-handshake")
 
     ready = ready_message()
+    if args.behavior == "pid-mismatch":
+        ready["pid"] = os.getpid() + 1
     if role == "bad-handshake":
         ready["rules_bundle_id"] = "replacement-rules-mismatch"
     print(json.dumps(ready, separators=(",", ":")), flush=True)
@@ -183,6 +185,10 @@ def main() -> int:
                 sys.stdout.flush()
                 time.sleep(0.02)
                 continue
+        if args.behavior == "result-then-exit":
+            encoded = json.dumps(result, separators=(",", ":")).encode("utf-8") + b"\n"
+            os.write(sys.stdout.fileno(), encoded)
+            os._exit(17)
         print(json.dumps(result, separators=(",", ":")), flush=True)
     return 0
 

@@ -8,9 +8,11 @@ later Task 6 layer.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import ctypes
 import os
 from pathlib import Path
 import queue
+import select
 import subprocess
 import sys
 import threading
@@ -427,39 +429,67 @@ class PersistentWorkerPool:
         assert state.process.stdout is not None
         assert state.events is not None
         try:
+            eof_observed = False
             while True:
                 raw_line = state.process.stdout.readline()
                 if raw_line == b"":
+                    eof_observed = True
                     break
                 try:
                     line = raw_line.decode("utf-8")
                 except UnicodeDecodeError as error:
                     state.events.put(("reader_error", f"invalid UTF-8 on worker stdout: {error}"))
                     return
-                state.events.put(("line", line.rstrip("\r\n")))
+                pending_lines = [line.rstrip("\r\n")]
+                while PersistentWorkerPool._stdout_pending_status(state) == "data":
+                    raw_line = state.process.stdout.readline()
+                    if raw_line == b"":
+                        eof_observed = True
+                        break
+                    try:
+                        pending_lines.append(raw_line.decode("utf-8").rstrip("\r\n"))
+                    except UnicodeDecodeError as error:
+                        state.events.put(("reader_error", f"invalid UTF-8 on worker stdout: {error}"))
+                        return
+                if eof_observed:
+                    # An observed EOF invalidates every result in the batch;
+                    # publish the failure signal before the result lines.
+                    state.events.put(("eof", None))
+                    for pending_line in pending_lines:
+                        state.events.put(("line", pending_line))
+                    return
+                for pending_line in pending_lines:
+                    state.events.put(("line", pending_line))
         except Exception as error:  # pragma: no cover - OS-specific reader failure
             state.events.put(("reader_error", str(error)))
         finally:
-            state.events.put(("eof", None))
+            if not eof_observed:
+                state.events.put(("eof", None))
 
     def _read_ready(self, state: _WorkerState) -> None:
-        kind, payload = self._wait_state_event(state, self.startup_timeout_seconds)
-        if kind == "eof":
-            self.last_run_metadata["worker_crashes"] += 1
-            raise WorkerStartupError(self._exit_message(state))
-        if kind != "line" or payload is None:
-            self.last_run_metadata["handshake_errors"] += 1
-            raise WorkerStartupError(payload or "worker did not emit a ready line")
         try:
+            kind, payload = self._wait_state_event(state, self.startup_timeout_seconds)
+            if kind == "eof":
+                self.last_run_metadata["worker_crashes"] += 1
+                raise WorkerStartupError(self._exit_message(state))
+            if kind != "line" or payload is None:
+                raise WorkerStartupError(payload or "worker did not emit a ready line")
             message = decode_line(payload)
             if message.get("type") != "ready":
                 raise ProtocolValidationError("first worker message was not ready")
             validate_ready(message, self.expected)
+            actual_pid = int(state.process.pid) if state.process is not None else 0
+            if message["pid"] != actual_pid:
+                raise ProtocolValidationError(
+                    "worker ready PID does not match the Popen.pid"
+                )
+        except WorkerStartupError:
+            self.last_run_metadata["handshake_errors"] += 1
+            raise
         except Exception as error:
             self.last_run_metadata["handshake_errors"] += 1
             raise WorkerStartupError(str(error)) from error
         state.ready = message
-        state.pid = int(message["pid"])
 
     def _verify_ready_worker_alive(self, state: _WorkerState) -> None:
         """Reject a process that closes immediately after its ready line."""
@@ -523,9 +553,14 @@ class PersistentWorkerPool:
                 if state.events is None:
                     continue
                 try:
-                    return state, state.events.get_nowait()
+                    event = state.events.get_nowait()
                 except queue.Empty:
                     continue
+                if event[0] == "line":
+                    failure = self._queued_failure_event(state)
+                    if failure is not None:
+                        return state, failure
+                return state, event
             for state in self._states:
                 if state.alive and state.process is not None and state.process.poll() is not None:
                     return state, ("eof", None)
@@ -556,6 +591,10 @@ class PersistentWorkerPool:
             )
 
     def _handle_line(self, state: _WorkerState, line: str) -> None:
+        failure = self._queued_failure_event(state)
+        if failure is not None:
+            self._handle_failure_event(state, failure)
+            return
         if state.in_flight is None:
             self._worker_failed(
                 state,
@@ -596,28 +635,79 @@ class PersistentWorkerPool:
             coordinator_errors["failed_games"] = 1
             self.last_run_metadata["failed_games"] += 1
         result["coordinator_errors"] = coordinator_errors
+        failure = self._queued_failure_event(state)
+        if failure is not None:
+            self._handle_failure_event(state, failure)
+            return
         self._results[str(job["job_id"])] = result
         state.in_flight = None
 
-    def _reject_pending_events(self, state: _WorkerState) -> None:
+    @staticmethod
+    def _stdout_pending_status(state: _WorkerState) -> str:
+        process = state.process
+        if process is None or process.stdout is None:
+            return "eof"
+        if os.name == "nt":
+            try:
+                import msvcrt
+                from ctypes import wintypes
+
+                handle = msvcrt.get_osfhandle(process.stdout.fileno())
+                available = wintypes.DWORD()
+                peek_named_pipe = ctypes.windll.kernel32.PeekNamedPipe
+                peek_named_pipe.argtypes = [
+                    wintypes.HANDLE,
+                    ctypes.c_void_p,
+                    wintypes.DWORD,
+                    ctypes.POINTER(wintypes.DWORD),
+                    ctypes.POINTER(wintypes.DWORD),
+                    ctypes.POINTER(wintypes.DWORD),
+                ]
+                peek_named_pipe.restype = wintypes.BOOL
+                if not peek_named_pipe(
+                    wintypes.HANDLE(handle),
+                    None,
+                    0,
+                    None,
+                    ctypes.byref(available),
+                    None,
+                ):
+                    return "eof"
+                return "data" if available.value else "none"
+            except Exception:
+                return "unknown"
+        try:
+            readable, _writable, _exceptional = select.select([process.stdout], [], [], 0)
+        except (OSError, ValueError):
+            return "unknown"
+        return "data" if readable else "none"
+
+    def _queued_failure_event(
+        self, state: _WorkerState
+    ) -> tuple[str, str | None] | None:
+        if state.process is not None and state.process.poll() is not None:
+            return ("eof", None)
         if state.events is None:
-            raise CoordinatorError(f"worker {state.index} has no event queue")
-        # The reader thread may be between queueing the accepted line and
-        # reading the next already-buffered line.  Give that read a bounded
-        # opportunity to publish before dispatching another job.
-        deadline = time.perf_counter() + 0.01
-        pending: list[tuple[str, str | None]] = []
-        while not pending and time.perf_counter() < deadline:
-            while True:
-                try:
-                    pending.append(state.events.get_nowait())
-                except queue.Empty:
-                    break
-            if not pending:
-                time.sleep(0.001)
-        if not pending:
-            return
-        kind, _payload = pending[0]
+            return None
+        buffered: list[tuple[str, str | None]] = []
+        while True:
+            try:
+                buffered.append(state.events.get_nowait())
+            except queue.Empty:
+                break
+        failure = next(
+            (event for event in buffered if event[0] in {"eof", "reader_error"}),
+            None,
+        )
+        if failure is None:
+            for event in buffered:
+                state.events.put(event)
+        return failure
+
+    def _handle_failure_event(
+        self, state: _WorkerState, event: tuple[str, str | None]
+    ) -> None:
+        kind, payload = event
         if kind == "eof":
             self._worker_failed(
                 state,
@@ -625,6 +715,24 @@ class PersistentWorkerPool:
                 message=self._exit_message(state),
                 crashed=True,
             )
+            return
+        self._worker_failed(
+            state,
+            code="malformed_protocol",
+            message=payload or "worker stdout reader failure",
+            malformed=True,
+        )
+
+    def _reject_pending_events(self, state: _WorkerState) -> None:
+        if state.events is None:
+            raise CoordinatorError(f"worker {state.index} has no event queue")
+        failure = self._queued_failure_event(state)
+        if failure is not None:
+            self._handle_failure_event(state, failure)
+            return
+        try:
+            kind, _payload = state.events.get_nowait()
+        except queue.Empty:
             return
         self._worker_failed(
             state,
@@ -807,11 +915,15 @@ class PersistentWorkerPool:
                 f"worker {state.index} cannot be restarted safely: "
                 f"{state.cleanup_error or 'termination was not confirmed'}"
             )
-        self._launch(state)
+        try:
+            self._launch(state)
+        except Exception as error:
+            message = f"replacement worker {state.index} failed launch: {error}"
+            self._fail_closed(message, code="replacement_launch_failure")
+            raise WorkerRuntimeError(message) from error
         try:
             self._read_ready(state)
         except Exception as error:
-            self.last_run_metadata["handshake_errors"] += 1
             message = f"replacement worker {state.index} failed handshake: {error}"
             self._fail_closed(message, code="replacement_handshake_failure")
             raise WorkerRuntimeError(message) from error
