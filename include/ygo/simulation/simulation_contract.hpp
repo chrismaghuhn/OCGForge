@@ -62,7 +62,6 @@ struct ErrorCounters {
 };
 
 struct TimingBuckets {
-    std::uint64_t simulation_elapsed_us = 0;
     std::uint64_t core_process_us = 0;
     std::uint64_t protocol_candidate_us = 0;
     std::uint64_t continuation_us = 0;
@@ -70,7 +69,6 @@ struct TimingBuckets {
     std::uint64_t trace_hash_us = 0;
     std::uint64_t serialization_us = 0;
     std::uint64_t other_us = 0;
-    std::uint64_t coordinator_other_us = 0;
 };
 
 struct OperationCounters {
@@ -81,7 +79,6 @@ struct OperationCounters {
     std::uint64_t ocg_duel_query_count = 0;
     std::uint64_t script_reader_requests = 0;
     std::uint64_t script_loads = 0;
-    std::uint64_t script_cache_misses = 0;
     std::uint64_t observations = 0;
     std::uint64_t entities_projected = 0;
     std::uint64_t candidate_sets = 0;
@@ -97,6 +94,8 @@ struct CanonicalSimulationConfig {
     core::FixtureDeck deck_b;
     std::vector<std::uint32_t> required_script_codes;
 
+    // These fields are the authoritative canonical identity surface for
+    // worker handshakes. Payload paths/decks must not override them.
     std::string format = kCanonicalFormat;
     std::string duel_mode = kCanonicalDuelMode;
     std::uint64_t duel_flags = kCanonicalDuelFlags;
@@ -113,6 +112,18 @@ struct CanonicalSimulationConfig {
     bool instrumentation = false;
     bool persist_trace = false;
 };
+
+inline bool is_canonical_identity(const CanonicalSimulationConfig& config) {
+    return config.format == kCanonicalFormat &&
+           config.duel_mode == kCanonicalDuelMode &&
+           config.duel_flags == kCanonicalDuelFlags &&
+           config.rules_bundle_id == kCanonicalRulesBundleId &&
+           config.patchset_id == kCanonicalPatchsetId &&
+           config.patchset_sha256 == kCanonicalPatchsetSha256 &&
+           config.locked_deck_hashes.size() == 2 &&
+           config.locked_deck_hashes[0] == kCanonicalDeckASha256 &&
+           config.locked_deck_hashes[1] == kCanonicalDeckBSha256;
+}
 
 struct SimulationResult {
     std::string job_id;
@@ -133,6 +144,7 @@ struct SimulationResult {
 
     // These fields are intentionally value data for JSONL publication. The
     // worker owns no mutable engine object beyond the duration of a job.
+    // Worker-local primary timing domain; coordinator timing is separate.
     std::uint64_t simulation_elapsed_us = 0;
     std::uint64_t coordinator_elapsed_us = 0;
     std::optional<std::uint64_t> peak_process_memory_bytes;

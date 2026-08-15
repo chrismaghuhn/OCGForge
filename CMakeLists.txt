@@ -170,6 +170,10 @@ target_compile_definitions(ygo_observation_probe PRIVATE
 )
 
 enable_testing()
+add_executable(m4_simulation_contract_test tests/m4/simulation_contract_test.cpp)
+target_include_directories(m4_simulation_contract_test PRIVATE "${CMAKE_SOURCE_DIR}/include")
+add_test(NAME m4_simulation_contract_test COMMAND m4_simulation_contract_test)
+
 add_executable(protocol_test tests/protocol/protocol_test.cpp)
 target_link_libraries(protocol_test PRIVATE ygo_m0)
 add_test(NAME protocol_test COMMAND protocol_test)
