@@ -180,13 +180,16 @@ def normalize_job_id(job_id: Any) -> str:
 def _parse_nonnegative_int(token: str) -> int:
     if token.startswith("-"):
         raise ProtocolContractError("negative numeric values are not allowed")
-    return int(token)
+    value = int(token)
+    if value > UINT64_MAX:
+        raise ProtocolContractError("unsigned integer overflows uint64")
+    return value
 
 
 def _parse_nonnegative_float(token: str) -> float:
     if token.startswith("-"):
         raise ProtocolContractError("negative numeric values are not allowed")
-    return float(token)
+    raise ProtocolContractError("only unsigned integer values are accepted")
 
 
 def parse_json_line(line: str) -> dict[str, Any]:

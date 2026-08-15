@@ -12,6 +12,7 @@ from tools.m4.worker_protocol_contract import (
     CANONICAL_RULES_BUNDLE_ID,
     ProtocolContractError,
     UINT32_MAX,
+    UINT64_MAX,
     parse_json_line,
     recover_job_id,
     validate_ready,
@@ -376,6 +377,21 @@ class WorkerProtocolContractTests(unittest.TestCase):
         valid_unicode = json.dumps({"nested": ["\U0001f600", "\ud83d\ude00"]})
         parsed = parse_json_line(valid_unicode)
         self.assertEqual(parsed["nested"], ["\U0001f600", "\U0001f600"])
+
+    def test_json_parser_rejects_positive_decimal_and_exponent_tokens(self) -> None:
+        for token in ("0.0", "1.5", "1e2", "1E+2"):
+            with self.subTest(token=token), self.assertRaises(ProtocolContractError):
+                parse_json_line(f'{{"value":{token}}}')
+
+    def test_json_parser_rejects_uint64_overflow_and_accepts_integer_bounds(self) -> None:
+        for token in (str(UINT64_MAX + 1), str(UINT64_MAX + 10)):
+            with self.subTest(token=token), self.assertRaises(ProtocolContractError):
+                parse_json_line(f'{{"value":{token}}}')
+
+        parsed = parse_json_line(
+            f'{{"zero":0,"one":1,"maximum":{UINT64_MAX},"text":"\U0001f600"}}'
+        )
+        self.assertEqual(parsed, {"zero": 0, "one": 1, "maximum": UINT64_MAX, "text": "\U0001f600"})
 
     def test_json_fixture_rejects_duplicate_and_trailing_data(self) -> None:
         with self.assertRaises(ProtocolContractError):
