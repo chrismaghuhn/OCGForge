@@ -13,6 +13,7 @@ from tools.m4.benchmark import (
     CoordinatorError,
     PersistentWorkerPool,
     WorkerStartupError,
+    WorkerRuntimeError,
 )
 from tools.m4.job_generation import derive_job
 from tools.m4.worker_protocol import (
@@ -190,10 +191,33 @@ class FailureIsolationTests(unittest.TestCase):
             self.assertEqual(results[0]["failure_code"], "worker_crash")
             self.assertTrue(results[0]["coordinator"]["worker_crashed"])
             self.assertEqual(results[0]["errors"]["worker_errors"], 1)
+            self.assertIsNone(results[0]["simulation_elapsed_us"])
+            self.assertIsInstance(results[0]["coordinator_elapsed_us"], int)
             self.assertEqual(results[1]["status"], "passed")
             self.assertEqual(metadata["worker_crashes"], 1)
             self.assertEqual(metadata["retries"], 0)
             self.assertGreaterEqual(metadata["worker_restarts"], 1)
+
+    def test_pool_rejects_later_run_after_final_worker_crash_without_hanging(self) -> None:
+        workload = jobs(1)
+        with tempfile.TemporaryDirectory(prefix="ocgforge-m4-task5-lifecycle-") as directory:
+            pool = PersistentWorkerPool(
+                fake_command("crash-first-job", Path(directory) / "crashed.marker"),
+                worker_count=1,
+                output_dir=Path(directory),
+                restart_workers=True,
+                result_timeout_seconds=0.05,
+            )
+            try:
+                first_results = pool.run(workload)
+                self.assertEqual(first_results[0]["job_id"], workload[0]["job_id"])
+                self.assertEqual(first_results[0]["failure_code"], "worker_crash")
+                with self.assertRaisesRegex(
+                    WorkerRuntimeError, "not reusable after worker failure"
+                ):
+                    pool.run(jobs(2)[1:])
+            finally:
+                pool.close()
 
     def test_crash_after_ready_is_distinguished_from_job_failure(self) -> None:
         with tempfile.TemporaryDirectory(prefix="ocgforge-m4-task5-ready-crash-") as directory:

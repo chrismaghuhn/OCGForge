@@ -16,6 +16,10 @@ from tools.m4.worker_protocol_contract import (
     validate_ready,
     validate_result,
 )
+from tools.m4.worker_protocol import (
+    ProtocolValidationError as CoordinatorProtocolValidationError,
+    validate_result as validate_coordinator_result,
+)
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -173,6 +177,41 @@ class WorkerProtocolContractTests(unittest.TestCase):
             "worker_errors": 1,
         }
         validate_result(message, expected_job_id="m4-000001")
+
+    def test_coordinator_rejects_worker_metadata_and_timing_overrides(self) -> None:
+        for field, value in (
+            ("coordinator", {}),
+            ("coordinator_errors", {}),
+            ("stderr", "worker diagnostics"),
+        ):
+            message = result_fixture()
+            message[field] = value
+            with self.subTest(field=field), self.assertRaises(
+                CoordinatorProtocolValidationError
+            ):
+                validate_coordinator_result(message, expected_job_id="m4-000001")
+
+        message = result_fixture()
+        message["coordinator_elapsed_us"] = 17
+        with self.assertRaises(CoordinatorProtocolValidationError):
+            validate_coordinator_result(message, expected_job_id="m4-000001")
+
+    def test_coordinator_still_accepts_valid_failed_worker_result(self) -> None:
+        message = result_fixture()
+        message.update(
+            {
+                "status": "failed",
+                "terminal": False,
+                "winner": None,
+                "win_reason": None,
+                "gameplay_hash": None,
+                "trace_hash": None,
+                "failure_code": "unsupported",
+                "error_message": "deliberately unsupported test job",
+            }
+        )
+        message["errors"] = {**message["errors"], "unsupported": 1}
+        validate_coordinator_result(message, expected_job_id="m4-000001")
 
     def test_passed_result_rejects_nonzero_integrity_counter(self) -> None:
         message = result_fixture()

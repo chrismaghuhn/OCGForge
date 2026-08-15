@@ -242,6 +242,12 @@ class PersistentWorkerPool:
 
         if not self._started:
             self.start()
+        dead_workers = [state.index for state in self._states if not state.alive]
+        if dead_workers:
+            raise WorkerRuntimeError(
+                "worker pool is not reusable after worker failure; "
+                f"dead worker(s): {dead_workers}"
+            )
         copied_jobs = [dict(job) for job in jobs]
         job_ids = [job.get("job_id") for job in copied_jobs]
         if any(not isinstance(job_id, str) or not job_id for job_id in job_ids):
@@ -575,7 +581,9 @@ class PersistentWorkerPool:
             "semantic_action_count": 0,
             "gameplay_hash": None,
             "trace_hash": None,
-            "simulation_elapsed_us": elapsed_us,
+            # No worker-local simulation interval exists when the worker
+            # crashed or violated the protocol before returning a result.
+            "simulation_elapsed_us": None,
             "coordinator_elapsed_us": elapsed_us,
             "errors": errors,
             "timing_us": _zero_timing(),

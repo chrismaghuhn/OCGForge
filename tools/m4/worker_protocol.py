@@ -115,71 +115,18 @@ def validate_ready(
         raise _raise_protocol(error) from error
 
 
-_ALLOWED_COORDINATOR_FIELDS = {
+_COORDINATOR_RESULT_FIELDS = {
     "coordinator",
     "coordinator_errors",
-    "stderr",
+    "coordinator_elapsed_us",
 }
 
 
-def _validate_coordinator_elapsed(message: Mapping[str, Any]) -> dict[str, Any]:
-    candidate = dict(message)
-    elapsed = candidate.get("coordinator_elapsed_us")
-    if elapsed is not None and (
-        isinstance(elapsed, bool) or not isinstance(elapsed, int) or elapsed < 0
-    ):
-        raise ProtocolValidationError("coordinator_elapsed_us must be a nonnegative integer or null")
-    native_candidate = dict(candidate)
-    native_candidate["coordinator_elapsed_us"] = None
-    return native_candidate
-
-
 def validate_result(message: Mapping[str, Any], expected_job_id: str) -> None:
-    """Validate one worker result before coordinator metadata is attached.
-
-    The native worker must emit ``coordinator_elapsed_us: null``.  A caller
-    may validate a result after the coordinator has filled that field with a
-    nonnegative integer; the native portion is still checked against the
-    original strict wire contract.
-    """
+    """Validate one result against the exact native worker wire contract."""
 
     try:
-        candidate = _validate_coordinator_elapsed(message)
-        extras = set(candidate).difference(
-            {
-                "schema",
-                "type",
-                "status",
-                "job_id",
-                "terminal",
-                "winner",
-                "win_reason",
-                "engine_steps",
-                "interactive_decisions",
-                "semantic_action_count",
-                "gameplay_hash",
-                "trace_hash",
-                "simulation_elapsed_us",
-                "coordinator_elapsed_us",
-                "errors",
-                "timing_us",
-                "counters",
-                "worker",
-                "failure_code",
-                "error_message",
-            }
-        )
-        unknown_extras = extras.difference(_ALLOWED_COORDINATOR_FIELDS)
-        if unknown_extras:
-            raise ProtocolValidationError(
-                f"unexpected result metadata: {sorted(unknown_extras)}"
-            )
-        native_candidate = {
-            key: value
-            for key, value in candidate.items()
-            if key not in _ALLOWED_COORDINATOR_FIELDS
-        }
-        _validate_contract_result(native_candidate, expected_job_id=expected_job_id)
+        _validate_contract_result(dict(message), expected_job_id=expected_job_id)
     except ProtocolValidationError:
         raise
     except (KeyError, TypeError, ProtocolContractError, ValueError) as error:
@@ -193,7 +140,22 @@ def assert_primary_integrity(result: Mapping[str, Any]) -> None:
         job_id = result.get("job_id")
         if not isinstance(job_id, str) or not job_id:
             raise ProtocolValidationError("primary result has no job ID")
-        validate_result(result, job_id)
+        native_result = dict(result)
+        coordinator_elapsed_us = native_result.get("coordinator_elapsed_us")
+        if coordinator_elapsed_us is not None and (
+            isinstance(coordinator_elapsed_us, bool)
+            or not isinstance(coordinator_elapsed_us, int)
+            or coordinator_elapsed_us < 0
+        ):
+            raise ProtocolValidationError(
+                "coordinator_elapsed_us must be a nonnegative integer or null"
+            )
+        for key in _COORDINATOR_RESULT_FIELDS:
+            native_result.pop(key, None)
+        # The coordinator owns this field after receipt; restore the native
+        # wire value before applying the exact worker contract.
+        native_result["coordinator_elapsed_us"] = None
+        validate_result(native_result, job_id)
         if result.get("status") != "passed" or result.get("terminal") is not True:
             raise ProtocolValidationError("primary result is not a passed terminal game")
         errors = result.get("errors")
