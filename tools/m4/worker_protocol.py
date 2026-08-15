@@ -146,14 +146,13 @@ def assert_primary_integrity(result: Mapping[str, Any]) -> None:
             raise ProtocolValidationError("primary result has no job ID")
         native_result = dict(result)
         coordinator_elapsed_us = native_result.get("coordinator_elapsed_us")
-        if coordinator_elapsed_us is not None and (
-            isinstance(coordinator_elapsed_us, bool)
-            or not isinstance(coordinator_elapsed_us, int)
-            or coordinator_elapsed_us < 0
-        ):
-            raise ProtocolValidationError(
-                "coordinator_elapsed_us must be a nonnegative integer or null"
-            )
+        if coordinator_elapsed_us is not None:
+            try:
+                require_uint64(coordinator_elapsed_us, "coordinator_elapsed_us")
+            except ProtocolContractError as error:
+                raise ProtocolValidationError(
+                    "coordinator_elapsed_us must be an unsigned uint64 integer or null"
+                ) from error
         for key in _COORDINATOR_RESULT_FIELDS:
             native_result.pop(key, None)
         # The coordinator owns this field after receipt; restore the native

@@ -143,6 +143,14 @@ class WorkerProtocolValidationTests(unittest.TestCase):
             "worker_restarts": 0,
         }
         assert_primary_integrity(published)
+        max_uint64 = copy.deepcopy(published)
+        max_uint64["coordinator_elapsed_us"] = (1 << 64) - 1
+        assert_primary_integrity(max_uint64)
+        for invalid_value in ((1 << 64), True):
+            invalid_timing = copy.deepcopy(published)
+            invalid_timing["coordinator_elapsed_us"] = invalid_value
+            with self.assertRaises(ProtocolValidationError):
+                assert_primary_integrity(invalid_timing)
         invalid = copy.deepcopy(message)
         invalid["coordinator"] = published["coordinator"]
         invalid["coordinator_errors"] = published["coordinator_errors"]
