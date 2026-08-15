@@ -102,6 +102,8 @@ def result_message(job: dict[str, object], *, passed: bool) -> dict[str, object]
 
 
 def main() -> int:
+    sys.stdin.reconfigure(encoding="utf-8", errors="strict")
+    sys.stdout.reconfigure(encoding="utf-8", errors="strict")
     parser = argparse.ArgumentParser()
     parser.add_argument("--behavior", default="normal")
     parser.add_argument("--marker", default=None)

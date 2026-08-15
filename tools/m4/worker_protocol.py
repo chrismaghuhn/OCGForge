@@ -25,6 +25,7 @@ from .worker_protocol_contract import (
     require_uint64,
     WORKER_IDENTITY,
     ProtocolContractError,
+    normalize_job_id,
     normalize_unicode_scalars,
     parse_json_line,
     recover_job_id,
@@ -227,7 +228,7 @@ def job_to_message(job: Mapping[str, Any]) -> dict[str, Any]:
         raise ValueError("setup_script must be a string or path")
 
     required = {
-        "job_id": job.get("job_id"),
+        "job_id": normalize_job_id(job.get("job_id")),
         "seed": job.get("seed"),
         "seat_assignment": job.get("seat_assignment", "normal"),
         "starting_player": job.get("starting_player", 0),
@@ -242,8 +243,6 @@ def job_to_message(job: Mapping[str, Any]) -> dict[str, Any]:
         "setup_script": str(setup_script_value),
         "force_unsupported": job.get("force_unsupported", False),
     }
-    if not isinstance(required["job_id"], str) or not required["job_id"]:
-        raise ValueError("job_id must be a nonempty string")
     _require_job_uint64(required["seed"], "seed")
     starting_player = require_uint8(required["starting_player"], "starting_player")
     if starting_player > 1:

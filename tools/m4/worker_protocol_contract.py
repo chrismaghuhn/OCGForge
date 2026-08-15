@@ -166,6 +166,17 @@ def normalize_unicode_scalars(value: Any) -> Any:
     return _normalize_unicode_scalars(value)
 
 
+def normalize_job_id(job_id: Any) -> str:
+    """Return the canonical nonempty Unicode representation of a job ID."""
+
+    if not isinstance(job_id, str) or not job_id:
+        raise ProtocolContractError("job_id must be a nonempty string")
+    normalized = normalize_unicode_scalars(job_id)
+    if not normalized:
+        raise ProtocolContractError("job_id must be a nonempty string")
+    return normalized
+
+
 def _parse_nonnegative_int(token: str) -> int:
     if token.startswith("-"):
         raise ProtocolContractError("negative numeric values are not allowed")
@@ -362,7 +373,8 @@ def validate_result(message: dict[str, Any], *, expected_job_id: str) -> None:
         raise ProtocolContractError("invalid result schema or type")
     if message["status"] not in {"passed", "failed"}:
         raise ProtocolContractError("invalid result status")
-    if _require_string(message, "job_id") != expected_job_id:
+    actual_job_id = normalize_job_id(_require_string(message, "job_id"))
+    if actual_job_id != normalize_job_id(expected_job_id):
         raise ProtocolContractError("result job ID does not match request")
     if not isinstance(message["terminal"], bool):
         raise ProtocolContractError("terminal must be a boolean")

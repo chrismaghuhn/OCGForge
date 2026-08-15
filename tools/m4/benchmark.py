@@ -27,6 +27,7 @@ from .worker_protocol import (
     validate_ready,
     validate_result,
 )
+from .worker_protocol_contract import ProtocolContractError, normalize_job_id
 
 
 class CoordinatorError(RuntimeError):
@@ -263,7 +264,18 @@ class PersistentWorkerPool:
                 f"dead worker(s): {dead_workers}"
             )
         copied_jobs = [dict(job) for job in jobs]
-        job_ids = [job.get("job_id") for job in copied_jobs]
+        job_ids: list[str] = []
+        for job in copied_jobs:
+            raw_job_id = job.get("job_id")
+            if not isinstance(raw_job_id, str) or not raw_job_id:
+                raise ValueError("every job must have a nonempty string job_id")
+            try:
+                canonical_job_id = normalize_job_id(raw_job_id)
+            except ProtocolContractError:
+                canonical_job_id = raw_job_id
+            else:
+                job["job_id"] = canonical_job_id
+            job_ids.append(canonical_job_id)
         if any(not isinstance(job_id, str) or not job_id for job_id in job_ids):
             raise ValueError("every job must have a nonempty string job_id")
         if len(set(job_ids)) != len(job_ids):

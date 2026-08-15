@@ -214,6 +214,52 @@ class FailureIsolationTests(unittest.TestCase):
                     self.assertIsNone(pool._states[0].in_flight)
                     self.assertTrue(pool._states[0].alive)
 
+    def test_unpaired_job_id_is_invalid_without_worker_crash(self) -> None:
+        workload = jobs(2)
+        invalid_job_id = "m4-invalid-\ud800"
+        workload[0]["job_id"] = invalid_job_id
+        with tempfile.TemporaryDirectory(prefix="ocgforge-m4-task5-job-id-invalid-") as directory:
+            with PersistentWorkerPool(
+                fake_command("normal"),
+                worker_count=1,
+                output_dir=Path(directory),
+            ) as pool:
+                results = pool.run(workload)
+
+                invalid_result = next(
+                    result for result in results if result["job_id"] == invalid_job_id
+                )
+                self.assertEqual(invalid_result["status"], "failed")
+                self.assertEqual(invalid_result["failure_code"], "invalid_job")
+                self.assertEqual(invalid_result["coordinator"]["job_validation_error"], True)
+                self.assertFalse(invalid_result["worker"]["crashed"])
+                self.assertEqual(pool.last_run_metadata["worker_crashes"], 0)
+                self.assertIsNone(pool._states[0].in_flight)
+                self.assertTrue(pool._states[0].alive)
+
+    def test_surrogate_pair_job_id_matches_and_publishes_normalized_identity(self) -> None:
+        workload = jobs(2)
+        workload[0]["job_id"] = "m4-\ud83d\ude00"
+        canonical_job_id = "m4-\U0001f600"
+        expected_input_ids = [canonical_job_id, workload[1]["job_id"]]
+        expected_published_ids = [workload[1]["job_id"], canonical_job_id]
+        with tempfile.TemporaryDirectory(prefix="ocgforge-m4-task5-job-id-") as directory:
+            with PersistentWorkerPool(
+                fake_command("normal"),
+                worker_count=1,
+                output_dir=Path(directory),
+            ) as pool:
+                results = pool.run(workload)
+
+                self.assertEqual([result["status"] for result in results], ["passed", "passed"])
+                self.assertEqual([result["job_id"] for result in results], expected_published_ids)
+                self.assertEqual(pool.last_run_metadata["result_order"], expected_input_ids)
+                self.assertEqual(pool.last_run_metadata["malformed_protocol"], 0)
+                self.assertEqual(pool.last_run_metadata["worker_crashes"], 0)
+                self.assertEqual(pool.last_run_metadata["worker_restarts"], 0)
+                self.assertTrue(pool._states[0].alive)
+                self.assertIsNone(pool._states[0].in_flight)
+
     def test_valid_surrogate_pairs_keep_worker_usable(self) -> None:
         workload = jobs(2)
         workload[0]["setup_script"] = "\ud83d\ude00"

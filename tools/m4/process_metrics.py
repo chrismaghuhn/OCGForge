@@ -71,13 +71,13 @@ def read_working_set_bytes(pid: int) -> int | None:
         if not get_process_memory_info(handle, ctypes.byref(counters), counters.cb):
             return None
         return int(counters.WorkingSetSize)
-    except (AttributeError, OSError, TypeError, ValueError):
+    except Exception:
         return None
     finally:
         try:
             if os.name == "nt" and "handle" in locals() and handle:
                 close_handle(handle)
-        except (AttributeError, OSError):
+        except Exception:
             pass
 
 
@@ -109,6 +109,7 @@ class ProcessMetricsSampler:
         self._peak_total = 0
         self._last_process_count: int | None = None
         self._measured = False
+        self._measurement_failed = False
 
     def start(self) -> None:
         if self._thread is not None:
@@ -130,7 +131,8 @@ class ProcessMetricsSampler:
             peak_total = self._peak_total
             peak_worker = max(self._peak_by_pid.values(), default=0)
             measured = self._measured
-        if not measured:
+            measurement_failed = self._measurement_failed
+        if measurement_failed or not measured:
             return ProcessMetricsSnapshot(
                 process_count=NOT_MEASURED,
                 peak_total_working_set_bytes=NOT_MEASURED,
@@ -151,23 +153,44 @@ class ProcessMetricsSampler:
             self._stop.wait(self._interval_seconds)
 
     def _sample_once(self) -> None:
+        with self._lock:
+            if self._measurement_failed:
+                return
         try:
-            pids = [int(pid) for pid in self._pid_supplier() if int(pid) > 0]
-        except (TypeError, ValueError):
+            raw_pids = list(self._pid_supplier())
+            pids: list[int] = []
+            for raw_pid in raw_pids:
+                if isinstance(raw_pid, bool):
+                    raise ValueError("PID must be an integer")
+                pid = int(raw_pid)
+                if pid <= 0:
+                    raise ValueError("PID must be positive")
+                pids.append(pid)
+            if not pids:
+                raise ValueError("at least one PID is required")
+        except Exception:
+            self._mark_measurement_failed()
             return
         values: list[int] = []
         for pid in pids:
-            value = read_working_set_bytes(pid)
-            if value is None:
-                continue
+            try:
+                value = read_working_set_bytes(pid)
+            except Exception:
+                value = None
+            if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+                self._mark_measurement_failed()
+                return
             values.append(value)
-            with self._lock:
-                self._peak_by_pid[pid] = max(value, self._peak_by_pid.get(pid, 0))
         with self._lock:
+            for pid, value in zip(pids, values):
+                self._peak_by_pid[pid] = max(value, self._peak_by_pid.get(pid, 0))
             self._last_process_count = len(pids) + 1
-            if values:
-                self._measured = True
-                self._peak_total = max(self._peak_total, sum(values))
+            self._measured = True
+            self._peak_total = max(self._peak_total, sum(values))
+
+    def _mark_measurement_failed(self) -> None:
+        with self._lock:
+            self._measurement_failed = True
 
 
 def stderr_size(path: str | os.PathLike[str]) -> int | str:
