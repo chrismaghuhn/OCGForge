@@ -351,7 +351,6 @@ SimulationResult run_canonical_simulation(const SimulationJob& job,
                             observation_config.own_deck.main_deck = deck_a.main_deck;
                             const auto observation = ygo::observation::build_player_observation(
                                 host, 0, observation_config);
-                            trace_record_suffix_start = Clock::now();
                             ygo::trace::attach_observation_metadata(terminal, observation);
                             add_timing(result.timing.observation_us, observation_start, Clock::now(), instrumentation);
                             observation_entity_total += observation.entities.size();
@@ -359,6 +358,7 @@ SimulationResult run_canonical_simulation(const SimulationJob& job,
                             ++result.operations.observations;
                             result.operations.entities_projected += observation.entities.size();
                         }
+                        trace_record_suffix_start = Clock::now();
                         terminal.engine_advanced = true;
                         terminal.terminal = true;
                         terminal.winner = decoded.winner;
