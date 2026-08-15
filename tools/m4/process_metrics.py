@@ -20,12 +20,23 @@ def read_working_set_bytes(pid: int) -> int | None:
     if os.name != "nt" or pid <= 0:
         return None
 
+    handle = None
     try:
         from ctypes import wintypes
 
         PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
         PROCESS_VM_READ = 0x0010
-        handle = ctypes.windll.kernel32.OpenProcess(
+        kernel32 = ctypes.windll.kernel32
+        psapi = ctypes.windll.psapi
+
+        open_process = kernel32.OpenProcess
+        open_process.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+        open_process.restype = wintypes.HANDLE
+        close_handle = kernel32.CloseHandle
+        close_handle.argtypes = [wintypes.HANDLE]
+        close_handle.restype = wintypes.BOOL
+
+        handle = open_process(
             PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_VM_READ,
             False,
             pid,
@@ -50,7 +61,7 @@ def read_working_set_bytes(pid: int) -> int | None:
 
         counters = ProcessMemoryCountersEx()
         counters.cb = ctypes.sizeof(counters)
-        get_process_memory_info = ctypes.windll.psapi.GetProcessMemoryInfo
+        get_process_memory_info = psapi.GetProcessMemoryInfo
         get_process_memory_info.argtypes = [
             wintypes.HANDLE,
             ctypes.POINTER(ProcessMemoryCountersEx),
@@ -65,7 +76,7 @@ def read_working_set_bytes(pid: int) -> int | None:
     finally:
         try:
             if os.name == "nt" and "handle" in locals() and handle:
-                ctypes.windll.kernel32.CloseHandle(handle)
+                close_handle(handle)
         except (AttributeError, OSError):
             pass
 

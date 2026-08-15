@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import sys
+import time
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
@@ -123,6 +124,13 @@ def main() -> int:
         if should_crash:
             print("fake worker crash after job", file=sys.stderr, flush=True)
             return 17
+        if args.behavior == "hang-first-job":
+            print("fake worker waiting without a result", file=sys.stderr, flush=True)
+            time.sleep(30)
+        if args.behavior == "invalid-utf8":
+            sys.stdout.buffer.write(b'{"schema":"ocgforge.m4.worker.v1",\xff}\n')
+            sys.stdout.buffer.flush()
+            return 0
         passed = not bool(job.get("force_unsupported", False))
         print(json.dumps(result_message(job, passed=passed), separators=(",", ":")), flush=True)
     return 0

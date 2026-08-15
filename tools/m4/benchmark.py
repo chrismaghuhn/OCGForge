@@ -60,6 +60,9 @@ class _WorkerState:
     alive: bool = False
     restarted_for_job: bool = False
     in_flight: _InFlight | None = None
+    retired: bool = False
+    reaped: bool = False
+    cleanup_error: str | None = None
 
 
 def _zero_coordinator_errors() -> dict[str, int]:
@@ -154,6 +157,8 @@ class PersistentWorkerPool:
         self._states: list[_WorkerState] = []
         self._started = False
         self._closed = False
+        self._unusable = False
+        self._unusable_reason: str | None = None
         self._metrics: ProcessMetricsSampler | None = None
         self._results: dict[str, dict[str, Any]] = {}
         self.last_run_metadata: dict[str, Any] = self._new_metadata()
@@ -240,9 +245,18 @@ class PersistentWorkerPool:
     ) -> list[dict[str, Any]]:
         """Run each value job once and publish results in canonical order."""
 
+        if self._unusable:
+            raise WorkerRuntimeError(
+                "worker pool is not reusable after fail-closed shutdown: "
+                f"{self._unusable_reason or 'unknown coordinator failure'}"
+            )
         if not self._started:
             self.start()
-        dead_workers = [state.index for state in self._states if not state.alive]
+        dead_workers = [
+            state.index
+            for state in self._states
+            if not state.alive or state.retired
+        ]
         if dead_workers:
             raise WorkerRuntimeError(
                 "worker pool is not reusable after worker failure; "
@@ -266,16 +280,33 @@ class PersistentWorkerPool:
         if not copied_jobs:
             return []
 
+        dispatchable_jobs: list[tuple[dict[str, Any], str]] = []
+        for job in copied_jobs:
+            try:
+                encoded_job = encode_job(job)
+            except (AttributeError, KeyError, TypeError, ValueError) as error:
+                job_id = str(job["job_id"])
+                self._results[job_id] = self._invalid_job_result(job, str(error))
+                continue
+            dispatchable_jobs.append((job, encoded_job))
+
+        if not dispatchable_jobs:
+            ordered = [self._results[key] for key in sorted(self._results, key=_job_sort_key)]
+            self.last_run_metadata["games_completed"] = len(ordered)
+            self.last_run_metadata["failed_games"] = len(ordered)
+            return ordered
+
         self._metrics = ProcessMetricsSampler(self._live_pids)
         self._metrics.start()
         next_index = 0
         try:
             for state in self._states:
-                if state.alive and next_index < len(copied_jobs):
-                    self._dispatch(state, copied_jobs[next_index])
+                if state.alive and next_index < len(dispatchable_jobs):
+                    job, encoded_job = dispatchable_jobs[next_index]
+                    self._dispatch(state, job, encoded_job)
                     next_index += 1
 
-            while next_index < len(copied_jobs) or any(
+            while next_index < len(dispatchable_jobs) or any(
                 state.in_flight is not None for state in self._states
             ):
                 state, event = self._next_event()
@@ -305,16 +336,18 @@ class PersistentWorkerPool:
                         malformed=True,
                     )
 
-                if state.alive and state.in_flight is None and next_index < len(copied_jobs):
-                    self._dispatch(state, copied_jobs[next_index])
+                if state.alive and state.in_flight is None and next_index < len(dispatchable_jobs):
+                    job, encoded_job = dispatchable_jobs[next_index]
+                    self._dispatch(state, job, encoded_job)
                     next_index += 1
-                elif not state.alive and next_index < len(copied_jobs):
+                elif not state.alive and next_index < len(dispatchable_jobs):
                     if not self.restart_workers:
                         raise WorkerRuntimeError(
                             f"worker {state.index} failed with unassigned jobs remaining"
                         )
                     self._restart(state)
-                    self._dispatch(state, copied_jobs[next_index])
+                    job, encoded_job = dispatchable_jobs[next_index]
+                    self._dispatch(state, job, encoded_job)
                     next_index += 1
         finally:
             if self._metrics is not None:
@@ -342,10 +375,8 @@ class PersistentWorkerPool:
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=stderr_file,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                bufsize=1,
+                text=False,
+                bufsize=0,
             )
         except Exception:
             stderr_file.close()
@@ -361,6 +392,9 @@ class PersistentWorkerPool:
         state.alive = True
         state.ready = None
         state.in_flight = None
+        state.retired = False
+        state.reaped = False
+        state.cleanup_error = None
         state.reader = threading.Thread(
             target=self._read_stdout,
             args=(state,),
@@ -377,9 +411,14 @@ class PersistentWorkerPool:
         assert state.events is not None
         try:
             while True:
-                line = state.process.stdout.readline()
-                if line == "":
+                raw_line = state.process.stdout.readline()
+                if raw_line == b"":
                     break
+                try:
+                    line = raw_line.decode("utf-8")
+                except UnicodeDecodeError as error:
+                    state.events.put(("reader_error", f"invalid UTF-8 on worker stdout: {error}"))
+                    return
                 state.events.put(("line", line.rstrip("\r\n")))
         except Exception as error:  # pragma: no cover - OS-specific reader failure
             state.events.put(("reader_error", str(error)))
@@ -458,14 +497,16 @@ class PersistentWorkerPool:
                 if state.alive and state.process is not None and state.process.poll() is not None:
                     return state, ("eof", None)
             time.sleep(0.001)
-        raise WorkerRuntimeError("timed out waiting for a worker result")
+        message = "timed out waiting for a worker result"
+        self._fail_closed(message, code="worker_timeout")
+        raise WorkerRuntimeError(message)
 
-    def _dispatch(self, state: _WorkerState, job: dict[str, Any]) -> None:
+    def _dispatch(self, state: _WorkerState, job: dict[str, Any], encoded_job: str) -> None:
         if not state.alive or state.process is None or state.process.stdin is None:
             raise WorkerRuntimeError(f"worker {state.index} is not available for dispatch")
         state.in_flight = _InFlight(job=job, dispatched_ns=time.perf_counter_ns())
         try:
-            state.process.stdin.write(encode_job(job) + "\n")
+            state.process.stdin.write((encoded_job + "\n").encode("utf-8"))
             state.process.stdin.flush()
         except (BrokenPipeError, OSError, ValueError) as error:
             self._worker_failed(
@@ -546,8 +587,82 @@ class PersistentWorkerPool:
         if malformed:
             self.last_run_metadata["malformed_protocol"] += 1
         self.last_run_metadata["worker_errors"] += 1
-        state.alive = False
-        self._shutdown_state(state)
+        reaped = self._shutdown_state(state)
+        if not reaped:
+            self._mark_unusable(
+                f"worker {state.index} could not be reaped after {code}"
+            )
+            raise WorkerRuntimeError(self._unusable_reason or "worker cleanup failed")
+
+    def _fail_closed(self, message: str, *, code: str) -> None:
+        self._mark_unusable(message)
+        for state in self._states:
+            in_flight = state.in_flight
+            if in_flight is not None:
+                self._results[str(in_flight.job["job_id"])] = self._failed_result(
+                    state,
+                    in_flight,
+                    code=code,
+                    message=message,
+                    crashed=False,
+                    malformed=False,
+                )
+                state.in_flight = None
+                self.last_run_metadata["failed_games"] += 1
+            reaped = self._shutdown_state(state)
+            if not reaped:
+                self._mark_unusable(
+                    f"{message}; worker {state.index} could not be reaped"
+                )
+        self._refresh_worker_metadata()
+
+    def _mark_unusable(self, reason: str) -> None:
+        self._unusable = True
+        if self._unusable_reason is None:
+            self._unusable_reason = reason
+
+    @staticmethod
+    def _invalid_job_result(job: Mapping[str, Any], message: str) -> dict[str, Any]:
+        return {
+            "schema": "ocgforge.m4.worker.v1",
+            "type": "result",
+            "status": "failed",
+            "job_id": str(job["job_id"]),
+            "terminal": False,
+            "winner": None,
+            "win_reason": None,
+            "engine_steps": 0,
+            "interactive_decisions": 0,
+            "semantic_action_count": 0,
+            "gameplay_hash": None,
+            "trace_hash": None,
+            "simulation_elapsed_us": None,
+            "coordinator_elapsed_us": None,
+            "errors": _zero_errors(),
+            "timing_us": _zero_timing(),
+            "counters": _zero_counters(),
+            "worker": {
+                "pid": 0,
+                "restart_index": 0,
+                "crashed": False,
+                "restarted": False,
+            },
+            "failure_code": "invalid_job",
+            "error_message": message or "job validation failed",
+            "coordinator": {
+                "worker_index": None,
+                "worker_pid": None,
+                "worker_crashed": False,
+                "worker_restarted": False,
+                "worker_restart_index": 0,
+                "stderr_path": "NOT_MEASURED",
+                "job_validation_error": True,
+            },
+            "coordinator_errors": {
+                **_zero_coordinator_errors(),
+                "failed_games": 1,
+            },
+        }
 
     def _failed_result(
         self,
@@ -614,6 +729,11 @@ class PersistentWorkerPool:
         state.restart_index += 1
         state.restarted_for_job = True
         self.last_run_metadata["worker_restarts"] += 1
+        if not state.reaped or state.cleanup_error:
+            raise WorkerRuntimeError(
+                f"worker {state.index} cannot be restarted safely: "
+                f"{state.cleanup_error or 'termination was not confirmed'}"
+            )
         self._launch(state)
         try:
             self._read_ready(state)
@@ -640,46 +760,74 @@ class PersistentWorkerPool:
             "stderr_bytes": stderr_size(state.stderr_path) if state.stderr_path else "NOT_MEASURED",
             "ready": state.ready is not None,
             "alive": state.alive,
+            "retired": state.retired,
+            "reaped": state.reaped,
+            "cleanup_error": state.cleanup_error,
         }
 
     def _refresh_worker_metadata(self) -> None:
         self.last_run_metadata["workers"] = [self._worker_metadata(state) for state in self._states]
 
-    def _shutdown_state(self, state: _WorkerState) -> None:
+    def _shutdown_state(self, state: _WorkerState) -> bool:
         process = state.process
+        state.retired = True
         if process is None:
             state.alive = False
-            return
+            state.reaped = True
+            state.cleanup_error = None
+            return True
         try:
             if process.stdin is not None:
                 process.stdin.close()
         except (OSError, ValueError):
             pass
         try:
-            process.wait(timeout=2.0)
-        except subprocess.TimeoutExpired:
-            try:
+            if process.poll() is None:
                 process.terminate()
+        except (OSError, ValueError) as error:
+            state.cleanup_error = f"terminate failed: {error}"
+        try:
+            if process.poll() is None:
                 process.wait(timeout=2.0)
-            except (OSError, subprocess.TimeoutExpired):
-                try:
+        except (OSError, subprocess.TimeoutExpired) as error:
+            state.cleanup_error = f"wait after terminate failed: {error}"
+            try:
+                if process.poll() is None:
                     process.kill()
+            except (OSError, ValueError) as kill_error:
+                state.cleanup_error = f"kill failed: {kill_error}"
+            try:
+                if process.poll() is None:
                     process.wait(timeout=2.0)
-                except (OSError, subprocess.TimeoutExpired):
-                    pass
+            except (OSError, subprocess.TimeoutExpired) as kill_wait_error:
+                state.cleanup_error = f"wait after kill failed: {kill_wait_error}"
+        if process.poll() is None:
+            state.alive = True
+            state.reaped = False
+            if state.cleanup_error is None:
+                state.cleanup_error = "process termination was not confirmed"
+            self._refresh_worker_metadata()
+            return False
+        state.alive = False
+        state.reaped = True
         if state.reader is not None and state.reader is not threading.current_thread():
             state.reader.join(timeout=2.0)
+            if state.reader.is_alive():
+                state.cleanup_error = state.cleanup_error or "stdout reader did not terminate"
         try:
             if process.stdout is not None:
                 process.stdout.close()
-        except (OSError, ValueError):
-            pass
-        state.alive = False
+        except (OSError, ValueError) as error:
+            state.cleanup_error = state.cleanup_error or f"stdout close failed: {error}"
         self._refresh_worker_metadata()
+        return state.cleanup_error is None
 
     def _shutdown_all(self) -> None:
         for state in self._states:
-            self._shutdown_state(state)
+            if not self._shutdown_state(state):
+                self._mark_unusable(
+                    f"worker {state.index} cleanup was not confirmed"
+                )
 
 
 def tempfile_directory() -> str:

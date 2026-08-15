@@ -7,6 +7,7 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 
 from tools.m4.benchmark import (
@@ -151,6 +152,35 @@ class WorkerProtocolValidationTests(unittest.TestCase):
 
 
 class FailureIsolationTests(unittest.TestCase):
+    def test_invalid_jobs_fail_without_poisoning_healthy_pool(self) -> None:
+        workload = jobs(4)
+        workload[0]["seed"] = -1
+        workload[1]["replay_actions"] = None
+        with tempfile.TemporaryDirectory(prefix="ocgforge-m4-task5-invalid-") as directory:
+            with PersistentWorkerPool(
+                fake_command("normal"),
+                worker_count=1,
+                output_dir=Path(directory),
+            ) as pool:
+                results = pool.run(workload)
+
+                self.assertEqual(
+                    [result["job_id"] for result in results],
+                    [job["job_id"] for job in workload],
+                )
+                self.assertEqual([result["status"] for result in results], [
+                    "failed", "failed", "passed", "passed"
+                ])
+                self.assertEqual(results[0]["failure_code"], "invalid_job")
+                self.assertIn("nonnegative", results[0]["error_message"])
+                self.assertEqual(results[1]["failure_code"], "invalid_job")
+                self.assertEqual(results[1]["coordinator"]["job_validation_error"], True)
+                self.assertFalse(results[1]["worker"]["crashed"])
+                self.assertEqual(pool.last_run_metadata["worker_crashes"], 0)
+                self.assertEqual(pool.last_run_metadata["retries"], 0)
+                self.assertTrue(pool._states[0].alive)
+                self.assertIsNone(pool._states[0].in_flight)
+
     def test_valid_invalid_valid_jobs_are_explicit_and_sorted(self) -> None:
         workload = jobs()
         workload[1]["force_unsupported"] = True
@@ -218,6 +248,51 @@ class FailureIsolationTests(unittest.TestCase):
                     pool.run(jobs(2)[1:])
             finally:
                 pool.close()
+
+    def test_timeout_retires_pool_and_clears_stale_mapping(self) -> None:
+        workload = jobs(1)
+        with tempfile.TemporaryDirectory(prefix="ocgforge-m4-task5-timeout-") as directory:
+            pool = PersistentWorkerPool(
+                fake_command("hang-first-job"),
+                worker_count=1,
+                output_dir=Path(directory),
+                result_timeout_seconds=0.05,
+            )
+            started = time.monotonic()
+            try:
+                with self.assertRaisesRegex(
+                    WorkerRuntimeError, "timed out waiting for a worker result"
+                ):
+                    pool.run(workload)
+                self.assertLess(time.monotonic() - started, 5.0)
+                self.assertTrue(pool._unusable)
+                self.assertEqual(set(pool._results), {workload[0]["job_id"]})
+                self.assertTrue(all(state.in_flight is None for state in pool._states))
+                self.assertTrue(all(state.reaped for state in pool._states))
+                self.assertTrue(all(state.process is not None for state in pool._states))
+                self.assertTrue(all(state.process.poll() is not None for state in pool._states))
+                with self.assertRaisesRegex(
+                    WorkerRuntimeError, "not reusable after fail-closed shutdown"
+                ):
+                    pool.run(jobs(2))
+            finally:
+                pool.close()
+
+    def test_invalid_utf8_is_explicit_malformed_protocol_failure(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="ocgforge-m4-task5-utf8-") as directory:
+            with PersistentWorkerPool(
+                fake_command("invalid-utf8"),
+                worker_count=1,
+                output_dir=Path(directory),
+            ) as pool:
+                results = pool.run(jobs(1))
+
+                self.assertEqual(results[0]["status"], "failed")
+                self.assertEqual(results[0]["failure_code"], "malformed_protocol")
+                self.assertIn("invalid UTF-8", results[0]["error_message"])
+                self.assertEqual(results[0]["coordinator_errors"]["malformed_protocol"], 1)
+                self.assertEqual(results[0]["coordinator_errors"]["worker_crashes"], 0)
+                self.assertIsNone(results[0]["simulation_elapsed_us"])
 
     def test_crash_after_ready_is_distinguished_from_job_failure(self) -> None:
         with tempfile.TemporaryDirectory(prefix="ocgforge-m4-task5-ready-crash-") as directory:
