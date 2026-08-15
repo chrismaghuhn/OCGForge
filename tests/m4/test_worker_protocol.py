@@ -19,6 +19,7 @@ from tools.m4.worker_protocol_contract import (
 )
 from tools.m4.worker_protocol import (
     ProtocolValidationError as CoordinatorProtocolValidationError,
+    encode_job,
     job_to_message,
     validate_result as validate_coordinator_result,
 )
@@ -343,10 +344,34 @@ class WorkerProtocolContractTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             job_to_message(invalid)
 
+    def test_outgoing_surrogate_pairs_normalize_before_utf8_encoding(self) -> None:
+        job = {
+            "job_id": "m4-surrogate-pair",
+            "seed": 1,
+            "starting_player": 0,
+            "max_steps": 2200,
+            "setup_script": "\ud83d\ude00",
+            "replay_actions": ["\ud83d\ude00"],
+            "focus_codes": [],
+        }
+
+        message = job_to_message(job)
+        self.assertEqual(message["setup_script"], "\U0001f600")
+        self.assertEqual(message["replay_actions"], ["\U0001f600"])
+        encoded = encode_job(job)
+        self.assertIn('"setup_script":"\U0001f600"', encoded)
+        self.assertIn('"replay_actions":["\U0001f600"]', encoded)
+        self.assertEqual(encoded.encode("utf-8").decode("utf-8"), encoded)
+
     def test_json_fixture_rejects_unpaired_surrogates_but_accepts_valid_unicode(self) -> None:
         unpaired = json.dumps({"nested": ["valid", "\ud800"]})
         with self.assertRaises(ProtocolContractError):
             parse_json_line(unpaired)
+
+    def test_json_parser_rejects_all_negative_numeric_tokens(self) -> None:
+        for token in ("-0", "-1", "-0.5", "-1e2"):
+            with self.subTest(token=token), self.assertRaises(ProtocolContractError):
+                parse_json_line(f'{{"value":{token}}}')
 
         valid_unicode = json.dumps({"nested": ["\U0001f600", "\ud83d\ude00"]})
         parsed = parse_json_line(valid_unicode)

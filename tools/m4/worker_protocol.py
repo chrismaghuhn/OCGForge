@@ -25,6 +25,7 @@ from .worker_protocol_contract import (
     require_uint64,
     WORKER_IDENTITY,
     ProtocolContractError,
+    normalize_unicode_scalars,
     parse_json_line,
     recover_job_id,
     validate_ready as _validate_contract_ready,
@@ -269,8 +270,9 @@ def job_to_message(job: Mapping[str, Any]) -> dict[str, Any]:
         if not isinstance(trace_output, (str, Path)):
             raise ValueError("trace_output must be a string or path")
         message["trace_output"] = str(Path(trace_output))
-    reject_unpaired_surrogates(message)
-    return message
+    normalized_message = normalize_unicode_scalars(message)
+    reject_unpaired_surrogates(normalized_message)
+    return normalized_message
 
 
 def encode_job(job: Mapping[str, Any]) -> str:

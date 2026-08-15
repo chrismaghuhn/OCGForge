@@ -112,6 +112,72 @@ def reject_unpaired_surrogates(value: Any) -> None:
     _reject_unpaired_surrogates(value)
 
 
+def _normalize_unicode_scalars(value: Any, path: str = "$") -> Any:
+    if isinstance(value, str):
+        normalized: list[str] = []
+        index = 0
+        while index < len(value):
+            codepoint = ord(value[index])
+            if 0xD800 <= codepoint <= 0xDBFF:
+                if index + 1 >= len(value):
+                    raise ProtocolContractError(
+                        f"unpaired Unicode surrogate in JSON string at {path}"
+                    )
+                low = ord(value[index + 1])
+                if not 0xDC00 <= low <= 0xDFFF:
+                    raise ProtocolContractError(
+                        f"unpaired Unicode surrogate in JSON string at {path}"
+                    )
+                normalized.append(
+                    chr(0x10000 + ((codepoint - 0xD800) << 10) + (low - 0xDC00))
+                )
+                index += 2
+                continue
+            if 0xDC00 <= codepoint <= 0xDFFF:
+                raise ProtocolContractError(
+                    f"unpaired Unicode surrogate in JSON string at {path}"
+                )
+            normalized.append(value[index])
+            index += 1
+        return "".join(normalized)
+    if isinstance(value, dict):
+        return {
+            _normalize_unicode_scalars(key, f"{path}.<key>"): _normalize_unicode_scalars(
+                child, f"{path}.{key}"
+            )
+            for key, child in value.items()
+        }
+    if isinstance(value, list):
+        return [
+            _normalize_unicode_scalars(child, f"{path}[{index}]")
+            for index, child in enumerate(value)
+        ]
+    if isinstance(value, tuple):
+        return tuple(
+            _normalize_unicode_scalars(child, f"{path}[{index}]")
+            for index, child in enumerate(value)
+        )
+    return value
+
+
+def normalize_unicode_scalars(value: Any) -> Any:
+    """Normalize valid UTF-16 surrogate pairs and reject unpaired surrogates."""
+
+    return _normalize_unicode_scalars(value)
+
+
+def _parse_nonnegative_int(token: str) -> int:
+    if token.startswith("-"):
+        raise ProtocolContractError("negative numeric values are not allowed")
+    return int(token)
+
+
+def _parse_nonnegative_float(token: str) -> float:
+    if token.startswith("-"):
+        raise ProtocolContractError("negative numeric values are not allowed")
+    return float(token)
+
+
 def parse_json_line(line: str) -> dict[str, Any]:
     """Parse one strict JSON object line without accepting duplicate keys."""
 
@@ -119,6 +185,8 @@ def parse_json_line(line: str) -> dict[str, Any]:
         value = json.loads(
             line,
             object_pairs_hook=_duplicate_key_check,
+            parse_int=_parse_nonnegative_int,
+            parse_float=_parse_nonnegative_float,
             parse_constant=lambda value: (_ for _ in ()).throw(
                 ProtocolContractError(f"non-finite JSON constant: {value}")
             ),

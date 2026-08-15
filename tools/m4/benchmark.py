@@ -294,6 +294,9 @@ class PersistentWorkerPool:
             ordered = [self._results[key] for key in sorted(self._results, key=_job_sort_key)]
             self.last_run_metadata["games_completed"] = len(ordered)
             self.last_run_metadata["failed_games"] = len(ordered)
+            if require_primary_integrity:
+                for result in ordered:
+                    assert_primary_integrity(result)
             return ordered
 
         self._metrics = ProcessMetricsSampler(self._live_pids)

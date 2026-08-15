@@ -214,6 +214,39 @@ class FailureIsolationTests(unittest.TestCase):
                     self.assertIsNone(pool._states[0].in_flight)
                     self.assertTrue(pool._states[0].alive)
 
+    def test_valid_surrogate_pairs_keep_worker_usable(self) -> None:
+        workload = jobs(2)
+        workload[0]["setup_script"] = "\ud83d\ude00"
+        workload[0]["replay_actions"] = ["\ud83d\ude00"]
+        with tempfile.TemporaryDirectory(prefix="ocgforge-m4-task5-surrogate-pair-") as directory:
+            with PersistentWorkerPool(
+                fake_command("normal"),
+                worker_count=1,
+                output_dir=Path(directory),
+            ) as pool:
+                results = pool.run(workload)
+
+                self.assertEqual([result["status"] for result in results], ["passed", "passed"])
+                self.assertEqual(pool.last_run_metadata["worker_crashes"], 0)
+                self.assertEqual(pool.last_run_metadata["worker_restarts"], 0)
+                self.assertTrue(pool._states[0].alive)
+                self.assertIsNone(pool._states[0].in_flight)
+
+    def test_primary_integrity_rejects_local_invalid_job_results(self) -> None:
+        workload = jobs(1)
+        workload[0]["setup_script"] = "\ud800"
+        with tempfile.TemporaryDirectory(prefix="ocgforge-m4-task5-primary-invalid-") as directory:
+            with PersistentWorkerPool(
+                fake_command("normal"),
+                worker_count=1,
+                output_dir=Path(directory),
+            ) as pool:
+                results = pool.run(workload)
+                self.assertEqual(results[0]["failure_code"], "invalid_job")
+                with self.assertRaises(ProtocolValidationError):
+                    pool.run(workload, require_primary_integrity=True)
+                self.assertTrue(pool._states[0].alive)
+
     def test_valid_invalid_valid_jobs_are_explicit_and_sorted(self) -> None:
         workload = jobs()
         workload[1]["force_unsupported"] = True
