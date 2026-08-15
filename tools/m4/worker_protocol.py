@@ -19,6 +19,8 @@ from .worker_protocol_contract import (
     CANONICAL_RULES_BUNDLE_ID,
     PROTOCOL_SCHEMA,
     PROTOCOL_VERSION,
+    reject_unpaired_surrogates,
+    require_uint8,
     require_uint32,
     require_uint64,
     WORKER_IDENTITY,
@@ -208,6 +210,22 @@ def assert_primary_integrity(result: Mapping[str, Any]) -> None:
 def job_to_message(job: Mapping[str, Any]) -> dict[str, Any]:
     """Convert a value job to the exact native worker request envelope."""
 
+    replay_actions_value = job.get("replay_actions", [])
+    if not isinstance(replay_actions_value, (list, tuple)):
+        raise ValueError("replay_actions must be a sequence of strings")
+    replay_actions = list(replay_actions_value)
+    if any(not isinstance(action, str) for action in replay_actions):
+        raise ValueError("replay_actions must contain only strings")
+
+    focus_codes_value = job.get("focus_codes", [])
+    if not isinstance(focus_codes_value, (list, tuple)):
+        raise ValueError("focus_codes must be a sequence of unsigned integers")
+    focus_codes = list(focus_codes_value)
+
+    setup_script_value = job.get("setup_script", "")
+    if not isinstance(setup_script_value, (str, Path)):
+        raise ValueError("setup_script must be a string or path")
+
     required = {
         "job_id": job.get("job_id"),
         "seed": job.get("seed"),
@@ -219,15 +237,15 @@ def job_to_message(job: Mapping[str, Any]) -> dict[str, Any]:
         "observation_mode": job.get("observation_mode", "full"),
         "instrumentation": job.get("instrumentation", False),
         "persist_trace": job.get("persist_trace", False),
-        "replay_actions": list(job.get("replay_actions", [])),
-        "focus_codes": list(job.get("focus_codes", [])),
-        "setup_script": str(job.get("setup_script", "")),
+        "replay_actions": replay_actions,
+        "focus_codes": focus_codes,
+        "setup_script": str(setup_script_value),
         "force_unsupported": job.get("force_unsupported", False),
     }
     if not isinstance(required["job_id"], str) or not required["job_id"]:
         raise ValueError("job_id must be a nonempty string")
     _require_job_uint64(required["seed"], "seed")
-    starting_player = _require_job_uint64(required["starting_player"], "starting_player")
+    starting_player = require_uint8(required["starting_player"], "starting_player")
     if starting_player > 1:
         raise ValueError("starting_player must be 0 or 1")
     require_uint32(required["max_steps"], "max_steps")
@@ -249,7 +267,10 @@ def job_to_message(job: Mapping[str, Any]) -> dict[str, Any]:
     }
     trace_output = job.get("trace_output")
     if trace_output:
+        if not isinstance(trace_output, (str, Path)):
+            raise ValueError("trace_output must be a string or path")
         message["trace_output"] = str(Path(trace_output))
+    reject_unpaired_surrogates(message)
     return message
 
 

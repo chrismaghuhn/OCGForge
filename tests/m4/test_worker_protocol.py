@@ -11,6 +11,7 @@ from tools.m4.worker_protocol_contract import (
     CANONICAL_PATCHSET_SHA256,
     CANONICAL_RULES_BUNDLE_ID,
     ProtocolContractError,
+    UINT32_MAX,
     parse_json_line,
     recover_job_id,
     validate_ready,
@@ -280,6 +281,65 @@ class WorkerProtocolContractTests(unittest.TestCase):
                 job_to_message(invalid)
 
         invalid = {**job, "focus_codes": [2**64]}
+        with self.assertRaises(ValueError):
+            job_to_message(invalid)
+
+    def test_native_uint32_boundaries_are_enforced(self) -> None:
+        ready = ready_fixture()
+        ready["pid"] = UINT32_MAX
+        validate_ready(ready)
+        ready["pid"] = UINT32_MAX + 1
+        with self.assertRaises(ProtocolContractError):
+            validate_ready(ready)
+
+        for field in ("engine_steps", "interactive_decisions", "semantic_action_count"):
+            valid = result_fixture()
+            valid[field] = UINT32_MAX
+            validate_result(valid, expected_job_id="m4-000001")
+            invalid = result_fixture()
+            invalid[field] = UINT32_MAX + 1
+            with self.subTest(field=field), self.assertRaises(ProtocolContractError):
+                validate_result(invalid, expected_job_id="m4-000001")
+
+        for field in ("pid", "restart_index"):
+            valid = result_fixture()
+            valid["worker"][field] = UINT32_MAX
+            validate_result(valid, expected_job_id="m4-000001")
+            invalid = result_fixture()
+            invalid["worker"][field] = UINT32_MAX + 1
+            with self.subTest(field=f"worker.{field}"), self.assertRaises(
+                ProtocolContractError
+            ):
+                validate_result(invalid, expected_job_id="m4-000001")
+
+        job = {
+            "job_id": "m4-uint32",
+            "seed": (1 << 64) - 1,
+            "starting_player": 0,
+            "max_steps": UINT32_MAX,
+            "focus_codes": [UINT32_MAX],
+        }
+        message = job_to_message(job)
+        self.assertEqual(message["max_steps"], UINT32_MAX)
+        self.assertEqual(message["focus_codes"], [UINT32_MAX])
+        for field in ("max_steps",):
+            invalid = {**job, field: UINT32_MAX + 1}
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                job_to_message(invalid)
+        invalid = {**job, "focus_codes": [UINT32_MAX + 1]}
+        with self.assertRaises(ValueError):
+            job_to_message(invalid)
+
+    def test_native_uint64_fields_retain_uint64_bounds(self) -> None:
+        job = {
+            "job_id": "m4-uint64",
+            "seed": (1 << 64) - 1,
+            "starting_player": 0,
+            "max_steps": 2200,
+            "focus_codes": [],
+        }
+        self.assertEqual(job_to_message(job)["seed"], (1 << 64) - 1)
+        invalid = {**job, "seed": 1 << 64}
         with self.assertRaises(ValueError):
             job_to_message(invalid)
 

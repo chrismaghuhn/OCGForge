@@ -17,6 +17,7 @@ PROTOCOL_VERSION = PROTOCOL_SCHEMA
 WORKER_IDENTITY = "ocgforge.m4.native_worker.v1"
 UINT64_MAX = (1 << 64) - 1
 UINT32_MAX = (1 << 32) - 1
+UINT8_MAX = (1 << 8) - 1
 CANONICAL_RULES_BUNDLE_ID = (
     "3adfe6b4cfe2c2805e50b389fc0eb4e70a3b0b6107436614d328fddc865e585f"
 )
@@ -94,6 +95,21 @@ def require_uint32(value: Any, key: str) -> int:
     if value > UINT32_MAX:
         raise ProtocolContractError(f"{key} exceeds uint32")
     return value
+
+
+def require_uint8(value: Any, key: str) -> int:
+    """Require an unsigned integer representable as the native uint8 field."""
+
+    value = require_uint64(value, key)
+    if value > UINT8_MAX:
+        raise ProtocolContractError(f"{key} exceeds uint8")
+    return value
+
+
+def reject_unpaired_surrogates(value: Any) -> None:
+    """Reject strings that cannot be emitted as strict UTF-8 JSON."""
+
+    _reject_unpaired_surrogates(value)
 
 
 def parse_json_line(line: str) -> dict[str, Any]:
@@ -177,7 +193,7 @@ def validate_ready(message: dict[str, Any]) -> None:
         raise ProtocolContractError("invalid ready schema or type")
     if message["protocol_version"] != PROTOCOL_VERSION:
         raise ProtocolContractError("wrong worker protocol version")
-    if _require_unsigned(message, "pid") == 0:
+    if require_uint32(message["pid"], "pid") == 0:
         raise ProtocolContractError("worker PID must be nonzero")
     if message["rules_bundle_id"] != CANONICAL_RULES_BUNDLE_ID:
         raise ProtocolContractError("wrong rules bundle identity")
@@ -283,15 +299,15 @@ def validate_result(message: dict[str, Any], *, expected_job_id: str) -> None:
     if not isinstance(message["terminal"], bool):
         raise ProtocolContractError("terminal must be a boolean")
     for key in ("winner", "win_reason"):
-        if message[key] is not None and require_uint64(message[key], key) > 255:
-            raise ProtocolContractError(f"{key} must be an unsigned integer or null")
+        if message[key] is not None:
+            require_uint8(message[key], key)
     for key in (
         "engine_steps",
         "interactive_decisions",
         "semantic_action_count",
-        "simulation_elapsed_us",
     ):
-        _require_unsigned(message, key)
+        require_uint32(message[key], key)
+    require_uint64(message["simulation_elapsed_us"], "simulation_elapsed_us")
     if message["coordinator_elapsed_us"] is not None:
         raise ProtocolContractError("worker result must leave coordinator_elapsed_us null")
     for key in ("gameplay_hash", "trace_hash"):
@@ -327,8 +343,8 @@ def validate_result(message: dict[str, Any], *, expected_job_id: str) -> None:
         raise ProtocolContractError("worker metadata must be an object")
     if set(worker) != {"pid", "restart_index", "crashed", "restarted"}:
         raise ProtocolContractError("wrong worker metadata keys")
-    if _require_unsigned(worker, "pid") == 0:
+    if require_uint32(worker["pid"], "worker.pid") == 0:
         raise ProtocolContractError("worker PID must be nonzero")
-    _require_unsigned(worker, "restart_index")
+    require_uint32(worker["restart_index"], "worker.restart_index")
     if not isinstance(worker["crashed"], bool) or not isinstance(worker["restarted"], bool):
         raise ProtocolContractError("worker crash metadata must be boolean")

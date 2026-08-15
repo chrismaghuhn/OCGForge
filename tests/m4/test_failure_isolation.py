@@ -181,6 +181,31 @@ class FailureIsolationTests(unittest.TestCase):
                 self.assertTrue(pool._states[0].alive)
                 self.assertIsNone(pool._states[0].in_flight)
 
+    def test_outgoing_surrogates_are_invalid_jobs_without_worker_crash(self) -> None:
+        for field, value in (
+            ("setup_script", "\ud800"),
+            ("replay_actions", ["\ud800"]),
+        ):
+            with self.subTest(field=field), tempfile.TemporaryDirectory(
+                prefix="ocgforge-m4-task5-surrogate-"
+            ) as directory:
+                workload = jobs(2)
+                workload[0][field] = value
+                with PersistentWorkerPool(
+                    fake_command("normal"),
+                    worker_count=1,
+                    output_dir=Path(directory),
+                ) as pool:
+                    results = pool.run(workload)
+
+                    self.assertEqual([result["status"] for result in results], ["failed", "passed"])
+                    self.assertEqual(results[0]["failure_code"], "invalid_job")
+                    self.assertEqual(results[0]["coordinator"]["job_validation_error"], True)
+                    self.assertFalse(results[0]["worker"]["crashed"])
+                    self.assertEqual(pool.last_run_metadata["worker_crashes"], 0)
+                    self.assertIsNone(pool._states[0].in_flight)
+                    self.assertTrue(pool._states[0].alive)
+
     def test_valid_invalid_valid_jobs_are_explicit_and_sorted(self) -> None:
         workload = jobs()
         workload[1]["force_unsupported"] = True
