@@ -15,6 +15,11 @@ inline constexpr char kCanonicalDuelMode[] = "DUEL_MODE_MR5";
 inline constexpr std::uint64_t kCanonicalDuelFlags = 0x2E800;
 inline constexpr char kCanonicalRulesBundleId[] =
     "3adfe6b4cfe2c2805e50b389fc0eb4e70a3b0b6107436614d328fddc865e585f";
+inline constexpr char kCanonicalCoreCommit[] = "9a0c558c2d686542f7914a6d529fd7aa57746aed";
+inline constexpr char kCanonicalCardScriptsCommit[] =
+    "f337c87018ca723c1aded5143e616bb649555273";
+inline constexpr char kCanonicalDatabaseCommit[] =
+    "89ad6837b0766a52984d8c715a7d5d4f8447946b";
 inline constexpr char kCanonicalPatchsetId[] = "ocgforge.ocgcore.api_hardening.v1";
 inline constexpr char kCanonicalPatchsetSha256[] =
     "6b5421b3a852085f48fa161a5ba1540f902aa00784a337694b21c9efc34f69bd";
@@ -122,7 +127,15 @@ inline bool is_canonical_identity(const CanonicalSimulationConfig& config) {
            config.patchset_sha256 == kCanonicalPatchsetSha256 &&
            config.locked_deck_hashes.size() == 2 &&
            config.locked_deck_hashes[0] == kCanonicalDeckASha256 &&
-           config.locked_deck_hashes[1] == kCanonicalDeckBSha256;
+           config.locked_deck_hashes[1] == kCanonicalDeckBSha256 &&
+           config.rules.bundle_id == kCanonicalRulesBundleId &&
+           config.rules.core_commit == kCanonicalCoreCommit &&
+           config.rules.cardscripts_commit == kCanonicalCardScriptsCommit &&
+           config.rules.database_commit == kCanonicalDatabaseCommit &&
+           config.rules.core_patchset_id == kCanonicalPatchsetId &&
+           config.rules.core_patchset_sha256 == kCanonicalPatchsetSha256 &&
+           config.deck_a.sha256 == kCanonicalDeckASha256 &&
+           config.deck_b.sha256 == kCanonicalDeckBSha256;
 }
 
 struct SimulationResult {
