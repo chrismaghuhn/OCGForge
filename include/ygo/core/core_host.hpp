@@ -34,6 +34,16 @@ struct ProcessResult {
     std::vector<std::uint8_t> message;
 };
 
+struct CoreHostMetrics {
+    std::size_t duel_process_calls = 0;
+    std::size_t duel_query_calls = 0;
+    std::size_t duel_query_location_calls = 0;
+    std::size_t duel_query_field_calls = 0;
+    std::size_t duel_query_count_calls = 0;
+    std::size_t script_reader_requests = 0;
+    std::size_t script_loads = 0;
+};
+
 class CoreHost final {
 public:
     explicit CoreHost(CoreHostConfig config);
@@ -61,6 +71,7 @@ public:
     const CoreHostConfig& config() const noexcept { return config_; }
     std::size_t response_submission_count() const noexcept { return response_submission_count_; }
     std::size_t process_call_count() const noexcept { return process_call_count_; }
+    CoreHostMetrics metrics() const noexcept;
     int api_major() const noexcept { return api_major_; }
     int api_minor() const noexcept { return api_minor_; }
 
@@ -71,6 +82,10 @@ private:
     Impl* impl_ = nullptr;
     std::size_t response_submission_count_ = 0;
     std::size_t process_call_count_ = 0;
+    mutable std::size_t duel_query_calls_ = 0;
+    mutable std::size_t duel_query_location_calls_ = 0;
+    mutable std::size_t duel_query_field_calls_ = 0;
+    mutable std::size_t duel_query_count_calls_ = 0;
     int api_major_ = 0;
     int api_minor_ = 0;
 };

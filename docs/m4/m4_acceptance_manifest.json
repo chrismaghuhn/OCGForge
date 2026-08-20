@@ -1,0 +1,312 @@
+{
+  "gates": {
+    "candidate_observation": {
+      "artifacts": [
+        {
+          "path": "artifacts/m3/canonical_mr5/full_games_m4_final/full_fixed_deck_results.json",
+          "sha256": "e7ac5faac3fcebee6fc339ef031b4c9cba0f5dd08ecd18a68b2fc6fdfb87ee4c"
+        },
+        {
+          "path": "docs/m4/m4_final_verification.json",
+          "sha256": "50fe20d88e245691fc936b65d0f26fb682231c33b13169e6c9bf5bbe0040a4eb"
+        }
+      ],
+      "evidence": "Canonical M3 observation completed 16/16 with no candidate truncation or automatic decisions.",
+      "verification": {
+        "canonical_result": {
+          "path": "artifacts/m3/canonical_mr5/full_games_m4_final/full_fixed_deck_results.json"
+        },
+        "commands": [
+          {
+            "exit_code": 0,
+            "name": "canonical_m3",
+            "passed": 16,
+            "total": 16
+          }
+        ]
+      }
+    },
+    "existing_regressions": {
+      "artifacts": [
+        {
+          "path": "artifacts/m3/canonical_mr5/full_games_m4_final/full_fixed_deck_results.json",
+          "sha256": "e7ac5faac3fcebee6fc339ef031b4c9cba0f5dd08ecd18a68b2fc6fdfb87ee4c"
+        },
+        {
+          "path": "docs/m4/m4_final_verification.json",
+          "sha256": "50fe20d88e245691fc936b65d0f26fb682231c33b13169e6c9bf5bbe0040a4eb"
+        }
+      ],
+      "evidence": "Existing Python, M3, M4, and canonical game suites pass at their required counts.",
+      "verification": {
+        "commands": [
+          {
+            "exit_code": 0,
+            "name": "python_tests",
+            "passed": 8,
+            "total": 8
+          },
+          {
+            "exit_code": 0,
+            "name": "m3_tests",
+            "passed": 17,
+            "total": 17
+          },
+          {
+            "exit_code": 0,
+            "name": "m4_tests",
+            "passed": 96,
+            "total": 96
+          },
+          {
+            "exit_code": 0,
+            "name": "canonical_m3",
+            "passed": 16,
+            "total": 16
+          }
+        ]
+      }
+    },
+    "failure_isolation": {
+      "artifacts": [
+        {
+          "path": "artifacts/m4/matrix/throughput-w32-timeout-failure.log",
+          "sha256": "cfe70710fe1d076b2c2a9b7ba5ae490c4bdfd3abdcdb06984be6a08921f8aa27"
+        },
+        {
+          "path": "docs/m4/m4_final_verification.json",
+          "sha256": "50fe20d88e245691fc936b65d0f26fb682231c33b13169e6c9bf5bbe0040a4eb"
+        }
+      ],
+      "evidence": "The 120-second w32 timeout is preserved as explicit negative evidence and successful longer-guard reruns remain separate.",
+      "verification": {
+        "commands": [
+          {
+            "exit_code": 0,
+            "name": "m4_failure_isolation",
+            "passed": 96,
+            "total": 96
+          }
+        ],
+        "timeout_log_path": "artifacts/m4/matrix/throughput-w32-timeout-failure.log"
+      }
+    },
+    "final_build_and_ctest": {
+      "artifacts": [
+        {
+          "path": "docs/m4/m4_final_verification.json",
+          "sha256": "50fe20d88e245691fc936b65d0f26fb682231c33b13169e6c9bf5bbe0040a4eb"
+        },
+        {
+          "path": "docs/m4/m4_benchmark_schema.json",
+          "sha256": "a59cdab3cd48f3909725d9f114265a987256d7a146f919186252d60ea689ca49"
+        }
+      ],
+      "evidence": "Final CMake configure/build and CTest completed successfully.",
+      "verification": {
+        "commands": [
+          {
+            "exit_code": 0,
+            "name": "cmake_configure",
+            "passed": 1,
+            "total": 1
+          },
+          {
+            "exit_code": 0,
+            "name": "cmake_build",
+            "passed": 1,
+            "total": 1
+          },
+          {
+            "exit_code": 0,
+            "name": "ctest",
+            "passed": 90,
+            "total": 90
+          }
+        ],
+        "ctest_passed": 90,
+        "ctest_total": 90
+      }
+    },
+    "handshake_identity": {
+      "artifacts": [
+        {
+          "path": "artifacts\\m4\\matrix\\throughput-w1.json",
+          "sha256": "e08a2163c86461bad83dfd727c4b38cf554a218d88738acda7fdc64b74d0d2a4"
+        },
+        {
+          "path": "artifacts\\m4\\matrix\\throughput-w32.json",
+          "sha256": "139b4b84c6383956a368ab9edae9add5bb0bc04e7ad762fd8b5d8a7580f5c345"
+        },
+        {
+          "path": "docs/m4/m4_final_verification.json",
+          "sha256": "50fe20d88e245691fc936b65d0f26fb682231c33b13169e6c9bf5bbe0040a4eb"
+        }
+      ],
+      "evidence": "Native integration and matrix identity checks pass with zero handshake or identity mismatches.",
+      "verification": {
+        "commands": [
+          {
+            "exit_code": 0,
+            "name": "ctest",
+            "passed": 90,
+            "total": 90
+          }
+        ],
+        "handshake_errors": 0,
+        "identity_mismatches": 0
+      }
+    },
+    "integrity": {
+      "artifacts": [
+        {
+          "path": "docs/m4/m4_benchmark_schema.json",
+          "sha256": "a59cdab3cd48f3909725d9f114265a987256d7a146f919186252d60ea689ca49"
+        },
+        {
+          "path": "docs/m4/m4_final_verification.json",
+          "sha256": "50fe20d88e245691fc936b65d0f26fb682231c33b13169e6c9bf5bbe0040a4eb"
+        }
+      ],
+      "evidence": "All declared-schema reports and matrix rows validate with zero invalid rows.",
+      "verification": {
+        "commands": [
+          {
+            "exit_code": 0,
+            "name": "report_schema_validation",
+            "passed": 10,
+            "total": 10
+          }
+        ],
+        "invalid_rows": 0,
+        "schema_errors": 0
+      }
+    },
+    "mode_equivalence": {
+      "artifacts": [
+        {
+          "path": "artifacts/m4/experiments/conformance.json",
+          "sha256": "3a379ef6ff30393c263de856dc161abccca1e7c0acc48aede7a5a33bc4dfb7ce"
+        },
+        {
+          "path": "artifacts/m4/experiments/throughput-no-persistence.json",
+          "sha256": "dc0c472419dd6eb3551d85e7a2c5e827edde55b4e48ddc6170d0480dc0ba33a7"
+        },
+        {
+          "path": "artifacts/m4/experiments/throughput-off-diagnostic.json",
+          "sha256": "76ed38c807f35ae78f06b147e897c556ed17c01319c60b539b3a1cf1491fe0f1"
+        },
+        {
+          "path": "docs/m4/m4_final_verification.json",
+          "sha256": "50fe20d88e245691fc936b65d0f26fb682231c33b13169e6c9bf5bbe0040a4eb"
+        }
+      ],
+      "evidence": "Conformance, throughput without persistence, and off-diagnostic runs agree semantically.",
+      "verification": {
+        "commands": [
+          {
+            "exit_code": 0,
+            "name": "mode_equivalence_validation",
+            "passed": 3,
+            "total": 3
+          }
+        ],
+        "semantic_match": true
+      }
+    },
+    "parallel_determinism": {
+      "artifacts": [
+        {
+          "path": "artifacts\\m4\\matrix\\throughput-w1.json",
+          "sha256": "e08a2163c86461bad83dfd727c4b38cf554a218d88738acda7fdc64b74d0d2a4"
+        },
+        {
+          "path": "artifacts\\m4\\matrix\\throughput-w2.json",
+          "sha256": "300f1da4d06f0dea3e433648697128cea391ce8463d12783b2d68437273879d5"
+        },
+        {
+          "path": "artifacts\\m4\\matrix\\throughput-w4.json",
+          "sha256": "722731eaabda9a8379cb902b62377865c7db09792208d9cff5c75098bcc59747"
+        },
+        {
+          "path": "artifacts\\m4\\matrix\\throughput-w8.json",
+          "sha256": "267fa9a13d121371339dbe20debc27fd37d2fad5701e8b32fa1b50d4b7a33cbd"
+        },
+        {
+          "path": "artifacts\\m4\\matrix\\throughput-w16.json",
+          "sha256": "588ccce006132e5d264a85bf7c34ebfe43a7519f7295cf29d82bbe90e09aa6e7"
+        },
+        {
+          "path": "artifacts\\m4\\matrix\\throughput-w32.json",
+          "sha256": "139b4b84c6383956a368ab9edae9add5bb0bc04e7ad762fd8b5d8a7580f5c345"
+        },
+        {
+          "path": "artifacts\\m4\\matrix\\throughput-w64.json",
+          "sha256": "7470d80c982764dc25bec84d2ba9a4edd4526501e56b5cf7d7174b784cd12f91"
+        },
+        {
+          "path": "docs/m4/m4_final_verification.json",
+          "sha256": "50fe20d88e245691fc936b65d0f26fb682231c33b13169e6c9bf5bbe0040a4eb"
+        }
+      ],
+      "evidence": "Semantic fingerprints match for every validated worker row.",
+      "verification": {
+        "commands": [
+          {
+            "exit_code": 0,
+            "name": "m4_tests",
+            "passed": 96,
+            "total": 96
+          }
+        ],
+        "mismatches": [],
+        "workers": [
+          1,
+          2,
+          4,
+          8,
+          16,
+          32,
+          64
+        ]
+      }
+    },
+    "privacy": {
+      "artifacts": [
+        {
+          "path": "artifacts\\m4\\matrix\\throughput-w1.json",
+          "sha256": "e08a2163c86461bad83dfd727c4b38cf554a218d88738acda7fdc64b74d0d2a4"
+        },
+        {
+          "path": "artifacts\\m4\\matrix\\throughput-w32.json",
+          "sha256": "139b4b84c6383956a368ab9edae9add5bb0bc04e7ad762fd8b5d8a7580f5c345"
+        },
+        {
+          "path": "artifacts\\m4\\matrix\\throughput-w64.json",
+          "sha256": "7470d80c982764dc25bec84d2ba9a4edd4526501e56b5cf7d7174b784cd12f91"
+        },
+        {
+          "path": "docs/m4/m4_final_verification.json",
+          "sha256": "50fe20d88e245691fc936b65d0f26fb682231c33b13169e6c9bf5bbe0040a4eb"
+        }
+      ],
+      "evidence": "Successful throughput worker stderr is empty and throughput traces are not persisted.",
+      "verification": {
+        "commands": [
+          {
+            "exit_code": 0,
+            "name": "privacy_boundary_validation",
+            "passed": 96,
+            "total": 96
+          }
+        ],
+        "stderr_bytes": 0,
+        "trace_persistence": false
+      }
+    }
+  },
+  "manifest_path": "docs/m4/m4_acceptance_manifest.json",
+  "manifest_sha256": "5949aee649c1abbc8a3f3533e0806609c161ba51c4aa2ace16b2460c075057a2",
+  "run_identity": "4a199bdaa73d6fe9bfd64d2c4ed7ca66abe83a61ce6015cdfda5858fe0402d8c",
+  "schema_version": "ocgforge.m4.acceptance.v1"
+}

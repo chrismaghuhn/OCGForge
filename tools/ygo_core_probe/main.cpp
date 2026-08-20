@@ -22,6 +22,7 @@
 #include "ygo/observation/observation_session.hpp"
 #include "ygo/protocol/message_decoder.hpp"
 #include "ygo/protocol/protocol_error.hpp"
+#include "ygo/simulation/canonical_simulation.hpp"
 #include "ygo/trace/engine_trace.hpp"
 #include "ygo/trace/sha256.hpp"
 
@@ -362,7 +363,128 @@ void emit_unsupported_diagnostic(const ygo::protocol::ProtocolError& error, std:
     std::cerr << "],\"error\":" << json_escape(error.what()) << "}\n";
 }
 
+std::string canonical_summary_json(const ygo::simulation::SimulationResult& result,
+                                   const ygo::simulation::CanonicalSimulationConfig& config,
+                                   const ygo::simulation::SimulationJob& job) {
+    std::ostringstream summary;
+    summary << "{\"schema_version\":\"ocgforge.m3.game_summary.v1\",\"format_id\":"
+            << json_escape(config.format) << ",\"duel_mode_name\":" << json_escape(config.duel_mode)
+            << ",\"duel_flags\":" << config.duel_flags << ",\"rules_bundle_id\":"
+            << json_escape(config.rules_bundle_id) << ",\"core_patchset_id\":"
+            << json_escape(config.patchset_id) << ",\"core_patchset_sha256\":"
+            << json_escape(config.patchset_sha256) << ",\"terminal\":"
+            << (result.terminal ? "true" : "false") << ",\"winner\":"
+            << (result.winner.has_value() ? std::to_string(*result.winner) : "255") << ",\"win_reason\":"
+            << (result.win_reason.has_value() ? std::to_string(*result.win_reason) : "255")
+            << ",\"starting_player\":" << static_cast<unsigned>(job.starting_player)
+            << ",\"engine_steps\":" << result.engine_steps << ",\"turns\":" << result.turns
+            << ",\"battle_command_count\":" << result.battle_command_count
+            << ",\"visible_life_points_event_count\":" << result.visible_life_points_event_count
+            << ",\"visible_destroyed_event_count\":" << result.visible_destroyed_event_count
+            << ",\"visible_win_event_count\":" << result.visible_win_event_count
+            << ",\"interactive_decisions\":" << result.interactive_decisions
+            << ",\"continuation_intermediate_steps\":" << result.continuation_intermediate_steps
+            << ",\"candidate_count_max\":" << result.operations.candidate_max
+            << ",\"candidate_count_mean\":" << result.candidate_count_mean
+            << ",\"observation_entity_total\":" << result.observation_entity_total
+            << ",\"observation_event_total\":" << result.observation_event_total
+            << ",\"unsupported_count\":" << result.errors.unsupported
+            << ",\"retry_count\":" << result.errors.retries
+            << ",\"automatic_decision_count\":" << result.errors.automatic
+            << ",\"candidate_truncation_count\":" << result.errors.truncated
+            << ",\"core_error_count\":" << result.errors.core_errors
+            << ",\"semantic_gameplay_hash\":" << json_escape(result.gameplay_hash)
+            << ",\"trace_hash\":" << json_escape(result.trace_hash.value_or("")) << "}";
+    return summary.str();
+}
+
+int run_canonical_full_game(const Arguments& arguments) {
+    ygo::simulation::CanonicalSimulationConfig config;
+    config.rules.card_scripts_root = YGO_M3_CARDSCRIPTS;
+    config.rules.card_data_tsv = YGO_M0_CARD_DATA_TSV;
+    config.rules.bundle_id = std::string(ygo::m3::canonical_rules().rules_bundle_id);
+    config.rules.core_patchset_id = std::string(ygo::m3::canonical_rules().core_patchset_id);
+    config.rules.core_patchset_sha256 = std::string(ygo::m3::canonical_rules().core_patchset_sha256);
+    config.duel_flags = ygo::m3::canonical_rules().duel_flags;
+    config.deck_a = ygo::core::load_fixture_deck(YGO_M3_DECK_A);
+    config.deck_b = ygo::core::load_fixture_deck(YGO_M3_DECK_B);
+    config.required_script_codes = required_script_codes(config.deck_a, config.deck_b);
+    config.mode = ygo::simulation::SimulationMode::Conformance;
+    config.observation_mode = ygo::simulation::ObservationMode::Full;
+
+    ygo::simulation::SimulationJob job;
+    job.job_id = "probe-m3-full-game";
+    job.seed = arguments.seed;
+    job.seat_assignment = arguments.mirror_seats ? ygo::simulation::SeatAssignment::Mirror
+                                                  : ygo::simulation::SeatAssignment::Normal;
+    job.starting_player = arguments.starting_player.value_or(0);
+    job.max_steps = arguments.max_steps;
+    job.focus_codes = arguments.focus_codes;
+    job.setup_script = arguments.setup_script;
+    job.force_unsupported = arguments.force_unsupported;
+    job.mode = ygo::simulation::SimulationMode::Conformance;
+    job.observation_mode = ygo::simulation::ObservationMode::Full;
+    job.persist_trace = !arguments.output.empty();
+    job.trace_output = arguments.output;
+    if (!arguments.replay_actions_path.empty()) {
+        std::ifstream replay_stream(arguments.replay_actions_path, std::ios::binary);
+        if (!replay_stream) {
+            throw std::runtime_error("cannot open replay actions: " + arguments.replay_actions_path);
+        }
+        std::string line;
+        while (std::getline(replay_stream, line)) {
+            line = trim_replay_action_line(std::move(line));
+            if (!line.empty() && line.front() != '#') {
+                job.replay_actions.push_back(std::move(line));
+            }
+        }
+    }
+
+    const auto result = ygo::simulation::run_canonical_simulation(job, config);
+    if (!result.pass) {
+        if (result.failure_code == "nonterminal") {
+            // The legacy probe treats max_steps exhaustion as a valid, emitted
+            // partial trace rather than as a protocol failure.
+        } else if (result.failure_code == "forced_unsupported") {
+            return 3;
+        } else if (result.failure_code == "retry" || result.errors.retries != 0) {
+            std::cerr << "probe error: " << result.error_message << '\n';
+            return 5;
+        } else if (result.errors.core_errors != 0) {
+            std::cerr << "core error: " << result.error_message << '\n';
+            return 4;
+        } else if (result.errors.unsupported != 0 || result.errors.truncated != 0) {
+            std::cerr << "protocol error: " << result.error_message << '\n';
+            return 3;
+        } else {
+            std::cerr << "probe error: " << result.error_message << '\n';
+            return 5;
+        }
+    }
+    if (!result.trace_jsonl.has_value() || !result.trace_hash.has_value()) {
+        std::cerr << "probe error: conformance result omitted canonical trace evidence\n";
+        return 5;
+    }
+
+    const auto summary = canonical_summary_json(result, config, job);
+    if (arguments.output.empty()) {
+        std::cout << *result.trace_jsonl;
+        std::cout << "SEMANTIC_GAMEPLAY_HASH " << result.gameplay_hash << "\n";
+        std::cout << "TRACE_HASH " << *result.trace_hash << "\n";
+        std::cout << "M3_SUMMARY " << summary << "\n";
+    }
+    std::cerr << "SEMANTIC_GAMEPLAY_HASH " << result.gameplay_hash << "\n";
+    std::cerr << "TRACE_HASH " << *result.trace_hash << "\n";
+    std::cerr << "M3_SUMMARY " << summary << "\n";
+    std::cerr << "CONTINUATION_RESPONSE_BUILD_TIME_US total=" << result.response_build_time_us_total
+              << " max=" << result.response_build_time_us_max << "\n";
+    return 0;
+}
+
 int run(const Arguments& arguments) {
+    if (arguments.m3_full_game) {
+        return run_canonical_full_game(arguments);
+    }
     ygo::core::CoreHostConfig config;
     config.rules.card_scripts_root = arguments.m3_fixed_matchup ? YGO_M3_CARDSCRIPTS : YGO_M0_CARDSCRIPTS;
     config.rules.card_data_tsv = YGO_M0_CARD_DATA_TSV;
@@ -400,7 +522,7 @@ int run(const Arguments& arguments) {
                               arguments.m3_fixed_matchup ? "m3.deterministic_conformance.v1"
                                                          : "m0.deterministic_priority.seeded_tie.v1",
                               arguments.m3_fixed_matchup);
-    const ygo::m3::DeterministicConformancePolicy m3_policy(arguments.focus_codes, arguments.m3_full_game);
+    const ygo::m3::DeterministicConformancePolicy m3_policy(arguments.focus_codes, false);
     std::vector<std::string> replay_actions;
     if (!arguments.replay_actions_path.empty()) {
         std::ifstream replay_stream(arguments.replay_actions_path, std::ios::binary);

@@ -202,10 +202,12 @@ void CoreHost::submit_response(const std::vector<std::uint8_t>& response) {
 }
 
 std::uint32_t CoreHost::query_count(std::uint8_t team, std::uint32_t location) const {
+    ++duel_query_count_calls_;
     return OCG_DuelQueryCount(impl_->duel, team, location);
 }
 
 std::vector<std::uint8_t> CoreHost::query_location(const OCG_QueryInfo& info) const {
+    ++duel_query_location_calls_;
     std::uint32_t length = 0;
     auto* raw = static_cast<const std::uint8_t*>(OCG_DuelQueryLocation(impl_->duel, &length, &info));
     if (raw == nullptr && length != 0) {
@@ -215,6 +217,7 @@ std::vector<std::uint8_t> CoreHost::query_location(const OCG_QueryInfo& info) co
 }
 
 std::vector<std::uint8_t> CoreHost::query(const OCG_QueryInfo& info) const {
+    ++duel_query_calls_;
     std::uint32_t length = 0;
     auto* raw = static_cast<const std::uint8_t*>(OCG_DuelQuery(impl_->duel, &length, &info));
     if (raw == nullptr && length != 0) {
@@ -224,12 +227,18 @@ std::vector<std::uint8_t> CoreHost::query(const OCG_QueryInfo& info) const {
 }
 
 std::vector<std::uint8_t> CoreHost::query_field() const {
+    ++duel_query_field_calls_;
     std::uint32_t length = 0;
     auto* raw = static_cast<const std::uint8_t*>(OCG_DuelQueryField(impl_->duel, &length));
     if (raw == nullptr && length != 0) {
         throw CoreError(CoreErrorCode::Query, "OCG_DuelQueryField", "null result with nonzero length");
     }
     return raw == nullptr ? std::vector<std::uint8_t>{} : std::vector<std::uint8_t>(raw, raw + length);
+}
+
+CoreHostMetrics CoreHost::metrics() const noexcept {
+    return CoreHostMetrics{process_call_count_, duel_query_calls_, duel_query_location_calls_, duel_query_field_calls_,
+                           duel_query_count_calls_, impl_->scripts.reader_requests(), impl_->scripts.successful_loads()};
 }
 
 std::optional<StaticCardData> CoreHost::static_card_data(std::uint32_t code) const {

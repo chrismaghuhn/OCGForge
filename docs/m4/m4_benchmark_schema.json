@@ -1,0 +1,420 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "ocgforge.m4.throughput_benchmark.v1",
+  "title": "OCGForge M4 throughput benchmark",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "canonical_environment",
+    "hardware",
+    "build",
+    "warmup_policy",
+    "mode",
+    "games_requested",
+    "workers_requested",
+    "cold_start",
+    "steady_state",
+    "jobs",
+    "observation_mode",
+    "instrumentation",
+    "trace_persistence"
+  ],
+  "properties": {
+    "schema_version": { "const": "ocgforge.m4.throughput_benchmark.v1" },
+    "canonical_environment": { "$ref": "#/$defs/canonical_environment" },
+    "hardware": { "$ref": "#/$defs/hardware" },
+    "build": { "$ref": "#/$defs/build" },
+    "warmup_policy": { "$ref": "#/$defs/warmup_policy" },
+    "mode": { "enum": ["conformance", "throughput"] },
+    "observation_mode": { "enum": ["full", "off_diagnostic"] },
+    "classification_label": { "const": "DIAGNOSTIC ONLY — NOT TRAINING THROUGHPUT" },
+    "instrumentation": { "type": "boolean" },
+    "trace_persistence": { "type": "boolean" },
+    "games_requested": { "type": "integer", "minimum": 0 },
+    "workers_requested": { "type": "integer", "minimum": 1 },
+    "cold_start": { "$ref": "#/$defs/cold_start" },
+    "steady_state": { "$ref": "#/$defs/steady_state" },
+    "jobs": { "type": "array", "items": { "$ref": "#/$defs/job" } }
+  },
+  "$defs": {
+    "job": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema", "type", "status", "job_id", "terminal", "winner", "win_reason",
+        "engine_steps", "interactive_decisions", "semantic_action_count", "gameplay_hash",
+        "trace_hash", "simulation_elapsed_us", "coordinator_elapsed_us", "errors", "timing_us",
+        "counters", "worker", "failure_code", "error_message", "coordinator", "coordinator_errors"
+      ],
+      "properties": {
+        "schema": { "const": "ocgforge.m4.worker.v1" },
+        "type": { "const": "result" },
+        "status": { "enum": ["passed", "failed"] },
+        "job_id": { "type": "string", "pattern": "^m4-[0-9]{6}$" },
+        "terminal": { "type": "boolean" },
+        "winner": { "oneOf": [{ "type": "integer", "minimum": 0 }, { "type": "null" }] },
+        "win_reason": { "oneOf": [{ "type": "integer", "minimum": 0 }, { "type": "null" }] },
+        "engine_steps": { "type": "integer", "minimum": 0 },
+        "interactive_decisions": { "type": "integer", "minimum": 0 },
+        "semantic_action_count": { "type": "integer", "minimum": 0 },
+        "gameplay_hash": { "oneOf": [{ "type": "string", "pattern": "^[0-9a-fA-F]{64}$" }, { "type": "null" }] },
+        "trace_hash": { "oneOf": [{ "type": "string", "pattern": "^[0-9a-fA-F]{64}$" }, { "type": "null" }] },
+        "simulation_elapsed_us": { "oneOf": [{ "type": "integer", "minimum": 0 }, { "type": "null" }] },
+        "coordinator_elapsed_us": { "oneOf": [{ "type": "integer", "minimum": 0 }, { "type": "null" }] },
+        "errors": { "$ref": "#/$defs/native_errors" },
+        "timing_us": { "$ref": "#/$defs/job_timing" },
+        "counters": { "$ref": "#/$defs/operation_counters" },
+        "worker": { "$ref": "#/$defs/job_worker" },
+        "failure_code": { "oneOf": [{ "type": "string" }, { "type": "null" }] },
+        "error_message": { "oneOf": [{ "type": "string" }, { "type": "null" }] },
+        "coordinator": { "$ref": "#/$defs/job_coordinator" },
+        "coordinator_errors": { "$ref": "#/$defs/coordinator_errors" }
+      }
+    },
+    "job_timing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["core_process", "protocol_candidate", "continuation", "observation", "trace_hash", "serialization", "other", "trace_persistence"],
+      "properties": {
+        "core_process": { "$ref": "#/$defs/nonnegative_integer" },
+        "protocol_candidate": { "$ref": "#/$defs/nonnegative_integer" },
+        "continuation": { "$ref": "#/$defs/nonnegative_integer" },
+        "observation": { "$ref": "#/$defs/nonnegative_integer" },
+        "trace_hash": { "$ref": "#/$defs/nonnegative_integer" },
+        "serialization": { "$ref": "#/$defs/nonnegative_integer" },
+        "other": { "$ref": "#/$defs/nonnegative_integer" },
+        "trace_persistence": { "$ref": "#/$defs/nonnegative_integer" }
+      }
+    },
+    "job_worker": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pid", "restart_index", "crashed", "restarted"],
+      "properties": {
+        "pid": { "$ref": "#/$defs/nonnegative_integer" },
+        "restart_index": { "$ref": "#/$defs/nonnegative_integer" },
+        "crashed": { "type": "boolean" },
+        "restarted": { "type": "boolean" }
+      }
+    },
+    "job_coordinator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stderr_path", "worker_index", "worker_pid", "worker_crashed", "worker_restarted", "worker_restart_index"],
+      "properties": {
+        "stderr_path": { "type": "string" },
+        "worker_index": { "oneOf": [{ "type": "integer", "minimum": 0 }, { "type": "null" }] },
+        "worker_pid": { "oneOf": [{ "type": "integer", "minimum": 0 }, { "type": "null" }] },
+        "worker_crashed": { "type": "boolean" },
+        "worker_restarted": { "type": "boolean" },
+        "worker_restart_index": { "$ref": "#/$defs/nonnegative_integer" },
+        "exit_code": { "oneOf": [{ "type": "integer" }, { "type": "null" }] },
+        "job_validation_error": { "type": "boolean" }
+      }
+    },
+    "measured_or_not": {
+      "oneOf": [
+        { "type": "number", "minimum": 0 },
+        { "const": "NOT_MEASURED" }
+      ]
+    },
+    "percentiles": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sample_count", "mean", "min", "p50", "p95", "p99", "max"],
+      "properties": {
+        "sample_count": { "type": "integer", "minimum": 0 },
+        "mean": { "$ref": "#/$defs/measured_or_not" },
+        "min": { "$ref": "#/$defs/measured_or_not" },
+        "p50": { "$ref": "#/$defs/measured_or_not" },
+        "p95": { "$ref": "#/$defs/measured_or_not" },
+        "p99": { "$ref": "#/$defs/measured_or_not" },
+        "max": { "$ref": "#/$defs/measured_or_not" }
+      }
+    },
+    "nonnegative_integer": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "index_range": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start", "stop", "count"],
+      "properties": {
+        "start": { "$ref": "#/$defs/nonnegative_integer" },
+        "stop": { "$ref": "#/$defs/nonnegative_integer" },
+        "count": { "$ref": "#/$defs/nonnegative_integer" }
+      }
+    },
+    "native_errors": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "retries",
+        "unsupported",
+        "automatic",
+        "truncated",
+        "core_errors",
+        "worker_errors"
+      ],
+      "properties": {
+        "retries": { "$ref": "#/$defs/nonnegative_integer" },
+        "unsupported": { "$ref": "#/$defs/nonnegative_integer" },
+        "automatic": { "$ref": "#/$defs/nonnegative_integer" },
+        "truncated": { "$ref": "#/$defs/nonnegative_integer" },
+        "core_errors": { "$ref": "#/$defs/nonnegative_integer" },
+        "worker_errors": { "$ref": "#/$defs/nonnegative_integer" }
+      }
+    },
+    "coordinator_errors": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "retries",
+        "handshake",
+        "malformed_protocol",
+        "failed_games",
+        "worker_crashes",
+        "worker_restarts"
+      ],
+      "properties": {
+        "retries": { "$ref": "#/$defs/nonnegative_integer" },
+        "handshake": { "$ref": "#/$defs/nonnegative_integer" },
+        "malformed_protocol": { "$ref": "#/$defs/nonnegative_integer" },
+        "failed_games": { "$ref": "#/$defs/nonnegative_integer" },
+        "worker_crashes": { "$ref": "#/$defs/nonnegative_integer" },
+        "worker_restarts": { "$ref": "#/$defs/nonnegative_integer" }
+      }
+    },
+    "report_errors": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "retries",
+        "unsupported",
+        "automatic",
+        "truncated",
+        "core_errors",
+        "worker_errors",
+        "coordinator"
+      ],
+      "properties": {
+        "retries": { "$ref": "#/$defs/nonnegative_integer" },
+        "unsupported": { "$ref": "#/$defs/nonnegative_integer" },
+        "automatic": { "$ref": "#/$defs/nonnegative_integer" },
+        "truncated": { "$ref": "#/$defs/nonnegative_integer" },
+        "core_errors": { "$ref": "#/$defs/nonnegative_integer" },
+        "worker_errors": { "$ref": "#/$defs/nonnegative_integer" },
+        "coordinator": { "$ref": "#/$defs/coordinator_errors" }
+      }
+    },
+    "timing_buckets": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "core_process",
+        "protocol_candidate",
+        "continuation",
+        "observation",
+        "trace_hash",
+        "serialization",
+        "other",
+        "trace_persistence",
+        "coordinator_ipc",
+        "coordinator_other"
+      ],
+      "properties": {
+        "core_process": { "$ref": "#/$defs/nonnegative_integer" },
+        "protocol_candidate": { "$ref": "#/$defs/nonnegative_integer" },
+        "continuation": { "$ref": "#/$defs/nonnegative_integer" },
+        "observation": { "$ref": "#/$defs/nonnegative_integer" },
+        "trace_hash": { "$ref": "#/$defs/nonnegative_integer" },
+        "serialization": { "$ref": "#/$defs/nonnegative_integer" },
+        "other": { "$ref": "#/$defs/nonnegative_integer" },
+        "trace_persistence": { "$ref": "#/$defs/nonnegative_integer" },
+        "coordinator_ipc": { "$ref": "#/$defs/nonnegative_integer" },
+        "coordinator_other": { "$ref": "#/$defs/nonnegative_integer" }
+      }
+    },
+    "operation_counters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ocg_duel_process",
+        "ocg_duel_query",
+        "ocg_duel_query_location",
+        "ocg_duel_query_field",
+        "ocg_duel_query_count",
+        "script_reader_requests",
+        "script_loads",
+        "observations",
+        "entities_projected",
+        "candidate_sets",
+        "candidate_total",
+        "candidate_max",
+        "semantic_hashes",
+        "trace_bytes_serialized"
+      ],
+      "properties": {
+        "ocg_duel_process": { "$ref": "#/$defs/nonnegative_integer" },
+        "ocg_duel_query": { "$ref": "#/$defs/nonnegative_integer" },
+        "ocg_duel_query_location": { "$ref": "#/$defs/nonnegative_integer" },
+        "ocg_duel_query_field": { "$ref": "#/$defs/nonnegative_integer" },
+        "ocg_duel_query_count": { "$ref": "#/$defs/nonnegative_integer" },
+        "script_reader_requests": { "$ref": "#/$defs/nonnegative_integer" },
+        "script_loads": { "$ref": "#/$defs/nonnegative_integer" },
+        "observations": { "$ref": "#/$defs/nonnegative_integer" },
+        "entities_projected": { "$ref": "#/$defs/nonnegative_integer" },
+        "candidate_sets": { "$ref": "#/$defs/nonnegative_integer" },
+        "candidate_total": { "$ref": "#/$defs/nonnegative_integer" },
+        "candidate_max": { "$ref": "#/$defs/nonnegative_integer" },
+        "semantic_hashes": { "$ref": "#/$defs/nonnegative_integer" },
+        "trace_bytes_serialized": { "$ref": "#/$defs/nonnegative_integer" }
+      }
+    },
+    "canonical_environment": {
+      "type": "object",
+      "required": [
+        "format_id",
+        "duel_mode_name",
+        "duel_flags",
+        "rules_bundle_id",
+        "core_patchset_sha256",
+        "deck_hashes"
+      ],
+      "properties": {
+        "format_id": { "type": "string" },
+        "duel_mode_name": { "type": "string" },
+        "duel_flags": { "type": "integer", "minimum": 0 },
+        "rules_bundle_id": { "type": "string", "minLength": 1 },
+        "core_patchset_sha256": { "type": "string", "minLength": 1 },
+        "deck_hashes": { "type": "array", "minItems": 2, "items": { "type": "string" } }
+      }
+    },
+    "hardware": {
+      "type": "object",
+      "required": ["platform", "system", "machine", "processor", "python_version", "physical_memory_bytes"],
+      "properties": {
+        "platform": { "type": "string" },
+        "system": { "type": "string" },
+        "machine": { "type": "string" },
+        "processor": { "type": "string" },
+        "python_version": { "type": "string" },
+        "physical_memory_bytes": { "$ref": "#/$defs/measured_or_not" }
+      }
+    },
+    "build": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["compiler_identity", "build_type", "worker_identity", "protocol_schema", "protocol_version", "platform", "worker_executable", "worker_count", "result_timeout_seconds"],
+      "properties": {
+        "compiler_identity": { "type": "string" },
+        "build_type": { "type": "string" },
+        "worker_identity": { "type": "string" },
+        "protocol_schema": { "type": "string" },
+        "protocol_version": { "type": "string" },
+        "platform": { "type": "string" },
+        "worker_executable": { "type": "string" },
+        "worker_count": { "$ref": "#/$defs/nonnegative_integer" },
+        "result_timeout_seconds": { "type": "number", "exclusiveMinimum": 0 }
+      }
+    },
+    "warmup_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "warmup_games",
+        "warmup_indices",
+        "steady_state_indices",
+        "master_seed",
+        "same_master_seed_for_warmup_and_steady",
+        "starting_player_mode",
+        "seat_mode",
+        "steady_timer_start",
+        "steady_timer_stop"
+      ],
+      "properties": {
+        "warmup_games": { "type": "integer", "minimum": 0 },
+        "warmup_indices": { "$ref": "#/$defs/index_range" },
+        "steady_state_indices": { "$ref": "#/$defs/index_range" },
+        "master_seed": { "type": "integer" },
+        "same_master_seed_for_warmup_and_steady": { "const": true },
+        "starting_player_mode": { "const": "balanced" },
+        "seat_mode": { "const": "balanced" },
+        "steady_timer_start": { "const": "after_warmup_completion" },
+        "steady_timer_stop": { "const": "after_final_result_publication" }
+      }
+    },
+    "cold_start": {
+      "type": "object",
+      "required": ["wall_clock_seconds", "ready_workers", "worker_count", "process_ready_time_domain"],
+      "properties": {
+        "wall_clock_seconds": { "type": "number", "minimum": 0 },
+        "ready_workers": { "type": "integer", "minimum": 0 },
+        "worker_count": { "type": "integer", "minimum": 1 },
+        "process_ready_time_domain": { "type": "string" }
+      }
+    },
+    "memory": {
+      "type": "object",
+      "required": [
+        "process_count",
+        "peak_total_working_set_bytes",
+        "peak_worker_working_set_bytes",
+        "memory_per_active_environment_bytes"
+      ],
+      "properties": {
+        "process_count": { "$ref": "#/$defs/measured_or_not" },
+        "peak_total_working_set_bytes": { "$ref": "#/$defs/measured_or_not" },
+        "peak_worker_working_set_bytes": { "$ref": "#/$defs/measured_or_not" },
+        "memory_per_active_environment_bytes": { "$ref": "#/$defs/measured_or_not" }
+      }
+    },
+    "steady_state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "games_requested",
+        "games_completed",
+        "terminal_games",
+        "failed_games",
+        "wall_clock_seconds",
+        "games_per_second",
+        "engine_steps_total",
+        "engine_steps_per_second",
+        "interactive_decisions_total",
+        "interactive_decisions_per_second",
+        "semantic_actions_total",
+        "simulation_elapsed_us",
+        "coordinator_elapsed_us",
+        "memory",
+        "errors",
+        "timing_buckets_us",
+        "operation_counters"
+      ],
+      "properties": {
+        "games_requested": { "type": "integer", "minimum": 0 },
+        "games_completed": { "type": "integer", "minimum": 0 },
+        "terminal_games": { "type": "integer", "minimum": 0 },
+        "failed_games": { "type": "integer", "minimum": 0 },
+        "wall_clock_seconds": { "type": "number", "minimum": 0 },
+        "games_per_second": { "type": "number", "minimum": 0 },
+        "engine_steps_total": { "type": "integer", "minimum": 0 },
+        "engine_steps_per_second": { "type": "number", "minimum": 0 },
+        "interactive_decisions_total": { "type": "integer", "minimum": 0 },
+        "interactive_decisions_per_second": { "type": "number", "minimum": 0 },
+        "semantic_actions_total": { "type": "integer", "minimum": 0 },
+        "simulation_elapsed_us": { "$ref": "#/$defs/percentiles" },
+        "coordinator_elapsed_us": { "$ref": "#/$defs/percentiles" },
+        "memory": { "$ref": "#/$defs/memory" },
+        "errors": { "$ref": "#/$defs/report_errors" },
+        "timing_buckets_us": { "$ref": "#/$defs/timing_buckets" },
+        "operation_counters": { "$ref": "#/$defs/operation_counters" },
+        "speedup": { "$ref": "#/$defs/measured_or_not" },
+        "parallel_efficiency": { "$ref": "#/$defs/measured_or_not" },
+        "simulation_elapsed_total_us": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}

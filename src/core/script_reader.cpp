@@ -86,11 +86,13 @@ int ScriptStore::load(OCG_Duel duel, const char* name, std::string* error) {
         }
         return 0;
     }
+    ++successful_loads_;
     return 1;
 }
 
 int script_reader_callback(void* payload, OCG_Duel duel, const char* name) {
     auto* context = static_cast<std::pair<ScriptStore*, std::string*>*>(payload);
+    ++context->first->reader_requests_;
     return context->first->load(duel, name, context->second);
 }
 
