@@ -45,6 +45,35 @@ OBSERVATION_COUNTER_KEYS = (
     "allocation_copy_events",
     "script_loads",
 )
+OBSERVATION_DETAIL_COUNTER_KEYS = (
+    "query_decode_calls",
+    "zone_projection_calls",
+    "relationship_resolution_events",
+    "observation_query_field_calls",
+    "public_state_hash_query_field_calls",
+    "script_reader_requests",
+)
+SETUP_TIMING_KEYS = (
+    "core_host_setup",
+    "fixture_script_load",
+)
+AUXILIARY_TIMING_KEYS = (
+    "public_state_hash",
+    "public_state_hash_query_field",
+)
+ENTITY_ZONE_KEYS = (
+    "UNKNOWN",
+    "MAIN_DECK",
+    "HAND",
+    "MONSTER_ZONE",
+    "SPELL_TRAP_ZONE",
+    "GRAVEYARD",
+    "BANISHED",
+    "EXTRA_DECK",
+    "FIELD_ZONE",
+    "PENDULUM_RELEVANT_STATE",
+    "OVERLAY",
+)
 COORDINATOR_TIMING_KEYS = (
     "worker_compute_wait",
     "pipe_read_write_cpu",
@@ -200,14 +229,18 @@ def validate_audit_report(report: Mapping[str, Any]) -> None:
 
 __all__ = [
     "AUDIT_TELEMETRY_KEYS",
+    "AUXILIARY_TIMING_KEYS",
     "COORDINATOR_TIMING_KEYS",
+    "ENTITY_ZONE_KEYS",
     "OBSERVATION_COUNTER_KEYS",
+    "OBSERVATION_DETAIL_COUNTER_KEYS",
     "OBSERVATION_TIMING_KEYS",
     "PerformanceAuditContractError",
     "default_audit_telemetry",
     "default_coordinator_timing_us",
     "default_observation_counters",
     "default_observation_timing_us",
+    "SETUP_TIMING_KEYS",
     "validate_audit_report",
     "validate_audit_telemetry",
 ]
