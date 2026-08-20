@@ -1,0 +1,142 @@
+{
+  "canonical_m3": {
+    "automatic_decision_count": 0,
+    "both_start_player_partitions": true,
+    "candidate_truncation_count": 0,
+    "complete_games": 16,
+    "core_error_count": 0,
+    "path": "artifacts/m3/canonical_mr5/full_games_m4_final/full_fixed_deck_results.json",
+    "required_complete_games": 16
+  },
+  "commands": [
+    {
+      "command": "cmake --preset dev-windows-zig",
+      "exit_code": 0,
+      "name": "cmake_configure",
+      "passed": 1,
+      "total": 1
+    },
+    {
+      "command": "cmake --build --preset dev-windows-zig --parallel",
+      "exit_code": 0,
+      "name": "cmake_build",
+      "passed": 1,
+      "total": 1
+    },
+    {
+      "command": "ctest --preset dev-windows-zig --output-on-failure",
+      "exit_code": 0,
+      "name": "ctest",
+      "passed": 90,
+      "session_id": 13094,
+      "total": 90
+    },
+    {
+      "command": "python -B -m unittest discover -s tests/python -v",
+      "exit_code": 0,
+      "name": "python_tests",
+      "passed": 8,
+      "total": 8
+    },
+    {
+      "command": "python -B -m unittest discover -s tests/m3 -v",
+      "exit_code": 0,
+      "name": "m3_tests",
+      "passed": 17,
+      "total": 17
+    },
+    {
+      "command": "full_fixed_deck_test.py --games 16",
+      "exit_code": 0,
+      "name": "canonical_m3",
+      "passed": 16,
+      "total": 16
+    },
+    {
+      "command": "Draft202012Validator over 10 final M4 reports",
+      "exit_code": 0,
+      "name": "report_schema_validation",
+      "passed": 10,
+      "total": 10
+    },
+    {
+      "command": "python -B -m unittest discover -s tests/m4 -v",
+      "elapsed_seconds": 1638.213,
+      "exit_code": 0,
+      "name": "m4_tests",
+      "passed": 96,
+      "total": 96
+    },
+    {
+      "command": "semantic fingerprint comparison over conformance, throughput-no-persistence, and off-diagnostic reports",
+      "exit_code": 0,
+      "name": "mode_equivalence_validation",
+      "passed": 3,
+      "total": 3
+    },
+    {
+      "command": "M4 failure-isolation and timeout-contract tests",
+      "exit_code": 0,
+      "name": "m4_failure_isolation",
+      "passed": 96,
+      "total": 96
+    },
+    {
+      "command": "throughput stderr and trace-persistence validation",
+      "exit_code": 0,
+      "name": "privacy_boundary_validation",
+      "passed": 96,
+      "total": 96
+    }
+  ],
+  "ctest": {
+    "passed": 90,
+    "session_id": 13094,
+    "total": 90
+  },
+  "m4_discovery": {
+    "elapsed_seconds": 1638.213,
+    "passed": 96,
+    "total": 96
+  },
+  "matrix": {
+    "jobs_per_row": 64,
+    "semantic_mismatches": [],
+    "total_jobs": 448,
+    "workers": [
+      1,
+      2,
+      4,
+      8,
+      16,
+      32,
+      64
+    ]
+  },
+  "observed_at": "2026-08-20T11:27:45.194167+00:00",
+  "privacy": {
+    "successful_worker_stderr_bytes": 0,
+    "throughput_trace_persistence": false
+  },
+  "regression_rechecks": {
+    "m3": {
+      "passed": 17,
+      "total": 17
+    },
+    "python": {
+      "passed": 8,
+      "total": 8
+    }
+  },
+  "reports": {
+    "schema_errors": 0,
+    "schema_validated": 10
+  },
+  "schema_version": "ocgforge.m4.verification.v1",
+  "timeout_negative_evidence": {
+    "failure_class": "worker_timeout",
+    "path": "artifacts/m4/matrix/throughput-w32-timeout-failure.log",
+    "python_main_return_code": 2,
+    "report_written": false
+  }
+}

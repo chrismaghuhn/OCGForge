@@ -1,9 +1,4 @@
-"""Reusable persistent native-worker coordinator for M4.
-
-This module deliberately stops at process-pool orchestration.  Benchmark
-matrix generation, aggregation, CLI parsing, and report schema belong to the
-later Task 6 layer.
-"""
+"""Reusable persistent native-worker coordinator and M4 benchmark CLI."""
 
 from __future__ import annotations
 
@@ -20,17 +15,55 @@ import threading
 import time
 from typing import Any, Mapping, Sequence
 
-from .process_metrics import ProcessMetricsSampler, stderr_size
-from .worker_protocol import (
-    HandshakeExpectation,
-    ProtocolValidationError,
-    assert_primary_integrity,
-    decode_line,
-    encode_job,
-    validate_ready,
-    validate_result,
-)
-from .worker_protocol_contract import ProtocolContractError, normalize_job_id
+if __package__ in (None, ""):
+    _REPO_ROOT = Path(__file__).resolve().parents[2]
+    if str(_REPO_ROOT) not in sys.path:
+        sys.path.insert(0, str(_REPO_ROOT))
+
+try:
+    from .job_generation import derive_job_with_options
+    from .process_metrics import ProcessMetricsSampler, stderr_size
+    from .report import (
+        BenchmarkIntegrityError,
+        aggregate_results,
+        build_argument_parser,
+        build_report,
+        default_hardware_metadata,
+        validate_complete_results,
+        write_report,
+    )
+    from .worker_protocol import (
+        HandshakeExpectation,
+        ProtocolValidationError,
+        assert_primary_integrity,
+        decode_line,
+        encode_job,
+        validate_ready,
+        validate_result,
+    )
+    from .worker_protocol_contract import ProtocolContractError, normalize_job_id
+except ImportError:  # pragma: no cover - exercised by direct CLI execution
+    from tools.m4.job_generation import derive_job_with_options
+    from tools.m4.process_metrics import ProcessMetricsSampler, stderr_size
+    from tools.m4.report import (
+        BenchmarkIntegrityError,
+        aggregate_results,
+        build_argument_parser,
+        build_report,
+        default_hardware_metadata,
+        validate_complete_results,
+        write_report,
+    )
+    from tools.m4.worker_protocol import (
+        HandshakeExpectation,
+        ProtocolValidationError,
+        assert_primary_integrity,
+        decode_line,
+        encode_job,
+        validate_ready,
+        validate_result,
+    )
+    from tools.m4.worker_protocol_contract import ProtocolContractError, normalize_job_id
 
 
 class CoordinatorError(RuntimeError):
@@ -185,6 +218,8 @@ class PersistentWorkerPool:
         self._closed = False
         self._unusable = False
         self._unusable_reason: str | None = None
+        self._run_integrity_failure: str | None = None
+        self._last_publication_ns: int | None = None
         self._metrics: ProcessMetricsSampler | None = None
         self._results: dict[str, dict[str, Any]] = {}
         self.last_run_metadata: dict[str, Any] = self._new_metadata()
@@ -236,6 +271,7 @@ class PersistentWorkerPool:
             "malformed_protocol": 0,
             "failed_games": 0,
             "worker_errors": 0,
+            "integrity_failure": None,
             "workers": [],
             "memory": {
                 "process_count": "NOT_MEASURED",
@@ -255,6 +291,18 @@ class PersistentWorkerPool:
     @property
     def workers(self) -> tuple[dict[str, Any], ...]:
         return tuple(self._worker_metadata(state) for state in self._states)
+
+    @property
+    def ready_messages(self) -> tuple[dict[str, Any], ...]:
+        """Return the validated startup identities observed for each worker."""
+
+        return tuple(dict(state.ready) for state in self._states if state.ready is not None)
+
+    @property
+    def last_publication_ns(self) -> int | None:
+        """Coordinator clock at which the final result row was published."""
+
+        return self._last_publication_ns
 
     def start(self) -> None:
         if self._closed:
@@ -301,9 +349,15 @@ class PersistentWorkerPool:
                 f"{self._unusable_reason or 'unknown coordinator failure'}"
             )
         try:
+            self._run_integrity_failure = None
+            self._last_publication_ns = None
             self._validate_timeouts()
             if not self._started:
                 self.start()
+            # A pool may be reused after a recoverable worker replacement.
+            # Metadata describes this run, not the lifetime of the pool.
+            self.last_run_metadata = self._new_metadata()
+            self._refresh_worker_metadata()
             dead_workers = [
                 state.index
                 for state in self._states
@@ -418,6 +472,11 @@ class PersistentWorkerPool:
                     job, encoded_job = dispatchable_jobs[next_index]
                     self._dispatch(state, job, encoded_job)
                     next_index += 1
+            self._last_publication_ns = time.perf_counter_ns()
+            # Keep a short post-publication lifecycle barrier so a worker
+            # cannot emit a delayed duplicate after the final result has
+            # already been accepted, even for diagnostic/non-primary runs.
+            self._settle_completed_run()
             ordered = [
                 self._results[key] for key in sorted(self._results, key=_job_sort_key)
             ]
@@ -426,6 +485,11 @@ class PersistentWorkerPool:
                 result.get("status") == "failed" for result in ordered
             )
             if require_primary_integrity:
+                if self._run_integrity_failure is not None:
+                    raise ProtocolValidationError(
+                        "primary run encountered coordinator integrity failure: "
+                        f"{self._run_integrity_failure}"
+                    )
                 for result in ordered:
                     assert_primary_integrity(result)
             return ordered
@@ -789,6 +853,51 @@ class PersistentWorkerPool:
             else:
                 return ("eof", None)
 
+    def _settle_completed_run(self) -> None:
+        """Reject output that arrives after the last result was published."""
+
+        # This is deliberately longer than the per-result lifecycle barrier:
+        # it covers a worker that flushes a duplicate after a scheduling
+        # delay, while remaining bounded for a healthy persistent worker.
+        deadline = time.perf_counter() + max(
+            self.lifecycle_settle_timeout_seconds,
+            0.25,
+        )
+        while time.perf_counter() < deadline:
+            for state in self._states:
+                if not state.alive:
+                    continue
+                if state.process is not None and state.process.poll() is not None:
+                    self._worker_failed(
+                        state,
+                        code="worker_crash",
+                        message=self._exit_message(state),
+                        crashed=True,
+                    )
+                    continue
+                if state.events is None:
+                    continue
+                try:
+                    kind, payload = state.events.get_nowait()
+                except queue.Empty:
+                    continue
+                if kind == "line":
+                    self._worker_failed(
+                        state,
+                        code="malformed_protocol",
+                        message="worker emitted a result after the final job was published",
+                        malformed=True,
+                    )
+                else:
+                    self._worker_failed(
+                        state,
+                        code="malformed_protocol" if kind == "reader_error" else "worker_crash",
+                        message=payload or self._exit_message(state),
+                        crashed=kind == "eof",
+                        malformed=kind == "reader_error",
+                    )
+            time.sleep(min(0.001, max(0.0, deadline - time.perf_counter())))
+
     @staticmethod
     def _stdout_pending_status(state: _WorkerState) -> str:
         process = state.process
@@ -898,6 +1007,8 @@ class PersistentWorkerPool:
         malformed: bool = False,
     ) -> None:
         in_flight = state.in_flight
+        self._run_integrity_failure = message or code
+        self.last_run_metadata["integrity_failure"] = self._run_integrity_failure
         state.staged_result = None
         if in_flight is not None:
             result = self._failed_result(
@@ -924,6 +1035,7 @@ class PersistentWorkerPool:
             raise WorkerRuntimeError(self._unusable_reason or "worker cleanup failed")
 
     def _fail_closed(self, message: str, *, code: str) -> None:
+        self.last_run_metadata["integrity_failure"] = message or code
         self._mark_unusable(message)
         for state in self._states:
             in_flight = state.in_flight
@@ -968,7 +1080,7 @@ class PersistentWorkerPool:
             "trace_hash": None,
             "simulation_elapsed_us": None,
             "coordinator_elapsed_us": None,
-            "errors": _zero_errors(),
+            "errors": {**_zero_errors(), "worker_errors": 1},
             "timing_us": _zero_timing(),
             "counters": _zero_counters(),
             "worker": {
@@ -1068,12 +1180,23 @@ class PersistentWorkerPool:
             self._launch(state)
         except Exception as error:
             message = f"replacement worker {state.index} failed launch: {error}"
+            self._run_integrity_failure = message
+            self.last_run_metadata["integrity_failure"] = message
             self._fail_closed(message, code="replacement_launch_failure")
             raise WorkerRuntimeError(message) from error
         try:
             self._read_ready(state)
+            self._verify_ready_worker_alive(state)
         except Exception as error:
             message = f"replacement worker {state.index} failed handshake: {error}"
+            if state.ready is not None:
+                # _read_ready accounts for malformed identity messages.  A
+                # process that exits after a valid ready line fails the same
+                # startup/liveness gate and must be visible as a handshake
+                # failure too.
+                self.last_run_metadata["handshake_errors"] += 1
+            self._run_integrity_failure = message
+            self.last_run_metadata["integrity_failure"] = message
             self._fail_closed(message, code="replacement_handshake_failure")
             raise WorkerRuntimeError(message) from error
 
@@ -1182,6 +1305,147 @@ WorkerPool = PersistentWorkerPool
 SimulationCoordinator = PersistentWorkerPool
 
 
+def _run_benchmark_cli(arguments: Sequence[str] | None = None) -> int:
+    parser = build_argument_parser()
+    args = parser.parse_args(arguments)
+    if args.starting_player_mode != "balanced" or args.seat_mode != "balanced":
+        raise BenchmarkIntegrityError("only balanced partition modes are supported")
+
+    total_jobs = args.warmup_games + args.games
+    jobs = [
+        derive_job_with_options(
+            args.master_seed,
+            index,
+            mode=args.mode,
+            observation_mode=args.observation_mode,
+            instrumentation=args.instrument,
+            persist_trace=args.trace_persistence,
+        )
+        for index in range(total_jobs)
+    ]
+    warmup_jobs = jobs[: args.warmup_games]
+    steady_jobs = jobs[args.warmup_games :]
+    output_path = Path(args.output)
+    worker_output_dir = output_path.parent / f"{output_path.stem}.workers"
+    pool = PersistentWorkerPool(
+        args.worker_executable,
+        worker_count=args.workers,
+        output_dir=worker_output_dir,
+        result_timeout_seconds=args.result_timeout_seconds,
+    )
+    cold_start_begin = time.perf_counter_ns()
+    pool.start()
+    cold_start_seconds = (time.perf_counter_ns() - cold_start_begin) / 1_000_000_000
+    ready_messages = pool.ready_messages
+    try:
+        if warmup_jobs:
+            warmup_results = pool.run(warmup_jobs, require_primary_integrity=True)
+            validate_complete_results(
+                warmup_results,
+                [job["job_id"] for job in warmup_jobs],
+                pool.last_run_metadata,
+                require_trace_hash=args.mode == "conformance" and args.trace_persistence,
+            )
+        steady_begin = time.perf_counter_ns()
+        steady_results = pool.run(steady_jobs, require_primary_integrity=True)
+        steady_end = pool.last_publication_ns or time.perf_counter_ns()
+        steady_seconds = (steady_end - steady_begin) / 1_000_000_000
+    finally:
+        pool.close()
+
+    metadata = pool.last_run_metadata
+    expected_ids = [job["job_id"] for job in steady_jobs]
+    validate_complete_results(
+        steady_results,
+        expected_ids,
+        metadata,
+        require_trace_hash=args.mode == "conformance" and args.trace_persistence,
+    )
+    steady_state = aggregate_results(
+        steady_results,
+        metadata,
+        wall_clock_seconds=steady_seconds,
+        games_requested=args.games,
+        workers_requested=args.workers,
+    )
+    ready = ready_messages[0] if ready_messages else {}
+    from tools.m3.rules_mode import load_canonical_environment
+
+    canonical_environment = load_canonical_environment(
+        Path(__file__).resolve().parents[2] / "third_party" / "rules_bundle.lock.json"
+    )
+    canonical_environment.update(
+        {
+            "deck_hashes": list(HandshakeExpectation.canonical().deck_hashes),
+            "worker_identity": ready.get("worker_identity", "NOT_MEASURED"),
+        }
+    )
+    build = {
+        "protocol_schema": ready.get("schema", "NOT_MEASURED"),
+        "protocol_version": ready.get("protocol_version", "NOT_MEASURED"),
+        "worker_identity": ready.get("worker_identity", "NOT_MEASURED"),
+        "compiler_identity": ready.get("compiler_identity", "NOT_MEASURED"),
+        "build_type": ready.get("build_type", "NOT_MEASURED"),
+        "worker_executable": str(args.worker_executable),
+        "worker_count": args.workers,
+        "result_timeout_seconds": args.result_timeout_seconds,
+        "platform": default_hardware_metadata()["platform"],
+    }
+    warmup_policy = {
+        "warmup_games": args.warmup_games,
+        "warmup_indices": {
+            "start": 0,
+            "stop": args.warmup_games,
+            "count": args.warmup_games,
+        },
+        "steady_state_indices": {
+            "start": args.warmup_games,
+            "stop": args.warmup_games + args.games,
+            "count": args.games,
+        },
+        "master_seed": args.master_seed,
+        "same_master_seed_for_warmup_and_steady": True,
+        "starting_player_mode": args.starting_player_mode,
+        "seat_mode": args.seat_mode,
+        "steady_timer_start": "after_warmup_completion",
+        "steady_timer_stop": "after_final_result_publication",
+    }
+    report = build_report(
+        canonical_environment=canonical_environment,
+        hardware=default_hardware_metadata(),
+        build=build,
+        warmup_policy=warmup_policy,
+        mode=args.mode,
+        observation_mode=args.observation_mode,
+        instrumentation=args.instrument,
+        trace_persistence=args.trace_persistence,
+        games_requested=args.games,
+        workers_requested=args.workers,
+        cold_start={
+            "wall_clock_seconds": cold_start_seconds,
+            "ready_workers": len(ready_messages),
+            "worker_count": args.workers,
+            "process_ready_time_domain": "coordinator_process_and_ready_handshake",
+        },
+        steady_state=steady_state,
+        jobs=steady_results,
+    )
+    write_report(output_path, report)
+    print(
+        f"M4 benchmark written: {output_path} "
+        f"({steady_state['games_completed']} games, {steady_state['games_per_second']:.6f} games/s)"
+    )
+    return 0
+
+
+def main(arguments: Sequence[str] | None = None) -> int:
+    try:
+        return _run_benchmark_cli(arguments)
+    except (BenchmarkIntegrityError, CoordinatorError, ProtocolValidationError, ValueError) as error:
+        print(f"M4 benchmark failed: {error}", file=sys.stderr)
+        return 2
+
+
 __all__ = [
     "CoordinatorError",
     "PersistentWorkerPool",
@@ -1189,4 +1453,9 @@ __all__ = [
     "WorkerPool",
     "WorkerRuntimeError",
     "WorkerStartupError",
+    "main",
 ]
+
+
+if __name__ == "__main__":  # pragma: no cover - exercised by CLI smoke tests
+    raise SystemExit(main())

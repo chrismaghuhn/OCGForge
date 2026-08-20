@@ -182,6 +182,23 @@ class WorkerProtocolContractTests(unittest.TestCase):
         }
         validate_result(message, expected_job_id="m4-000001")
 
+    def test_failed_result_requires_a_nonzero_error_counter(self) -> None:
+        message = result_fixture()
+        message.update(
+            {
+                "status": "failed",
+                "terminal": False,
+                "winner": None,
+                "win_reason": None,
+                "gameplay_hash": None,
+                "trace_hash": None,
+                "failure_code": "synthetic_failure",
+                "error_message": "synthetic failure",
+            }
+        )
+        with self.assertRaises(ProtocolContractError):
+            validate_result(message, expected_job_id="m4-000001")
+
     def test_simulation_timing_requires_positive_pass_time_and_bounded_buckets(self) -> None:
         zero_pass = result_fixture()
         zero_pass["simulation_elapsed_us"] = 0

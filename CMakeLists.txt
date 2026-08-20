@@ -566,3 +566,11 @@ add_test(NAME m4_failure_isolation_test
 set_tests_properties(m4_failure_isolation_test PROPERTIES
     WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
 )
+
+add_test(NAME m4_worker_integration_test
+    COMMAND "${Python3_EXECUTABLE}" -m unittest tests/m4/test_worker_integration.py -v
+)
+set_tests_properties(m4_worker_integration_test PROPERTIES
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    ENVIRONMENT "YGO_M4_WORKER=$<TARGET_FILE:ygo_m4_worker>"
+)

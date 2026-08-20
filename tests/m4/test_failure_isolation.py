@@ -354,6 +354,82 @@ class FailureIsolationTests(unittest.TestCase):
             self.assertEqual(metadata["worker_errors"], 1)
             self.assertEqual(metadata["worker_restarts"], 1)
 
+    def test_primary_integrity_rejects_extra_result_after_publication(self) -> None:
+        workload = jobs(1)
+        with tempfile.TemporaryDirectory(prefix="ocgforge-m4-task5-extra-primary-") as directory:
+            marker = Path(directory) / "extra-result.marker"
+            pool = PersistentWorkerPool(
+                fake_command("extra-first-job", marker),
+                worker_count=1,
+                output_dir=Path(directory),
+            )
+            try:
+                with self.assertRaises(ProtocolValidationError):
+                    pool.run(workload, require_primary_integrity=True)
+                self.assertEqual(pool.last_run_metadata["malformed_protocol"], 1)
+                self.assertEqual(pool.last_run_metadata["worker_errors"], 1)
+                self.assertTrue(pool._unusable)
+            finally:
+                pool.close()
+
+    def test_primary_integrity_rejects_delayed_extra_result_after_publication(self) -> None:
+        workload = jobs(1)
+        with tempfile.TemporaryDirectory(prefix="ocgforge-m4-task5-delayed-extra-") as directory:
+            marker = Path(directory) / "delayed-extra-result.marker"
+            pool = PersistentWorkerPool(
+                fake_command("delayed-extra-first-job", marker),
+                worker_count=1,
+                output_dir=Path(directory),
+            )
+            try:
+                with self.assertRaises(ProtocolValidationError):
+                    pool.run(workload, require_primary_integrity=True)
+                self.assertEqual(pool.last_run_metadata["malformed_protocol"], 1)
+                self.assertEqual(pool.last_run_metadata["worker_errors"], 1)
+                self.assertTrue(pool._unusable)
+            finally:
+                pool.close()
+
+    def test_replacement_worker_exit_after_ready_fails_closed(self) -> None:
+        workload = jobs(2)
+        with tempfile.TemporaryDirectory(prefix="ocgforge-m4-task5-replacement-exit-") as directory:
+            marker = Path(directory) / "replacement-starts.marker"
+            pool = PersistentWorkerPool(
+                fake_command("replacement-exit-after-ready", marker),
+                worker_count=1,
+                output_dir=Path(directory),
+            )
+            try:
+                with self.assertRaises(WorkerRuntimeError):
+                    pool.run(workload)
+                self.assertTrue(pool._unusable)
+                self.assertEqual(pool.last_run_metadata["handshake_errors"], 1)
+                self.assertIn("replacement worker", pool.last_run_metadata["integrity_failure"])
+                self.assertTrue(all(state.reaped for state in pool._states))
+                self.assertTrue(all(not state.alive for state in pool._states))
+            finally:
+                pool.close()
+
+    def test_reused_pool_resets_run_integrity_metadata(self) -> None:
+        workload = jobs(2)
+        with tempfile.TemporaryDirectory(prefix="ocgforge-m4-task5-metadata-reset-") as directory:
+            marker = Path(directory) / "crash-first.marker"
+            with PersistentWorkerPool(
+                fake_command("crash-first-job", marker),
+                worker_count=1,
+                output_dir=Path(directory),
+            ) as pool:
+                first_results = pool.run(workload)
+                self.assertEqual(first_results[0]["status"], "failed")
+                self.assertEqual(pool.last_run_metadata["worker_errors"], 1)
+                self.assertIsNotNone(pool.last_run_metadata["integrity_failure"])
+
+                second_results = pool.run(jobs(1))
+                self.assertEqual(second_results[0]["status"], "passed")
+                self.assertEqual(pool.last_run_metadata["worker_errors"], 0)
+                self.assertEqual(pool.last_run_metadata["malformed_protocol"], 0)
+                self.assertIsNone(pool.last_run_metadata["integrity_failure"])
+
     def test_result_worker_pid_mismatch_is_rejected_before_publication(self) -> None:
         workload = jobs(2)
         with tempfile.TemporaryDirectory(prefix="ocgforge-m4-task5-result-pid-") as directory:
@@ -678,6 +754,28 @@ class FailureIsolationTests(unittest.TestCase):
                     WorkerRuntimeError, "not reusable after fail-closed shutdown"
                 ):
                     pool.run(jobs(2))
+            finally:
+                pool.close()
+
+    def test_timeout_preserves_fail_closed_integrity_reason(self) -> None:
+        workload = jobs(1)
+        with tempfile.TemporaryDirectory(prefix="ocgforge-m4-task5-timeout-reason-") as directory:
+            pool = PersistentWorkerPool(
+                fake_command("hang-first-job"),
+                worker_count=1,
+                output_dir=Path(directory),
+                result_timeout_seconds=0.05,
+            )
+            try:
+                with self.assertRaisesRegex(
+                    WorkerRuntimeError, "timed out waiting for a worker result"
+                ):
+                    pool.run(workload)
+                self.assertIn(
+                    "timed out waiting for a worker result",
+                    pool.last_run_metadata["integrity_failure"] or "",
+                )
+                self.assertIn("timed out waiting for a worker result", pool._unusable_reason or "")
             finally:
                 pool.close()
 

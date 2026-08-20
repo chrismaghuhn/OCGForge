@@ -134,6 +134,12 @@ def main() -> int:
             1: "crash",
             2: "hang",
         }.get(start_number, "bad-handshake")
+    elif args.behavior == "replacement-exit-after-ready":
+        start_number = claim_start(args.marker)
+        role = {
+            1: "crash",
+            2: "exit-after-ready",
+        }.get(start_number, "bad-handshake")
 
     ready = ready_message()
     if args.behavior == "pid-mismatch":
@@ -141,6 +147,9 @@ def main() -> int:
     if role == "bad-handshake":
         ready["rules_bundle_id"] = "replacement-rules-mismatch"
     print(json.dumps(ready, separators=(",", ":")), flush=True)
+    if role == "exit-after-ready":
+        print("fake replacement worker exited after ready", file=sys.stderr, flush=True)
+        return 17
     if args.behavior == "crash-after-ready":
         print("fake worker crash after ready", file=sys.stderr, flush=True)
         return 17
@@ -189,6 +198,15 @@ def main() -> int:
                 sys.stdout.write(encoded + "\n" + encoded + "\n")
                 sys.stdout.flush()
                 time.sleep(0.02)
+                continue
+        if args.behavior == "delayed-extra-first-job" and args.marker:
+            marker = os.path.abspath(args.marker)
+            if not os.path.exists(marker):
+                with open(marker, "w", encoding="utf-8"):
+                    pass
+                print(json.dumps(result, separators=(",", ":")), flush=True)
+                time.sleep(0.20)
+                print(json.dumps(result, separators=(",", ":")), flush=True)
                 continue
         if args.behavior == "result-then-exit":
             encoded = json.dumps(result, separators=(",", ":")).encode("utf-8") + b"\n"

@@ -492,6 +492,8 @@ def validate_result(message: dict[str, Any], *, expected_job_id: str) -> None:
             raise ProtocolContractError("failed result lacks failure_code")
         if not isinstance(message["error_message"], str) or not message["error_message"]:
             raise ProtocolContractError("failed result lacks error_message")
+        if not any(message["errors"][key] != 0 for key in _ERROR_KEYS):
+            raise ProtocolContractError("failed result has no nonzero error counter")
     worker = message["worker"]
     if not isinstance(worker, dict):
         raise ProtocolContractError("worker metadata must be an object")
