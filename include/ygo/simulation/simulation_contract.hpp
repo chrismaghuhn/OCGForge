@@ -97,6 +97,44 @@ struct OperationCounters {
     std::uint64_t trace_bytes_serialized = 0;
 };
 
+struct ObservationTimingUs {
+    std::uint64_t observation_query_field = 0;
+    std::uint64_t observation_query_location = 0;
+    std::uint64_t observation_query_individual = 0;
+    std::uint64_t observation_query_decode = 0;
+    std::uint64_t observation_zone_projection = 0;
+    std::uint64_t observation_entity_projection = 0;
+    std::uint64_t observation_relationship_projection = 0;
+    std::uint64_t observation_visibility_privacy = 0;
+    std::uint64_t observation_candidate_consistency = 0;
+    std::uint64_t observation_canonical_serialization = 0;
+    std::uint64_t observation_hash = 0;
+    std::uint64_t observation_other = 0;
+};
+
+struct ObservationCounters {
+    std::uint64_t observations = 0;
+    std::uint64_t query_field_calls = 0;
+    std::uint64_t query_location_calls = 0;
+    std::uint64_t query_individual_calls = 0;
+    std::uint64_t entities_projected = 0;
+    std::uint64_t identity_known_entities = 0;
+    std::uint64_t redacted_entities = 0;
+    std::uint64_t static_card_data_lookups = 0;
+    std::uint64_t current_property_projections = 0;
+    std::uint64_t relationship_objects = 0;
+    std::uint64_t allocation_copy_events = 0;
+    std::uint64_t script_loads = 0;
+};
+
+struct CoordinatorTimingUs {
+    std::uint64_t worker_compute_wait = 0;
+    std::uint64_t pipe_read_write_cpu = 0;
+    std::uint64_t json_encode_decode_cpu = 0;
+    std::uint64_t dispatch_queue_overhead = 0;
+    std::uint64_t other = 0;
+};
+
 struct CanonicalSimulationConfig {
     core::RulesBundlePaths rules;
     core::FixtureDeck deck_a;
@@ -170,6 +208,9 @@ struct SimulationResult {
     ErrorCounters errors;
     TimingBuckets timing;
     OperationCounters operations;
+    ObservationTimingUs observation_timing_us;
+    ObservationCounters observation_counters;
+    CoordinatorTimingUs coordinator_timing_us;
 
     // These fields are intentionally value data for JSONL publication. The
     // worker owns no mutable engine object beyond the duration of a job.

@@ -41,7 +41,11 @@ try:
         validate_ready,
         validate_result,
     )
-    from .worker_protocol_contract import ProtocolContractError, normalize_job_id
+    from .worker_protocol_contract import (
+        ProtocolContractError,
+        default_audit_telemetry,
+        normalize_job_id,
+    )
 except ImportError:  # pragma: no cover - exercised by direct CLI execution
     from tools.m4.job_generation import derive_job_with_options
     from tools.m4.process_metrics import ProcessMetricsSampler, stderr_size
@@ -63,7 +67,11 @@ except ImportError:  # pragma: no cover - exercised by direct CLI execution
         validate_ready,
         validate_result,
     )
-    from tools.m4.worker_protocol_contract import ProtocolContractError, normalize_job_id
+    from tools.m4.worker_protocol_contract import (
+        ProtocolContractError,
+        default_audit_telemetry,
+        normalize_job_id,
+    )
 
 
 class CoordinatorError(RuntimeError):
@@ -155,6 +163,48 @@ def _zero_counters() -> dict[str, int]:
         "semantic_hashes": 0,
         "trace_bytes_serialized": 0,
     }
+
+
+def _zero_audit_telemetry() -> dict[str, dict[str, int]]:
+    """Return fresh additive M4.2 defaults for non-instrumented results."""
+
+    return default_audit_telemetry()
+
+
+def _add_default_audit_telemetry(result: dict[str, Any], job: Mapping[str, Any]) -> None:
+    """Add zero telemetry only when the job explicitly disabled instrumentation."""
+
+    if job.get("instrumentation", False):
+        return
+    for key, value in _zero_audit_telemetry().items():
+        result.setdefault(key, value)
+
+
+def _aggregate_audit_telemetry(
+    results: Sequence[Mapping[str, Any]],
+) -> dict[str, dict[str, int]]:
+    """Sum an optional complete telemetry bundle without changing M4 totals."""
+
+    if not any(
+        any(key in result for key in _zero_audit_telemetry()) for result in results
+    ):
+        return {}
+    aggregate = _zero_audit_telemetry()
+    for result in results:
+        for group_name, group_values in aggregate.items():
+            values = result.get(group_name, {key: 0 for key in group_values})
+            if not isinstance(values, Mapping) or set(values) != set(group_values):
+                raise BenchmarkIntegrityError(
+                    f"{group_name} has the wrong audit telemetry keys"
+                )
+            for key in group_values:
+                value = values[key]
+                if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+                    raise BenchmarkIntegrityError(
+                        f"{group_name}.{key} is not a nonnegative integer"
+                    )
+                aggregate[group_name][key] += value
+    return aggregate
 
 
 def _job_sort_key(job_id: str) -> tuple[int, str]:
@@ -750,6 +800,7 @@ class PersistentWorkerPool:
             return
 
         result = dict(message)
+        _add_default_audit_telemetry(result, job)
         result["coordinator"] = {
             "worker_index": state.index,
             "worker_pid": actual_pid,
@@ -1083,6 +1134,7 @@ class PersistentWorkerPool:
             "errors": {**_zero_errors(), "worker_errors": 1},
             "timing_us": _zero_timing(),
             "counters": _zero_counters(),
+            **_zero_audit_telemetry(),
             "worker": {
                 "pid": 0,
                 "restart_index": 0,
@@ -1145,6 +1197,7 @@ class PersistentWorkerPool:
             "errors": errors,
             "timing_us": _zero_timing(),
             "counters": _zero_counters(),
+            **_zero_audit_telemetry(),
             "worker": {
                 "pid": state.pid or (state.process.pid if state.process else 1),
                 "restart_index": state.restart_index,
@@ -1368,6 +1421,7 @@ def _run_benchmark_cli(arguments: Sequence[str] | None = None) -> int:
         games_requested=args.games,
         workers_requested=args.workers,
     )
+    steady_state.update(_aggregate_audit_telemetry(steady_results))
     ready = ready_messages[0] if ready_messages else {}
     from tools.m3.rules_mode import load_canonical_environment
 
