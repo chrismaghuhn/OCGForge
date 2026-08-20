@@ -7,8 +7,10 @@
 #include <string>
 
 #include "ocgapi_constants.h"
+#include "common.h"
 #include "ygo/core/core_host.hpp"
 #include "ygo/core/rules_bundle.hpp"
+#include "ygo/observation/decision_integration.hpp"
 #include "ygo/observation/observation_builder.hpp"
 #include "ygo/observation/serialization.hpp"
 #include "ygo/trace/sha256.hpp"
@@ -122,6 +124,113 @@ int run() {
             "observation changed engine state");
     require(before_process_count == host.process_call_count(), "observation advanced engine processing");
 
+    // M4.3.1 characterization: the eager builder hash is valid for the
+    // pre-context observation, then attach_decision_context mutates the
+    // observation and produces a different final hash. The intermediate hash
+    // is intentionally recorded as evidence only; the regression contract is
+    // the final bytes/hash after context attachment.
+    auto characterized = ygo::observation::build_player_observation(host, 0, config);
+    const auto intermediate_canonical_bytes = ygo::observation::canonical_serialize(characterized);
+    const auto intermediate_hash = characterized.observation_hash;
+    ygo::protocol::DecisionRequest characterization_request;
+    characterization_request.kind = ygo::protocol::DecisionRequestKind::BattleCommand;
+    characterization_request.decision_id = "m4-3-1-characterization";
+    characterization_request.engine_step_index = 17;
+    characterization_request.player = 0;
+    characterization_request.engine_message_type = MSG_SELECT_BATTLECMD;
+    characterization_request.engine_message_name = "select_battlecmd";
+    ygo::protocol::ActionCandidate characterization_candidate;
+    characterization_candidate.semantic_key = "m4-3-1-visible-decision";
+    const auto visible_hand = std::find_if(first.entities.begin(), first.entities.end(), [](const auto& entity) {
+        return entity.controller.value_or(2) == 0 &&
+               entity.zone == ygo::observation::SemanticZone::Hand && entity.identity_known &&
+               entity.passcode.has_value() && entity.sequence.has_value();
+    });
+    require(visible_hand != first.entities.end(), "characterization fixture lacks a visible hand entity");
+    characterization_candidate.source_card = visible_hand->passcode.value();
+    characterization_candidate.source_controller = 0;
+    characterization_candidate.source_location = LOCATION_HAND;
+    characterization_candidate.source_sequence = visible_hand->sequence.value();
+    characterization_request.candidates.push_back(characterization_candidate);
+    require(ygo::observation::candidate_observation_consistent(characterized, characterization_candidate),
+            "characterization candidate did not resolve against the eager observation");
+    ygo::observation::attach_decision_context(characterized, characterization_request);
+    const auto final_canonical_bytes = ygo::observation::canonical_serialize(characterized);
+    const auto final_hash = characterized.observation_hash;
+    require(intermediate_hash != final_hash,
+            "decision context attachment did not invalidate the eager intermediate hash");
+    require(intermediate_canonical_bytes != final_canonical_bytes,
+            "decision context attachment did not change canonical observation bytes");
+    require(final_hash == ygo::observation::observation_hash(characterized),
+            "characterized final observation hash did not match the final observation");
+    std::cout << "m4_3_1_characterization=ok\n"
+              << "intermediate_hash=" << intermediate_hash << '\n'
+              << "final_hash=" << final_hash << '\n'
+              << "final_canonical_bytes_length=" << final_canonical_bytes.size() << '\n'
+              << "final_canonical_bytes_sha256=" << ygo::trace::sha256_string(final_canonical_bytes) << '\n'
+              << "final_canonical_bytes=" << final_canonical_bytes;
+
+    auto deferred_config = config;
+    deferred_config.finalization = ygo::observation::ObservationFinalization::Deferred;
+    auto deferred = ygo::observation::build_player_observation(host, 0, deferred_config);
+    require(deferred.observation_hash.empty(),
+            "deferred observation was indistinguishable from an already-finalized observation");
+    ygo::observation::attach_decision_context(deferred, characterization_request);
+    require(ygo::observation::canonical_serialize(deferred) == final_canonical_bytes,
+            "deferred decision observation changed final canonical bytes");
+    require(deferred.observation_hash == final_hash,
+            "deferred decision observation changed final observation hash");
+    require(deferred.observation_hash == ygo::observation::observation_hash(deferred),
+            "deferred final observation hash did not match its canonical bytes");
+    std::cout << "m4_3_1_deferred_equivalence=ok\n";
+
+    const auto compare_finalization = [&](const ygo::core::CoreHost& fixture,
+                                          std::uint8_t perspective,
+                                          const ygo::observation::ObservationBuildConfig& base_config,
+                                          const ygo::protocol::DecisionRequest& request) {
+        auto eager_config = base_config;
+        eager_config.finalization = ygo::observation::ObservationFinalization::Immediate;
+        auto eager_observation = ygo::observation::build_player_observation(fixture, perspective, eager_config);
+        ygo::observation::attach_decision_context(eager_observation, request);
+        const auto eager_bytes = ygo::observation::canonical_serialize(eager_observation);
+
+        auto deferred_build_config = base_config;
+        deferred_build_config.finalization = ygo::observation::ObservationFinalization::Deferred;
+        auto deferred_observation =
+            ygo::observation::build_player_observation(fixture, perspective, deferred_build_config);
+        require(deferred_observation.observation_hash.empty(),
+                "deferred fixture observation exposed a non-final hash before context attachment");
+        ygo::observation::attach_decision_context(deferred_observation, request);
+        const auto deferred_bytes = ygo::observation::canonical_serialize(deferred_observation);
+        require(eager_bytes == deferred_bytes, "eager and deferred final observation bytes diverged");
+        require(eager_observation.observation_hash == deferred_observation.observation_hash,
+                "eager and deferred final observation hashes diverged");
+        require(eager_observation.observation_hash == ygo::observation::observation_hash(eager_observation) &&
+                    deferred_observation.observation_hash == ygo::observation::observation_hash(deferred_observation),
+                "final observation hash did not match canonical hash input");
+    };
+
+    auto perspective_request = characterization_request;
+    perspective_request.decision_id = "m4-3-1-perspective-1";
+    perspective_request.player = 1;
+    perspective_request.candidates.clear();
+    perspective_request.kind = ygo::protocol::DecisionRequestKind::Option;
+    compare_finalization(host, 0, config, characterization_request);
+    compare_finalization(host, 1, config, perspective_request);
+
+    auto continuation_request = perspective_request;
+    continuation_request.decision_id = "m4-3-1-continuation";
+    continuation_request.kind = ygo::protocol::DecisionRequestKind::CardSelection;
+    ygo::protocol::SelectionContinuation continuation;
+    continuation.continuation_id = "m4-3-1-continuation-id";
+    continuation.continuation_kind = ygo::protocol::ContinuationKind::UnorderedSelection;
+    continuation.continuation_step = 1;
+    continuation.original_message_type = MSG_SELECT_CARD;
+    continuation_request.continuation = continuation;
+    compare_finalization(host, 1, config, continuation_request);
+    require(config.finalization == ygo::observation::ObservationFinalization::Immediate,
+            "ObservationBuildConfig default finalization changed from Immediate");
+
     bool own_hand_visible = false;
     bool opponent_hand_entity = false;
     for (const auto& entity : first.entities) {
@@ -162,6 +271,12 @@ int run() {
             "hidden opponent Hand identity changed the player observation");
     require(hidden_hand_observation_a.observation_hash == hidden_hand_observation_b.observation_hash,
             "hidden opponent Hand identity changed the observation hash");
+    for (const auto perspective : {std::uint8_t{0}, std::uint8_t{1}}) {
+        auto hidden_request = perspective_request;
+        hidden_request.decision_id = "m4-3-1-hidden-perspective-" + std::to_string(perspective);
+        hidden_request.player = perspective;
+        compare_finalization(*hidden_hand_a, perspective, config, hidden_request);
+    }
 
     const auto revealed_field_a = make_world(146746, LOCATION_MZONE, POS_FACEUP_ATTACK);
     const auto revealed_field_b = make_world(41546, LOCATION_MZONE, POS_FACEUP_ATTACK);
@@ -195,6 +310,22 @@ int run() {
                 "hidden deck order changed the perspective-safe observation");
         require(observation_a.observation_hash == observation_b.observation_hash,
                 "hidden deck order changed the perspective-safe observation hash");
+
+        auto paired_request = perspective_request;
+        paired_request.decision_id = "m4-3-1-paired-world-" + std::to_string(perspective);
+        paired_request.player = perspective;
+        compare_finalization(*hidden_deck_a, perspective, config, paired_request);
+        auto paired_config = config;
+        paired_config.finalization = ygo::observation::ObservationFinalization::Immediate;
+        auto paired_a = ygo::observation::build_player_observation(*hidden_deck_a, perspective, paired_config);
+        auto paired_b = ygo::observation::build_player_observation(*hidden_deck_b, perspective, paired_config);
+        ygo::observation::attach_decision_context(paired_a, paired_request);
+        ygo::observation::attach_decision_context(paired_b, paired_request);
+        require(ygo::observation::canonical_serialize(paired_a) ==
+                    ygo::observation::canonical_serialize(paired_b),
+                "paired hidden worlds diverged after decision context attachment");
+        require(paired_a.observation_hash == paired_b.observation_hash,
+                "paired hidden worlds changed final observation hash after context attachment");
     }
 
     const auto own_set = make_world(146746, LOCATION_MZONE, POS_FACEDOWN_DEFENSE, 0);

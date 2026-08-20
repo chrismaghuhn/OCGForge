@@ -472,6 +472,8 @@ SimulationResult run_canonical_simulation(const SimulationJob& job,
                             observation_config.knowledge.own_decklist_known = true;
                             observation_config.own_deck.known = true;
                             observation_config.own_deck.main_deck = request.player == 0 ? deck_a.main_deck : deck_b.main_deck;
+                            observation_config.finalization =
+                                ygo::observation::ObservationFinalization::Deferred;
 #ifdef YGO_M4_PERFORMANCE_AUDIT
                             observation_config.performance_audit = &performance_audit;
 #endif

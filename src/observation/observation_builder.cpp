@@ -769,11 +769,13 @@ PlayerObservation build_player_observation(const ygo::core::CoreHost& host,
         observation.chain.links.push_back(link);
     }
 
+    if (config.finalization == ObservationFinalization::Immediate) {
 #ifdef YGO_M4_PERFORMANCE_AUDIT
-    observation.observation_hash = observation_hash(observation, config.performance_audit);
+        observation.observation_hash = observation_hash(observation, config.performance_audit);
 #else
-    observation.observation_hash = observation_hash(observation);
+        observation.observation_hash = observation_hash(observation);
 #endif
+    }
     return observation;
 }
 
