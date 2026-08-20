@@ -65,9 +65,6 @@
         "errors": { "$ref": "#/$defs/native_errors" },
         "timing_us": { "$ref": "#/$defs/job_timing" },
         "counters": { "$ref": "#/$defs/operation_counters" },
-        "observation_timing_us": { "$ref": "#/$defs/observation_timing_us" },
-        "observation_counters": { "$ref": "#/$defs/observation_counters" },
-        "coordinator_timing_us": { "$ref": "#/$defs/coordinator_timing_us" },
         "worker": { "$ref": "#/$defs/job_worker" },
         "failure_code": { "oneOf": [{ "type": "string" }, { "type": "null" }] },
         "error_message": { "oneOf": [{ "type": "string" }, { "type": "null" }] },
@@ -88,88 +85,6 @@
         "serialization": { "$ref": "#/$defs/nonnegative_integer" },
         "other": { "$ref": "#/$defs/nonnegative_integer" },
         "trace_persistence": { "$ref": "#/$defs/nonnegative_integer" }
-      }
-    },
-    "observation_timing_us": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "observation_query_field",
-        "observation_query_location",
-        "observation_query_individual",
-        "observation_query_decode",
-        "observation_zone_projection",
-        "observation_entity_projection",
-        "observation_relationship_projection",
-        "observation_visibility_privacy",
-        "observation_candidate_consistency",
-        "observation_canonical_serialization",
-        "observation_hash",
-        "observation_other"
-      ],
-      "properties": {
-        "observation_query_field": { "$ref": "#/$defs/nonnegative_integer" },
-        "observation_query_location": { "$ref": "#/$defs/nonnegative_integer" },
-        "observation_query_individual": { "$ref": "#/$defs/nonnegative_integer" },
-        "observation_query_decode": { "$ref": "#/$defs/nonnegative_integer" },
-        "observation_zone_projection": { "$ref": "#/$defs/nonnegative_integer" },
-        "observation_entity_projection": { "$ref": "#/$defs/nonnegative_integer" },
-        "observation_relationship_projection": { "$ref": "#/$defs/nonnegative_integer" },
-        "observation_visibility_privacy": { "$ref": "#/$defs/nonnegative_integer" },
-        "observation_candidate_consistency": { "$ref": "#/$defs/nonnegative_integer" },
-        "observation_canonical_serialization": { "$ref": "#/$defs/nonnegative_integer" },
-        "observation_hash": { "$ref": "#/$defs/nonnegative_integer" },
-        "observation_other": { "$ref": "#/$defs/nonnegative_integer" }
-      }
-    },
-    "observation_counters": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "observations",
-        "query_field_calls",
-        "query_location_calls",
-        "query_individual_calls",
-        "entities_projected",
-        "identity_known_entities",
-        "redacted_entities",
-        "static_card_data_lookups",
-        "current_property_projections",
-        "relationship_objects",
-        "allocation_copy_events",
-        "script_loads"
-      ],
-      "properties": {
-        "observations": { "$ref": "#/$defs/nonnegative_integer" },
-        "query_field_calls": { "$ref": "#/$defs/nonnegative_integer" },
-        "query_location_calls": { "$ref": "#/$defs/nonnegative_integer" },
-        "query_individual_calls": { "$ref": "#/$defs/nonnegative_integer" },
-        "entities_projected": { "$ref": "#/$defs/nonnegative_integer" },
-        "identity_known_entities": { "$ref": "#/$defs/nonnegative_integer" },
-        "redacted_entities": { "$ref": "#/$defs/nonnegative_integer" },
-        "static_card_data_lookups": { "$ref": "#/$defs/nonnegative_integer" },
-        "current_property_projections": { "$ref": "#/$defs/nonnegative_integer" },
-        "relationship_objects": { "$ref": "#/$defs/nonnegative_integer" },
-        "allocation_copy_events": { "$ref": "#/$defs/nonnegative_integer" },
-        "script_loads": { "$ref": "#/$defs/nonnegative_integer" }
-      }
-    },
-    "coordinator_timing_us": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "worker_compute_wait",
-        "pipe_read_write_cpu",
-        "json_encode_decode_cpu",
-        "dispatch_queue_overhead",
-        "other"
-      ],
-      "properties": {
-        "worker_compute_wait": { "$ref": "#/$defs/nonnegative_integer" },
-        "pipe_read_write_cpu": { "$ref": "#/$defs/nonnegative_integer" },
-        "json_encode_decode_cpu": { "$ref": "#/$defs/nonnegative_integer" },
-        "dispatch_queue_overhead": { "$ref": "#/$defs/nonnegative_integer" },
-        "other": { "$ref": "#/$defs/nonnegative_integer" }
       }
     },
     "job_worker": {
@@ -496,9 +411,6 @@
         "errors": { "$ref": "#/$defs/report_errors" },
         "timing_buckets_us": { "$ref": "#/$defs/timing_buckets" },
         "operation_counters": { "$ref": "#/$defs/operation_counters" },
-        "observation_timing_us": { "$ref": "#/$defs/observation_timing_us" },
-        "observation_counters": { "$ref": "#/$defs/observation_counters" },
-        "coordinator_timing_us": { "$ref": "#/$defs/coordinator_timing_us" },
         "speedup": { "$ref": "#/$defs/measured_or_not" },
         "parallel_efficiency": { "$ref": "#/$defs/measured_or_not" },
         "simulation_elapsed_total_us": { "type": "integer", "minimum": 0 }

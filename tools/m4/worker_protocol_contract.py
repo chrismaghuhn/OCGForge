@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Any, Mapping
+from typing import Any
 
 
 PROTOCOL_SCHEMA = "ocgforge.m4.worker.v1"
@@ -384,47 +384,6 @@ _COUNTER_KEYS = {
     "trace_bytes_serialized",
 }
 
-OBSERVATION_TIMING_KEYS = (
-    "observation_query_field",
-    "observation_query_location",
-    "observation_query_individual",
-    "observation_query_decode",
-    "observation_zone_projection",
-    "observation_entity_projection",
-    "observation_relationship_projection",
-    "observation_visibility_privacy",
-    "observation_candidate_consistency",
-    "observation_canonical_serialization",
-    "observation_hash",
-    "observation_other",
-)
-OBSERVATION_COUNTER_KEYS = (
-    "observations",
-    "query_field_calls",
-    "query_location_calls",
-    "query_individual_calls",
-    "entities_projected",
-    "identity_known_entities",
-    "redacted_entities",
-    "static_card_data_lookups",
-    "current_property_projections",
-    "relationship_objects",
-    "allocation_copy_events",
-    "script_loads",
-)
-COORDINATOR_TIMING_KEYS = (
-    "worker_compute_wait",
-    "pipe_read_write_cpu",
-    "json_encode_decode_cpu",
-    "dispatch_queue_overhead",
-    "other",
-)
-_AUDIT_TELEMETRY_KEYS = {
-    "observation_timing_us",
-    "observation_counters",
-    "coordinator_timing_us",
-}
-
 
 def _validate_unsigned_object(message: dict[str, Any], key: str, keys: set[str]) -> None:
     if not isinstance(message, dict):
@@ -435,115 +394,6 @@ def _validate_unsigned_object(message: dict[str, Any], key: str, keys: set[str])
         _require_unsigned(message, child_key)
 
 
-def _zero_unsigned_object(keys: tuple[str, ...]) -> dict[str, int]:
-    return {key: 0 for key in keys}
-
-
-def default_observation_timing_us() -> dict[str, int]:
-    """Return a fresh zero-valued observation timing object."""
-
-    return _zero_unsigned_object(OBSERVATION_TIMING_KEYS)
-
-
-def default_observation_counters() -> dict[str, int]:
-    """Return a fresh zero-valued observation counter object."""
-
-    return _zero_unsigned_object(OBSERVATION_COUNTER_KEYS)
-
-
-def default_coordinator_timing_us() -> dict[str, int]:
-    """Return a fresh zero-valued coordinator timing object."""
-
-    return _zero_unsigned_object(COORDINATOR_TIMING_KEYS)
-
-
-def default_audit_telemetry() -> dict[str, dict[str, int]]:
-    """Return fresh default-valid M4.2 telemetry with every value set to zero."""
-
-    return {
-        "observation_timing_us": default_observation_timing_us(),
-        "observation_counters": default_observation_counters(),
-        "coordinator_timing_us": default_coordinator_timing_us(),
-    }
-
-
-def _validate_audit_telemetry_values(
-    telemetry: Mapping[str, Any],
-    *,
-    outer_observation_us: int | None = None,
-) -> None:
-    if set(telemetry) != _AUDIT_TELEMETRY_KEYS:
-        raise ProtocolContractError("audit telemetry has the wrong keys")
-    _validate_unsigned_object(
-        telemetry["observation_timing_us"],
-        "observation_timing_us",
-        set(OBSERVATION_TIMING_KEYS),
-    )
-    _validate_unsigned_object(
-        telemetry["observation_counters"],
-        "observation_counters",
-        set(OBSERVATION_COUNTER_KEYS),
-    )
-    _validate_unsigned_object(
-        telemetry["coordinator_timing_us"],
-        "coordinator_timing_us",
-        set(COORDINATOR_TIMING_KEYS),
-    )
-    if outer_observation_us is not None:
-        nested_observation_us = sum(telemetry["observation_timing_us"].values())
-        if nested_observation_us > outer_observation_us:
-            raise ProtocolContractError(
-                "nested observation timing exceeds outer observation timing"
-            )
-
-
-def validate_audit_telemetry(
-    message: Mapping[str, Any],
-    *,
-    require: bool = True,
-) -> None:
-    """Validate the optional M4.2 telemetry bundle.
-
-    A complete bundle is validated whenever it is present.  Its absence is
-    accepted only for ordinary M4 compatibility unless ``require`` is true.
-    """
-
-    if not isinstance(message, Mapping):
-        raise ProtocolContractError("audit telemetry must be an object")
-
-    # Accept either a complete result/report object or the telemetry bundle
-    # itself, which keeps this validator useful for focused contract checks.
-    is_bundle = any(key in message for key in _AUDIT_TELEMETRY_KEYS) and set(
-        message
-    ).issubset(_AUDIT_TELEMETRY_KEYS)
-    if is_bundle:
-        present = set(message)
-        if not present:
-            if require:
-                raise ProtocolContractError("audit telemetry is missing")
-            return
-        if present != _AUDIT_TELEMETRY_KEYS:
-            raise ProtocolContractError("audit telemetry is incomplete")
-        _validate_audit_telemetry_values(message)
-        return
-
-    present = set(message).intersection(_AUDIT_TELEMETRY_KEYS)
-    if not present:
-        if require:
-            raise ProtocolContractError("audit telemetry is missing")
-        return
-    if present != _AUDIT_TELEMETRY_KEYS:
-        raise ProtocolContractError("audit telemetry is incomplete")
-    outer_observation_us: int | None = None
-    timing = message.get("timing_us")
-    if isinstance(timing, Mapping) and "observation" in timing:
-        outer_observation_us = timing["observation"]
-    _validate_audit_telemetry_values(
-        {key: message[key] for key in _AUDIT_TELEMETRY_KEYS},
-        outer_observation_us=outer_observation_us,
-    )
-
-
 def _is_sha256_hex(value: Any) -> bool:
     return (
         isinstance(value, str)
@@ -551,15 +401,8 @@ def _is_sha256_hex(value: Any) -> bool:
     )
 
 
-def validate_result(
-    message: dict[str, Any],
-    *,
-    expected_job_id: str,
-    require_audit_telemetry: bool = False,
-) -> None:
+def validate_result(message: dict[str, Any], *, expected_job_id: str) -> None:
     _reject_unpaired_surrogates(message)
-    if not isinstance(require_audit_telemetry, bool):
-        raise ProtocolContractError("require_audit_telemetry must be a boolean")
     required = {
         "schema",
         "type",
@@ -582,13 +425,7 @@ def validate_result(
         "failure_code",
         "error_message",
     }
-    actual = set(message)
-    missing = required.difference(actual)
-    extra = actual.difference(required | _AUDIT_TELEMETRY_KEYS)
-    if missing or extra:
-        raise ProtocolContractError(
-            f"wrong keys: missing={sorted(missing)}, extra={sorted(extra)}"
-        )
+    _require_keys(message, required)
     if message["schema"] != PROTOCOL_SCHEMA or message["type"] != "result":
         raise ProtocolContractError("invalid result schema or type")
     if message["status"] not in {"passed", "failed"}:
@@ -618,10 +455,6 @@ def validate_result(
     _validate_unsigned_object(message["errors"], "errors", _ERROR_KEYS)
     _validate_unsigned_object(message["timing_us"], "timing_us", _TIMING_KEYS)
     _validate_unsigned_object(message["counters"], "counters", _COUNTER_KEYS)
-    validate_audit_telemetry(
-        message,
-        require=require_audit_telemetry,
-    )
     simulation_timing_total = sum(
         message["timing_us"][key] for key in _SIMULATION_TIMING_KEYS
     )
