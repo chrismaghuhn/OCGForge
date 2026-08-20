@@ -1,169 +1,191 @@
 # OCGForge
 
-OCGForge is a deterministic Yu-Gi-Oh! simulation and game-AI research
-environment for reproducible engine, decision-protocol, observation/privacy,
-and fixed-deck conformance experiments. It builds a thin C++ adapter over the
-public C API of one pinned OCG core snapshot. It is not yet a general all-deck
-Yu-Gi-Oh! environment and it does not contain machine-learning code.
+OCGForge is a deterministic Yu-Gi-Oh! simulation and game-AI research environment built around a narrow C++ adapter to a pinned OCG rules stack.
 
-## M0 result
+The project is correctness-first. It aims to make engine interaction, legal decisions, player-visible observations, hidden-information handling, deterministic traces, and conformance evidence explicit and reproducible before adding ML-facing scale or training code.
 
-The verified fixture slice uses 40 normal-monster entries per player and
-reaches a terminal duel result with the pinned core. The adapter exposes typed
-candidate vectors for the controlled protocol slice:
+> **Current maturity:** the repository has a verified fixed-matchup M3/M3.5 checkpoint, not general all-deck Yu-Gi-Oh! support.
 
-- idle commands
-- battle commands
-- chain pass/effect choices
-- single-card selection
-- zone placement
-- position selection
-- yes/no selection
+## What OCGForge is
 
-The terminal trace exercised idle commands, battle commands, chain choices,
-single-card selection, and zone placement. Position and yes/no decoding are
-covered by protocol tests but were not emitted by this simple fixture.
+OCGForge currently provides:
 
-Other interactive messages fail closed with a structured diagnostic. Candidate
-sets are not resized to a fixed maximum. Original card passcodes remain the
-environment representation; model vocabulary mapping is deliberately outside
-the core and protocol layers.
+- a repository-pinned OCG rules bundle;
+- a C++ RAII host around the public OCG C API;
+- a typed, fail-closed decision protocol;
+- deterministic adapter-local continuations for combinatorial decisions;
+- perspective-safe player observations;
+- canonical observation and gameplay hashing;
+- deterministic engine traces;
+- focused fixtures and conformance inventories;
+- a locked Swordsoul Tenyi vs. Salamangreat fixed-deck validation slice;
+- two narrow repository-versioned ocgcore API-hardening patches.
 
-The probe policy is `m0.deterministic_priority.seeded_tie.v1`. It uses the
-complete semantic-key ordering for normal-summon ties and applies the first
-seed word only within that tie, so seed sensitivity is explicit without relying
-on pointer order, hash-map iteration, wall-clock time, or thread scheduling.
+OCGForge intentionally does **not** currently claim:
 
-## M2 player observation
+- full Yu-Gi-Oh! card or deck compatibility;
+- a stable general-purpose Gym-style API;
+- checkpoint/fork support;
+- high-throughput vectorized simulation;
+- a learned policy, teacher, search system, or training stack;
+- competitive playing strength.
 
-M2 adds a deterministic, perspective-safe `PlayerObservation` contract for
-zones, visible entities, relationships, mechanics state, chain/event history,
-decision context, and canonical observation hashes. Hidden hand, deck,
-face-down, Extra Deck, and knowledge-destroying transitions fail closed rather
-than exposing raw engine state. The observation probe is
-`build/dev-windows/ygo_observation_probe.exe` (or the equivalent
-`build/windows-zig` path).
+## Project priorities
 
-The unmodified pinned base API exposes Xyz material counts and the parent
-query's aggregate ordered material-code vector, but its existing
-`overlay_seq` path did not resolve the individual public material record
-correctly. M3.5 keeps the existing public contract and supplies a narrow,
-repository-versioned core patch so that
-`LOCATION_OVERLAY + parent sequence + overlay_seq` resolves the requested
-material. Visibility gates still redact hidden identities. See
-[M2.1 Xyz API investigation](docs/observation/M2_1_XYZ_API_INVESTIGATION.md)
-the [player observation contract](docs/contracts/player-observation-v1.md),
-and the [M3.5 API-hardening acceptance](docs/m3_5/M3_5_ACCEPTANCE.md).
+When goals conflict, use this order:
 
-The current local M3/M3.5 verification is 85/85 CTest tests, 8/8 repository
-Python tests, and 17/17 M3 Python tests. The hosted Windows workflow remains
-the repository integration gate and runs on pushes and pull requests.
+1. correctness;
+2. determinism;
+3. information safety;
+4. complete and honest legal-decision representation;
+5. replayability and auditability;
+6. maintainability;
+7. performance;
+8. ML throughput and scale.
 
-## M3 fixed-deck conformance and M3.5 API hardening
+Performance work must not weaken the first six properties.
 
-The locked matchup is now validated end to end:
+## Current checkpoint
 
-- `ocgforge.swordsoul_tenyi.ml_v1` versus
-  `ocgforge.salamangreat.ml_v1`
-- exact 40-card Main Decks and 15-card Extra Decks, with 110 valid slots and
-  50 unique cards
-- canonical `TCG_ADVANCED_2026_05_18` configuration using
-  `DUEL_MODE_MR5 = 0x2E800`
-- mechanics matrix: 38 engine-verified, 7 protocol-verified, 0 pending
-- 16/16 complete deterministic games across both start-player and mirrored
-  deck-seat partitions
-- zero retries, unsupported required decisions, automatic decisions,
-  candidate truncation, and core errors
+Documentation baseline: `main` at merge commit `7bcb907f09996ddb65471b62b8d6e045ff02eb6e` (2026-08-14).
 
-The canonical rules environment is recorded in
-[third_party/rules_bundle.lock.json](third_party/rules_bundle.lock.json) as
-bundle `3adfe6b4cfe2c2805e50b389fc0eb4e70a3b0b6107436614d328fddc865e585f`.
-The pinned ocgcore, OCG API, CardScripts, and BabelCDB versions remain
-unchanged. The runtime uses an immutable pinned base core plus the ordered,
-repository-versioned `ocgforge.ocgcore.api_hardening.v1` patchset; no upstream
-source checkout is modified.
+Repository-recorded M3/M3.5 acceptance evidence reports:
 
-M3.5 adds two narrow public API capabilities:
+- M3: **FINAL PASS**;
+- M3.5: **FINAL PASS**;
+- 45/45 required fixed-matchup mechanics classified, with 0 pending;
+- 16/16 complete fixed-deck games over both starting-player partitions and mirrored deck seats;
+- 0 unsupported required decisions, retries, automatic decisions, candidate truncations, or core errors in those fixed games;
+- 85/85 CTest tests;
+- 17/17 M3 Python tests;
+- 8/8 repository Python tests;
+- independent-process determinism, semantic-action replay, and CRLF replay gates recorded as passing.
 
-- the existing `overlay_seq` query contract resolves the correct individual
-  Xyz material while preserving the existing privacy projection;
-- `OCG_DuelSetStartingPlayer` accepts only player 0 or 1 before duel start,
-  preserves default player 0 behavior, and rejects invalid or post-start calls.
+These values are acceptance evidence committed to the repository. They are **not a claim that this documentation-only package re-ran the test suite**.
 
-It does not add a general mid-duel turn-player mutation API, a second Xyz query
-mechanism, machine-learning code, or a general board-construction runtime API.
-The complete acceptance evidence is in
-[docs/m3/M3_ACCEPTANCE_MATRIX.md](docs/m3/M3_ACCEPTANCE_MATRIX.md) and
-[docs/m3_5/M3_5_ACCEPTANCE.md](docs/m3_5/M3_5_ACCEPTANCE.md).
+See [Current Project State](docs/CURRENT_PROJECT_STATE.md) for the exact scope boundary.
 
-## Reproducible rules bundle
+## Architecture at a glance
 
-The exact runtime inputs and the deterministic `bundle_id` are recorded in
-[third_party/rules_bundle.lock.json](third_party/rules_bundle.lock.json).
-The repository-local dependency cache is ignored by Git and is populated by
-the exact-commit fetcher:
+```text
+Pinned rules bundle
+  ocgcore + CardScripts + BabelCDB
+              |
+              v
+        ygo::core::CoreHost
+              |
+      raw engine messages
+              |
+              v
+      Decision Protocol v1
+  typed complete candidates
+  + local continuations
+              |
+              +--------------------+
+              |                    |
+              v                    v
+   selected engine response     Trace v1/v2
+              |
+              v
+          ocgcore
+              |
+       public queries/events
+              |
+              v
+    PlayerObservation v1
+   perspective-safe state
+              |
+              v
+ future search / teacher / model /
+       environment adapters
+```
+
+The pinned OCG rules stack remains authoritative for game legality and current engine state. OCGForge contracts define what the environment exposes and how it fails.
+
+## Quick start
+
+### Native Windows / MSVC
+
+From a Visual Studio developer environment with Ninja available:
+
+```text
+cmake --preset dev-windows
+cmake --build --preset dev-windows --parallel
+ctest --preset dev-windows --output-on-failure
+```
+
+The configure step uses the repository rules-bundle machinery and an ignored local cache.
+
+### Local Windows Zig fallback
+
+The repository also contains a Windows-oriented Zig/Ninja fallback preset:
+
+```text
+cmake --preset dev-windows-zig
+cmake --build --preset dev-windows-zig --parallel
+ctest --preset dev-windows-zig --output-on-failure
+```
+
+The fallback toolchain binaries are local ignored inputs; they are not part of the canonical rules bundle.
+
+### Verify the pinned rules bundle
 
 ```text
 python tools/fetch_rules_bundle.py --lock third_party/rules_bundle.lock.json --cache .cache/rules_bundle
 python tools/verify_rules_bundle.py --lock third_party/rules_bundle.lock.json --cache .cache/rules_bundle
 ```
 
-See [THIRD_PARTY.md](THIRD_PARTY.md) for the license records. The complete
-project is not represented as MIT-only.
-
-## Windows build
-
-The documented native path uses MSVC and Ninja from a Visual Studio developer
-environment:
-
-```text
-cmake --preset dev-windows
-cmake --build --preset dev-windows
-ctest --preset dev-windows
-```
-
-The `dev-windows` configure preset verifies or fetches the pinned rules bundle
-into `.cache/rules_bundle`. A clean build starts with an empty
-`build/dev-windows` and an empty dependency cache; no sibling checkout is
-required.
-
-When native MSVC is unavailable, the repository also contains a local fallback
-using pinned repository-local Zig 0.14.1 and Ninja binaries:
-
-```text
-cmake --preset dev-windows-zig
-cmake --build --preset dev-windows-zig
-ctest --preset dev-windows-zig
-```
-
-Those fallback binaries are ignored cache inputs and are not part of the
-rules bundle.
-
 ## Useful probes
 
-Run the controlled duel and write a canonical JSONL trace:
+Controlled duel trace:
 
 ```text
 build/dev-windows/ygo_core_probe.exe --max-steps 1000 --output artifacts/probe-trace.jsonl
 ```
 
-The probe exits nonzero on an unsupported interactive message. The deliberate
-diagnostic path is:
+Deliberate fail-closed diagnostic:
 
 ```text
 build/dev-windows/ygo_core_probe.exe --force-unsupported
 ```
 
-The output contains the message type, raw-message hash, step, player, bundle,
-deck hashes, complete seed bundle, and recent trace context. It never submits
-a fabricated response.
+Player-observation probe:
 
-## Contracts and audit
+```text
+build/dev-windows/ygo_observation_probe.exe --fixture m2 --seed 123 --player 0 --output artifacts/m2-observation.json
+```
 
-- [engine trace v1](docs/contracts/engine-trace-v1.md)
-- [player view v1](docs/contracts/player-view-v1.md)
-- [adapter ADR](docs/adr/ADR-0001-modern-ocg-adapter.md)
-- [ygo-agent reference audit](docs/audits/ygo-agent-ygoenv-reference-audit.md)
+Use the equivalent `build/windows-zig` path when building with the Zig fallback preset.
 
-The pinned `sbl1996/ygo-agent` snapshot is read-only audit material. The
-project does not fork its ygoenv implementation.
+## Documentation
+
+Start with [docs/README.md](docs/README.md).
+
+Core project documents:
+
+- [Project Charter](docs/PROJECT_CHARTER.md)
+- [Normative Hierarchy](docs/NORMATIVE_HIERARCHY.md)
+- [Architecture](docs/ARCHITECTURE.md)
+- [Current Project State](docs/CURRENT_PROJECT_STATE.md)
+- [Roadmap](docs/ROADMAP.md)
+- [Development Guide](docs/DEVELOPMENT.md)
+- [Testing and Acceptance](docs/TESTING.md)
+- [Determinism and Information Safety](docs/DETERMINISM_AND_INFORMATION_SAFETY.md)
+- [Versioning and Compatibility](docs/VERSIONING_AND_COMPATIBILITY.md)
+- [Glossary](docs/GLOSSARY.md)
+
+Existing detailed evidence and contracts remain authoritative within their scope:
+
+- `docs/contracts/`
+- `docs/protocol/`
+- `docs/observation/`
+- `docs/m3/`
+- `docs/m3_5/`
+- `docs/adr/`
+- `third_party/rules_bundle.lock.json`
+
+## Third-party and licensing
+
+The runtime rules stack includes components recorded as AGPL-3.0-or-later, and the pinned BabelCDB snapshot has an unresolved license record in this repository. Do not describe the complete project as MIT-only.
+
+See [THIRD_PARTY.md](THIRD_PARTY.md) and `third_party/rules_bundle.lock.json`.
