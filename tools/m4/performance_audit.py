@@ -579,18 +579,28 @@ class _CoordinatorTimingAccumulator:
     def snapshot(self) -> CoordinatorTimingSnapshot:
         with self._lock:
             coordinator_cpu_ns = self.main_cpu_ns + self.reader_cpu_ns
-            pipe_ns = self.pipe_write_cpu_ns + self.reader_cpu_ns
-            classified_ns = (
-                pipe_ns + self.json_cpu_ns + self.dispatch_queue_cpu_ns
+            # ``json_cpu_ns`` uses a high-resolution nonblocking wall window
+            # when Windows thread CPU time is below its clock quantum.  That
+            # proxy can overlap the coarse outer CPU sample, so assign the
+            # measured CPU domains disjointly and let JSON consume only the
+            # residual.  Worker-compute wait is intentionally not part of
+            # this CPU budget.
+            pipe_ns = min(
+                self.pipe_write_cpu_ns + self.reader_cpu_ns,
+                coordinator_cpu_ns,
             )
-            other_ns = max(0, coordinator_cpu_ns - classified_ns)
+            remaining_ns = coordinator_cpu_ns - pipe_ns
+            dispatch_ns = min(self.dispatch_queue_cpu_ns, remaining_ns)
+            remaining_ns -= dispatch_ns
+            json_ns = min(self.json_cpu_ns, remaining_ns)
+            other_ns = remaining_ns - json_ns
             return CoordinatorTimingSnapshot(
                 wall_clock_ns=self.wall_clock_ns,
                 coordinator_cpu_ns=coordinator_cpu_ns,
                 worker_compute_wait_ns=self.worker_wait_ns,
                 pipe_read_write_cpu_ns=pipe_ns,
-                json_encode_decode_cpu_ns=self.json_cpu_ns,
-                dispatch_queue_overhead_ns=self.dispatch_queue_cpu_ns,
+                json_encode_decode_cpu_ns=json_ns,
+                dispatch_queue_overhead_ns=dispatch_ns,
                 other_cpu_ns=other_ns,
             )
 
@@ -1783,6 +1793,28 @@ def _build_optimization_candidates(full: Mapping[str, Any]) -> list[dict[str, An
     buckets = full["timing_us"]["observation"]
     candidates = [
         {
+            "candidate": "observation_hash_cost_audit",
+            "bucket": "observation_hash",
+            "semantic_risk": "high",
+            "complexity": "medium",
+            "suspected_redundant_work": (
+                "The observation hash is the largest measured bucket; any repeated "
+                "hashing or input materialization is a hypothesis, not yet proven"
+            ),
+            "proposed_optimization_concept": (
+                "Profile hash-input ownership and algorithm work before considering "
+                "a narrowly equivalent observation-hash reduction"
+            ),
+            "semantic_privacy_risk": (
+                "Changing bytes, perspective separation, or hash lifetime could alter "
+                "canonical observation identity or privacy boundaries"
+            ),
+            "required_equivalence_test": (
+                "Canonical serialized bytes and observation_hash equality for every "
+                "deterministic sample row, including perspective/privacy fixtures"
+            ),
+        },
+        {
             "candidate": "entity_projection_static_metadata_reuse",
             "bucket": "observation_entity_projection",
             "semantic_risk": "high",
@@ -1921,7 +1953,7 @@ def build_performance_audit_report(
     candidate_audit = {
         "candidate_max": candidate_max,
         "baseline_evidence": "docs/m4/m4_baseline.json:evidence.rows_by_worker.1.operation_counters.candidate_max",
-        "sample_candidate_max_sum": full["primary"]["operation_counters"]["candidate_max"],
+        "sample_candidate_max": full["primary"]["operation_counters"]["candidate_max"],
         "sample_candidate_max_per_game": max(
             int(_report_mapping(result, "full_sample.result")["counters"]["candidate_max"])
             for result in full_results
@@ -1931,8 +1963,9 @@ def build_performance_audit_report(
         "candidate_generation_optimization_proposed": False,
         "classification": (
             "Candidate generation remains out of scope: protocol_candidate is "
-            "reported, while the canonical baseline evidence remains the decision "
-            "gate for not optimizing this path in M4.2."
+            "not independently timed by the audit sidecar, so the canonical baseline "
+            "evidence remains the decision gate and no candidate optimization is "
+            "proposed in M4.2."
         ),
     }
     entity_audit = _build_entity_audit(full)
@@ -2099,7 +2132,8 @@ def render_performance_audit_markdown(report: Mapping[str, Any]) -> str:
         "|---|---:|---:|---:|---:|",
     ]
     outer = full["timing_us"]["outer_observation"]["total_us"]
-    for key, timing in full["timing_us"]["observation"].items():
+    for key in OBSERVATION_TIMING_KEYS:
+        timing = full["timing_us"]["observation"][key]
         fraction = timing["total_us"] * 100.0 / outer if outer else 0.0
         lines.append(
             f"| {key} | {timing['total_us']} | {timing['calls']} | "
@@ -2132,7 +2166,8 @@ def render_performance_audit_markdown(report: Mapping[str, Any]) -> str:
             "|---|---:|---:|---:|",
         ]
     )
-    for zone, counters in full["counters"]["entities_by_zone"].items():
+    for zone in ENTITY_ZONE_KEYS:
+        counters = full["counters"]["entities_by_zone"][zone]
         lines.append(
             f"| {zone} | {counters['entities_projected']} | "
             f"{counters['identity_known']} | {counters['redacted']} |"
@@ -2151,6 +2186,12 @@ def render_performance_audit_markdown(report: Mapping[str, Any]) -> str:
             "",
             f"Script loads: {full['runtime']['script_loads']}; "
             f"script-reader requests: {full['runtime']['script_reader_requests']}.",
+            "Setup timing: "
+            + "; ".join(
+                f"{key} {full['timing_us']['setup'][key]['total_us']} us"
+                for key in _COMPLETE_SETUP_TIMING_KEYS
+            )
+            + ".",
             f"Coordinator worker-compute wait: "
             f"{full['timing_us']['coordinator']['worker_compute_wait']['total_us']} us; "
             f"CPU domains total: {full['timing_us']['coordinator_cpu_domain_total_us']} us; "
@@ -2163,9 +2204,12 @@ def render_performance_audit_markdown(report: Mapping[str, Any]) -> str:
             "",
             f"Candidate maximum: {report['candidate_audit']['candidate_max']} "
             f"(baseline evidence: {report['candidate_audit']['baseline_evidence']}). "
-            f"Measured protocol_candidate: "
-            f"{report['candidate_audit']['measured_protocol_candidate_fraction_percent']:.6f}%; "
-            "no candidate optimization is proposed.",
+            f"Baseline protocol_candidate fraction: "
+            f"{report['candidate_audit']['baseline_protocol_candidate_fraction_percent']:.6f}%; "
+            f"audit sample legacy timing field: "
+            f"{report['candidate_audit']['measured_protocol_candidate_fraction_percent']:.6f}% "
+            "(not independently instrumented by the native audit sidecar). "
+            "The baseline gate remains authoritative; no candidate optimization is proposed.",
             "",
             "| rank | candidate | measured fraction | semantic risk | complexity | affected bucket |",
             "|---:|---|---:|---|---|---|",

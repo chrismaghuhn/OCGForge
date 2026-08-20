@@ -1,0 +1,1035 @@
+{
+  "begin_m5": false,
+  "candidate_audit": {
+    "baseline_evidence": "docs/m4/m4_baseline.json:evidence.rows_by_worker.1.operation_counters.candidate_max",
+    "baseline_protocol_candidate_fraction_percent": 0.189337,
+    "candidate_generation_optimization_proposed": false,
+    "candidate_max": 1344,
+    "classification": "Candidate generation remains out of scope: protocol_candidate is not independently timed by the audit sidecar, so the canonical baseline evidence remains the decision gate and no candidate optimization is proposed in M4.2.",
+    "measured_protocol_candidate_fraction_percent": 0.0,
+    "sample_candidate_max": 336,
+    "sample_candidate_max_per_game": 21
+  },
+  "canonical_identity": {
+    "full": {
+      "build_type": "Debug",
+      "compiler_identity": "Clang-19.1.7",
+      "core_patchset_sha256": "6b5421b3a852085f48fa161a5ba1540f902aa00784a337694b21c9efc34f69bd",
+      "deck_hashes": [
+        "8ee4b699de19ff256e388d46f35b8696a60ff6ec59f0324f060a2468876711b7",
+        "6041abe0a59463d0715ae1da9100090ad487de02a02794e8ec0686d4c0513188"
+      ],
+      "duel_flags": 190464,
+      "duel_mode_name": "DUEL_MODE_MR5",
+      "format_id": "TCG_ADVANCED_2026_05_18",
+      "protocol_version": "ocgforge.m4.worker.v1",
+      "rules_bundle_id": "3adfe6b4cfe2c2805e50b389fc0eb4e70a3b0b6107436614d328fddc865e585f",
+      "schema": "ocgforge.m4.worker.v1",
+      "worker_identity": "ocgforge.m4.native_worker.v1"
+    },
+    "off_diagnostic": {
+      "build_type": "Debug",
+      "compiler_identity": "Clang-19.1.7",
+      "core_patchset_sha256": "6b5421b3a852085f48fa161a5ba1540f902aa00784a337694b21c9efc34f69bd",
+      "deck_hashes": [
+        "8ee4b699de19ff256e388d46f35b8696a60ff6ec59f0324f060a2468876711b7",
+        "6041abe0a59463d0715ae1da9100090ad487de02a02794e8ec0686d4c0513188"
+      ],
+      "duel_flags": 190464,
+      "duel_mode_name": "DUEL_MODE_MR5",
+      "format_id": "TCG_ADVANCED_2026_05_18",
+      "protocol_version": "ocgforge.m4.worker.v1",
+      "rules_bundle_id": "3adfe6b4cfe2c2805e50b389fc0eb4e70a3b0b6107436614d328fddc865e585f",
+      "schema": "ocgforge.m4.worker.v1",
+      "worker_identity": "ocgforge.m4.native_worker.v1"
+    },
+    "same_across_samples": true
+  },
+  "cross_check": {
+    "full_outer_observation_total_us": 581760353,
+    "full_worker_local_runtime_us": 616501509,
+    "gameplay_hashes_equal": true,
+    "off_is_diagnostic_only": true,
+    "off_observation_total_us": 0,
+    "off_training_throughput_eligible": false,
+    "off_worker_local_runtime_us": 29051031,
+    "same_canonical_identity": true,
+    "same_canonical_workload": true,
+    "worker_local_runtime_delta_us": 587450478
+  },
+  "entity_projection_audit": {
+    "allocation_copy_events": 7371722,
+    "current_property_projections": 526004,
+    "entities_by_zone": {
+      "BANISHED": {
+        "entities_projected": 0,
+        "identity_known": 0,
+        "redacted": 0
+      },
+      "EXTRA_DECK": {
+        "entities_projected": 148620,
+        "identity_known": 148620,
+        "redacted": 0
+      },
+      "FIELD_ZONE": {
+        "entities_projected": 0,
+        "identity_known": 0,
+        "redacted": 0
+      },
+      "GRAVEYARD": {
+        "entities_projected": 312552,
+        "identity_known": 312552,
+        "redacted": 0
+      },
+      "HAND": {
+        "entities_projected": 64656,
+        "identity_known": 64656,
+        "redacted": 0
+      },
+      "MAIN_DECK": {
+        "entities_projected": 0,
+        "identity_known": 0,
+        "redacted": 0
+      },
+      "MONSTER_ZONE": {
+        "entities_projected": 0,
+        "identity_known": 0,
+        "redacted": 0
+      },
+      "OVERLAY": {
+        "entities_projected": 0,
+        "identity_known": 0,
+        "redacted": 0
+      },
+      "PENDULUM_RELEVANT_STATE": {
+        "entities_projected": 176,
+        "identity_known": 176,
+        "redacted": 0
+      },
+      "SPELL_TRAP_ZONE": {
+        "entities_projected": 0,
+        "identity_known": 0,
+        "redacted": 0
+      },
+      "UNKNOWN": {
+        "entities_projected": 0,
+        "identity_known": 0,
+        "redacted": 0
+      }
+    },
+    "entities_projected": 526004,
+    "every_zone_reported": true,
+    "evidence": "The audit counted 526004 repeated static_card_data lookups during entity projection; immutable printed metadata is therefore reconstructed in the measured observation path. No representation change was implemented.",
+    "identity_known": 526004,
+    "immutable_printed_metadata_reconstructed": true,
+    "privacy_partition_closes": true,
+    "redacted": 0,
+    "relationship_objects": 0,
+    "relationship_resolution_events": 0,
+    "representation_changed": false,
+    "static_printed_metadata_lookups": 526004
+  },
+  "gates": {
+    "begin_m5": false,
+    "canonical_identity": true,
+    "canonical_workload": true,
+    "full_primary_results": true,
+    "gameplay_equivalence": true,
+    "lifecycle_clean": true,
+    "off_diagnostic_label": true,
+    "off_primary_results": true,
+    "optimization_implemented": false,
+    "privacy_partition": true,
+    "query_count_explanation": true,
+    "schema_validation": true,
+    "sidecars_complete": true
+  },
+  "off_diagnostic_label": "DIAGNOSTIC ONLY — NOT TRAINING THROUGHPUT",
+  "optimization_candidates": [
+    {
+      "bucket": "observation_hash",
+      "candidate": "observation_hash_cost_audit",
+      "complexity": "medium",
+      "measured_runtime_fraction_percent": 47.945332,
+      "measured_total_us": 278926935,
+      "proposed_optimization_concept": "Profile hash-input ownership and algorithm work before considering a narrowly equivalent observation-hash reduction",
+      "rank": 1,
+      "required_equivalence_test": "Canonical serialized bytes and observation_hash equality for every deterministic sample row, including perspective/privacy fixtures",
+      "semantic_privacy_risk": "Changing bytes, perspective separation, or hash lifetime could alter canonical observation identity or privacy boundaries",
+      "semantic_risk": "high",
+      "suspected_redundant_work": "The observation hash is the largest measured bucket; any repeated hashing or input materialization is a hypothesis, not yet proven"
+    },
+    {
+      "bucket": "observation_canonical_serialization",
+      "candidate": "canonical_serialization_copy_reduction",
+      "complexity": "medium",
+      "measured_runtime_fraction_percent": 30.667783,
+      "measured_total_us": 178413003,
+      "proposed_optimization_concept": "Reduce only proven temporary copies while preserving canonical ordering and hash bytes",
+      "rank": 2,
+      "required_equivalence_test": "Canonical serialized bytes and observation_hash equality across all deterministic sample rows",
+      "semantic_privacy_risk": "Ordering or mutation mistakes would alter observation hashes",
+      "semantic_risk": "medium",
+      "suspected_redundant_work": "Canonical serialization copies/sorts observation collections before hashing"
+    },
+    {
+      "bucket": "observation_entity_projection",
+      "candidate": "entity_projection_static_metadata_reuse",
+      "complexity": "high",
+      "measured_runtime_fraction_percent": 0.410428,
+      "measured_total_us": 2387708,
+      "proposed_optimization_concept": "Reuse immutable printed metadata only after visibility and state-equivalence proof",
+      "rank": 3,
+      "required_equivalence_test": "Full canonical observation byte/hash equivalence plus known/redacted per-zone privacy fixture",
+      "semantic_privacy_risk": "Could leak or attach metadata to a redacted entity if identity boundaries drift",
+      "semantic_risk": "high",
+      "suspected_redundant_work": "Repeated immutable printed-card metadata lookups while projecting entities"
+    },
+    {
+      "bucket": "observation_query_field",
+      "candidate": "query_field_reuse_for_public_state_hash",
+      "complexity": "medium",
+      "measured_runtime_fraction_percent": 0.017665,
+      "measured_total_us": 102766,
+      "proposed_optimization_concept": "Reuse the already captured field bytes only after hash/perspective/lifetime equivalence proof",
+      "rank": 4,
+      "required_equivalence_test": "Per-decision field bytes, public_state_hash, PlayerObservation hash, gameplay hash, and privacy equivalence",
+      "semantic_privacy_risk": "A stale or wrong-perspective field snapshot would change public hashes or expose hidden state",
+      "semantic_risk": "high",
+      "suspected_redundant_work": "The public_state_hash path repeats a field query in the decision path"
+    },
+    {
+      "bucket": "observation_visibility_privacy",
+      "candidate": "visibility_privacy_projection_reduction",
+      "complexity": "high",
+      "measured_runtime_fraction_percent": 0.000562,
+      "measured_total_us": 3269,
+      "proposed_optimization_concept": "Narrowly reduce repeated predicates only with a public-state/privacy proof",
+      "rank": 5,
+      "required_equivalence_test": "Known/redacted matrix over every zone and opponent hidden-information fixture",
+      "semantic_privacy_risk": "Any false positive identity visibility is a hard privacy failure",
+      "semantic_risk": "high",
+      "suspected_redundant_work": "Visibility and redaction decisions are reevaluated for every projected entity"
+    },
+    {
+      "bucket": "observation_relationship_projection",
+      "candidate": "relationship_projection_reuse",
+      "complexity": "medium",
+      "measured_runtime_fraction_percent": 4.8e-05,
+      "measured_total_us": 279,
+      "proposed_optimization_concept": "Reuse only immutable relationship evidence after lifecycle and locator equivalence proof",
+      "rank": 6,
+      "required_equivalence_test": "Relationship object byte equality and overlay/privacy fixture equivalence",
+      "semantic_privacy_risk": "Incorrect relationship freshness could expose hidden attachments or stale links",
+      "semantic_risk": "high",
+      "suspected_redundant_work": "Relationship resolution and relationship-object construction are repeated across observations"
+    }
+  ],
+  "optimization_implemented": false,
+  "provenance": {
+    "hardware": {
+      "machine": "AMD64",
+      "physical_memory_bytes": 34278862848,
+      "platform": "Windows-11-10.0.26200-SP0",
+      "processor": "AMD64 Family 25 Model 33 Stepping 2, AuthenticAMD",
+      "python_version": "3.14.5",
+      "system": "Windows"
+    },
+    "native_sidecar_prefix": "M4_PERFORMANCE_AUDIT ",
+    "native_sidecar_schema": "ocgforge.m4.performance_audit.v1",
+    "worker_command": [
+      "C:\\yogiohML\\build\\m4-audit\\ygo_m4_worker.exe"
+    ]
+  },
+  "query_call_site_classification": [
+    {
+      "call_site": "observation_builder.cpp: query_field",
+      "calls_per_observation": 1,
+      "duplicate_classification": "not duplicate within PlayerObservation",
+      "measured_calls_per_observation": 1.0,
+      "measured_total_calls": 9908,
+      "purpose": "PlayerObservation field snapshot",
+      "query_type": "OCG_DuelQueryField",
+      "safe_candidate_for_reuse": "Only after semantic equivalence is proved for the field snapshot",
+      "same_state_duplicate": false
+    },
+    {
+      "call_site": "canonical_simulation.cpp: public_state_hash terminal/decision",
+      "calls_per_observation": 1,
+      "duplicate_classification": "same-state duplicate relative to PlayerObservation in the decision path",
+      "measured_calls_per_observation": 1.0,
+      "measured_total_calls": 9908,
+      "purpose": "Observation-equivalent terminal/decision public-state hash",
+      "query_type": "OCG_DuelQueryField",
+      "safe_candidate_for_reuse": "Only with a hash-equivalence proof including perspective and state lifetime",
+      "same_state_duplicate": true
+    },
+    {
+      "call_site": "observation_builder.cpp: query_location loops",
+      "calls_per_observation": 12,
+      "duplicate_classification": "distinct zone/player snapshots; do not eliminate",
+      "measured_calls_per_observation": 12.0,
+      "measured_total_calls": 118896,
+      "purpose": "Privacy-safe zone/entity snapshot: HAND/MZONE/SZONE/GRAVE/REMOVED for both players plus EXTRA for both players",
+      "query_type": "OCG_DuelQueryLocation",
+      "safe_candidate_for_reuse": "No elimination candidate; preserve all zone queries",
+      "same_state_duplicate": false
+    },
+    {
+      "call_site": "observation_builder.cpp: query_card",
+      "calls_per_observation": 0,
+      "duplicate_classification": "Observed only when nonzero; no calls in the canonical baseline",
+      "measured_calls_per_observation": 0.0,
+      "measured_total_calls": 0,
+      "purpose": "Individual card/overlay/relationship enrichment",
+      "query_type": "OCG_DuelQuery",
+      "safe_candidate_for_reuse": "No change proposed; sidecar tracks any future nonzero path",
+      "same_state_duplicate": false
+    }
+  ],
+  "recommendation": {
+    "basis": "Highest measured observation-path fraction: 47.945332% in observation_hash. This is an experiment target only; no speedup is estimated.",
+    "expected_affected_bucket": "observation_hash",
+    "first_m4_3_experiment": "observation_hash_cost_audit",
+    "required_equivalence_test": "Canonical serialized bytes and observation_hash equality for every deterministic sample row, including perspective/privacy fixtures"
+  },
+  "samples": {
+    "full": {
+      "classification_label": "FULL",
+      "counters": {
+        "detail": {
+          "observation_query_field_calls": 9908,
+          "public_state_hash_query_field_calls": 9908,
+          "query_decode_calls": 128804,
+          "relationship_resolution_events": 0,
+          "script_reader_requests": 1200,
+          "zone_projection_calls": 508088
+        },
+        "entities_by_zone": {
+          "BANISHED": {
+            "entities_projected": 0,
+            "identity_known": 0,
+            "redacted": 0
+          },
+          "EXTRA_DECK": {
+            "entities_projected": 148620,
+            "identity_known": 148620,
+            "redacted": 0
+          },
+          "FIELD_ZONE": {
+            "entities_projected": 0,
+            "identity_known": 0,
+            "redacted": 0
+          },
+          "GRAVEYARD": {
+            "entities_projected": 312552,
+            "identity_known": 312552,
+            "redacted": 0
+          },
+          "HAND": {
+            "entities_projected": 64656,
+            "identity_known": 64656,
+            "redacted": 0
+          },
+          "MAIN_DECK": {
+            "entities_projected": 0,
+            "identity_known": 0,
+            "redacted": 0
+          },
+          "MONSTER_ZONE": {
+            "entities_projected": 0,
+            "identity_known": 0,
+            "redacted": 0
+          },
+          "OVERLAY": {
+            "entities_projected": 0,
+            "identity_known": 0,
+            "redacted": 0
+          },
+          "PENDULUM_RELEVANT_STATE": {
+            "entities_projected": 176,
+            "identity_known": 176,
+            "redacted": 0
+          },
+          "SPELL_TRAP_ZONE": {
+            "entities_projected": 0,
+            "identity_known": 0,
+            "redacted": 0
+          },
+          "UNKNOWN": {
+            "entities_projected": 0,
+            "identity_known": 0,
+            "redacted": 0
+          }
+        },
+        "observation": {
+          "allocation_copy_events": 7371722,
+          "current_property_projections": 526004,
+          "entities_projected": 526004,
+          "identity_known_entities": 526004,
+          "observations": 9908,
+          "query_field_calls": 19816,
+          "query_individual_calls": 0,
+          "query_location_calls": 118896,
+          "redacted_entities": 0,
+          "relationship_objects": 0,
+          "script_loads": 1232,
+          "static_card_data_lookups": 526004
+        }
+      },
+      "observation_mode": "full",
+      "primary": {
+        "errors": {
+          "automatic": 0,
+          "coordinator": {
+            "failed_games": 0,
+            "handshake": 0,
+            "malformed_protocol": 0,
+            "retries": 0,
+            "worker_crashes": 0,
+            "worker_restarts": 0
+          },
+          "core_errors": 0,
+          "retries": 0,
+          "truncated": 0,
+          "unsupported": 0,
+          "worker_errors": 0
+        },
+        "failed_games": 0,
+        "gameplay_hashes": [
+          {
+            "gameplay_hash": "b1af2c99cef71777d66d0def385cceef869b429412ecbca33d2f0075fe9b7508",
+            "job_id": "m4-000000"
+          },
+          {
+            "gameplay_hash": "6e5a6d08d5f55899f3ba771007a2274acbfd47ded4261d0bc72b01fc48d2aa9d",
+            "job_id": "m4-000001"
+          },
+          {
+            "gameplay_hash": "3044bcf6f7be82bb7376e9ec119d81de9b7b35aadff6371b75df0ad73c5a0e32",
+            "job_id": "m4-000002"
+          },
+          {
+            "gameplay_hash": "bf43b0ea22d78152d20855316bb8aa4be9bc061ad4f4bbefdc3e7da6a2ebe059",
+            "job_id": "m4-000003"
+          },
+          {
+            "gameplay_hash": "a7b45c4de4af918f33ee74cb70305ec6b26e93442c02fc2a90da727652dc52dc",
+            "job_id": "m4-000004"
+          },
+          {
+            "gameplay_hash": "1e4cf137db1b6b4339b226c810e88d12be2e3e35f8700faad6737a06cdd47263",
+            "job_id": "m4-000005"
+          },
+          {
+            "gameplay_hash": "d3687b5802665dee674a9cfba91aabb009f000e41f778bc064257ec337faeacc",
+            "job_id": "m4-000006"
+          },
+          {
+            "gameplay_hash": "b94e824a60d373ad48c40ba549b09a83c2eed0335dca17a4dfb5a3f0e2121ad0",
+            "job_id": "m4-000007"
+          },
+          {
+            "gameplay_hash": "12739051bb84d369aad7cff661186b93b417be5a2d5ec7aa0b7a92aca6b4ff5d",
+            "job_id": "m4-000008"
+          },
+          {
+            "gameplay_hash": "72390dacc499f6e957452e4f522e4a4943bff0ad8e299483049441cffcc56b00",
+            "job_id": "m4-000009"
+          },
+          {
+            "gameplay_hash": "f14aa9c6c7174cc55ad8dce595d8494abe3c14ba64abe0945a46645c289591ea",
+            "job_id": "m4-000010"
+          },
+          {
+            "gameplay_hash": "f94570a418ae9e4f6bc4340a2a34da284d0412eb19ea042f169d8571ebc42b50",
+            "job_id": "m4-000011"
+          },
+          {
+            "gameplay_hash": "d3775dbca2ca721923d70f7c7de0d950df8966ce14483adaa5f396f82df1ff1f",
+            "job_id": "m4-000012"
+          },
+          {
+            "gameplay_hash": "fa0fd37162958d0c0f9f361334b376b58a00197c2ddcd0518b8bc1c14029190a",
+            "job_id": "m4-000013"
+          },
+          {
+            "gameplay_hash": "61203e7aceea590d93fb78c6adc5c7713853c42e170c78b2e52c62c401eb7a5f",
+            "job_id": "m4-000014"
+          },
+          {
+            "gameplay_hash": "363512b6fb9457dd544c68565e04c8153ba46e94bbb6a4ae6280029bc7274aa2",
+            "job_id": "m4-000015"
+          }
+        ],
+        "games_completed": 16,
+        "games_requested": 16,
+        "integrity_gate": true,
+        "job_ids": [
+          "m4-000000",
+          "m4-000001",
+          "m4-000002",
+          "m4-000003",
+          "m4-000004",
+          "m4-000005",
+          "m4-000006",
+          "m4-000007",
+          "m4-000008",
+          "m4-000009",
+          "m4-000010",
+          "m4-000011",
+          "m4-000012",
+          "m4-000013",
+          "m4-000014",
+          "m4-000015"
+        ],
+        "lifecycle_gate": true,
+        "operation_counters": {
+          "candidate_max": 336,
+          "candidate_sets": 9892,
+          "candidate_total": 46897,
+          "entities_projected": 526004,
+          "observations": 9908,
+          "ocg_duel_process": 24272,
+          "ocg_duel_query": 0,
+          "ocg_duel_query_count": 0,
+          "ocg_duel_query_field": 19816,
+          "ocg_duel_query_location": 118896,
+          "script_loads": 1232,
+          "script_reader_requests": 1200,
+          "semantic_hashes": 16,
+          "trace_bytes_serialized": 0
+        },
+        "terminal_games": 16,
+        "timing_buckets_us": {
+          "continuation": 0,
+          "core_process": 0,
+          "observation": 0,
+          "other": 616501509,
+          "protocol_candidate": 0,
+          "serialization": 0,
+          "trace_hash": 0,
+          "trace_persistence": 0
+        }
+      },
+      "runtime": {
+        "observation_fraction_of_simulation_percent": 0.0,
+        "outer_observation_fraction_of_simulation_percent": 94.36479,
+        "outer_observation_total_us": 581760353,
+        "primary_observation_total_us": 0,
+        "protocol_candidate_fraction_of_simulation_percent": 0.0,
+        "script_loads": 1232,
+        "script_reader_requests": 1200,
+        "worker_compute_wait_is_not_cpu": true,
+        "worker_local_simulation_elapsed_total_us": 616501509
+      },
+      "timing_us": {
+        "auxiliary": {
+          "public_state_hash": {
+            "calls": 9908,
+            "mean_us_per_call": 0,
+            "total_us": 4725
+          },
+          "public_state_hash_query_field": {
+            "calls": 9908,
+            "mean_us_per_call": 87,
+            "total_us": 867581
+          }
+        },
+        "coordinator": {
+          "dispatch_queue_overhead": {
+            "calls": 1,
+            "mean_us_per_call": 10000000,
+            "total_us": 10000000
+          },
+          "json_encode_decode_cpu": {
+            "calls": 1,
+            "mean_us_per_call": 0,
+            "total_us": 0
+          },
+          "other": {
+            "calls": 1,
+            "mean_us_per_call": 0,
+            "total_us": 0
+          },
+          "pipe_read_write_cpu": {
+            "calls": 1,
+            "mean_us_per_call": 0,
+            "total_us": 0
+          },
+          "worker_compute_wait": {
+            "calls": 1,
+            "mean_us_per_call": 609385066,
+            "total_us": 609385066
+          }
+        },
+        "coordinator_cpu_domain_gap_us": 0,
+        "coordinator_cpu_domain_total_us": 10000000,
+        "coordinator_cpu_us": 10000000,
+        "coordinator_wall_clock_us": 616572072,
+        "observation": {
+          "observation_candidate_consistency": {
+            "calls": 33247,
+            "mean_us_per_call": 0,
+            "total_us": 8562
+          },
+          "observation_canonical_serialization": {
+            "calls": 19800,
+            "mean_us_per_call": 9010,
+            "total_us": 178413003
+          },
+          "observation_entity_projection": {
+            "calls": 526004,
+            "mean_us_per_call": 4,
+            "total_us": 2387708
+          },
+          "observation_hash": {
+            "calls": 19800,
+            "mean_us_per_call": 14087,
+            "total_us": 278926935
+          },
+          "observation_other": {
+            "calls": 9908,
+            "mean_us_per_call": 2811,
+            "total_us": 27860825
+          },
+          "observation_query_decode": {
+            "calls": 128804,
+            "mean_us_per_call": 447,
+            "total_us": 57692581
+          },
+          "observation_query_field": {
+            "calls": 9908,
+            "mean_us_per_call": 10,
+            "total_us": 102766
+          },
+          "observation_query_individual": {
+            "calls": 0,
+            "mean_us_per_call": 0,
+            "total_us": 0
+          },
+          "observation_query_location": {
+            "calls": 118896,
+            "mean_us_per_call": 305,
+            "total_us": 36324156
+          },
+          "observation_relationship_projection": {
+            "calls": 9908,
+            "mean_us_per_call": 0,
+            "total_us": 279
+          },
+          "observation_visibility_privacy": {
+            "calls": 1476104,
+            "mean_us_per_call": 0,
+            "total_us": 3269
+          },
+          "observation_zone_projection": {
+            "calls": 508088,
+            "mean_us_per_call": 0,
+            "total_us": 40269
+          }
+        },
+        "outer_observation": {
+          "calls": 9908,
+          "mean_us_per_call": 58716,
+          "total_us": 581760353
+        },
+        "setup": {
+          "core_host_setup": {
+            "calls": 16,
+            "mean_us_per_call": 21687,
+            "total_us": 346992
+          },
+          "fixture_script_load": {
+            "calls": 0,
+            "mean_us_per_call": 0,
+            "total_us": 0
+          },
+          "script_load": {
+            "calls": 1232,
+            "mean_us_per_call": 3011,
+            "total_us": 3709945
+          }
+        }
+      },
+      "training_throughput_eligible": true
+    },
+    "off_diagnostic": {
+      "classification_label": "DIAGNOSTIC ONLY — NOT TRAINING THROUGHPUT",
+      "counters": {
+        "detail": {
+          "observation_query_field_calls": 0,
+          "public_state_hash_query_field_calls": 9908,
+          "query_decode_calls": 0,
+          "relationship_resolution_events": 0,
+          "script_reader_requests": 1200,
+          "zone_projection_calls": 0
+        },
+        "entities_by_zone": {
+          "BANISHED": {
+            "entities_projected": 0,
+            "identity_known": 0,
+            "redacted": 0
+          },
+          "EXTRA_DECK": {
+            "entities_projected": 0,
+            "identity_known": 0,
+            "redacted": 0
+          },
+          "FIELD_ZONE": {
+            "entities_projected": 0,
+            "identity_known": 0,
+            "redacted": 0
+          },
+          "GRAVEYARD": {
+            "entities_projected": 0,
+            "identity_known": 0,
+            "redacted": 0
+          },
+          "HAND": {
+            "entities_projected": 0,
+            "identity_known": 0,
+            "redacted": 0
+          },
+          "MAIN_DECK": {
+            "entities_projected": 0,
+            "identity_known": 0,
+            "redacted": 0
+          },
+          "MONSTER_ZONE": {
+            "entities_projected": 0,
+            "identity_known": 0,
+            "redacted": 0
+          },
+          "OVERLAY": {
+            "entities_projected": 0,
+            "identity_known": 0,
+            "redacted": 0
+          },
+          "PENDULUM_RELEVANT_STATE": {
+            "entities_projected": 0,
+            "identity_known": 0,
+            "redacted": 0
+          },
+          "SPELL_TRAP_ZONE": {
+            "entities_projected": 0,
+            "identity_known": 0,
+            "redacted": 0
+          },
+          "UNKNOWN": {
+            "entities_projected": 0,
+            "identity_known": 0,
+            "redacted": 0
+          }
+        },
+        "observation": {
+          "allocation_copy_events": 0,
+          "current_property_projections": 0,
+          "entities_projected": 0,
+          "identity_known_entities": 0,
+          "observations": 0,
+          "query_field_calls": 9908,
+          "query_individual_calls": 0,
+          "query_location_calls": 0,
+          "redacted_entities": 0,
+          "relationship_objects": 0,
+          "script_loads": 1232,
+          "static_card_data_lookups": 0
+        }
+      },
+      "observation_mode": "off_diagnostic",
+      "primary": {
+        "errors": {
+          "automatic": 0,
+          "coordinator": {
+            "failed_games": 0,
+            "handshake": 0,
+            "malformed_protocol": 0,
+            "retries": 0,
+            "worker_crashes": 0,
+            "worker_restarts": 0
+          },
+          "core_errors": 0,
+          "retries": 0,
+          "truncated": 0,
+          "unsupported": 0,
+          "worker_errors": 0
+        },
+        "failed_games": 0,
+        "gameplay_hashes": [
+          {
+            "gameplay_hash": "b1af2c99cef71777d66d0def385cceef869b429412ecbca33d2f0075fe9b7508",
+            "job_id": "m4-000000"
+          },
+          {
+            "gameplay_hash": "6e5a6d08d5f55899f3ba771007a2274acbfd47ded4261d0bc72b01fc48d2aa9d",
+            "job_id": "m4-000001"
+          },
+          {
+            "gameplay_hash": "3044bcf6f7be82bb7376e9ec119d81de9b7b35aadff6371b75df0ad73c5a0e32",
+            "job_id": "m4-000002"
+          },
+          {
+            "gameplay_hash": "bf43b0ea22d78152d20855316bb8aa4be9bc061ad4f4bbefdc3e7da6a2ebe059",
+            "job_id": "m4-000003"
+          },
+          {
+            "gameplay_hash": "a7b45c4de4af918f33ee74cb70305ec6b26e93442c02fc2a90da727652dc52dc",
+            "job_id": "m4-000004"
+          },
+          {
+            "gameplay_hash": "1e4cf137db1b6b4339b226c810e88d12be2e3e35f8700faad6737a06cdd47263",
+            "job_id": "m4-000005"
+          },
+          {
+            "gameplay_hash": "d3687b5802665dee674a9cfba91aabb009f000e41f778bc064257ec337faeacc",
+            "job_id": "m4-000006"
+          },
+          {
+            "gameplay_hash": "b94e824a60d373ad48c40ba549b09a83c2eed0335dca17a4dfb5a3f0e2121ad0",
+            "job_id": "m4-000007"
+          },
+          {
+            "gameplay_hash": "12739051bb84d369aad7cff661186b93b417be5a2d5ec7aa0b7a92aca6b4ff5d",
+            "job_id": "m4-000008"
+          },
+          {
+            "gameplay_hash": "72390dacc499f6e957452e4f522e4a4943bff0ad8e299483049441cffcc56b00",
+            "job_id": "m4-000009"
+          },
+          {
+            "gameplay_hash": "f14aa9c6c7174cc55ad8dce595d8494abe3c14ba64abe0945a46645c289591ea",
+            "job_id": "m4-000010"
+          },
+          {
+            "gameplay_hash": "f94570a418ae9e4f6bc4340a2a34da284d0412eb19ea042f169d8571ebc42b50",
+            "job_id": "m4-000011"
+          },
+          {
+            "gameplay_hash": "d3775dbca2ca721923d70f7c7de0d950df8966ce14483adaa5f396f82df1ff1f",
+            "job_id": "m4-000012"
+          },
+          {
+            "gameplay_hash": "fa0fd37162958d0c0f9f361334b376b58a00197c2ddcd0518b8bc1c14029190a",
+            "job_id": "m4-000013"
+          },
+          {
+            "gameplay_hash": "61203e7aceea590d93fb78c6adc5c7713853c42e170c78b2e52c62c401eb7a5f",
+            "job_id": "m4-000014"
+          },
+          {
+            "gameplay_hash": "363512b6fb9457dd544c68565e04c8153ba46e94bbb6a4ae6280029bc7274aa2",
+            "job_id": "m4-000015"
+          }
+        ],
+        "games_completed": 16,
+        "games_requested": 16,
+        "integrity_gate": true,
+        "job_ids": [
+          "m4-000000",
+          "m4-000001",
+          "m4-000002",
+          "m4-000003",
+          "m4-000004",
+          "m4-000005",
+          "m4-000006",
+          "m4-000007",
+          "m4-000008",
+          "m4-000009",
+          "m4-000010",
+          "m4-000011",
+          "m4-000012",
+          "m4-000013",
+          "m4-000014",
+          "m4-000015"
+        ],
+        "lifecycle_gate": true,
+        "operation_counters": {
+          "candidate_max": 336,
+          "candidate_sets": 9892,
+          "candidate_total": 46897,
+          "entities_projected": 0,
+          "observations": 0,
+          "ocg_duel_process": 24272,
+          "ocg_duel_query": 0,
+          "ocg_duel_query_count": 0,
+          "ocg_duel_query_field": 9908,
+          "ocg_duel_query_location": 0,
+          "script_loads": 1232,
+          "script_reader_requests": 1200,
+          "semantic_hashes": 16,
+          "trace_bytes_serialized": 0
+        },
+        "terminal_games": 16,
+        "timing_buckets_us": {
+          "continuation": 0,
+          "core_process": 0,
+          "observation": 0,
+          "other": 29051031,
+          "protocol_candidate": 0,
+          "serialization": 0,
+          "trace_hash": 0,
+          "trace_persistence": 0
+        }
+      },
+      "runtime": {
+        "observation_fraction_of_simulation_percent": 0.0,
+        "outer_observation_fraction_of_simulation_percent": 0.0,
+        "outer_observation_total_us": 0,
+        "primary_observation_total_us": 0,
+        "protocol_candidate_fraction_of_simulation_percent": 0.0,
+        "script_loads": 1232,
+        "script_reader_requests": 1200,
+        "worker_compute_wait_is_not_cpu": true,
+        "worker_local_simulation_elapsed_total_us": 29051031
+      },
+      "timing_us": {
+        "auxiliary": {
+          "public_state_hash": {
+            "calls": 9908,
+            "mean_us_per_call": 0,
+            "total_us": 4732
+          },
+          "public_state_hash_query_field": {
+            "calls": 9908,
+            "mean_us_per_call": 24,
+            "total_us": 242211
+          }
+        },
+        "coordinator": {
+          "dispatch_queue_overhead": {
+            "calls": 1,
+            "mean_us_per_call": 531250,
+            "total_us": 531250
+          },
+          "json_encode_decode_cpu": {
+            "calls": 1,
+            "mean_us_per_call": 0,
+            "total_us": 0
+          },
+          "other": {
+            "calls": 1,
+            "mean_us_per_call": 0,
+            "total_us": 0
+          },
+          "pipe_read_write_cpu": {
+            "calls": 1,
+            "mean_us_per_call": 0,
+            "total_us": 0
+          },
+          "worker_compute_wait": {
+            "calls": 1,
+            "mean_us_per_call": 28779282,
+            "total_us": 28779282
+          }
+        },
+        "coordinator_cpu_domain_gap_us": 0,
+        "coordinator_cpu_domain_total_us": 531250,
+        "coordinator_cpu_us": 531250,
+        "coordinator_wall_clock_us": 29106926,
+        "observation": {
+          "observation_candidate_consistency": {
+            "calls": 0,
+            "mean_us_per_call": 0,
+            "total_us": 0
+          },
+          "observation_canonical_serialization": {
+            "calls": 0,
+            "mean_us_per_call": 0,
+            "total_us": 0
+          },
+          "observation_entity_projection": {
+            "calls": 0,
+            "mean_us_per_call": 0,
+            "total_us": 0
+          },
+          "observation_hash": {
+            "calls": 0,
+            "mean_us_per_call": 0,
+            "total_us": 0
+          },
+          "observation_other": {
+            "calls": 0,
+            "mean_us_per_call": 0,
+            "total_us": 0
+          },
+          "observation_query_decode": {
+            "calls": 0,
+            "mean_us_per_call": 0,
+            "total_us": 0
+          },
+          "observation_query_field": {
+            "calls": 0,
+            "mean_us_per_call": 0,
+            "total_us": 0
+          },
+          "observation_query_individual": {
+            "calls": 0,
+            "mean_us_per_call": 0,
+            "total_us": 0
+          },
+          "observation_query_location": {
+            "calls": 0,
+            "mean_us_per_call": 0,
+            "total_us": 0
+          },
+          "observation_relationship_projection": {
+            "calls": 0,
+            "mean_us_per_call": 0,
+            "total_us": 0
+          },
+          "observation_visibility_privacy": {
+            "calls": 0,
+            "mean_us_per_call": 0,
+            "total_us": 0
+          },
+          "observation_zone_projection": {
+            "calls": 0,
+            "mean_us_per_call": 0,
+            "total_us": 0
+          }
+        },
+        "outer_observation": {
+          "calls": 0,
+          "mean_us_per_call": 0,
+          "total_us": 0
+        },
+        "setup": {
+          "core_host_setup": {
+            "calls": 16,
+            "mean_us_per_call": 19584,
+            "total_us": 313356
+          },
+          "fixture_script_load": {
+            "calls": 0,
+            "mean_us_per_call": 0,
+            "total_us": 0
+          },
+          "script_load": {
+            "calls": 1232,
+            "mean_us_per_call": 2784,
+            "total_us": 3430552
+          }
+        }
+      },
+      "training_throughput_eligible": false
+    }
+  },
+  "schema_version": "ocgforge.m4.performance_audit.v1",
+  "status": "M4.2 PERFORMANCE AUDIT PASS",
+  "workload": {
+    "games": 16,
+    "instrumentation": false,
+    "job_index_range": {
+      "count": 16,
+      "start": 0,
+      "stop": 16
+    },
+    "master_seed": 20260815,
+    "matchup": "Swordsoul Tenyi ML v1 vs Salamangreat ML v1",
+    "max_steps": 2200,
+    "mode": "throughput",
+    "persist_trace": false,
+    "workers": 1
+  }
+}

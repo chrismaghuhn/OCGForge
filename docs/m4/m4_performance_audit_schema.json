@@ -702,7 +702,7 @@
       "required": [
         "candidate_max",
         "baseline_evidence",
-        "sample_candidate_max_sum",
+        "sample_candidate_max",
         "sample_candidate_max_per_game",
         "baseline_protocol_candidate_fraction_percent",
         "measured_protocol_candidate_fraction_percent",
@@ -712,7 +712,7 @@
       "properties": {
         "candidate_max": { "const": 1344 },
         "baseline_evidence": { "type": "string" },
-        "sample_candidate_max_sum": { "$ref": "#/$defs/nonnegative_integer" },
+        "sample_candidate_max": { "$ref": "#/$defs/nonnegative_integer" },
         "sample_candidate_max_per_game": { "$ref": "#/$defs/nonnegative_integer" },
         "baseline_protocol_candidate_fraction_percent": { "$ref": "#/$defs/finite_nonnegative_number" },
         "measured_protocol_candidate_fraction_percent": { "$ref": "#/$defs/finite_nonnegative_number" },

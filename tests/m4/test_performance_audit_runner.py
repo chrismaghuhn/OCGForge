@@ -247,6 +247,26 @@ class PerformanceAuditRunnerTests(unittest.TestCase):
             },
         )
 
+    def test_short_json_proxy_is_capped_at_available_cpu_residual(self) -> None:
+        accumulator = _CoordinatorTimingAccumulator()
+        accumulator.add("json_cpu_ns", 700)
+        accumulator.add("dispatch_queue_cpu_ns", 5_000)
+        accumulator.finish(wall_clock_ns=60_000, main_cpu_ns=5_000)
+
+        snapshot = accumulator.snapshot()
+
+        self.assertEqual(snapshot.coordinator_cpu_ns, 5_000)
+        self.assertEqual(snapshot.dispatch_queue_overhead_ns, 5_000)
+        self.assertEqual(snapshot.json_encode_decode_cpu_ns, 0)
+        self.assertEqual(snapshot.other_cpu_ns, 0)
+        self.assertLessEqual(
+            snapshot.pipe_read_write_cpu_ns
+            + snapshot.json_encode_decode_cpu_ns
+            + snapshot.dispatch_queue_overhead_ns
+            + snapshot.other_cpu_ns,
+            snapshot.coordinator_cpu_ns,
+        )
+
     def test_nonblocking_short_operations_accumulate_with_perf_counter_window(self) -> None:
         class FakeClock:
             def __init__(self) -> None:

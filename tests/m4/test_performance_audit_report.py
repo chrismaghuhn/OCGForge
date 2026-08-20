@@ -13,6 +13,7 @@ from tools.m4.performance_audit import (
     OFF_DIAGNOSTIC_LABEL,
     PerformanceAuditReportError,
     build_performance_audit_report,
+    render_performance_audit_markdown,
     validate_performance_audit_artifact,
 )
 from tools.m4.performance_audit_contract import (
@@ -162,13 +163,13 @@ def _sidecar(job_id: str, *, observation_mode: str) -> str:
                 "observation_query_individual": 0,
                 "observation_query_decode": 5,
                 "observation_zone_projection": 5,
-                "observation_entity_projection": 20,
+                "observation_entity_projection": 10,
                 "observation_relationship_projection": 5,
                 "observation_visibility_privacy": 5,
                 "observation_candidate_consistency": 5,
                 "observation_canonical_serialization": 10,
-                "observation_hash": 5,
-                "observation_other": 10,
+                "observation_hash": 25,
+                "observation_other": 0,
             }
         )
     timing = {key: _timing(value, 0 if value == 0 else 1) for key, value in timing_totals.items()}
@@ -332,6 +333,31 @@ class PerformanceAuditReportTests(unittest.TestCase):
         self.assertEqual(report["status"], "M4.2 PERFORMANCE AUDIT PASS")
         self.assertFalse(report["optimization_implemented"])
         self.assertFalse(report["begin_m5"])
+
+    def test_candidate_ranking_includes_largest_hash_bucket(self) -> None:
+        report = self._build()
+
+        candidates = report["optimization_candidates"]  # type: ignore[index]
+        self.assertEqual(candidates[0]["bucket"], "observation_hash")  # type: ignore[index]
+        self.assertEqual(
+            report["recommendation"]["first_m4_3_experiment"],  # type: ignore[index]
+            candidates[0]["candidate"],  # type: ignore[index]
+        )
+        candidate_audit = report["candidate_audit"]  # type: ignore[index]
+        self.assertEqual(candidate_audit["sample_candidate_max"], 4)  # type: ignore[index]
+        self.assertNotIn("sample_candidate_max_sum", candidate_audit)
+
+    def test_markdown_round_trip_is_deterministic_and_explains_baselines(self) -> None:
+        report = self._build()
+        reordered = json.loads(json.dumps(report, sort_keys=True))
+
+        self.assertEqual(
+            render_performance_audit_markdown(report),
+            render_performance_audit_markdown(reordered),
+        )
+        markdown = render_performance_audit_markdown(report)
+        self.assertIn("Baseline protocol_candidate fraction: 0.189337%", markdown)
+        self.assertIn("script_load 8 us", markdown)
 
     def test_schema_rejects_extra_top_level_field(self) -> None:
         report = self._build()
