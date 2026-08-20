@@ -74,11 +74,29 @@ std::string json_escape(const std::string& value) {
     return result.str();
 }
 
+#ifndef YGO_M4_PERFORMANCE_AUDIT
 std::string public_state_hash(const ygo::core::CoreHost& host, std::uint8_t perspective) {
     auto field = host.query_field();
     field.push_back(perspective);
     return ygo::trace::sha256_bytes(field);
 }
+#endif
+
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+std::string public_state_hash_audited(const ygo::core::CoreHost& host, std::uint8_t perspective,
+                                      ygo::observation::PerformanceAuditCollector* audit) {
+    ygo::observation::PerformanceAuditCollector::AuxiliaryScope whole_scope(
+        audit, ygo::observation::PerformanceAuditAuxiliaryBucket::PublicStateHash);
+    ygo::observation::PerformanceAuditCollector::AuxiliaryScope query_scope(
+        audit, ygo::observation::PerformanceAuditAuxiliaryBucket::PublicStateHashQueryField);
+    if (audit != nullptr) {
+        audit->record_query_field_call(false);
+    }
+    auto field = host.query_field();
+    field.push_back(perspective);
+    return ygo::trace::sha256_bytes(field);
+}
+#endif
 
 ygo::trace::TraceManifest manifest(const ygo::core::CoreHost& host,
                                    const ygo::core::FixtureDeck& deck_a,
@@ -214,6 +232,9 @@ SimulationResult run_canonical_simulation(const SimulationJob& job,
                                           const CanonicalSimulationConfig& config) {
     SimulationResult result;
     result.job_id = job.job_id;
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+    ygo::observation::PerformanceAuditCollector performance_audit;
+#endif
     const bool instrumentation = job.instrumentation || config.instrumentation;
     ygo::trace::EngineTrace trace;
     bool terminal_reached = false;
@@ -246,6 +267,9 @@ SimulationResult run_canonical_simulation(const SimulationJob& job,
     if (!is_canonical_identity(config) || job.canonical_rules_id != config.rules_bundle_id) {
         result = failed_result(job, "canonical_identity_mismatch",
                                "simulation configuration does not match the canonical M4 identity");
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+        result.performance_audit = performance_audit.snapshot();
+#endif
         return result;
     }
 
@@ -264,13 +288,27 @@ SimulationResult run_canonical_simulation(const SimulationJob& job,
 
         simulation_start = Clock::now();
         {
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+            auto setup_scope = performance_audit.setup_scope(
+                ygo::observation::PerformanceAuditSetupBucket::CoreHostSetup);
+#endif
             ygo::core::CoreHost host(host_config);
             host.load_deck(0, deck_a);
             host.load_deck(1, deck_b);
             host.start_duel();
             if (!job.setup_script.empty()) {
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+                auto fixture_script_scope = performance_audit.setup_scope(
+                    ygo::observation::PerformanceAuditSetupBucket::FixtureScriptLoad);
+#endif
                 host.load_fixture_script(job.setup_script);
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+                fixture_script_scope.finish();
+#endif
             }
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+            setup_scope.finish();
+#endif
 
             ygo::observation::ObservationSession observation_sessions[] = {
                 ygo::observation::ObservationSession(0, static_cast<std::uint32_t>(config.duel_flags)),
@@ -337,11 +375,18 @@ SimulationResult run_canonical_simulation(const SimulationJob& job,
                         terminal.engine_step_index = index;
                         terminal.raw_message_length = static_cast<std::uint32_t>(process_result.message.size());
                         terminal.raw_message_sha256 = ygo::trace::sha256_bytes(process_result.message);
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+                        terminal.public_state_hash = public_state_hash_audited(host, 0, &performance_audit);
+#else
                         terminal.public_state_hash = public_state_hash(host, 0);
+#endif
                         add_timing(result.timing.trace_hash_us, trace_record_prefix_start, Clock::now(), instrumentation);
                         Clock::time_point trace_record_suffix_start = Clock::now();
                         if (job.observation_mode == ObservationMode::Full) {
                             const auto observation_start = Clock::now();
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+                            auto observation_scope = performance_audit.observation_scope();
+#endif
                             ygo::observation::ObservationBuildConfig observation_config;
                             observation_config.decision_index = decision_index;
                             observation_config.engine_step_index = index;
@@ -349,6 +394,9 @@ SimulationResult run_canonical_simulation(const SimulationJob& job,
                             observation_config.knowledge.own_decklist_known = true;
                             observation_config.own_deck.known = true;
                             observation_config.own_deck.main_deck = deck_a.main_deck;
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+                            observation_config.performance_audit = &performance_audit;
+#endif
                             const auto observation = ygo::observation::build_player_observation(
                                 host, 0, observation_config);
                             ygo::trace::attach_observation_metadata(terminal, observation);
@@ -411,6 +459,9 @@ SimulationResult run_canonical_simulation(const SimulationJob& job,
                         bool has_observation = false;
                         if (job.observation_mode == ObservationMode::Full) {
                             observation_start = Clock::now();
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+                            auto observation_scope = performance_audit.observation_scope();
+#endif
                             ygo::observation::ObservationBuildConfig observation_config;
                             observation_config.decision_index = decision_index;
                             observation_config.engine_step_index = request.engine_step_index;
@@ -418,38 +469,62 @@ SimulationResult run_canonical_simulation(const SimulationJob& job,
                             observation_config.knowledge.own_decklist_known = true;
                             observation_config.own_deck.known = true;
                             observation_config.own_deck.main_deck = request.player == 0 ? deck_a.main_deck : deck_b.main_deck;
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+                            observation_config.performance_audit = &performance_audit;
+#endif
                             observation = ygo::observation::build_player_observation(
                                 host, request.player, observation_config);
-                            ygo::observation::attach_decision_context(observation, request);
+                            ygo::observation::attach_decision_context(observation, request
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+                                                                        , &performance_audit
+#endif
+                            );
                             has_observation = true;
                             observation_entity_total += observation.entities.size();
                             observation_event_total += observation.visible_events.size();
                             ++result.operations.observations;
                             result.operations.entities_projected += observation.entities.size();
-                        }
-                        if (has_observation) {
-                            for (const auto& candidate_item : request.candidates) {
-                                const bool has_snapshot_locator =
-                                    (candidate_item.source_card != 0 && candidate_item.source_location != 0 &&
-                                     candidate_item.source_location != LOCATION_DECK &&
-                                     candidate_item.source_location != LOCATION_EXTRA) ||
-                                    (candidate_item.target_card != 0 && candidate_item.target_location != 0 &&
-                                     candidate_item.target_location != LOCATION_DECK &&
-                                     candidate_item.target_location != LOCATION_EXTRA);
-                                if (has_snapshot_locator &&
-                                    !ygo::observation::candidate_observation_consistent(observation, candidate_item)) {
-                                    throw ygo::protocol::ProtocolError(
-                                        ygo::protocol::ProtocolErrorCode::UnsupportedDecision,
-                                        "visible M3 candidate does not resolve against PlayerObservation: " +
-                                            candidate_item.semantic_key,
-                                        request.engine_message_type, request.player);
+                            if (has_observation) {
+                                for (const auto& candidate_item : request.candidates) {
+                                    const bool has_snapshot_locator =
+                                        (candidate_item.source_card != 0 && candidate_item.source_location != 0 &&
+                                         candidate_item.source_location != LOCATION_DECK &&
+                                         candidate_item.source_location != LOCATION_EXTRA) ||
+                                        (candidate_item.target_card != 0 && candidate_item.target_location != 0 &&
+                                         candidate_item.target_location != LOCATION_DECK &&
+                                         candidate_item.target_location != LOCATION_EXTRA);
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+                                    if (has_snapshot_locator) {
+                                        auto candidate_scope = performance_audit.scope(
+                                            ygo::observation::PerformanceAuditBucket::CandidateConsistency);
+                                        if (!ygo::observation::candidate_observation_consistent(
+                                                observation, candidate_item, &performance_audit)) {
+#else
+                                    if (has_snapshot_locator &&
+                                        !ygo::observation::candidate_observation_consistent(observation, candidate_item
+                                        )) {
+#endif
+                                        throw ygo::protocol::ProtocolError(
+                                            ygo::protocol::ProtocolErrorCode::UnsupportedDecision,
+                                            "visible M3 candidate does not resolve against PlayerObservation: " +
+                                                candidate_item.semantic_key,
+                                            request.engine_message_type, request.player);
+                                    }
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+                                    }
+#endif
                                 }
+                                add_timing(result.timing.observation_us, observation_start, Clock::now(), instrumentation);
                             }
-                            add_timing(result.timing.observation_us, observation_start, Clock::now(), instrumentation);
                         }
                         const auto trace_record_prefix_start = Clock::now();
                         auto step = ygo::trace::make_decision_step(index, process_result.message, request,
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+                                                                   public_state_hash_audited(host, request.player,
+                                                                                             &performance_audit));
+#else
                                                                    public_state_hash(host, request.player));
+#endif
                         if (has_observation) {
                             ygo::trace::attach_observation_metadata(step, observation);
                         }
@@ -553,6 +628,9 @@ SimulationResult run_canonical_simulation(const SimulationJob& job,
             result.operations.ocg_duel_query_count = metrics.duel_query_count_calls;
             result.operations.script_reader_requests = metrics.script_reader_requests;
             result.operations.script_loads = metrics.script_loads;
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+            performance_audit.set_script_metrics(metrics.script_loads, metrics.script_reader_requests);
+#endif
 
             const auto trace_start = Clock::now();
             result.gameplay_hash = ygo::trace::semantic_gameplay_hash(trace);
@@ -617,6 +695,9 @@ SimulationResult run_canonical_simulation(const SimulationJob& job,
         record_persistence_timing();
     }
 
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+    result.performance_audit = performance_audit.snapshot();
+#endif
     return result;
 }
 

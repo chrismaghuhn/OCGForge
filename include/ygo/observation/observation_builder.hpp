@@ -6,6 +6,10 @@
 
 #include "ygo/observation/player_observation.hpp"
 
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+#include "ygo/observation/performance_audit.hpp"
+#endif
+
 namespace ygo::core {
 class CoreHost;
 }
@@ -20,6 +24,9 @@ struct ObservationBuildConfig {
     std::uint64_t engine_step_index = 0;
     std::vector<VisibleGameEvent> visible_events;
     std::optional<DecisionContext> decision_context;
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+    PerformanceAuditCollector* performance_audit = nullptr;
+#endif
 };
 
 PlayerObservation build_player_observation(const ygo::core::CoreHost& host,

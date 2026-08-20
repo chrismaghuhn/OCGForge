@@ -7,10 +7,17 @@
 
 #include "ygo/simulation/simulation_contract.hpp"
 
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+#include "ygo/observation/performance_audit.hpp"
+#endif
+
 namespace ygo::m4::worker {
 
 inline constexpr char kProtocolSchema[] = "ocgforge.m4.worker.v1";
 inline constexpr char kProtocolVersion[] = "ocgforge.m4.worker.v1";
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+inline constexpr char kPerformanceAuditSidecarPrefix[] = "M4_PERFORMANCE_AUDIT ";
+#endif
 inline constexpr char kWorkerIdentity[] = "ocgforge.m4.native_worker.v1";
 
 struct WorkerReadyInfo {
@@ -33,6 +40,12 @@ std::string serialize_ready(const WorkerReadyInfo& worker,
 
 std::string serialize_result(const ygo::simulation::SimulationResult& result,
                              const WorkerReadyInfo& worker);
+
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+std::string serialize_performance_audit(
+    const std::string& job_id,
+    const ygo::observation::PerformanceAuditSnapshot& audit);
+#endif
 
 std::string serialize_protocol_error(const ProtocolParseResult& parse_result);
 

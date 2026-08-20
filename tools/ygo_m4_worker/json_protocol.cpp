@@ -612,6 +612,109 @@ void append_worker_object(std::ostringstream& output, const ygo::simulation::Sim
     output << '}';
 }
 
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+void append_audit_timing_bucket(std::ostringstream& output, const std::string_view name,
+                                const ygo::observation::PerformanceAuditTiming& timing,
+                                const bool comma) {
+    if (comma) {
+        output << ',';
+    }
+    output << json_escape(name) << ":{";
+    append_json_unsigned(output, "total_us", timing.total_us, false);
+    append_json_unsigned(output, "calls", timing.calls);
+    append_json_unsigned(output, "mean_us_per_call", timing.mean_us_per_call());
+    output << '}';
+}
+
+void append_observation_audit_timing(std::ostringstream& output,
+                                     const ygo::observation::PerformanceAuditSnapshot& audit) {
+    output << ",\"observation_timing_us\":{";
+    for (std::size_t index = 0; index < audit.observation_timing.size(); ++index) {
+        append_audit_timing_bucket(
+            output,
+            ygo::observation::PerformanceAuditCollector::bucket_name(
+                static_cast<ygo::observation::PerformanceAuditBucket>(index)),
+            audit.observation_timing[index], index != 0);
+    }
+    output << '}';
+}
+
+void append_auxiliary_audit_timing(std::ostringstream& output,
+                                   const ygo::observation::PerformanceAuditSnapshot& audit) {
+    output << ",\"auxiliary_timing_us\":{";
+    for (std::size_t index = 0; index < audit.auxiliary_timing.size(); ++index) {
+        append_audit_timing_bucket(
+            output,
+            ygo::observation::PerformanceAuditCollector::auxiliary_bucket_name(
+                static_cast<ygo::observation::PerformanceAuditAuxiliaryBucket>(index)),
+            audit.auxiliary_timing[index], index != 0);
+    }
+    output << '}';
+}
+
+void append_setup_audit_timing(std::ostringstream& output,
+                               const ygo::observation::PerformanceAuditSnapshot& audit) {
+    output << ",\"setup_timing_us\":{";
+    for (std::size_t index = 0; index < audit.setup_timing.size(); ++index) {
+        append_audit_timing_bucket(
+            output,
+            ygo::observation::PerformanceAuditCollector::setup_bucket_name(
+                static_cast<ygo::observation::PerformanceAuditSetupBucket>(index)),
+            audit.setup_timing[index], index != 0);
+    }
+    output << '}';
+}
+
+void append_performance_audit_counters(
+    std::ostringstream& output, const ygo::observation::PerformanceAuditSnapshot& audit) {
+    const auto& counters = audit.counters;
+    output << ",\"observation_counters\":{";
+    append_json_unsigned(output, "observations", counters.observations, false);
+    append_json_unsigned(output, "query_field_calls", counters.query_field_calls);
+    append_json_unsigned(output, "query_location_calls", counters.query_location_calls);
+    append_json_unsigned(output, "query_individual_calls", counters.query_individual_calls);
+    append_json_unsigned(output, "entities_projected", counters.entities_projected);
+    append_json_unsigned(output, "identity_known_entities", counters.identity_known_entities);
+    append_json_unsigned(output, "redacted_entities", counters.redacted_entities);
+    append_json_unsigned(output, "static_card_data_lookups", counters.static_card_data_lookups);
+    append_json_unsigned(output, "current_property_projections", counters.current_property_projections);
+    append_json_unsigned(output, "relationship_objects", counters.relationship_objects);
+    append_json_unsigned(output, "allocation_copy_events", counters.allocation_copy_events);
+    append_json_unsigned(output, "script_loads", counters.script_loads);
+    output << '}';
+
+    const auto& detail = audit.detail_counters;
+    output << ",\"observation_detail_counters\":{";
+    append_json_unsigned(output, "query_decode_calls", detail.query_decode_calls, false);
+    append_json_unsigned(output, "zone_projection_calls", detail.zone_projection_calls);
+    append_json_unsigned(output, "relationship_resolution_events", detail.relationship_resolution_events);
+    append_json_unsigned(output, "observation_query_field_calls", detail.observation_query_field_calls);
+    append_json_unsigned(output, "public_state_hash_query_field_calls",
+                         detail.public_state_hash_query_field_calls);
+    append_json_unsigned(output, "script_reader_requests", detail.script_reader_requests);
+    output << '}';
+}
+
+void append_entities_by_zone(std::ostringstream& output,
+                             const ygo::observation::PerformanceAuditSnapshot& audit) {
+    output << ",\"entities_by_zone\":{";
+    for (std::size_t index = 0; index < audit.entities_by_zone.size(); ++index) {
+        if (index != 0) {
+            output << ',';
+        }
+        const auto zone = static_cast<ygo::observation::SemanticZone>(index);
+        output << json_escape(ygo::observation::semantic_zone_name(zone)) << ":{";
+        const auto& counters = audit.entities_by_zone[index];
+        append_json_unsigned(output, "entities_projected", counters.entities_projected, false);
+        append_json_unsigned(output, "identity_known", counters.identity_known);
+        append_json_unsigned(output, "redacted", counters.redacted);
+        output << '}';
+    }
+    output << '}';
+}
+
+#endif
+
 }  // namespace
 
 std::string serialize_ready(const WorkerReadyInfo& worker,
@@ -708,6 +811,26 @@ std::string serialize_result(const ygo::simulation::SimulationResult& result,
     output << '}';
     return output.str();
 }
+
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+std::string serialize_performance_audit(
+    const std::string& job_id,
+    const ygo::observation::PerformanceAuditSnapshot& audit) {
+    std::ostringstream output;
+    output << '{';
+    append_json_string(output, "schema", "ocgforge.m4.performance_audit.v1", false);
+    append_json_string(output, "type", "performance_audit");
+    append_json_string(output, "job_id", job_id);
+    append_json_unsigned(output, "observation_total_us", audit.observation_total_us);
+    append_observation_audit_timing(output, audit);
+    append_performance_audit_counters(output, audit);
+    append_setup_audit_timing(output, audit);
+    append_auxiliary_audit_timing(output, audit);
+    append_entities_by_zone(output, audit);
+    output << '}';
+    return output.str();
+}
+#endif
 
 std::string serialize_protocol_error(const ProtocolParseResult& parse_result) {
     std::ostringstream output;

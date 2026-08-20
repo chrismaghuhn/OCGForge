@@ -494,4 +494,29 @@ std::string canonical_serialize(const PlayerObservation& observation) {
     return without_hash.substr(0, without_hash.size() - 1) + ",\"observation_hash\":" + json_escape(hash) + "}\n";
 }
 
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+std::string canonical_serialize_without_hash(const PlayerObservation& observation,
+                                             PerformanceAuditCollector* audit) {
+    if (audit == nullptr) {
+        return canonical_serialize_without_hash(observation);
+    }
+    PerformanceAuditCollector::Scope scope(audit, PerformanceAuditBucket::CanonicalSerialization);
+    return serialize_without_hash(observation);
+}
+
+std::string observation_hash(const PlayerObservation& observation,
+                             PerformanceAuditCollector* audit) {
+    if (audit == nullptr) {
+        return observation_hash(observation);
+    }
+    std::string serialized;
+    {
+        PerformanceAuditCollector::Scope scope(audit, PerformanceAuditBucket::CanonicalSerialization);
+        serialized = serialize_without_hash(observation);
+    }
+    PerformanceAuditCollector::Scope scope(audit, PerformanceAuditBucket::Hash);
+    return ygo::trace::sha256_string(serialized);
+}
+#endif
+
 }  // namespace ygo::observation

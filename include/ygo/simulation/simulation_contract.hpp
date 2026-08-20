@@ -8,6 +8,10 @@
 
 #include "ygo/core/rules_bundle.hpp"
 
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+#include "ygo/observation/performance_audit.hpp"
+#endif
+
 namespace ygo::simulation {
 
 inline constexpr char kCanonicalFormat[] = "TCG_ADVANCED_2026_05_18";
@@ -183,6 +187,9 @@ struct SimulationResult {
     std::uint32_t worker_restart_index = 0;
     bool worker_crashed = false;
     bool worker_restarted = false;
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+    ygo::observation::PerformanceAuditSnapshot performance_audit;
+#endif
 };
 
 }  // namespace ygo::simulation
