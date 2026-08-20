@@ -37,6 +37,7 @@ enum class PerformanceAuditAuxiliaryBucket : std::uint8_t {
 enum class PerformanceAuditSetupBucket : std::uint8_t {
     CoreHostSetup,
     FixtureScriptLoad,
+    ScriptLoad,
     Count,
 };
 
@@ -269,6 +270,16 @@ public:
             }
         }
 
+        void cancel() noexcept {
+            if (!active_) {
+                return;
+            }
+            active_ = false;
+            if (collector_ != nullptr) {
+                collector_->active_setup_scope_ = parent_;
+            }
+        }
+
     private:
         static std::uint64_t elapsed_us(const Clock::time_point start,
                                         const Clock::time_point end) noexcept {
@@ -421,7 +432,7 @@ public:
 
     static std::string_view setup_bucket_name(const PerformanceAuditSetupBucket bucket) noexcept {
         constexpr std::array<std::string_view, static_cast<std::size_t>(PerformanceAuditSetupBucket::Count)>
-            names = {"core_host_setup", "fixture_script_load"};
+            names = {"core_host_setup", "fixture_script_load", "script_load"};
         const auto index = static_cast<std::size_t>(bucket);
         return index < names.size() ? names[index] : "unknown";
     }

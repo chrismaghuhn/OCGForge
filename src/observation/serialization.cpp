@@ -237,8 +237,18 @@ void write_match_context(std::ostringstream& out, const MatchContext& context) {
     out << '}';
 }
 
-std::string serialize_without_hash(const PlayerObservation& observation) {
+std::string serialize_without_hash(
+    const PlayerObservation& observation
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+    , PerformanceAuditCollector* audit
+#endif
+) {
     auto zones = observation.zones;
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+    if (audit != nullptr) {
+        audit->record_copy_event();
+    }
+#endif
     std::sort(zones.begin(), zones.end(), [](const ObservedZone& left, const ObservedZone& right) {
         return std::tie(left.player, left.kind, left.total_count, left.public_identity_count,
                         left.hidden_count) <
@@ -246,15 +256,30 @@ std::string serialize_without_hash(const PlayerObservation& observation) {
                         right.hidden_count);
     });
     auto entities = observation.entities;
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+    if (audit != nullptr) {
+        audit->record_copy_event();
+    }
+#endif
     std::sort(entities.begin(), entities.end(), [](const ObservedCard& left, const ObservedCard& right) {
         return left.locator.value < right.locator.value;
     });
     auto relationships = observation.relationships;
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+    if (audit != nullptr) {
+        audit->record_copy_event();
+    }
+#endif
     std::sort(relationships.begin(), relationships.end(), [](const Relationship& left, const Relationship& right) {
         return std::tie(left.kind, left.source.value, left.target.value) <
                std::tie(right.kind, right.source.value, right.target.value);
     });
     auto events = observation.visible_events;
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+    if (audit != nullptr) {
+        audit->record_copy_event();
+    }
+#endif
     std::sort(events.begin(), events.end(), [](const VisibleGameEvent& left, const VisibleGameEvent& right) {
         return std::tie(left.event_index, left.engine_step_index) <
                std::tie(right.event_index, right.engine_step_index);
@@ -300,8 +325,18 @@ std::string serialize_without_hash(const PlayerObservation& observation) {
                << ",\"target\":" << json_escape(relationship.target.value) << '}';
     });
     out << ",\"chain\":{\"length\":" << observation.chain.length << ",\"links\":";
-    write_array(out, observation.chain.links, [](std::ostringstream& stream, const ChainLink& link) {
+    write_array(out, observation.chain.links,
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+                [audit](std::ostringstream& stream, const ChainLink& link) {
+#else
+                [](std::ostringstream& stream, const ChainLink& link) {
+#endif
         auto targets = link.targets;
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+        if (audit != nullptr) {
+            audit->record_copy_event();
+        }
+#endif
         std::sort(targets.begin(), targets.end());
         stream << "{\"index\":" << link.index << ",\"activating_player\":";
         write_optional_u8(stream, link.activating_player);
@@ -318,7 +353,15 @@ std::string serialize_without_hash(const PlayerObservation& observation) {
         stream << '}';
     });
     out << "},\"visible_events\":";
-    write_array(out, events, [](std::ostringstream& stream, const VisibleGameEvent& event) {
+    write_array(out, events,
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+                [audit](std::ostringstream& stream, const VisibleGameEvent& event) {
+                    if (audit != nullptr) {
+                        audit->record_copy_event();
+                    }
+#else
+                [](std::ostringstream& stream, const VisibleGameEvent& event) {
+#endif
         write_event(stream, event);
     });
     out << ",\"decision_context\":{";
@@ -338,6 +381,11 @@ std::string serialize_without_hash(const PlayerObservation& observation) {
     write_optional_string(out, observation.decision_context.continuation_id);
     out << ",\"referenced_entities\":";
     auto references = observation.decision_context.referenced_entities;
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+    if (audit != nullptr) {
+        audit->record_copy_event();
+    }
+#endif
     std::sort(references.begin(), references.end());
     write_array(out, references, [](std::ostringstream& stream, const ObservationLocator& locator) {
         stream << json_escape(locator.value);
@@ -481,7 +529,11 @@ std::string visible_event_kind_name(VisibleEventKind kind) {
 }
 
 std::string canonical_serialize_without_hash(const PlayerObservation& observation) {
-    return serialize_without_hash(observation);
+    return serialize_without_hash(observation
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+                                  , nullptr
+#endif
+    );
 }
 
 std::string observation_hash(const PlayerObservation& observation) {
@@ -501,7 +553,7 @@ std::string canonical_serialize_without_hash(const PlayerObservation& observatio
         return canonical_serialize_without_hash(observation);
     }
     PerformanceAuditCollector::Scope scope(audit, PerformanceAuditBucket::CanonicalSerialization);
-    return serialize_without_hash(observation);
+    return serialize_without_hash(observation, audit);
 }
 
 std::string observation_hash(const PlayerObservation& observation,
@@ -512,7 +564,7 @@ std::string observation_hash(const PlayerObservation& observation,
     std::string serialized;
     {
         PerformanceAuditCollector::Scope scope(audit, PerformanceAuditBucket::CanonicalSerialization);
-        serialized = serialize_without_hash(observation);
+        serialized = serialize_without_hash(observation, audit);
     }
     PerformanceAuditCollector::Scope scope(audit, PerformanceAuditBucket::Hash);
     return ygo::trace::sha256_string(serialized);

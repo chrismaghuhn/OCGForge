@@ -54,6 +54,17 @@ const ygo::observation::ObservedZone* find_zone(const ygo::observation::PlayerOb
     return nullptr;
 }
 
+void verify_null_audit_collector_path(const ygo::core::CoreHost& host) {
+    ygo::observation::ObservationBuildConfig observation_config;
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+    require(observation_config.performance_audit == nullptr,
+            "native regression fixture unexpectedly enabled the audit collector");
+#endif
+    const auto observation = ygo::observation::build_player_observation(host, 0, observation_config);
+    require(observation.observation_hash.size() == 64,
+            "null audit collector path did not produce a valid observation hash");
+}
+
 int run() {
     ygo::core::CoreHostConfig core_config;
     core_config.rules.card_data_tsv = YGO_M0_CARD_DATA_TSV;
@@ -70,6 +81,7 @@ int run() {
     host.start_duel();
     (void)host.process();
 
+    verify_null_audit_collector_path(host);
     ygo::observation::ObservationBuildConfig observation_config;
     const auto observation = ygo::observation::build_player_observation(host, 0, observation_config);
     const auto* xyz = find_card(observation, 359563, ygo::observation::SemanticZone::MonsterZone);

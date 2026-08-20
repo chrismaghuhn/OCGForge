@@ -285,6 +285,9 @@ SimulationResult run_canonical_simulation(const SimulationJob& job,
         host_config.starting_player = job.starting_player;
         host_config.seed = seed_bundle(job.seed);
         host_config.required_script_codes = config.required_script_codes;
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+        host_config.performance_audit = &performance_audit;
+#endif
 
         simulation_start = Clock::now();
         {

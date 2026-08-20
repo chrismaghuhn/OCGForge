@@ -722,8 +722,10 @@ PlayerObservation build_player_observation(const ygo::core::CoreHost& host,
             );
             if (target.has_value()) {
 #ifdef YGO_M4_PERFORMANCE_AUDIT
-                config.performance_audit->record_relationship_object();
-                config.performance_audit->record_copy_event();
+                if (config.performance_audit != nullptr) {
+                    config.performance_audit->record_relationship_object();
+                    config.performance_audit->record_copy_event();
+                }
 #endif
                 observation.relationships.push_back({pending.kind, pending.source, *target});
             }
@@ -760,7 +762,9 @@ PlayerObservation build_player_observation(const ygo::core::CoreHost& host,
             }
         }
 #ifdef YGO_M4_PERFORMANCE_AUDIT
-        config.performance_audit->record_copy_event();
+        if (config.performance_audit != nullptr) {
+            config.performance_audit->record_copy_event();
+        }
 #endif
         observation.chain.links.push_back(link);
     }

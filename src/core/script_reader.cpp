@@ -36,7 +36,16 @@ std::optional<std::uint32_t> card_code_from_script_name(const std::string& name)
 }  // namespace
 
 int ScriptStore::load(OCG_Duel duel, const char* name, std::string* error) {
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+    auto script_load_scope = performance_audit_ == nullptr
+                                 ? ygo::observation::PerformanceAuditCollector::SetupScope{}
+                                 : performance_audit_->setup_scope(
+                                       ygo::observation::PerformanceAuditSetupBucket::ScriptLoad);
+#endif
     if (name == nullptr) {
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+        script_load_scope.cancel();
+#endif
         if (error != nullptr) {
             *error = "script callback received null name";
         }
@@ -71,11 +80,17 @@ int ScriptStore::load(OCG_Duel duel, const char* name, std::string* error) {
             if (required_codes_.find(*code) != required_codes_.end() && error != nullptr) {
                 *error = "required card script not found: " + requested;
             }
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+            script_load_scope.cancel();
+#endif
             return 0;
         }
         if (error != nullptr) {
             *error = "script not found: " + path.string();
         }
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+        script_load_scope.cancel();
+#endif
         return 0;
     }
 
@@ -84,8 +99,14 @@ int ScriptStore::load(OCG_Duel duel, const char* name, std::string* error) {
         if (error != nullptr) {
             *error = "OCG_LoadScript rejected: " + requested;
         }
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+        script_load_scope.cancel();
+#endif
         return 0;
     }
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+    script_load_scope.finish();
+#endif
     ++successful_loads_;
     return 1;
 }
