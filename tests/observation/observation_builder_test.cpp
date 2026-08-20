@@ -120,6 +120,65 @@ int run() {
     require(ygo::observation::canonical_serialize(first) == ygo::observation::canonical_serialize(second),
             "repeated observations were not canonical-deterministic");
     require(first.observation_hash == second.observation_hash, "repeated observation hash changed");
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+    {
+        ygo::observation::PerformanceAuditCollector lifecycle_audit;
+        {
+            auto lifecycle_scope = lifecycle_audit.observation_scope();
+            (void)ygo::observation::observation_hash(first, &lifecycle_audit);
+            (void)ygo::observation::canonical_serialize(first, &lifecycle_audit);
+        }
+        {
+            auto lifecycle_scope = lifecycle_audit.observation_scope();
+            (void)ygo::observation::observation_hash(first, &lifecycle_audit);
+            lifecycle_audit.record_observation_mutation();
+            (void)ygo::observation::observation_hash(first, &lifecycle_audit);
+        }
+        const auto snapshot = lifecycle_audit.snapshot();
+        require(snapshot.serialization_lifecycles.size() == 2,
+                "serialization lifecycle records did not preserve observation boundaries");
+        require(snapshot.serialization_lifecycles[0].lifecycle_id != 0 &&
+                    snapshot.serialization_lifecycles[0].lifecycle_id !=
+                        snapshot.serialization_lifecycles[1].lifecycle_id,
+                "serialization lifecycle IDs were not unique and nonzero");
+        require(snapshot.serialization_lifecycles[0].serialize_without_hash_calls == 2 &&
+                    snapshot.serialization_lifecycles[0].canonical_serialize_calls == 1 &&
+                    snapshot.serialization_lifecycles[0].sha256_calls == 2,
+                "serialization consumer calls were not counted separately");
+        require(snapshot.serialization_lifecycles[0].same_mutation_epoch_duplicate_calls == 1,
+                "same-state serialization was not classified as duplicate materialization");
+        require(snapshot.serialization_lifecycles[1].serialize_without_hash_calls == 2 &&
+                    snapshot.serialization_lifecycles[1].same_mutation_epoch_duplicate_calls == 0,
+                "mutation epoch did not separate repeated serialization from duplicate work");
+        std::cout << "m4_3_2_lifecycle_diagnostics=ok\n"
+                  << "direct_lifecycle_id=" << snapshot.serialization_lifecycles[0].lifecycle_id << '\n'
+                  << "direct_serialize_without_hash_calls="
+                  << snapshot.serialization_lifecycles[0].serialize_without_hash_calls << '\n'
+                  << "direct_sha256_calls=" << snapshot.serialization_lifecycles[0].sha256_calls << '\n'
+                  << "direct_canonical_serialize_calls="
+                  << snapshot.serialization_lifecycles[0].canonical_serialize_calls << '\n'
+                  << "direct_same_epoch_duplicate_calls="
+                  << snapshot.serialization_lifecycles[0].same_mutation_epoch_duplicate_calls << '\n'
+                  << "mutated_lifecycle_id=" << snapshot.serialization_lifecycles[1].lifecycle_id << '\n'
+                  << "mutated_same_epoch_duplicate_calls="
+                  << snapshot.serialization_lifecycles[1].same_mutation_epoch_duplicate_calls << '\n';
+    }
+    {
+        ygo::observation::PerformanceAuditCollector contract_audit;
+        auto lifecycle_scope = contract_audit.observation_scope();
+        const auto without_hash = ygo::observation::canonical_serialize_without_hash(first, &contract_audit);
+        const auto observed_hash = ygo::observation::observation_hash(first, &contract_audit);
+        const auto canonical = ygo::observation::canonical_serialize(first, &contract_audit);
+        const auto expected_hash = ygo::trace::sha256_string(without_hash);
+        const auto expected_canonical =
+            without_hash.substr(0, without_hash.size() - 1) + ",\"observation_hash\":" +
+            "\"" + expected_hash + "\"}\n";
+        require(observed_hash == expected_hash,
+                "observation_hash did not hash the exact canonical-without-hash bytes");
+        require(canonical == expected_canonical,
+                "canonical_serialize did not append the hash to the exact canonical-without-hash bytes");
+    }
+#endif
     require(before_engine == ygo::trace::sha256_bytes(host.query_field()),
             "observation changed engine state");
     require(before_process_count == host.process_call_count(), "observation advanced engine processing");

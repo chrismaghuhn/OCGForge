@@ -1,0 +1,111 @@
+{
+  "schema_version": "ocgforge.m4.serialization_lifecycle_audit.v1",
+  "status": "M4.3.2 CHARACTERIZATION PASS",
+  "optimization_implemented": false,
+  "begin_m5": false,
+  "workload": {
+    "matchup": "Swordsoul Tenyi ML v1 vs Salamangreat ML v1",
+    "master_seed": 20260815,
+    "games": 16,
+    "workers": 1,
+    "max_steps": 2200,
+    "mode": "throughput",
+    "persist_trace": false,
+    "observation_mode": "full",
+    "diagnostic_observation_off": true
+  },
+  "full_throughput": {
+    "jobs": 16,
+    "observations": 9908,
+    "serialization_lifecycles": 9908,
+    "decision_lifecycles": 9892,
+    "terminal_lifecycles": 16,
+    "serialize_without_hash_calls": 9908,
+    "serialize_without_hash_bytes": 1345246987,
+    "serialize_without_hash_mean_bytes": 135773.82,
+    "sha256_calls": 9908,
+    "canonical_serialize_calls": 0,
+    "canonical_serialize_bytes": 0,
+    "canonical_bytes_consumed_by_throughput": false,
+    "same_mutation_epoch_duplicate_calls": 0,
+    "unexpected_mutation_counts": 0,
+    "every_lifecycle_one_hash_input": true,
+    "every_lifecycle_one_sha256": true,
+    "lifecycle_ids_contiguous_per_job": true,
+    "same_finalized_observation_serialized_more_than_once_without_mutation": false,
+    "worker_local_runtime_us": 385051844,
+    "observation_off_worker_local_runtime_us": 34589592,
+    "observation_off_is_diagnostic_only": true
+  },
+  "observation_off": {
+    "jobs": 16,
+    "observations": 0,
+    "serialization_lifecycles": 0,
+    "serialize_without_hash_calls": 0,
+    "sha256_calls": 0,
+    "canonical_serialize_calls": 0,
+    "canonical_bytes_consumed": false,
+    "training_throughput_eligible": false
+  },
+  "direct_api_duplicate_probe": {
+    "lifecycle_id": 1,
+    "call_sequence": [
+      "observation_hash",
+      "canonical_serialize"
+    ],
+    "mutation_count": 0,
+    "serialize_without_hash_calls": 2,
+    "sha256_calls": 2,
+    "canonical_serialize_calls": 1,
+    "same_mutation_epoch_duplicate_calls": 1,
+    "duplicate_proven": true
+  },
+  "mutation_epoch_control": {
+    "lifecycle_id": 2,
+    "mutation_count": 1,
+    "serialize_without_hash_calls": 2,
+    "same_mutation_epoch_duplicate_calls": 0,
+    "mutation_separates_repeated_work": true
+  },
+  "contract_equivalence": {
+    "canonical_without_hash_is_hash_input": true,
+    "observation_hash_equals_sha256_of_exact_bytes": true,
+    "canonical_serialize_appends_existing_hash_field_to_exact_bytes": true,
+    "byte_identical_contract_proven": true,
+    "privacy_projection_changed": false,
+    "format_changed": false,
+    "hash_algorithm_changed": false
+  },
+  "future_reuse_design": {
+    "safe_within_one_unchanged_observation_lifetime": true,
+    "requires_mutation_invalidation": true,
+    "cross_observation_cache": false,
+    "hidden_mutable_player_observation_cache": false,
+    "implemented": false,
+    "reason_not_implemented": "The measured FULL/THROUGHPUT path never calls canonical_serialize and has zero same-state duplicate materializations."
+  },
+  "per_job": [
+    {"job_id": "m4-000000", "lifecycles": 613, "serialize_without_hash_bytes": 82600414},
+    {"job_id": "m4-000001", "lifecycles": 622, "serialize_without_hash_bytes": 84741891},
+    {"job_id": "m4-000002", "lifecycles": 622, "serialize_without_hash_bytes": 84765793},
+    {"job_id": "m4-000003", "lifecycles": 613, "serialize_without_hash_bytes": 82539263},
+    {"job_id": "m4-000004", "lifecycles": 613, "serialize_without_hash_bytes": 82589266},
+    {"job_id": "m4-000005", "lifecycles": 629, "serialize_without_hash_bytes": 86454533},
+    {"job_id": "m4-000006", "lifecycles": 622, "serialize_without_hash_bytes": 84775417},
+    {"job_id": "m4-000007", "lifecycles": 620, "serialize_without_hash_bytes": 84191661},
+    {"job_id": "m4-000008", "lifecycles": 620, "serialize_without_hash_bytes": 84277667},
+    {"job_id": "m4-000009", "lifecycles": 622, "serialize_without_hash_bytes": 84899449},
+    {"job_id": "m4-000010", "lifecycles": 622, "serialize_without_hash_bytes": 84688462},
+    {"job_id": "m4-000011", "lifecycles": 613, "serialize_without_hash_bytes": 82395280},
+    {"job_id": "m4-000012", "lifecycles": 620, "serialize_without_hash_bytes": 84189331},
+    {"job_id": "m4-000013", "lifecycles": 622, "serialize_without_hash_bytes": 84826977},
+    {"job_id": "m4-000014", "lifecycles": 622, "serialize_without_hash_bytes": 84868439},
+    {"job_id": "m4-000015", "lifecycles": 613, "serialize_without_hash_bytes": 82443144}
+  ],
+  "artifacts": {
+    "lifecycle_sidecar_schema": "ocgforge.m4.serialization_lifecycle.v1",
+    "lifecycle_sidecar_prefix": "M4_SERIALIZATION_LIFECYCLE ",
+    "raw_run_directory": "C:\\yogiohML-m4-3-2\\characterization\\runs"
+  },
+  "decision": "No optimization benchmark: no THROUGHPUT duplicate materialization was proven. Stop after characterization."
+}

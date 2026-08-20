@@ -830,6 +830,61 @@ std::string serialize_performance_audit(
     output << '}';
     return output.str();
 }
+
+std::string serialize_serialization_lifecycle(
+    const std::string& job_id,
+    const ygo::observation::PerformanceAuditSnapshot& audit) {
+    std::uint64_t serialize_without_hash_calls = 0;
+    std::uint64_t serialize_without_hash_bytes = 0;
+    std::uint64_t sha256_calls = 0;
+    std::uint64_t canonical_serialize_calls = 0;
+    std::uint64_t canonical_serialize_bytes = 0;
+    std::uint64_t same_mutation_epoch_duplicate_calls = 0;
+    for (const auto& lifecycle : audit.serialization_lifecycles) {
+        serialize_without_hash_calls += lifecycle.serialize_without_hash_calls;
+        serialize_without_hash_bytes += lifecycle.serialize_without_hash_bytes;
+        sha256_calls += lifecycle.sha256_calls;
+        canonical_serialize_calls += lifecycle.canonical_serialize_calls;
+        canonical_serialize_bytes += lifecycle.canonical_serialize_bytes;
+        same_mutation_epoch_duplicate_calls += lifecycle.same_mutation_epoch_duplicate_calls;
+    }
+
+    std::ostringstream output;
+    output << '{';
+    append_json_string(output, "schema", "ocgforge.m4.serialization_lifecycle.v1", false);
+    append_json_string(output, "type", "serialization_lifecycle");
+    append_json_string(output, "job_id", job_id);
+    append_json_unsigned(output, "lifecycle_count", audit.serialization_lifecycles.size());
+    append_json_unsigned(output, "serialize_without_hash_calls", serialize_without_hash_calls);
+    append_json_unsigned(output, "serialize_without_hash_bytes", serialize_without_hash_bytes);
+    append_json_unsigned(output, "sha256_calls", sha256_calls);
+    append_json_unsigned(output, "canonical_serialize_calls", canonical_serialize_calls);
+    append_json_unsigned(output, "canonical_serialize_bytes", canonical_serialize_bytes);
+    append_json_unsigned(output, "same_mutation_epoch_duplicate_calls", same_mutation_epoch_duplicate_calls);
+    append_json_bool(output, "canonical_serialize_called", canonical_serialize_calls != 0);
+    output << ",\"lifecycle_records\":[";
+    for (std::size_t index = 0; index < audit.serialization_lifecycles.size(); ++index) {
+        if (index != 0) {
+            output << ',';
+        }
+        const auto& lifecycle = audit.serialization_lifecycles[index];
+        output << '{';
+        append_json_unsigned(output, "lifecycle_id", lifecycle.lifecycle_id, false);
+        append_json_unsigned(output, "mutation_count", lifecycle.mutation_count);
+        append_json_unsigned(output, "serialize_without_hash_calls",
+                             lifecycle.serialize_without_hash_calls);
+        append_json_unsigned(output, "serialize_without_hash_bytes",
+                             lifecycle.serialize_without_hash_bytes);
+        append_json_unsigned(output, "sha256_calls", lifecycle.sha256_calls);
+        append_json_unsigned(output, "canonical_serialize_calls", lifecycle.canonical_serialize_calls);
+        append_json_unsigned(output, "canonical_serialize_bytes", lifecycle.canonical_serialize_bytes);
+        append_json_unsigned(output, "same_mutation_epoch_duplicate_calls",
+                             lifecycle.same_mutation_epoch_duplicate_calls);
+        output << '}';
+    }
+    output << "]}";
+    return output.str();
+}
 #endif
 
 std::string serialize_protocol_error(const ProtocolParseResult& parse_result) {

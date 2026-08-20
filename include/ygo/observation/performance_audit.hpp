@@ -2,8 +2,11 @@
 
 #include <array>
 #include <chrono>
+#include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <string_view>
+#include <vector>
 
 #include "ygo/observation/observed_zone.hpp"
 
@@ -80,6 +83,17 @@ struct PerformanceAuditDetailCounters {
     std::uint64_t script_reader_requests = 0;
 };
 
+struct PerformanceAuditSerializationLifecycle {
+    std::uint64_t lifecycle_id = 0;
+    std::uint64_t mutation_count = 0;
+    std::uint64_t serialize_without_hash_calls = 0;
+    std::uint64_t serialize_without_hash_bytes = 0;
+    std::uint64_t sha256_calls = 0;
+    std::uint64_t canonical_serialize_calls = 0;
+    std::uint64_t canonical_serialize_bytes = 0;
+    std::uint64_t same_mutation_epoch_duplicate_calls = 0;
+};
+
 struct PerformanceAuditSnapshot {
     std::uint64_t observation_total_us = 0;
     std::array<PerformanceAuditTiming, static_cast<std::size_t>(PerformanceAuditBucket::Count)>
@@ -92,6 +106,7 @@ struct PerformanceAuditSnapshot {
     PerformanceAuditCounters counters;
     PerformanceAuditDetailCounters detail_counters;
     std::array<PerformanceAuditZoneCounters, 11> entities_by_zone{};
+    std::vector<PerformanceAuditSerializationLifecycle> serialization_lifecycles;
 };
 
 class PerformanceAuditCollector final {
@@ -302,17 +317,26 @@ public:
         explicit ObservationScope(PerformanceAuditCollector* collector) noexcept
             : collector_(collector), start_(Clock::now()), previous_(collector == nullptr
                                                                           ? false
-                                                                          : collector->observation_active_) {
+                                                                          : collector->observation_active_),
+              previous_lifecycle_index_(collector == nullptr ? kNoLifecycle : collector->active_lifecycle_index_),
+              previous_mutation_epoch_(collector == nullptr ? 0 : collector->active_mutation_epoch_),
+              previous_epoch_serialization_calls_(collector == nullptr
+                                                      ? 0
+                                                      : collector->active_epoch_serialization_calls_) {
             if (collector_ != nullptr) {
                 collector_->named_observation_time_us_ = 0;
                 collector_->observation_active_ = true;
+                collector_->begin_serialization_lifecycle();
             }
         }
 
         ObservationScope(const ObservationScope&) = delete;
         ObservationScope& operator=(const ObservationScope&) = delete;
         ObservationScope(ObservationScope&& other) noexcept
-            : collector_(other.collector_), start_(other.start_), previous_(other.previous_), active_(other.active_) {
+            : collector_(other.collector_), start_(other.start_), previous_(other.previous_),
+              previous_lifecycle_index_(other.previous_lifecycle_index_),
+              previous_mutation_epoch_(other.previous_mutation_epoch_),
+              previous_epoch_serialization_calls_(other.previous_epoch_serialization_calls_), active_(other.active_) {
             other.collector_ = nullptr;
             other.active_ = false;
         }
@@ -337,6 +361,9 @@ public:
             other.total_us += elapsed >= named ? elapsed - named : 0;
             ++other.calls;
             collector_->observation_active_ = previous_;
+            collector_->active_lifecycle_index_ = previous_lifecycle_index_;
+            collector_->active_mutation_epoch_ = previous_mutation_epoch_;
+            collector_->active_epoch_serialization_calls_ = previous_epoch_serialization_calls_;
         }
 
     private:
@@ -349,6 +376,9 @@ public:
         PerformanceAuditCollector* collector_ = nullptr;
         Clock::time_point start_{};
         bool previous_ = false;
+        std::size_t previous_lifecycle_index_ = kNoLifecycle;
+        std::uint64_t previous_mutation_epoch_ = 0;
+        std::uint64_t previous_epoch_serialization_calls_ = 0;
         bool active_ = true;
     };
 
@@ -402,13 +432,51 @@ public:
     void record_relationship_object() noexcept { ++snapshot_.counters.relationship_objects; }
     void record_copy_event() noexcept { ++snapshot_.counters.allocation_copy_events; }
 
+    void record_observation_mutation() noexcept {
+        if (active_lifecycle_index_ == kNoLifecycle) {
+            return;
+        }
+        auto& lifecycle = snapshot_.serialization_lifecycles[active_lifecycle_index_];
+        ++lifecycle.mutation_count;
+        ++active_mutation_epoch_;
+        active_epoch_serialization_calls_ = 0;
+    }
+
+    void record_serialize_without_hash(const std::size_t bytes) noexcept {
+        if (active_lifecycle_index_ == kNoLifecycle) {
+            return;
+        }
+        auto& lifecycle = snapshot_.serialization_lifecycles[active_lifecycle_index_];
+        ++lifecycle.serialize_without_hash_calls;
+        lifecycle.serialize_without_hash_bytes += static_cast<std::uint64_t>(bytes);
+        if (active_epoch_serialization_calls_ != 0) {
+            ++lifecycle.same_mutation_epoch_duplicate_calls;
+        }
+        ++active_epoch_serialization_calls_;
+    }
+
+    void record_sha256_call() noexcept {
+        if (active_lifecycle_index_ != kNoLifecycle) {
+            ++snapshot_.serialization_lifecycles[active_lifecycle_index_].sha256_calls;
+        }
+    }
+
+    void record_canonical_serialize(const std::size_t bytes) noexcept {
+        if (active_lifecycle_index_ == kNoLifecycle) {
+            return;
+        }
+        auto& lifecycle = snapshot_.serialization_lifecycles[active_lifecycle_index_];
+        ++lifecycle.canonical_serialize_calls;
+        lifecycle.canonical_serialize_bytes += static_cast<std::uint64_t>(bytes);
+    }
+
     void set_script_metrics(const std::uint64_t script_loads,
                             const std::uint64_t script_reader_requests) noexcept {
         snapshot_.counters.script_loads = script_loads;
         snapshot_.detail_counters.script_reader_requests = script_reader_requests;
     }
 
-    PerformanceAuditSnapshot snapshot() const noexcept { return snapshot_; }
+    PerformanceAuditSnapshot snapshot() const { return snapshot_; }
 
     static std::string_view bucket_name(const PerformanceAuditBucket bucket) noexcept {
         constexpr std::array<std::string_view, static_cast<std::size_t>(PerformanceAuditBucket::Count)>
@@ -442,6 +510,23 @@ private:
     friend class AuxiliaryScope;
     friend class ObservationScope;
     friend class SetupScope;
+
+    static constexpr std::size_t kNoLifecycle = std::numeric_limits<std::size_t>::max();
+
+    void begin_serialization_lifecycle() noexcept {
+        try {
+            snapshot_.serialization_lifecycles.push_back({});
+            active_lifecycle_index_ = snapshot_.serialization_lifecycles.size() - 1;
+            auto& lifecycle = snapshot_.serialization_lifecycles[active_lifecycle_index_];
+            lifecycle.lifecycle_id = ++next_lifecycle_id_;
+            active_mutation_epoch_ = 0;
+            active_epoch_serialization_calls_ = 0;
+        } catch (...) {
+            active_lifecycle_index_ = kNoLifecycle;
+            active_mutation_epoch_ = 0;
+            active_epoch_serialization_calls_ = 0;
+        }
+    }
 
     void record_timing(const PerformanceAuditBucket bucket, const std::uint64_t exclusive_us) noexcept {
         const auto index = static_cast<std::size_t>(bucket);
@@ -484,6 +569,10 @@ private:
     Scope* active_scope_ = nullptr;
     AuxiliaryScope* active_auxiliary_scope_ = nullptr;
     SetupScope* active_setup_scope_ = nullptr;
+    std::uint64_t next_lifecycle_id_ = 0;
+    std::size_t active_lifecycle_index_ = kNoLifecycle;
+    std::uint64_t active_mutation_epoch_ = 0;
+    std::uint64_t active_epoch_serialization_calls_ = 0;
 };
 
 }  // namespace ygo::observation

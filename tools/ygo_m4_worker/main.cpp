@@ -162,6 +162,9 @@ int run_worker() {
         std::cerr << ygo::m4::worker::kPerformanceAuditSidecarPrefix
                   << ygo::m4::worker::serialize_performance_audit(result.job_id, result.performance_audit)
                   << '\n';
+        std::cerr << ygo::m4::worker::kSerializationLifecycleSidecarPrefix
+                  << ygo::m4::worker::serialize_serialization_lifecycle(result.job_id, result.performance_audit)
+                  << '\n';
         std::cerr.flush();
 #endif
     }

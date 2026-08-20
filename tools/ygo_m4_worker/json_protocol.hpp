@@ -17,6 +17,7 @@ inline constexpr char kProtocolSchema[] = "ocgforge.m4.worker.v1";
 inline constexpr char kProtocolVersion[] = "ocgforge.m4.worker.v1";
 #ifdef YGO_M4_PERFORMANCE_AUDIT
 inline constexpr char kPerformanceAuditSidecarPrefix[] = "M4_PERFORMANCE_AUDIT ";
+inline constexpr char kSerializationLifecycleSidecarPrefix[] = "M4_SERIALIZATION_LIFECYCLE ";
 #endif
 inline constexpr char kWorkerIdentity[] = "ocgforge.m4.native_worker.v1";
 
@@ -43,6 +44,9 @@ std::string serialize_result(const ygo::simulation::SimulationResult& result,
 
 #ifdef YGO_M4_PERFORMANCE_AUDIT
 std::string serialize_performance_audit(
+    const std::string& job_id,
+    const ygo::observation::PerformanceAuditSnapshot& audit);
+std::string serialize_serialization_lifecycle(
     const std::string& job_id,
     const ygo::observation::PerformanceAuditSnapshot& audit);
 #endif

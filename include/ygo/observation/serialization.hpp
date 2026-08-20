@@ -17,6 +17,8 @@ std::string observation_hash(const PlayerObservation& observation);
 #ifdef YGO_M4_PERFORMANCE_AUDIT
 std::string canonical_serialize_without_hash(const PlayerObservation& observation,
                                              PerformanceAuditCollector* audit);
+std::string canonical_serialize(const PlayerObservation& observation,
+                                PerformanceAuditCollector* audit);
 std::string observation_hash(const PlayerObservation& observation,
                              PerformanceAuditCollector* audit);
 #endif

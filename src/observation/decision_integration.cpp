@@ -108,6 +108,11 @@ void attach_decision_context_impl(PlayerObservation& observation,
                                   , PerformanceAuditCollector* audit
 #endif
                                   ) {
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+    if (audit != nullptr) {
+        audit->record_observation_mutation();
+    }
+#endif
     DecisionContext context;
     context.decision_id = request.decision_id;
     context.kind = ygo::protocol::decision_kind_name(request.kind);
