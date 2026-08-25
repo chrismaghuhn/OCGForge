@@ -47,7 +47,7 @@ Performance work must not weaken the first six properties.
 
 ## Current checkpoint
 
-Documentation baseline: `main` at merge commit `7bcb907f09996ddb65471b62b8d6e045ff02eb6e` (2026-08-14).
+Documentation baseline: `main` at the M4 finalization base `bafe75b97e03d796b318d6f7757cc555873f1fb9` (2026-08-25).
 
 Repository-recorded M3/M3.5 acceptance evidence reports:
 
@@ -61,11 +61,13 @@ Repository-recorded M3/M3.5 acceptance evidence reports:
 - 8/8 repository Python tests;
 - independent-process determinism, semantic-action replay, and CRLF replay gates recorded as passing.
 
-PR #3 adds the M4 parallel-simulation foundation and its benchmark/audit
-handoff. The committed M4 baseline is currently **ACCEPTANCE PENDING** because
-the clean-checkout evidence required to verify a baseline PASS is not bundled
-with this checkpoint. This is a foundation/baseline status only; it is not an
-optimization-completion, general ML-readiness, or M5 claim.
+M4 adds the parallel-simulation foundation and its benchmark/audit contracts.
+The finalized branch records **M4 FINAL PASS** from fresh Release evidence,
+with semantic validation through 64 workers and 16 workers recommended for
+production concurrency. This is a parallel-simulation foundation result; it
+is not a general ML-readiness or M5 claim. M4.3.5 remains a documented
+rejected experiment, while accepted internal equivalence-preserving work is
+recorded separately in `docs/m4/M4_FINAL.md`.
 
 These values are acceptance evidence committed to the repository. They are **not a claim that this documentation-only package re-ran the test suite**.
 

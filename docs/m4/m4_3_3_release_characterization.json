@@ -1,0 +1,431 @@
+{
+  "schema": "ocgforge.m4.release_characterization.v1",
+  "status": "M4.3.3 RELEASE CHARACTERIZATION PASS",
+  "optimization_implemented": false,
+  "begin_m5": false,
+  "source_commit": "a61e3465b5903b21ad5eae17f45889e2a2fccef3",
+  "workload": {
+    "matchup": "Swordsoul Tenyi ML v1 vs Salamangreat ML v1",
+    "master_seed": 20260815,
+    "games": 16,
+    "workers": 1,
+    "max_steps": 2200,
+    "mode": "throughput",
+    "observation_mode": "full",
+    "trace_persistence": false,
+    "instrumentation": false,
+    "same_debug_release_job_derivation": true
+  },
+  "builds": {
+    "common": {
+      "compiler_identity": "Clang-19.1.7",
+      "zig_version": "0.14.1",
+      "toolchain": "cmake/zig-toolchain.cmake",
+      "generator": "Ninja",
+      "ninja": ".cache/toolchain/ninja/ninja.exe",
+      "rules_bundle_id": "3adfe6b4cfe2c2805e50b389fc0eb4e70a3b0b6107436614d328fddc865e585f",
+      "core_patchset_sha256": "6b5421b3a852085f48fa161a5ba1540f902aa00784a337694b21c9efc34f69bd",
+      "deck_hashes": [
+        "8ee4b699de19ff256e388d46f35b8696a60ff6ec59f0324f060a2468876711b7",
+        "6041abe0a59463d0715ae1da9100090ad487de02a02794e8ec0686d4c0513188"
+      ]
+    },
+    "debug": {
+      "preset": "dev-windows-zig",
+      "audit_build_directory": "build/m4-audit",
+      "cmake_build_type": "Debug",
+      "cmake_flags": ["-g", "-DYGO_M4_PERFORMANCE_AUDIT"],
+      "audit_define": "YGO_M4_PERFORMANCE_AUDIT",
+      "audit_worker": {
+        "path": "build/m4-audit/ygo_m4_worker.exe",
+        "sha256": "940b251371ae1c663abbbc7ac342cee007f3eaa182fab3f640f9f962669f5473"
+      },
+      "ordinary_worker": {
+        "path": "build/windows-zig/ygo_m4_worker.exe",
+        "sha256": "0d6599f6adbad9d88ffd398afbc8192572665e311717921ed32eb34464cd1a65"
+      },
+      "worker_handshake": {
+        "worker_identity": "ocgforge.m4.native_worker.v1",
+        "compiler_identity": "Clang-19.1.7",
+        "build_type": "Debug",
+        "protocol_schema": "ocgforge.m4.worker.v1",
+        "protocol_version": "ocgforge.m4.worker.v1"
+      }
+    },
+    "release": {
+      "preset": "release-windows-zig",
+      "audit_build_directory": "build/m4-audit-release",
+      "cmake_build_type": "Release",
+      "cmake_flags": ["-O3", "-DNDEBUG", "-DYGO_M4_PERFORMANCE_AUDIT"],
+      "ordinary_release_flags": ["-O3", "-DNDEBUG"],
+      "audit_define": "YGO_M4_PERFORMANCE_AUDIT",
+      "audit_worker": {
+        "path": "build/m4-audit-release/ygo_m4_worker.exe",
+        "sha256": "ac29e35faab302416f12fb556667b9d550d0285622a5d4e66c221ffbb3771b07"
+      },
+      "ordinary_worker": {
+        "path": "build/release-windows-zig/ygo_m4_worker.exe",
+        "sha256": "0696e53aef3d8789e39207567ecfdbb8d5efbe39721d1fe1a8a8ca046d78ce5b"
+      },
+      "worker_handshake": {
+        "worker_identity": "ocgforge.m4.native_worker.v1",
+        "compiler_identity": "Clang-19.1.7",
+        "build_type": "Release",
+        "protocol_schema": "ocgforge.m4.worker.v1",
+        "protocol_version": "ocgforge.m4.worker.v1"
+      }
+    },
+    "compile_commands": {
+      "debug_audit": "build/m4-audit/compile_commands.json",
+      "release_audit": "build/m4-audit-release/compile_commands.json",
+      "release_ordinary": "build/release-windows-zig/compile_commands.json",
+      "relevant_release_flags": "-DYGO_M4_PERFORMANCE_AUDIT -O3 -DNDEBUG -std=c++17 -Wall -Wextra -Wpedantic",
+      "relevant_debug_flags": "-DYGO_M4_PERFORMANCE_AUDIT -g -std=c++17 -Wall -Wextra -Wpedantic"
+    }
+  },
+  "semantic_equivalence": {
+    "pass": true,
+    "harness": "tools/m4/compare_build_modes.py",
+    "evidence": "artifacts/m4/m4-3-3/semantic/build_mode_equivalence.json",
+    "jobs": 16,
+    "all_result_semantic_fields_equal": true,
+    "all_error_counters_zero": true,
+    "all_trace_step_payloads_equal": true,
+    "all_trace_step_bytes_equal": true,
+    "all_observation_hash_sequences_equal": true,
+    "observation_count_per_build": 9908,
+    "observation_hash_sequence_sha256": "0fe46fac3521c05ad56a25a6dbfe202f939d4d9a93936a5856963e0c94a270c9",
+    "gameplay_hash_set_digest": "726a764e428a0b47f26a0e6d27d4dd5145b17c86e456d3b919c403003b00c072",
+    "normalized_trace_hashes_equal": true,
+    "raw_trace_hashes_equal": false,
+    "raw_trace_hash_difference_explanation": "canonical_trace_hash_v2 includes build_type and compiler_identity in its existing manifest; the raw Debug/Release trace hashes therefore differ by build identity, while all step payloads, observation hashes, and manifest-normalized trace hashes are equal."
+  },
+  "privacy_gates": {
+    "debug": {
+      "status": "PASS",
+      "ctest_preset": "dev-windows-zig",
+      "tests": [
+        "sha256_known_answer_test",
+        "observation_contract_test",
+        "privacy_projection_test",
+        "observation_builder_test",
+        "m2_1_xyz_api_test",
+        "continuation_privacy_test",
+        "m3_real_deck_privacy_test"
+      ]
+    },
+    "release": {
+      "status": "PASS",
+      "ctest_preset": "release-windows-zig",
+      "tests": [
+        "sha256_known_answer_test",
+        "observation_contract_test",
+        "privacy_projection_test",
+        "observation_builder_test",
+        "m2_1_xyz_api_test",
+        "continuation_privacy_test",
+        "m3_real_deck_privacy_test"
+      ]
+    },
+    "paired_world_coverage": [
+      "m2_1_xyz_api_test: hidden Xyz materials preserve identical perspective-safe bytes and hashes",
+      "m3_real_deck_privacy_test: hidden identities remain equal while revealed identities differ",
+      "privacy_projection_test: hidden identity and identity-derived fields are redacted",
+      "continuation_privacy_test: continuation observations preserve privacy"
+    ]
+  },
+  "observation_serialization_lifecycle": {
+    "throughput_consumes_canonical_serialize": false,
+    "evidence_rule": "The audit sidecar reports zero canonical_serialize calls and zero canonical_serialize bytes, exactly one serialize_without_hash and SHA-256 call per lifecycle, and zero same-mutation-epoch duplicate materializations.",
+    "debug": {
+      "lifecycle_count": 9908,
+      "serialize_without_hash_calls": 9908,
+      "serialize_without_hash_bytes": 1345246987,
+      "sha256_calls": 9908,
+      "canonical_serialize_calls": 0,
+      "canonical_serialize_bytes": 0,
+      "same_mutation_epoch_duplicate_calls": 0,
+      "mean_bytes_per_materialization": 135773.817824,
+      "serialize_without_hash_elapsed_us": 88895918,
+      "serialize_without_hash_megabytes_per_second": 15.132832
+    },
+    "release": {
+      "lifecycle_count": 9908,
+      "serialize_without_hash_calls": 9908,
+      "serialize_without_hash_bytes": 1345246987,
+      "sha256_calls": 9908,
+      "canonical_serialize_calls": 0,
+      "canonical_serialize_bytes": 0,
+      "same_mutation_epoch_duplicate_calls": 0,
+      "mean_bytes_per_materialization": 135773.817824,
+      "serialize_without_hash_elapsed_us": 20329019,
+      "serialize_without_hash_megabytes_per_second": 66.173729
+    }
+  },
+  "timing_buckets": {
+    "outer_observation": {
+      "calls": 9908,
+      "debug": {"total_us": 349316775, "fraction_worker_percent": 91.113097, "mean_us_per_call": 35256},
+      "release": {"total_us": 29713129, "fraction_worker_percent": 91.518059, "mean_us_per_call": 2998},
+      "debug_to_release_speedup": 11.756311
+    },
+    "observation_query_field": {
+      "calls": 9908,
+      "debug": {"total_us": 99285, "fraction_worker_percent": 0.025897, "fraction_observation_percent": 0.028423, "mean_us_per_call": 10},
+      "release": {"total_us": 207, "fraction_worker_percent": 0.000638, "fraction_observation_percent": 0.000697, "mean_us_per_call": 0},
+      "debug_to_release_speedup": 479.637681
+    },
+    "observation_query_location": {
+      "calls": 118896,
+      "debug": {"total_us": 35384875, "fraction_worker_percent": 9.229518, "fraction_observation_percent": 10.129738, "mean_us_per_call": 297},
+      "release": {"total_us": 470102, "fraction_worker_percent": 1.447940, "fraction_observation_percent": 1.582136, "mean_us_per_call": 3},
+      "debug_to_release_speedup": 75.270633
+    },
+    "observation_query_individual": {
+      "calls": 0,
+      "debug": {"total_us": 0, "fraction_worker_percent": 0.0, "fraction_observation_percent": 0.0, "mean_us_per_call": 0},
+      "release": {"total_us": 0, "fraction_worker_percent": 0.0, "fraction_observation_percent": 0.0, "mean_us_per_call": 0},
+      "debug_to_release_speedup": null
+    },
+    "observation_query_decode": {
+      "calls": 128804,
+      "debug": {"total_us": 56776135, "fraction_worker_percent": 14.809050, "fraction_observation_percent": 16.253481, "mean_us_per_call": 440},
+      "release": {"total_us": 2697643, "fraction_worker_percent": 8.308888, "fraction_observation_percent": 9.078960, "mean_us_per_call": 20},
+      "debug_to_release_speedup": 21.046571
+    },
+    "observation_zone_projection": {
+      "calls": 508088,
+      "debug": {"total_us": 31955, "fraction_worker_percent": 0.008335, "fraction_observation_percent": 0.009148, "mean_us_per_call": 0},
+      "release": {"total_us": 231, "fraction_worker_percent": 0.000711, "fraction_observation_percent": 0.000777, "mean_us_per_call": 0},
+      "debug_to_release_speedup": 138.333333
+    },
+    "observation_entity_projection": {
+      "calls": 526004,
+      "debug": {"total_us": 2339588, "fraction_worker_percent": 0.610240, "fraction_observation_percent": 0.669761, "mean_us_per_call": 4},
+      "release": {"total_us": 1207, "fraction_worker_percent": 0.003718, "fraction_observation_percent": 0.004062, "mean_us_per_call": 0},
+      "debug_to_release_speedup": 1938.349627
+    },
+    "observation_relationship_projection": {
+      "calls": 9908,
+      "debug": {"total_us": 294, "fraction_worker_percent": 0.000077, "fraction_observation_percent": 0.000084, "mean_us_per_call": 0},
+      "release": {"total_us": 0, "fraction_worker_percent": 0.0, "fraction_observation_percent": 0.0, "mean_us_per_call": 0},
+      "debug_to_release_speedup": null
+    },
+    "observation_visibility_privacy": {
+      "calls": 1476104,
+      "debug": {"total_us": 1876, "fraction_worker_percent": 0.000489, "fraction_observation_percent": 0.000537, "mean_us_per_call": 0},
+      "release": {"total_us": 716, "fraction_worker_percent": 0.002205, "fraction_observation_percent": 0.002410, "mean_us_per_call": 0},
+      "debug_to_release_speedup": 2.620112
+    },
+    "observation_candidate_consistency": {
+      "calls": 33247,
+      "debug": {"total_us": 8542, "fraction_worker_percent": 0.002228, "fraction_observation_percent": 0.002445, "mean_us_per_call": 0},
+      "release": {"total_us": 70, "fraction_worker_percent": 0.000216, "fraction_observation_percent": 0.000236, "mean_us_per_call": 0},
+      "debug_to_release_speedup": 122.028571
+    },
+    "observation_canonical_serialization": {
+      "calls": 9908,
+      "debug": {"total_us": 88895918, "fraction_worker_percent": 23.186926, "fraction_observation_percent": 25.448511, "mean_us_per_call": 8972},
+      "release": {"total_us": 20329019, "fraction_worker_percent": 62.614488, "fraction_observation_percent": 68.417631, "mean_us_per_call": 2051},
+      "debug_to_release_speedup": 4.372858
+    },
+    "observation_hash": {
+      "calls": 9908,
+      "debug": {"total_us": 138780159, "fraction_worker_percent": 36.198348, "fraction_observation_percent": 39.729028, "mean_us_per_call": 14006},
+      "release": {"total_us": 4636641, "fraction_worker_percent": 14.281107, "fraction_observation_percent": 15.604688, "mean_us_per_call": 467},
+      "debug_to_release_speedup": 29.931185
+    },
+    "observation_other": {
+      "calls": 9908,
+      "debug": {"total_us": 26998148, "fraction_worker_percent": 7.041989, "fraction_observation_percent": 7.728844, "mean_us_per_call": 2724},
+      "release": {"total_us": 1577293, "fraction_worker_percent": 4.858149, "fraction_observation_percent": 5.308404, "mean_us_per_call": 159},
+      "debug_to_release_speedup": 17.116761
+    }
+  },
+  "worker_throughput": {
+    "debug": {"worker_local_simulation_us": 383388106, "worker_local_simulation_seconds": 383.388106, "games_per_second": 0.041733167},
+    "release": {"worker_local_simulation_us": 32466957, "worker_local_simulation_seconds": 32.466957, "games_per_second": 0.492808735},
+    "release_throughput_speedup": 11.808563,
+    "release_worker_runtime_reduction_percent": 91.532,
+    "same_machine_state_repetition": "one fresh Debug audit followed by one fresh Release audit; no scaling matrix was run"
+  },
+  "raw_sha256_benchmark": {
+    "implementation": "existing ygo::trace::sha256_string(std::string_view); no implementation change",
+    "target_bytes_per_size": 33554432,
+    "known_answer_tests": "passed in Debug and Release",
+    "evidence": {
+      "debug": "artifacts/m4/m4-3-3/raw-sha/debug.json",
+      "release": "artifacts/m4/m4-3-3/raw-sha/release.json"
+    },
+    "cases": [
+      {"size_bytes": 4096, "calls": 8192, "total_bytes": 33554432, "debug_elapsed_us": 4905946, "release_elapsed_us": 111246, "debug_megabytes_per_second": 6.83954, "release_megabytes_per_second": 301.622, "debug_to_release_speedup": 44.099977, "hash_equal": true, "hash": "432f51b0d64d9bcdf2e738ee846a9f5740646e0bb1cc095616293e6cac8bfe40"},
+      {"size_bytes": 32768, "calls": 1024, "total_bytes": 33554432, "debug_elapsed_us": 4937309, "release_elapsed_us": 108121, "debug_megabytes_per_second": 6.7961, "release_megabytes_per_second": 310.339, "debug_to_release_speedup": 45.664663, "hash_equal": true, "hash": "cf890f855960d2dcc5e50a2adb4671558deeaa64955e4aa9702850d74bbcf445"},
+      {"size_bytes": 139264, "calls": 241, "total_bytes": 33562624, "debug_elapsed_us": 4307853, "release_elapsed_us": 108630, "debug_megabytes_per_second": 7.79103, "release_megabytes_per_second": 308.962, "debug_to_release_speedup": 39.6562, "hash_equal": true, "hash": "0037cf732e35c99aa7dd4a2c3239a9eb17ff10da3f682325de2961c09b4bbd1f"},
+      {"size_bytes": 1048576, "calls": 32, "total_bytes": 33554432, "debug_elapsed_us": 4299717, "release_elapsed_us": 108270, "debug_megabytes_per_second": 7.80387, "release_megabytes_per_second": 309.913, "debug_to_release_speedup": 39.712912, "hash_equal": true, "hash": "3f8a853cfd1416af3ab78fd914f7574dd86045f3f132294cf9ba47717130d3a8"}
+    ]
+  },
+  "serialization_build_mode_characterization": {
+    "implementation": "existing serialize_without_hash path; no serializer change",
+    "debug": {"calls": 9908, "bytes": 1345246987, "elapsed_us": 88895918, "megabytes_per_second": 15.132832},
+    "release": {"calls": 9908, "bytes": 1345246987, "elapsed_us": 20329019, "megabytes_per_second": 66.173729},
+    "debug_to_release_speedup": 4.372858,
+    "canonical_serialize_consumed_by_throughput": false
+  },
+  "operation_counters": {
+    "equal_debug_release": true,
+    "debug": {
+      "observations": 9908,
+      "candidate_sets": 9892,
+      "candidate_total": 46897,
+      "candidate_max": 336,
+      "entities_projected": 526004,
+      "ocg_duel_query_field": 19816,
+      "ocg_duel_query_location": 118896,
+      "ocg_duel_query": 0,
+      "ocg_duel_process": 24272,
+      "script_loads": 1232,
+      "script_reader_requests": 1200,
+      "semantic_hashes": 16
+    },
+    "release": {
+      "observations": 9908,
+      "candidate_sets": 9892,
+      "candidate_total": 46897,
+      "candidate_max": 336,
+      "entities_projected": 526004,
+      "ocg_duel_query_field": 19816,
+      "ocg_duel_query_location": 118896,
+      "ocg_duel_query": 0,
+      "ocg_duel_process": 24272,
+      "script_loads": 1232,
+      "script_reader_requests": 1200,
+      "semantic_hashes": 16
+    }
+  },
+  "entity_projection_audit": {
+    "entities_projected": 526004,
+    "identity_known": 526004,
+    "redacted": 0,
+    "static_card_data_lookups": 526004,
+    "current_property_projections": 526004,
+    "allocation_copy_events": 3970235,
+    "relationship_objects": 0,
+    "entities_by_zone": {
+      "HAND": 64656,
+      "GRAVEYARD": 312552,
+      "EXTRA_DECK": 148620,
+      "PENDULUM_RELEVANT_STATE": 176,
+      "MAIN_DECK": 0,
+      "MONSTER_ZONE": 0,
+      "SPELL_TRAP_ZONE": 0,
+      "BANISHED": 0,
+      "FIELD_ZONE": 0,
+      "OVERLAY": 0,
+      "UNKNOWN": 0
+    },
+    "immutable_printed_metadata_reconstructed": true,
+    "representation_changed": false
+  },
+  "setup_script_timing": {
+    "debug": {"script_load_calls": 1232, "script_reader_requests": 1200, "script_load_elapsed_us": 3621746, "worker_fraction_percent": 0.944668},
+    "release": {"script_load_calls": 1232, "script_reader_requests": 1200, "script_load_elapsed_us": 409878, "worker_fraction_percent": 1.262447},
+    "classification": "REMAINS_MEASURABLE as setup, but not a dominant observation bucket"
+  },
+  "observation_off_cross_check": {
+    "diagnostic_only_not_training_throughput": true,
+    "debug": {"full_worker_us": 383388106, "observation_off_worker_us": 36452639, "full_minus_off_us": 346935467, "full_minus_off_fraction_percent": 90.491975},
+    "release": {"full_worker_us": 32466957, "observation_off_worker_us": 1860979, "full_minus_off_us": 30605978, "full_minus_off_fraction_percent": 94.268083},
+    "release_observation_off_speedup_over_debug": 19.587,
+    "not_used_as_training_throughput": true
+  },
+  "candidate_classifications": [
+    {
+      "candidate": "single_observation_canonical_byte_reuse",
+      "classification": "NOT_MATERIAL",
+      "evidence": "M4.3.2 lifecycle sidecars show exactly one serialize_without_hash and SHA call per lifecycle, zero canonical_serialize calls, and zero same-epoch duplicate materializations."
+    },
+    {
+      "candidate": "canonical_serialization_copy_reduction",
+      "classification": "REMAINS_MAJOR",
+      "release_evidence": "20,329,019 us; 68.417631% of outer observation time and 62.614488% of worker time."
+    },
+    {
+      "candidate": "observation_hash_cost_audit",
+      "classification": "REMAINS_MEASURABLE",
+      "release_evidence": "4,636,641 us; 15.604688% of outer observation time. Raw SHA throughput improved about 40-46x, but the game bucket remains measurable."
+    },
+    {
+      "candidate": "query_decode",
+      "classification": "REMAINS_MEASURABLE",
+      "release_evidence": "2,697,643 us; 9.078960% of outer observation time."
+    },
+    {
+      "candidate": "query_location",
+      "classification": "REMAINS_MEASURABLE",
+      "release_evidence": "470,102 us; 1.582136% of outer observation time; 12 semantically distinct calls per observation remain required."
+    },
+    {
+      "candidate": "entity_projection_static_metadata_reuse",
+      "classification": "DEBUG_BUILD_ARTIFACT_OR_MUCH_REDUCED",
+      "release_evidence": "The path still performs 526,004 static lookups, but its measured time is 1,207 us (0.004062% of observation time) in Release."
+    },
+    {
+      "candidate": "query_field_reuse_for_public_state_hash",
+      "classification": "NOT_MATERIAL",
+      "release_evidence": "The same-state duplicate remains 1 extra field query per observation, but the measured field bucket is 207 us (0.000697% of observation time)."
+    },
+    {
+      "candidate": "visibility_privacy_projection_reduction",
+      "classification": "NOT_MATERIAL",
+      "release_evidence": "716 us; 0.002410% of observation time; privacy gates remain PASS."
+    },
+    {
+      "candidate": "relationship_projection_reuse",
+      "classification": "NOT_MATERIAL",
+      "release_evidence": "0 Release timing us and zero relationship objects in the controlled sample."
+    },
+    {
+      "candidate": "candidate_generation",
+      "classification": "NOT_MATERIAL",
+      "evidence": "Baseline protocol_candidate fraction remains 0.189337%; candidate optimization was not run."
+    }
+  ],
+  "interpretation": {
+    "observation_hash_is_largest_release_bucket": false,
+    "largest_release_bucket": "observation_canonical_serialization",
+    "serialization_remains_material": true,
+    "query_decode_is_dominant": false,
+    "release_throughput_improvement_is_measured": true,
+    "later_release_scaling_matrix_required": true,
+    "scaling_recommendation": "The prior saturation point should be remeasured in a later fresh Release worker matrix because one-worker compute demand fell 11.808563x. No matrix was run in M4.3.3.",
+    "first_future_experiment": "Characterize the ownership/copy boundary of the existing serialize_without_hash path in Release; do not implement it in M4.3.3."
+  },
+  "verification": {
+    "release_preset_configured": true,
+    "release_preset": "release-windows-zig",
+    "debug_sha_known_answer_test": "PASS",
+    "release_sha_known_answer_test": "PASS",
+    "debug_privacy_ctest_set": "7/7 PASS",
+    "release_privacy_ctest_set": "7/7 PASS",
+    "m4_python_suite": "121 tests OK, 3 skipped",
+    "m3_python_suite": "17 tests OK",
+    "debug_performance_audit": "M4.2 PERFORMANCE AUDIT PASS",
+    "release_performance_audit": "M4.2 PERFORMANCE AUDIT PASS",
+    "trace_persistence_for_semantic_gate": "PASS with explicit per-job trace_output",
+    "scaling_matrix_run": false,
+    "sha_implementation_changed": false,
+    "serializer_changed": false,
+    "ocgcore_changed": false,
+    "cardscripts_changed": false,
+    "m5_started": false
+  },
+  "evidence": {
+    "debug_audit": "artifacts/m4/m4-3-3/performance-debug/audit.json",
+    "release_audit": "artifacts/m4/m4-3-3/performance-release/audit.json",
+    "debug_audit_sidecar": "artifacts/m4/m4-3-3/performance-debug/runs/full/worker-000.stderr.log",
+    "release_audit_sidecar": "artifacts/m4/m4-3-3/performance-release/runs/full/worker-000.stderr.log",
+    "semantic_equivalence": "artifacts/m4/m4-3-3/semantic/build_mode_equivalence.json",
+    "sha_debug": "artifacts/m4/m4-3-3/raw-sha/debug.json",
+    "sha_release": "artifacts/m4/m4-3-3/raw-sha/release.json"
+  }
+}

@@ -27,9 +27,17 @@ struct CoreHost::Impl {
     OCG_Duel duel = nullptr;
 
     explicit Impl(const std::filesystem::path& script_root,
-                  const std::vector<std::uint32_t>& required_script_codes)
+                  const std::vector<std::uint32_t>& required_script_codes
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+                  , ygo::observation::PerformanceAuditCollector* performance_audit
+#endif
+                  )
         : card_data_payload{&card_data, &callback_error},
-          scripts(script_root, required_script_codes),
+          scripts(script_root, required_script_codes
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+                  , performance_audit
+#endif
+          ),
           script_payload(&scripts, &callback_error) {}
 };
 
@@ -45,7 +53,11 @@ CoreHost::CoreHost(CoreHostConfig config) : config_(std::move(config)) {
         throw CoreError(CoreErrorCode::Lifecycle, "OCG_GetVersion",
                         "expected 11.0, got " + std::to_string(api_major_) + "." + std::to_string(api_minor_));
     }
-    impl_ = new Impl(config_.rules.card_scripts_root, config_.required_script_codes);
+    impl_ = new Impl(config_.rules.card_scripts_root, config_.required_script_codes
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+                     , config_.performance_audit
+#endif
+    );
     try {
         impl_->card_data.load(config_.rules.card_data_tsv);
         auto& options = impl_->options;

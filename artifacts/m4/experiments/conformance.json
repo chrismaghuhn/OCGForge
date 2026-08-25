@@ -1,0 +1,1389 @@
+{
+  "build": {
+    "build_type": "Release",
+    "compiler_identity": "Clang-19.1.7",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "protocol_schema": "ocgforge.m4.worker.v1",
+    "protocol_version": "ocgforge.m4.worker.v1",
+    "result_timeout_seconds": 300.0,
+    "worker_count": 1,
+    "worker_executable": "build\\release-windows-zig\\ygo_m4_worker.exe",
+    "worker_identity": "ocgforge.m4.native_worker.v1"
+  },
+  "canonical_environment": {
+    "babelcdb_commit": "89ad6837b0766a52984d8c715a7d5d4f8447946b",
+    "cardscripts_commit": "f337c87018ca723c1aded5143e616bb649555273",
+    "core_patchset_id": "ocgforge.ocgcore.api_hardening.v1",
+    "core_patchset_sha256": "6b5421b3a852085f48fa161a5ba1540f902aa00784a337694b21c9efc34f69bd",
+    "deck_hashes": [
+      "8ee4b699de19ff256e388d46f35b8696a60ff6ec59f0324f060a2468876711b7",
+      "6041abe0a59463d0715ae1da9100090ad487de02a02794e8ec0686d4c0513188"
+    ],
+    "duel_flags": 190464,
+    "duel_mode_name": "DUEL_MODE_MR5",
+    "format_id": "TCG_ADVANCED_2026_05_18",
+    "ocg_api_version": "11.0",
+    "ocgcore_commit": "9a0c558c2d686542f7914a6d529fd7aa57746aed",
+    "rule_affecting_inputs": {
+      "card_scripts": {
+        "commit": "f337c87018ca723c1aded5143e616bb649555273",
+        "repository": "https://github.com/ProjectIgnis/CardScripts.git",
+        "resolved_checkout_sha256": "ce53e1033ea7a3057745bbe143c1803a4a0c7db7f6cded4c28b0170536320e3c"
+      },
+      "core": {
+        "api_version": "11.0",
+        "commit": "9a0c558c2d686542f7914a6d529fd7aa57746aed",
+        "patchset": {
+          "id": "ocgforge.ocgcore.api_hardening.v1",
+          "ordered_patches": [
+            {
+              "name": "0001-fix-overlay-seq-parent-query.patch",
+              "sha256": "5238201c1b5fbce6623432f87ec0b39dbc2639bae107549c02c5e756e4180dd8"
+            },
+            {
+              "name": "0002-add-starting-player-control.patch",
+              "sha256": "85e4e725c351609816277a93af7f281e488e6c15cb218bbc821f649eaf4fe0ad"
+            }
+          ],
+          "sha256": "6b5421b3a852085f48fa161a5ba1540f902aa00784a337694b21c9efc34f69bd"
+        },
+        "repository": "https://github.com/edo9300/ygopro-core.git",
+        "resolved_checkout_sha256": "161849049d34de7ea60b2f370cc35f903262c14769e399d0bf43a381d295d7f3"
+      },
+      "database": {
+        "artifact": {
+          "path": "cards.cdb",
+          "sha256": "7a6570fe313ae0affe4e1e2047c564b669397500777da6c3d76e79aac393726f"
+        },
+        "commit": "89ad6837b0766a52984d8c715a7d5d4f8447946b",
+        "repository": "https://github.com/ProjectIgnis/BabelCDB.git",
+        "resolved_checkout_sha256": "acef726f8fb74d7f2b3a43dc14088f117012dbf9c7eab35612716cb8e79df4d1"
+      },
+      "duel_flags": {
+        "names": [
+          "DUEL_PZONE",
+          "DUEL_EMZONE",
+          "DUEL_FSX_MMZONE",
+          "DUEL_TRAP_MONSTERS_NOT_USE_ZONE",
+          "DUEL_TRIGGER_ONLY_IN_LOCATION"
+        ],
+        "value": 190464
+      },
+      "duel_mode": "DUEL_MODE_MR5",
+      "format_id": "TCG_ADVANCED_2026_05_18",
+      "protocol_slice": "m0.normal_monster_fixture.v1"
+    },
+    "rules_bundle_id": "3adfe6b4cfe2c2805e50b389fc0eb4e70a3b0b6107436614d328fddc865e585f",
+    "worker_identity": "ocgforge.m4.native_worker.v1"
+  },
+  "cold_start": {
+    "process_ready_time_domain": "coordinator_process_and_ready_handshake",
+    "ready_workers": 1,
+    "wall_clock_seconds": 0.068717,
+    "worker_count": 1
+  },
+  "games_requested": 16,
+  "hardware": {
+    "machine": "AMD64",
+    "physical_memory_bytes": 34278862848,
+    "platform": "Windows-11-10.0.26200-SP0",
+    "processor": "AMD64 Family 25 Model 33 Stepping 2, AuthenticAMD",
+    "python_version": "3.14.5",
+    "system": "Windows"
+  },
+  "instrumentation": true,
+  "jobs": [
+    {
+      "coordinator": {
+        "stderr_path": "artifacts\\m4\\experiments\\conformance.workers\\worker-000.stderr.log",
+        "worker_crashed": false,
+        "worker_index": 0,
+        "worker_pid": 16196,
+        "worker_restart_index": 0,
+        "worker_restarted": false
+      },
+      "coordinator_elapsed_us": 1825736,
+      "coordinator_errors": {
+        "failed_games": 0,
+        "handshake": 0,
+        "malformed_protocol": 0,
+        "retries": 0,
+        "worker_crashes": 0,
+        "worker_restarts": 0
+      },
+      "counters": {
+        "candidate_max": 21,
+        "candidate_sets": 621,
+        "candidate_total": 2937,
+        "entities_projected": 33109,
+        "observations": 622,
+        "ocg_duel_process": 1524,
+        "ocg_duel_query": 0,
+        "ocg_duel_query_count": 0,
+        "ocg_duel_query_field": 1244,
+        "ocg_duel_query_location": 7464,
+        "script_loads": 77,
+        "script_reader_requests": 75,
+        "semantic_hashes": 1,
+        "trace_bytes_serialized": 696473
+      },
+      "engine_steps": 1524,
+      "error_message": null,
+      "errors": {
+        "automatic": 0,
+        "core_errors": 0,
+        "retries": 0,
+        "truncated": 0,
+        "unsupported": 0,
+        "worker_errors": 0
+      },
+      "failure_code": null,
+      "gameplay_hash": "3044bcf6f7be82bb7376e9ec119d81de9b7b35aadff6371b75df0ad73c5a0e32",
+      "interactive_decisions": 621,
+      "job_id": "m4-000002",
+      "schema": "ocgforge.m4.worker.v1",
+      "semantic_action_count": 621,
+      "simulation_elapsed_us": 1823156,
+      "status": "passed",
+      "terminal": true,
+      "timing_us": {
+        "continuation": 0,
+        "core_process": 221817,
+        "observation": 1416858,
+        "other": 78287,
+        "protocol_candidate": 28417,
+        "serialization": 20549,
+        "trace_hash": 57228,
+        "trace_persistence": 0
+      },
+      "trace_hash": "2dd4fd25b07200ea2e538b68627612f929c395a6da5679127f022218e42da6d3",
+      "type": "result",
+      "win_reason": 2,
+      "winner": 0,
+      "worker": {
+        "crashed": false,
+        "pid": 16196,
+        "restart_index": 0,
+        "restarted": false
+      }
+    },
+    {
+      "coordinator": {
+        "stderr_path": "artifacts\\m4\\experiments\\conformance.workers\\worker-000.stderr.log",
+        "worker_crashed": false,
+        "worker_index": 0,
+        "worker_pid": 16196,
+        "worker_restart_index": 0,
+        "worker_restarted": false
+      },
+      "coordinator_elapsed_us": 1768006,
+      "coordinator_errors": {
+        "failed_games": 0,
+        "handshake": 0,
+        "malformed_protocol": 0,
+        "retries": 0,
+        "worker_crashes": 0,
+        "worker_restarts": 0
+      },
+      "counters": {
+        "candidate_max": 21,
+        "candidate_sets": 612,
+        "candidate_total": 2900,
+        "entities_projected": 32294,
+        "observations": 613,
+        "ocg_duel_process": 1502,
+        "ocg_duel_query": 0,
+        "ocg_duel_query_count": 0,
+        "ocg_duel_query_field": 1226,
+        "ocg_duel_query_location": 7356,
+        "script_loads": 77,
+        "script_reader_requests": 75,
+        "semantic_hashes": 1,
+        "trace_bytes_serialized": 686561
+      },
+      "engine_steps": 1502,
+      "error_message": null,
+      "errors": {
+        "automatic": 0,
+        "core_errors": 0,
+        "retries": 0,
+        "truncated": 0,
+        "unsupported": 0,
+        "worker_errors": 0
+      },
+      "failure_code": null,
+      "gameplay_hash": "bf43b0ea22d78152d20855316bb8aa4be9bc061ad4f4bbefdc3e7da6a2ebe059",
+      "interactive_decisions": 612,
+      "job_id": "m4-000003",
+      "schema": "ocgforge.m4.worker.v1",
+      "semantic_action_count": 612,
+      "simulation_elapsed_us": 1765118,
+      "status": "passed",
+      "terminal": true,
+      "timing_us": {
+        "continuation": 0,
+        "core_process": 205629,
+        "observation": 1419573,
+        "other": 54565,
+        "protocol_candidate": 30381,
+        "serialization": 18515,
+        "trace_hash": 36455,
+        "trace_persistence": 0
+      },
+      "trace_hash": "d2cb9329e33d82aa15f8274d2eb6c623d0454a21de90369fb27b7f52fda3df43",
+      "type": "result",
+      "win_reason": 2,
+      "winner": 1,
+      "worker": {
+        "crashed": false,
+        "pid": 16196,
+        "restart_index": 0,
+        "restarted": false
+      }
+    },
+    {
+      "coordinator": {
+        "stderr_path": "artifacts\\m4\\experiments\\conformance.workers\\worker-000.stderr.log",
+        "worker_crashed": false,
+        "worker_index": 0,
+        "worker_pid": 16196,
+        "worker_restart_index": 0,
+        "worker_restarted": false
+      },
+      "coordinator_elapsed_us": 1730928,
+      "coordinator_errors": {
+        "failed_games": 0,
+        "handshake": 0,
+        "malformed_protocol": 0,
+        "retries": 0,
+        "worker_crashes": 0,
+        "worker_restarts": 0
+      },
+      "counters": {
+        "candidate_max": 21,
+        "candidate_sets": 612,
+        "candidate_total": 2909,
+        "entities_projected": 32290,
+        "observations": 613,
+        "ocg_duel_process": 1502,
+        "ocg_duel_query": 0,
+        "ocg_duel_query_count": 0,
+        "ocg_duel_query_field": 1226,
+        "ocg_duel_query_location": 7356,
+        "script_loads": 77,
+        "script_reader_requests": 75,
+        "semantic_hashes": 1,
+        "trace_bytes_serialized": 686798
+      },
+      "engine_steps": 1502,
+      "error_message": null,
+      "errors": {
+        "automatic": 0,
+        "core_errors": 0,
+        "retries": 0,
+        "truncated": 0,
+        "unsupported": 0,
+        "worker_errors": 0
+      },
+      "failure_code": null,
+      "gameplay_hash": "a7b45c4de4af918f33ee74cb70305ec6b26e93442c02fc2a90da727652dc52dc",
+      "interactive_decisions": 612,
+      "job_id": "m4-000004",
+      "schema": "ocgforge.m4.worker.v1",
+      "semantic_action_count": 612,
+      "simulation_elapsed_us": 1727671,
+      "status": "passed",
+      "terminal": true,
+      "timing_us": {
+        "continuation": 0,
+        "core_process": 219243,
+        "observation": 1363183,
+        "other": 54983,
+        "protocol_candidate": 32168,
+        "serialization": 18923,
+        "trace_hash": 39171,
+        "trace_persistence": 0
+      },
+      "trace_hash": "9923227cc7c7f166b300267be8dc1aeb2bcc3ab03ca7cff9850fcf3baf33e5f6",
+      "type": "result",
+      "win_reason": 2,
+      "winner": 0,
+      "worker": {
+        "crashed": false,
+        "pid": 16196,
+        "restart_index": 0,
+        "restarted": false
+      }
+    },
+    {
+      "coordinator": {
+        "stderr_path": "artifacts\\m4\\experiments\\conformance.workers\\worker-000.stderr.log",
+        "worker_crashed": false,
+        "worker_index": 0,
+        "worker_pid": 16196,
+        "worker_restart_index": 0,
+        "worker_restarted": false
+      },
+      "coordinator_elapsed_us": 1449411,
+      "coordinator_errors": {
+        "failed_games": 0,
+        "handshake": 0,
+        "malformed_protocol": 0,
+        "retries": 0,
+        "worker_crashes": 0,
+        "worker_restarts": 0
+      },
+      "counters": {
+        "candidate_max": 21,
+        "candidate_sets": 628,
+        "candidate_total": 2991,
+        "entities_projected": 33791,
+        "observations": 629,
+        "ocg_duel_process": 1540,
+        "ocg_duel_query": 0,
+        "ocg_duel_query_count": 0,
+        "ocg_duel_query_field": 1258,
+        "ocg_duel_query_location": 7548,
+        "script_loads": 77,
+        "script_reader_requests": 75,
+        "semantic_hashes": 1,
+        "trace_bytes_serialized": 704833
+      },
+      "engine_steps": 1540,
+      "error_message": null,
+      "errors": {
+        "automatic": 0,
+        "core_errors": 0,
+        "retries": 0,
+        "truncated": 0,
+        "unsupported": 0,
+        "worker_errors": 0
+      },
+      "failure_code": null,
+      "gameplay_hash": "1e4cf137db1b6b4339b226c810e88d12be2e3e35f8700faad6737a06cdd47263",
+      "interactive_decisions": 628,
+      "job_id": "m4-000005",
+      "schema": "ocgforge.m4.worker.v1",
+      "semantic_action_count": 628,
+      "simulation_elapsed_us": 1446457,
+      "status": "passed",
+      "terminal": true,
+      "timing_us": {
+        "continuation": 0,
+        "core_process": 162570,
+        "observation": 1153797,
+        "other": 50411,
+        "protocol_candidate": 21537,
+        "serialization": 18630,
+        "trace_hash": 39512,
+        "trace_persistence": 0
+      },
+      "trace_hash": "c41a46b02dda7425058de07930859bf769c8a0b1d00b0e6c98512a63638fba50",
+      "type": "result",
+      "win_reason": 2,
+      "winner": 1,
+      "worker": {
+        "crashed": false,
+        "pid": 16196,
+        "restart_index": 0,
+        "restarted": false
+      }
+    },
+    {
+      "coordinator": {
+        "stderr_path": "artifacts\\m4\\experiments\\conformance.workers\\worker-000.stderr.log",
+        "worker_crashed": false,
+        "worker_index": 0,
+        "worker_pid": 16196,
+        "worker_restart_index": 0,
+        "worker_restarted": false
+      },
+      "coordinator_elapsed_us": 1432614,
+      "coordinator_errors": {
+        "failed_games": 0,
+        "handshake": 0,
+        "malformed_protocol": 0,
+        "retries": 0,
+        "worker_crashes": 0,
+        "worker_restarts": 0
+      },
+      "counters": {
+        "candidate_max": 21,
+        "candidate_sets": 621,
+        "candidate_total": 2925,
+        "entities_projected": 33107,
+        "observations": 622,
+        "ocg_duel_process": 1524,
+        "ocg_duel_query": 0,
+        "ocg_duel_query_count": 0,
+        "ocg_duel_query_field": 1244,
+        "ocg_duel_query_location": 7464,
+        "script_loads": 77,
+        "script_reader_requests": 75,
+        "semantic_hashes": 1,
+        "trace_bytes_serialized": 696179
+      },
+      "engine_steps": 1524,
+      "error_message": null,
+      "errors": {
+        "automatic": 0,
+        "core_errors": 0,
+        "retries": 0,
+        "truncated": 0,
+        "unsupported": 0,
+        "worker_errors": 0
+      },
+      "failure_code": null,
+      "gameplay_hash": "d3687b5802665dee674a9cfba91aabb009f000e41f778bc064257ec337faeacc",
+      "interactive_decisions": 621,
+      "job_id": "m4-000006",
+      "schema": "ocgforge.m4.worker.v1",
+      "semantic_action_count": 621,
+      "simulation_elapsed_us": 1429286,
+      "status": "passed",
+      "terminal": true,
+      "timing_us": {
+        "continuation": 0,
+        "core_process": 142668,
+        "observation": 1140459,
+        "other": 43761,
+        "protocol_candidate": 20142,
+        "serialization": 22938,
+        "trace_hash": 59318,
+        "trace_persistence": 0
+      },
+      "trace_hash": "9c9ebf72f7b851f5ccb121c4fc37f090fd9b152a2972e960110d31b865077ee9",
+      "type": "result",
+      "win_reason": 2,
+      "winner": 0,
+      "worker": {
+        "crashed": false,
+        "pid": 16196,
+        "restart_index": 0,
+        "restarted": false
+      }
+    },
+    {
+      "coordinator": {
+        "stderr_path": "artifacts\\m4\\experiments\\conformance.workers\\worker-000.stderr.log",
+        "worker_crashed": false,
+        "worker_index": 0,
+        "worker_pid": 16196,
+        "worker_restart_index": 0,
+        "worker_restarted": false
+      },
+      "coordinator_elapsed_us": 1416849,
+      "coordinator_errors": {
+        "failed_games": 0,
+        "handshake": 0,
+        "malformed_protocol": 0,
+        "retries": 0,
+        "worker_crashes": 0,
+        "worker_restarts": 0
+      },
+      "counters": {
+        "candidate_max": 21,
+        "candidate_sets": 619,
+        "candidate_total": 2939,
+        "entities_projected": 32981,
+        "observations": 620,
+        "ocg_duel_process": 1518,
+        "ocg_duel_query": 0,
+        "ocg_duel_query_count": 0,
+        "ocg_duel_query_field": 1240,
+        "ocg_duel_query_location": 7440,
+        "script_loads": 77,
+        "script_reader_requests": 75,
+        "semantic_hashes": 1,
+        "trace_bytes_serialized": 694498
+      },
+      "engine_steps": 1518,
+      "error_message": null,
+      "errors": {
+        "automatic": 0,
+        "core_errors": 0,
+        "retries": 0,
+        "truncated": 0,
+        "unsupported": 0,
+        "worker_errors": 0
+      },
+      "failure_code": null,
+      "gameplay_hash": "b94e824a60d373ad48c40ba549b09a83c2eed0335dca17a4dfb5a3f0e2121ad0",
+      "interactive_decisions": 619,
+      "job_id": "m4-000007",
+      "schema": "ocgforge.m4.worker.v1",
+      "semantic_action_count": 619,
+      "simulation_elapsed_us": 1413983,
+      "status": "passed",
+      "terminal": true,
+      "timing_us": {
+        "continuation": 0,
+        "core_process": 161520,
+        "observation": 1113491,
+        "other": 52379,
+        "protocol_candidate": 20995,
+        "serialization": 27972,
+        "trace_hash": 37626,
+        "trace_persistence": 0
+      },
+      "trace_hash": "c2362f85d66cc17840b930d0ae4993fde97d7f9d15a7a750c6d798e30d6d1c17",
+      "type": "result",
+      "win_reason": 2,
+      "winner": 1,
+      "worker": {
+        "crashed": false,
+        "pid": 16196,
+        "restart_index": 0,
+        "restarted": false
+      }
+    },
+    {
+      "coordinator": {
+        "stderr_path": "artifacts\\m4\\experiments\\conformance.workers\\worker-000.stderr.log",
+        "worker_crashed": false,
+        "worker_index": 0,
+        "worker_pid": 16196,
+        "worker_restart_index": 0,
+        "worker_restarted": false
+      },
+      "coordinator_elapsed_us": 1387964,
+      "coordinator_errors": {
+        "failed_games": 0,
+        "handshake": 0,
+        "malformed_protocol": 0,
+        "retries": 0,
+        "worker_crashes": 0,
+        "worker_restarts": 0
+      },
+      "counters": {
+        "candidate_max": 21,
+        "candidate_sets": 619,
+        "candidate_total": 2947,
+        "entities_projected": 32956,
+        "observations": 620,
+        "ocg_duel_process": 1518,
+        "ocg_duel_query": 0,
+        "ocg_duel_query_count": 0,
+        "ocg_duel_query_field": 1240,
+        "ocg_duel_query_location": 7440,
+        "script_loads": 77,
+        "script_reader_requests": 75,
+        "semantic_hashes": 1,
+        "trace_bytes_serialized": 694715
+      },
+      "engine_steps": 1518,
+      "error_message": null,
+      "errors": {
+        "automatic": 0,
+        "core_errors": 0,
+        "retries": 0,
+        "truncated": 0,
+        "unsupported": 0,
+        "worker_errors": 0
+      },
+      "failure_code": null,
+      "gameplay_hash": "12739051bb84d369aad7cff661186b93b417be5a2d5ec7aa0b7a92aca6b4ff5d",
+      "interactive_decisions": 619,
+      "job_id": "m4-000008",
+      "schema": "ocgforge.m4.worker.v1",
+      "semantic_action_count": 619,
+      "simulation_elapsed_us": 1385534,
+      "status": "passed",
+      "terminal": true,
+      "timing_us": {
+        "continuation": 0,
+        "core_process": 171148,
+        "observation": 1086371,
+        "other": 49529,
+        "protocol_candidate": 22776,
+        "serialization": 18240,
+        "trace_hash": 37470,
+        "trace_persistence": 0
+      },
+      "trace_hash": "f305f765f64663ef646cc955e8485935a6e2a8e8fb7e0d261a8eb3ca0f3b1518",
+      "type": "result",
+      "win_reason": 2,
+      "winner": 0,
+      "worker": {
+        "crashed": false,
+        "pid": 16196,
+        "restart_index": 0,
+        "restarted": false
+      }
+    },
+    {
+      "coordinator": {
+        "stderr_path": "artifacts\\m4\\experiments\\conformance.workers\\worker-000.stderr.log",
+        "worker_crashed": false,
+        "worker_index": 0,
+        "worker_pid": 16196,
+        "worker_restart_index": 0,
+        "worker_restarted": false
+      },
+      "coordinator_elapsed_us": 1464704,
+      "coordinator_errors": {
+        "failed_games": 0,
+        "handshake": 0,
+        "malformed_protocol": 0,
+        "retries": 0,
+        "worker_crashes": 0,
+        "worker_restarts": 0
+      },
+      "counters": {
+        "candidate_max": 21,
+        "candidate_sets": 621,
+        "candidate_total": 2934,
+        "entities_projected": 33075,
+        "observations": 622,
+        "ocg_duel_process": 1524,
+        "ocg_duel_query": 0,
+        "ocg_duel_query_count": 0,
+        "ocg_duel_query_field": 1244,
+        "ocg_duel_query_location": 7464,
+        "script_loads": 77,
+        "script_reader_requests": 75,
+        "semantic_hashes": 1,
+        "trace_bytes_serialized": 696421
+      },
+      "engine_steps": 1524,
+      "error_message": null,
+      "errors": {
+        "automatic": 0,
+        "core_errors": 0,
+        "retries": 0,
+        "truncated": 0,
+        "unsupported": 0,
+        "worker_errors": 0
+      },
+      "failure_code": null,
+      "gameplay_hash": "72390dacc499f6e957452e4f522e4a4943bff0ad8e299483049441cffcc56b00",
+      "interactive_decisions": 621,
+      "job_id": "m4-000009",
+      "schema": "ocgforge.m4.worker.v1",
+      "semantic_action_count": 621,
+      "simulation_elapsed_us": 1461585,
+      "status": "passed",
+      "terminal": true,
+      "timing_us": {
+        "continuation": 0,
+        "core_process": 157480,
+        "observation": 1181017,
+        "other": 50762,
+        "protocol_candidate": 22081,
+        "serialization": 16457,
+        "trace_hash": 33788,
+        "trace_persistence": 0
+      },
+      "trace_hash": "c050c30f73decfdbf54feb2163e19ade47ac4d22387328cc9d96464bd5070f90",
+      "type": "result",
+      "win_reason": 2,
+      "winner": 1,
+      "worker": {
+        "crashed": false,
+        "pid": 16196,
+        "restart_index": 0,
+        "restarted": false
+      }
+    },
+    {
+      "coordinator": {
+        "stderr_path": "artifacts\\m4\\experiments\\conformance.workers\\worker-000.stderr.log",
+        "worker_crashed": false,
+        "worker_index": 0,
+        "worker_pid": 16196,
+        "worker_restart_index": 0,
+        "worker_restarted": false
+      },
+      "coordinator_elapsed_us": 1387353,
+      "coordinator_errors": {
+        "failed_games": 0,
+        "handshake": 0,
+        "malformed_protocol": 0,
+        "retries": 0,
+        "worker_crashes": 0,
+        "worker_restarts": 0
+      },
+      "counters": {
+        "candidate_max": 21,
+        "candidate_sets": 621,
+        "candidate_total": 2928,
+        "entities_projected": 33167,
+        "observations": 622,
+        "ocg_duel_process": 1524,
+        "ocg_duel_query": 0,
+        "ocg_duel_query_count": 0,
+        "ocg_duel_query_field": 1244,
+        "ocg_duel_query_location": 7464,
+        "script_loads": 77,
+        "script_reader_requests": 75,
+        "semantic_hashes": 1,
+        "trace_bytes_serialized": 696222
+      },
+      "engine_steps": 1524,
+      "error_message": null,
+      "errors": {
+        "automatic": 0,
+        "core_errors": 0,
+        "retries": 0,
+        "truncated": 0,
+        "unsupported": 0,
+        "worker_errors": 0
+      },
+      "failure_code": null,
+      "gameplay_hash": "f14aa9c6c7174cc55ad8dce595d8494abe3c14ba64abe0945a46645c289591ea",
+      "interactive_decisions": 621,
+      "job_id": "m4-000010",
+      "schema": "ocgforge.m4.worker.v1",
+      "semantic_action_count": 621,
+      "simulation_elapsed_us": 1383293,
+      "status": "passed",
+      "terminal": true,
+      "timing_us": {
+        "continuation": 0,
+        "core_process": 145784,
+        "observation": 1115295,
+        "other": 49434,
+        "protocol_candidate": 20846,
+        "serialization": 17748,
+        "trace_hash": 34186,
+        "trace_persistence": 0
+      },
+      "trace_hash": "d7812993389f1e98fdef9ed484c0d4e2c59b503553095f808cccc9a443abc0f3",
+      "type": "result",
+      "win_reason": 2,
+      "winner": 0,
+      "worker": {
+        "crashed": false,
+        "pid": 16196,
+        "restart_index": 0,
+        "restarted": false
+      }
+    },
+    {
+      "coordinator": {
+        "stderr_path": "artifacts\\m4\\experiments\\conformance.workers\\worker-000.stderr.log",
+        "worker_crashed": false,
+        "worker_index": 0,
+        "worker_pid": 16196,
+        "worker_restart_index": 0,
+        "worker_restarted": false
+      },
+      "coordinator_elapsed_us": 1369165,
+      "coordinator_errors": {
+        "failed_games": 0,
+        "handshake": 0,
+        "malformed_protocol": 0,
+        "retries": 0,
+        "worker_crashes": 0,
+        "worker_restarts": 0
+      },
+      "counters": {
+        "candidate_max": 21,
+        "candidate_sets": 612,
+        "candidate_total": 2893,
+        "entities_projected": 32402,
+        "observations": 613,
+        "ocg_duel_process": 1502,
+        "ocg_duel_query": 0,
+        "ocg_duel_query_count": 0,
+        "ocg_duel_query_field": 1226,
+        "ocg_duel_query_location": 7356,
+        "script_loads": 77,
+        "script_reader_requests": 75,
+        "semantic_hashes": 1,
+        "trace_bytes_serialized": 686333
+      },
+      "engine_steps": 1502,
+      "error_message": null,
+      "errors": {
+        "automatic": 0,
+        "core_errors": 0,
+        "retries": 0,
+        "truncated": 0,
+        "unsupported": 0,
+        "worker_errors": 0
+      },
+      "failure_code": null,
+      "gameplay_hash": "f94570a418ae9e4f6bc4340a2a34da284d0412eb19ea042f169d8571ebc42b50",
+      "interactive_decisions": 612,
+      "job_id": "m4-000011",
+      "schema": "ocgforge.m4.worker.v1",
+      "semantic_action_count": 612,
+      "simulation_elapsed_us": 1365293,
+      "status": "passed",
+      "terminal": true,
+      "timing_us": {
+        "continuation": 0,
+        "core_process": 144962,
+        "observation": 1091692,
+        "other": 48995,
+        "protocol_candidate": 20346,
+        "serialization": 18585,
+        "trace_hash": 40713,
+        "trace_persistence": 0
+      },
+      "trace_hash": "9dac5b32a6f213862a7ff2f8014799ebed2883fbdf73d12dcf0c5f47bb0c62e8",
+      "type": "result",
+      "win_reason": 2,
+      "winner": 1,
+      "worker": {
+        "crashed": false,
+        "pid": 16196,
+        "restart_index": 0,
+        "restarted": false
+      }
+    },
+    {
+      "coordinator": {
+        "stderr_path": "artifacts\\m4\\experiments\\conformance.workers\\worker-000.stderr.log",
+        "worker_crashed": false,
+        "worker_index": 0,
+        "worker_pid": 16196,
+        "worker_restart_index": 0,
+        "worker_restarted": false
+      },
+      "coordinator_elapsed_us": 1431326,
+      "coordinator_errors": {
+        "failed_games": 0,
+        "handshake": 0,
+        "malformed_protocol": 0,
+        "retries": 0,
+        "worker_crashes": 0,
+        "worker_restarts": 0
+      },
+      "counters": {
+        "candidate_max": 21,
+        "candidate_sets": 619,
+        "candidate_total": 2959,
+        "entities_projected": 32973,
+        "observations": 620,
+        "ocg_duel_process": 1518,
+        "ocg_duel_query": 0,
+        "ocg_duel_query_count": 0,
+        "ocg_duel_query_field": 1240,
+        "ocg_duel_query_location": 7440,
+        "script_loads": 77,
+        "script_reader_requests": 75,
+        "semantic_hashes": 1,
+        "trace_bytes_serialized": 695008
+      },
+      "engine_steps": 1518,
+      "error_message": null,
+      "errors": {
+        "automatic": 0,
+        "core_errors": 0,
+        "retries": 0,
+        "truncated": 0,
+        "unsupported": 0,
+        "worker_errors": 0
+      },
+      "failure_code": null,
+      "gameplay_hash": "d3775dbca2ca721923d70f7c7de0d950df8966ce14483adaa5f396f82df1ff1f",
+      "interactive_decisions": 619,
+      "job_id": "m4-000012",
+      "schema": "ocgforge.m4.worker.v1",
+      "semantic_action_count": 619,
+      "simulation_elapsed_us": 1427406,
+      "status": "passed",
+      "terminal": true,
+      "timing_us": {
+        "continuation": 0,
+        "core_process": 142373,
+        "observation": 1156817,
+        "other": 53131,
+        "protocol_candidate": 20975,
+        "serialization": 21044,
+        "trace_hash": 33066,
+        "trace_persistence": 0
+      },
+      "trace_hash": "9e1bb2fdd9106ba4ec7dc3fa1f8eca4370862e8878b13f3f8e7cbd5ee7be0961",
+      "type": "result",
+      "win_reason": 2,
+      "winner": 0,
+      "worker": {
+        "crashed": false,
+        "pid": 16196,
+        "restart_index": 0,
+        "restarted": false
+      }
+    },
+    {
+      "coordinator": {
+        "stderr_path": "artifacts\\m4\\experiments\\conformance.workers\\worker-000.stderr.log",
+        "worker_crashed": false,
+        "worker_index": 0,
+        "worker_pid": 16196,
+        "worker_restart_index": 0,
+        "worker_restarted": false
+      },
+      "coordinator_elapsed_us": 1285394,
+      "coordinator_errors": {
+        "failed_games": 0,
+        "handshake": 0,
+        "malformed_protocol": 0,
+        "retries": 0,
+        "worker_crashes": 0,
+        "worker_restarts": 0
+      },
+      "counters": {
+        "candidate_max": 21,
+        "candidate_sets": 621,
+        "candidate_total": 2943,
+        "entities_projected": 33059,
+        "observations": 622,
+        "ocg_duel_process": 1524,
+        "ocg_duel_query": 0,
+        "ocg_duel_query_count": 0,
+        "ocg_duel_query_field": 1244,
+        "ocg_duel_query_location": 7464,
+        "script_loads": 77,
+        "script_reader_requests": 75,
+        "semantic_hashes": 1,
+        "trace_bytes_serialized": 696646
+      },
+      "engine_steps": 1524,
+      "error_message": null,
+      "errors": {
+        "automatic": 0,
+        "core_errors": 0,
+        "retries": 0,
+        "truncated": 0,
+        "unsupported": 0,
+        "worker_errors": 0
+      },
+      "failure_code": null,
+      "gameplay_hash": "fa0fd37162958d0c0f9f361334b376b58a00197c2ddcd0518b8bc1c14029190a",
+      "interactive_decisions": 621,
+      "job_id": "m4-000013",
+      "schema": "ocgforge.m4.worker.v1",
+      "semantic_action_count": 621,
+      "simulation_elapsed_us": 1282864,
+      "status": "passed",
+      "terminal": true,
+      "timing_us": {
+        "continuation": 0,
+        "core_process": 133167,
+        "observation": 1041423,
+        "other": 50461,
+        "protocol_candidate": 19554,
+        "serialization": 12671,
+        "trace_hash": 25588,
+        "trace_persistence": 0
+      },
+      "trace_hash": "cc3554bbd99f72dcc330c3cc71ec4f223e69b0483a1472a61a7669f6978514ba",
+      "type": "result",
+      "win_reason": 2,
+      "winner": 1,
+      "worker": {
+        "crashed": false,
+        "pid": 16196,
+        "restart_index": 0,
+        "restarted": false
+      }
+    },
+    {
+      "coordinator": {
+        "stderr_path": "artifacts\\m4\\experiments\\conformance.workers\\worker-000.stderr.log",
+        "worker_crashed": false,
+        "worker_index": 0,
+        "worker_pid": 16196,
+        "worker_restart_index": 0,
+        "worker_restarted": false
+      },
+      "coordinator_elapsed_us": 1420997,
+      "coordinator_errors": {
+        "failed_games": 0,
+        "handshake": 0,
+        "malformed_protocol": 0,
+        "retries": 0,
+        "worker_crashes": 0,
+        "worker_restarts": 0
+      },
+      "counters": {
+        "candidate_max": 21,
+        "candidate_sets": 621,
+        "candidate_total": 2952,
+        "entities_projected": 33053,
+        "observations": 622,
+        "ocg_duel_process": 1524,
+        "ocg_duel_query": 0,
+        "ocg_duel_query_count": 0,
+        "ocg_duel_query_field": 1244,
+        "ocg_duel_query_location": 7464,
+        "script_loads": 77,
+        "script_reader_requests": 75,
+        "semantic_hashes": 1,
+        "trace_bytes_serialized": 696894
+      },
+      "engine_steps": 1524,
+      "error_message": null,
+      "errors": {
+        "automatic": 0,
+        "core_errors": 0,
+        "retries": 0,
+        "truncated": 0,
+        "unsupported": 0,
+        "worker_errors": 0
+      },
+      "failure_code": null,
+      "gameplay_hash": "61203e7aceea590d93fb78c6adc5c7713853c42e170c78b2e52c62c401eb7a5f",
+      "interactive_decisions": 621,
+      "job_id": "m4-000014",
+      "schema": "ocgforge.m4.worker.v1",
+      "semantic_action_count": 621,
+      "simulation_elapsed_us": 1417887,
+      "status": "passed",
+      "terminal": true,
+      "timing_us": {
+        "continuation": 0,
+        "core_process": 145471,
+        "observation": 1149941,
+        "other": 46488,
+        "protocol_candidate": 21636,
+        "serialization": 17620,
+        "trace_hash": 36731,
+        "trace_persistence": 0
+      },
+      "trace_hash": "7202f3af8bfaade9a19ab33cbb16ec5fbc8db2d13334a2fa522d1e27dec074cf",
+      "type": "result",
+      "win_reason": 2,
+      "winner": 0,
+      "worker": {
+        "crashed": false,
+        "pid": 16196,
+        "restart_index": 0,
+        "restarted": false
+      }
+    },
+    {
+      "coordinator": {
+        "stderr_path": "artifacts\\m4\\experiments\\conformance.workers\\worker-000.stderr.log",
+        "worker_crashed": false,
+        "worker_index": 0,
+        "worker_pid": 16196,
+        "worker_restart_index": 0,
+        "worker_restarted": false
+      },
+      "coordinator_elapsed_us": 1378838,
+      "coordinator_errors": {
+        "failed_games": 0,
+        "handshake": 0,
+        "malformed_protocol": 0,
+        "retries": 0,
+        "worker_crashes": 0,
+        "worker_restarts": 0
+      },
+      "counters": {
+        "candidate_max": 21,
+        "candidate_sets": 612,
+        "candidate_total": 2895,
+        "entities_projected": 32346,
+        "observations": 613,
+        "ocg_duel_process": 1502,
+        "ocg_duel_query": 0,
+        "ocg_duel_query_count": 0,
+        "ocg_duel_query_field": 1226,
+        "ocg_duel_query_location": 7356,
+        "script_loads": 77,
+        "script_reader_requests": 75,
+        "semantic_hashes": 1,
+        "trace_bytes_serialized": 686419
+      },
+      "engine_steps": 1502,
+      "error_message": null,
+      "errors": {
+        "automatic": 0,
+        "core_errors": 0,
+        "retries": 0,
+        "truncated": 0,
+        "unsupported": 0,
+        "worker_errors": 0
+      },
+      "failure_code": null,
+      "gameplay_hash": "363512b6fb9457dd544c68565e04c8153ba46e94bbb6a4ae6280029bc7274aa2",
+      "interactive_decisions": 612,
+      "job_id": "m4-000015",
+      "schema": "ocgforge.m4.worker.v1",
+      "semantic_action_count": 612,
+      "simulation_elapsed_us": 1375161,
+      "status": "passed",
+      "terminal": true,
+      "timing_us": {
+        "continuation": 0,
+        "core_process": 137112,
+        "observation": 1120017,
+        "other": 48590,
+        "protocol_candidate": 19800,
+        "serialization": 17594,
+        "trace_hash": 32048,
+        "trace_persistence": 0
+      },
+      "trace_hash": "ba4a8f13f43644038e729e36c7be98076afdef60dc3d14d2d07d5c3b5a0db504",
+      "type": "result",
+      "win_reason": 2,
+      "winner": 1,
+      "worker": {
+        "crashed": false,
+        "pid": 16196,
+        "restart_index": 0,
+        "restarted": false
+      }
+    },
+    {
+      "coordinator": {
+        "stderr_path": "artifacts\\m4\\experiments\\conformance.workers\\worker-000.stderr.log",
+        "worker_crashed": false,
+        "worker_index": 0,
+        "worker_pid": 16196,
+        "worker_restart_index": 0,
+        "worker_restarted": false
+      },
+      "coordinator_elapsed_us": 1362286,
+      "coordinator_errors": {
+        "failed_games": 0,
+        "handshake": 0,
+        "malformed_protocol": 0,
+        "retries": 0,
+        "worker_crashes": 0,
+        "worker_restarts": 0
+      },
+      "counters": {
+        "candidate_max": 21,
+        "candidate_sets": 612,
+        "candidate_total": 2886,
+        "entities_projected": 32362,
+        "observations": 613,
+        "ocg_duel_process": 1502,
+        "ocg_duel_query": 0,
+        "ocg_duel_query_count": 0,
+        "ocg_duel_query_field": 1226,
+        "ocg_duel_query_location": 7356,
+        "script_loads": 77,
+        "script_reader_requests": 75,
+        "semantic_hashes": 1,
+        "trace_bytes_serialized": 686162
+      },
+      "engine_steps": 1502,
+      "error_message": null,
+      "errors": {
+        "automatic": 0,
+        "core_errors": 0,
+        "retries": 0,
+        "truncated": 0,
+        "unsupported": 0,
+        "worker_errors": 0
+      },
+      "failure_code": null,
+      "gameplay_hash": "df498f12e13d44129380d59f0ddcbe3b9bc111878a0c0cfc42cc9f391fb8254e",
+      "interactive_decisions": 612,
+      "job_id": "m4-000016",
+      "schema": "ocgforge.m4.worker.v1",
+      "semantic_action_count": 612,
+      "simulation_elapsed_us": 1358147,
+      "status": "passed",
+      "terminal": true,
+      "timing_us": {
+        "continuation": 0,
+        "core_process": 135269,
+        "observation": 1100009,
+        "other": 49980,
+        "protocol_candidate": 19484,
+        "serialization": 20405,
+        "trace_hash": 33000,
+        "trace_persistence": 0
+      },
+      "trace_hash": "ed6e00fb6da9bcfd0e773eb32b2622a20939190d2ffa1e4ee3b4c81c0627d4a3",
+      "type": "result",
+      "win_reason": 2,
+      "winner": 0,
+      "worker": {
+        "crashed": false,
+        "pid": 16196,
+        "restart_index": 0,
+        "restarted": false
+      }
+    },
+    {
+      "coordinator": {
+        "stderr_path": "artifacts\\m4\\experiments\\conformance.workers\\worker-000.stderr.log",
+        "worker_crashed": false,
+        "worker_index": 0,
+        "worker_pid": 16196,
+        "worker_restart_index": 0,
+        "worker_restarted": false
+      },
+      "coordinator_elapsed_us": 1325308,
+      "coordinator_errors": {
+        "failed_games": 0,
+        "handshake": 0,
+        "malformed_protocol": 0,
+        "retries": 0,
+        "worker_crashes": 0,
+        "worker_restarts": 0
+      },
+      "counters": {
+        "candidate_max": 21,
+        "candidate_sets": 621,
+        "candidate_total": 2937,
+        "entities_projected": 33124,
+        "observations": 622,
+        "ocg_duel_process": 1524,
+        "ocg_duel_query": 0,
+        "ocg_duel_query_count": 0,
+        "ocg_duel_query_field": 1244,
+        "ocg_duel_query_location": 7464,
+        "script_loads": 77,
+        "script_reader_requests": 75,
+        "semantic_hashes": 1,
+        "trace_bytes_serialized": 696487
+      },
+      "engine_steps": 1524,
+      "error_message": null,
+      "errors": {
+        "automatic": 0,
+        "core_errors": 0,
+        "retries": 0,
+        "truncated": 0,
+        "unsupported": 0,
+        "worker_errors": 0
+      },
+      "failure_code": null,
+      "gameplay_hash": "2966f49c6a86fe13e954b0d1fc1330df82251b1d3079ce0e5655ab2eed48d84f",
+      "interactive_decisions": 621,
+      "job_id": "m4-000017",
+      "schema": "ocgforge.m4.worker.v1",
+      "semantic_action_count": 621,
+      "simulation_elapsed_us": 1321916,
+      "status": "passed",
+      "terminal": true,
+      "timing_us": {
+        "continuation": 0,
+        "core_process": 144308,
+        "observation": 1051685,
+        "other": 46619,
+        "protocol_candidate": 20095,
+        "serialization": 21168,
+        "trace_hash": 38041,
+        "trace_persistence": 0
+      },
+      "trace_hash": "7c92af64b9c07c2826ac3a4a2e68c5eca0a2ab8662839c82213a2ff972642429",
+      "type": "result",
+      "win_reason": 2,
+      "winner": 1,
+      "worker": {
+        "crashed": false,
+        "pid": 16196,
+        "restart_index": 0,
+        "restarted": false
+      }
+    }
+  ],
+  "mode": "conformance",
+  "observation_mode": "full",
+  "schema_version": "ocgforge.m4.throughput_benchmark.v1",
+  "steady_state": {
+    "coordinator_elapsed_us": {
+      "max": 1825736,
+      "mean": 1464804.9375,
+      "min": 1285394,
+      "p50": 1416849,
+      "p95": 1825736,
+      "p99": 1825736,
+      "sample_count": 16
+    },
+    "engine_steps_per_second": 995.9009068257933,
+    "engine_steps_total": 24272,
+    "errors": {
+      "automatic": 0,
+      "coordinator": {
+        "failed_games": 0,
+        "handshake": 0,
+        "malformed_protocol": 0,
+        "retries": 0,
+        "worker_crashes": 0,
+        "worker_restarts": 0
+      },
+      "core_errors": 0,
+      "retries": 0,
+      "truncated": 0,
+      "unsupported": 0,
+      "worker_errors": 0
+    },
+    "failed_games": 0,
+    "games_completed": 16,
+    "games_per_second": 0.6564936762200352,
+    "games_requested": 16,
+    "interactive_decisions_per_second": 405.87721532303675,
+    "interactive_decisions_total": 9892,
+    "memory": {
+      "memory_per_active_environment_bytes": 15093760,
+      "peak_total_working_set_bytes": 15093760,
+      "peak_worker_working_set_bytes": 15093760,
+      "process_count": 2
+    },
+    "operation_counters": {
+      "candidate_max": 336,
+      "candidate_sets": 9892,
+      "candidate_total": 46875,
+      "entities_projected": 526089,
+      "observations": 9908,
+      "ocg_duel_process": 24272,
+      "ocg_duel_query": 0,
+      "ocg_duel_query_count": 0,
+      "ocg_duel_query_field": 19816,
+      "ocg_duel_query_location": 118896,
+      "script_loads": 1232,
+      "script_reader_requests": 1200,
+      "semantic_hashes": 16,
+      "trace_bytes_serialized": 11096649
+    },
+    "parallel_efficiency": 1.0,
+    "semantic_actions_total": 9892,
+    "simulation_elapsed_total_us": 23384757,
+    "simulation_elapsed_us": {
+      "max": 1823156,
+      "mean": 1461547.3125,
+      "min": 1282864,
+      "p50": 1413983,
+      "p95": 1823156,
+      "p99": 1823156,
+      "sample_count": 16
+    },
+    "speedup": 1.0,
+    "terminal_games": 16,
+    "timing_buckets_us": {
+      "continuation": 0,
+      "coordinator_other": 0,
+      "core_process": 2570521,
+      "dispatch_to_receipt": 23436879,
+      "observation": 18701628,
+      "other": 828375,
+      "protocol_candidate": 361233,
+      "serialization": 309059,
+      "trace_hash": 613941,
+      "trace_persistence": 0
+    },
+    "wall_clock_seconds": 24.3719027
+  },
+  "trace_persistence": true,
+  "warmup_policy": {
+    "master_seed": 20260815,
+    "same_master_seed_for_warmup_and_steady": true,
+    "seat_mode": "balanced",
+    "starting_player_mode": "balanced",
+    "steady_state_indices": {
+      "count": 16,
+      "start": 2,
+      "stop": 18
+    },
+    "steady_timer_start": "after_warmup_completion",
+    "steady_timer_stop": "after_final_result_publication",
+    "warmup_games": 2,
+    "warmup_indices": {
+      "count": 2,
+      "start": 0,
+      "stop": 2
+    }
+  },
+  "workers_requested": 1
+}

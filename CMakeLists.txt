@@ -116,6 +116,7 @@ add_library(ygo_m0 STATIC
     src/trace/engine_trace.cpp
     src/trace/sha256.cpp
     src/observation/query_decoder.cpp
+    src/observation/direct_canonical_writer.cpp
     src/observation/serialization.cpp
     src/observation/card_projection.cpp
     src/observation/observation_builder.cpp
@@ -143,6 +144,12 @@ target_compile_definitions(ygo_m0 PUBLIC
     YGO_M3_CORE_PATCHSET_ID="${M0_RULES_CORE_PATCHSET_ID}"
     YGO_M3_CORE_PATCHSET_SHA256="${M0_RULES_CORE_PATCHSET_SHA256}"
 )
+option(YGO_M4_DIRECT_CANONICAL_WRITER
+       "Use the direct canonical serializer writer"
+       ON)
+if(YGO_M4_DIRECT_CANONICAL_WRITER)
+    target_compile_definitions(ygo_m0 PRIVATE YGO_M4_DIRECT_CANONICAL_WRITER)
+endif()
 if(MSVC)
     target_compile_options(ygo_m0 PRIVATE /W4 /permissive-)
 else()
@@ -196,6 +203,14 @@ target_compile_definitions(ygo_observation_probe PRIVATE
     YGO_M2_SETUP="${CMAKE_SOURCE_DIR}/fixtures/m2_setup.lua"
 )
 
+add_executable(sha256_benchmark tools/ygo_sha256_benchmark/main.cpp)
+target_link_libraries(sha256_benchmark PRIVATE ygo_m0)
+if(MSVC)
+    target_compile_options(sha256_benchmark PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(sha256_benchmark PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
 enable_testing()
 add_executable(m4_simulation_contract_test tests/m4/simulation_contract_test.cpp)
 target_include_directories(m4_simulation_contract_test PRIVATE "${CMAKE_SOURCE_DIR}/include")
@@ -228,6 +243,10 @@ add_test(NAME decision_fail_closed_test COMMAND decision_fail_closed_test)
 add_executable(trace_semantics_test tests/trace/trace_semantics_test.cpp)
 target_link_libraries(trace_semantics_test PRIVATE ygo_m0)
 add_test(NAME trace_semantics_test COMMAND trace_semantics_test)
+
+add_executable(sha256_known_answer_test tests/trace/sha256_known_answer_test.cpp)
+target_link_libraries(sha256_known_answer_test PRIVATE ygo_m0)
+add_test(NAME sha256_known_answer_test COMMAND sha256_known_answer_test)
 
 add_test(NAME m35_probe_trace_starting_player_test
          COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tests/m3_5/probe_trace_starting_player_test.py"
@@ -271,6 +290,21 @@ target_compile_definitions(observation_builder_test PRIVATE
     YGO_M2_CARDSCRIPTS="${M0_CARDSCRIPTS_DIR}"
 )
 add_test(NAME observation_builder_test COMMAND observation_builder_test)
+
+add_executable(m4_3_5_serialization_fixture_test
+    tests/observation/m4_3_5_serialization_fixture_test.cpp
+)
+target_link_libraries(m4_3_5_serialization_fixture_test PRIVATE ygo_m0)
+add_test(NAME m4_3_5_serialization_fixture_test COMMAND m4_3_5_serialization_fixture_test)
+
+add_executable(m4_3_6_direct_writer_test
+    tests/observation/m4_3_6_direct_writer_test.cpp
+)
+target_link_libraries(m4_3_6_direct_writer_test PRIVATE ygo_m0)
+target_include_directories(m4_3_6_direct_writer_test PRIVATE
+    "${CMAKE_SOURCE_DIR}/src/observation"
+)
+add_test(NAME m4_3_6_direct_writer_test COMMAND m4_3_6_direct_writer_test)
 
 add_executable(mechanics_projection_test tests/observation/mechanics_projection_test.cpp)
 target_link_libraries(mechanics_projection_test PRIVATE ygo_m0)

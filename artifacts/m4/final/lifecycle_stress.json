@@ -1,0 +1,54 @@
+{
+  "all_passed": true,
+  "assertion_weakened": false,
+  "command": [
+    "python",
+    "-B",
+    "-m",
+    "unittest",
+    "tests.m4.test_failure_isolation.FailureIsolationTests.test_result_then_exit_never_publishes_passed_under_repeated_scheduling",
+    "-v"
+  ],
+  "independent_process_repetitions": 5,
+  "internal_repetitions_per_process": 100,
+  "retries": 0,
+  "runs": [
+    {
+      "exit_code": 0,
+      "passed": true,
+      "repetition": 1,
+      "stderr_last_line": "OK",
+      "stdout_last_line": ""
+    },
+    {
+      "exit_code": 0,
+      "passed": true,
+      "repetition": 2,
+      "stderr_last_line": "OK",
+      "stdout_last_line": ""
+    },
+    {
+      "exit_code": 0,
+      "passed": true,
+      "repetition": 3,
+      "stderr_last_line": "OK",
+      "stdout_last_line": ""
+    },
+    {
+      "exit_code": 0,
+      "passed": true,
+      "repetition": 4,
+      "stderr_last_line": "OK",
+      "stdout_last_line": ""
+    },
+    {
+      "exit_code": 0,
+      "passed": true,
+      "repetition": 5,
+      "stderr_last_line": "OK",
+      "stdout_last_line": ""
+    }
+  ],
+  "schema_version": "ocgforge.m4.lifecycle_stress_evidence.v1",
+  "total_cases": 500
+}

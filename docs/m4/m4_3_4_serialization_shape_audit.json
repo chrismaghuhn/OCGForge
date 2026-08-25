@@ -1,0 +1,1811 @@
+{
+  "build_identity": {
+    "CMAKE_BUILD_TYPE": "Release",
+    "CMAKE_CXX_COMPILER": "C:/yogiohML-m4-3-1/tools/zig-cxx.cmd",
+    "CMAKE_CXX_FLAGS": "-DYGO_M4_PERFORMANCE_AUDIT -DYGO_M4_SERIALIZATION_SHAPE_AUDIT",
+    "CMAKE_CXX_FLAGS_RELEASE": "-O3 -DNDEBUG",
+    "CMAKE_TOOLCHAIN_FILE": "C:/yogiohML-m4-3-1/cmake/zig-toolchain.cmake",
+    "build_type": "Release",
+    "compiler_identity": "Clang-19.1.7",
+    "serialization_compile_commands": [
+      {
+        "arguments": null,
+        "command": "C:\\yogiohML-m4-3-1\\tools\\zig-cxx.cmd -DYGO_M0_BUILD_TYPE=\\\"Release\\\" -DYGO_M0_CARD_DATA_TSV=\\\"C:/yogiohML-m4-3-1/.cache/derived/fixture_card_data.tsv\\\" -DYGO_M0_COMPILER_ID=\\\"Clang-19.1.7\\\" -DYGO_M0_SOURCE_DIR=\\\"C:/yogiohML-m4-3-1\\\" -DYGO_M3_CORE_PATCHSET_ID=\\\"ocgforge.ocgcore.api_hardening.v1\\\" -DYGO_M3_CORE_PATCHSET_SHA256=\\\"6b5421b3a852085f48fa161a5ba1540f902aa00784a337694b21c9efc34f69bd\\\" -DYGO_M3_DUEL_FLAGS_VALUE=190464 -DYGO_M3_DUEL_MODE_NAME=\\\"DUEL_MODE_MR5\\\" -DYGO_M3_FORMAT_ID=\\\"TCG_ADVANCED_2026_05_18\\\" -DYGO_M3_RULES_BUNDLE_ID=\\\"3adfe6b4cfe2c2805e50b389fc0eb4e70a3b0b6107436614d328fddc865e585f\\\" -IC:/yogiohML-m4-3-1/include -IC:/yogiohML-m4-3-1/src/core -IC:/yogiohML-m4-3-1/.cache/derived/ocgcore -IC:/yogiohML-m4-3-1/.cache/derived/ocgcore/lua -IC:/yogiohML-m4-3-1/.cache/derived/ocgcore/lua/src -DYGO_M4_PERFORMANCE_AUDIT -DYGO_M4_SERIALIZATION_SHAPE_AUDIT -O3 -DNDEBUG -std=c++17 -Wall -Wextra -Wpedantic -o CMakeFiles\\ygo_m0.dir\\src\\observation\\serialization.cpp.obj -c C:\\yogiohML-m4-3-1\\src\\observation\\serialization.cpp",
+        "file": "C:/yogiohML-m4-3-1/src/observation/serialization.cpp"
+      }
+    ],
+    "worker": "C:\\yogiohML-m4-3-1\\build\\m4-3-4-shape\\ygo_m4_worker.exe",
+    "worker_ready_identity": {
+      "build_type": "Release",
+      "compiler_identity": "Clang-19.1.7",
+      "core_patchset_sha256": "6b5421b3a852085f48fa161a5ba1540f902aa00784a337694b21c9efc34f69bd",
+      "deck_hashes": [
+        "8ee4b699de19ff256e388d46f35b8696a60ff6ec59f0324f060a2468876711b7",
+        "6041abe0a59463d0715ae1da9100090ad487de02a02794e8ec0686d4c0513188"
+      ],
+      "duel_flags": 190464,
+      "duel_mode_name": "DUEL_MODE_MR5",
+      "format_id": "TCG_ADVANCED_2026_05_18",
+      "protocol_version": "ocgforge.m4.worker.v1",
+      "rules_bundle_id": "3adfe6b4cfe2c2805e50b389fc0eb4e70a3b0b6107436614d328fddc865e585f",
+      "worker_identity": "ocgforge.m4.native_worker.v1"
+    },
+    "worker_sha256": "97634b6ba007393d0c3cd4199f29c926920c497a7f37ad40fc7488cfb83469a7"
+  },
+  "canonical_byte_composition": {
+    "complete_sum_matches_canonical_bytes": true,
+    "delimiter_assignment": "Each section span includes its leading comma/key and its emitted value; the schema/basic header starts at byte 0. The spans are contiguous and there is no unassigned delimiter remainder.",
+    "sections": {
+      "chain": {
+        "bytes": 343984,
+        "percent_of_canonical_bytes": 0.02557
+      },
+      "decision_context": {
+        "bytes": 3069765,
+        "percent_of_canonical_bytes": 0.228193
+      },
+      "entities": {
+        "bytes": 367534943,
+        "percent_of_canonical_bytes": 27.321001
+      },
+      "globals": {
+        "bytes": 1828064,
+        "percent_of_canonical_bytes": 0.135891
+      },
+      "match_context": {
+        "bytes": 6068492,
+        "percent_of_canonical_bytes": 0.451106
+      },
+      "relationships": {
+        "bytes": 188252,
+        "percent_of_canonical_bytes": 0.013994
+      },
+      "schema_basic_header": {
+        "bytes": 1120587,
+        "percent_of_canonical_bytes": 0.0833
+      },
+      "visible_events": {
+        "bytes": 940315868,
+        "percent_of_canonical_bytes": 69.899125
+      },
+      "zones": {
+        "bytes": 24777032,
+        "percent_of_canonical_bytes": 1.84182
+      }
+    },
+    "sum_bytes": 1345246987
+  },
+  "classifications": [
+    "RENDERING_DOMINANT"
+  ],
+  "copy_boundary": {
+    "copy_fraction_of_serialize_percent": 0.267876,
+    "copy_sort_time_matches_phase_totals": true,
+    "copy_stats": {
+      "chain_targets": {
+        "approximate_bytes": 0,
+        "calls": 176,
+        "elements": 0,
+        "mean_us_per_call": 0.0,
+        "total_us": 0
+      },
+      "counters": {
+        "approximate_bytes": 0,
+        "calls": 1052008,
+        "elements": 0,
+        "mean_us_per_call": 8.9e-05,
+        "total_us": 94
+      },
+      "decision_references": {
+        "approximate_bytes": 723647,
+        "calls": 9908,
+        "elements": 21926,
+        "mean_us_per_call": 0.000202,
+        "total_us": 2
+      },
+      "event_targets": {
+        "approximate_bytes": 0,
+        "calls": 3362505,
+        "elements": 0,
+        "mean_us_per_call": 0.000113,
+        "total_us": 379
+      },
+      "link_markers": {
+        "approximate_bytes": 1541408,
+        "calls": 1052008,
+        "elements": 385352,
+        "mean_us_per_call": 0.000192,
+        "total_us": 202
+      },
+      "opponent_deck": {
+        "approximate_bytes": 0,
+        "calls": 19816,
+        "elements": 0,
+        "mean_us_per_call": 0.0,
+        "total_us": 0
+      },
+      "own_deck": {
+        "approximate_bytes": 1585280,
+        "calls": 19816,
+        "elements": 396320,
+        "mean_us_per_call": 0.000757,
+        "total_us": 15
+      },
+      "top_level_entities": {
+        "approximate_bytes": 394173303,
+        "calls": 9908,
+        "elements": 526004,
+        "mean_us_per_call": 2.253532,
+        "total_us": 22328
+      },
+      "top_level_relationships": {
+        "approximate_bytes": 0,
+        "calls": 9908,
+        "elements": 0,
+        "mean_us_per_call": 0.0,
+        "total_us": 0
+      },
+      "top_level_visible_events": {
+        "approximate_bytes": 551987388,
+        "calls": 9908,
+        "elements": 3362505,
+        "mean_us_per_call": 3.710739,
+        "total_us": 36766
+      },
+      "top_level_zones": {
+        "approximate_bytes": 4755840,
+        "calls": 9908,
+        "elements": 198160,
+        "mean_us_per_call": 0.003633,
+        "total_us": 36
+      }
+    },
+    "copy_total_us": 59822,
+    "sort_fraction_of_serialize_percent": 0.318865,
+    "sort_stats": {
+      "chain_targets": {
+        "calls": 176,
+        "elements": 0,
+        "mean_us_per_call": 0.0,
+        "total_us": 0
+      },
+      "counters": {
+        "calls": 1052008,
+        "elements": 0,
+        "mean_us_per_call": 0.000125,
+        "total_us": 132
+      },
+      "decision_references": {
+        "calls": 9908,
+        "elements": 21926,
+        "mean_us_per_call": 0.000505,
+        "total_us": 5
+      },
+      "decks": {
+        "calls": 39632,
+        "elements": 396320,
+        "mean_us_per_call": 0.006888,
+        "total_us": 273
+      },
+      "entities": {
+        "calls": 9908,
+        "elements": 526004,
+        "mean_us_per_call": 6.73365,
+        "total_us": 66717
+      },
+      "event_targets": {
+        "calls": 3362505,
+        "elements": 0,
+        "mean_us_per_call": 0.000108,
+        "total_us": 363
+      },
+      "link_markers": {
+        "calls": 1052008,
+        "elements": 385352,
+        "mean_us_per_call": 0.000156,
+        "total_us": 164
+      },
+      "relationships": {
+        "calls": 9908,
+        "elements": 0,
+        "mean_us_per_call": 0.001413,
+        "total_us": 14
+      },
+      "visible_events": {
+        "calls": 9908,
+        "elements": 3362505,
+        "mean_us_per_call": 0.357186,
+        "total_us": 3539
+      },
+      "zones": {
+        "calls": 9908,
+        "elements": 198160,
+        "mean_us_per_call": 0.000202,
+        "total_us": 2
+      }
+    },
+    "sort_total_us": 71209
+  },
+  "entity_serialization": {
+    "counter_bytes": 2104016,
+    "counter_instances": 0,
+    "current_property_bytes": 118180853,
+    "current_property_bytes_fraction_of_entity_bytes": 32.212388,
+    "current_property_objects": 526004,
+    "entity_bytes": 366880135,
+    "entity_instances": 526004,
+    "link_marker_bytes": 5618880,
+    "link_marker_instances": 385352,
+    "mean_bytes_per_entity": 697.485447,
+    "printed_and_current_property_bytes": 242879749,
+    "printed_current_bytes_fraction_of_entity_bytes": 66.20139,
+    "printed_property_bytes": 124698896,
+    "printed_property_bytes_fraction_of_entity_bytes": 33.989002,
+    "printed_property_objects": 526004
+  },
+  "focused_shape_equivalence": {
+    "executable": "C:\\yogiohML-m4-3-1\\build\\m4-3-4-shape\\observation_builder_test.exe",
+    "executable_sha256": "c34b5b00fa2740d40f7fa856ed0e9f5383ced2b82d69019e15f40fae5fba9064",
+    "fixture_count": 6,
+    "fixture_lines": [
+      "m4_3_4_shape_fixture=ordinary_visible plain_us=1143 shaped_us=1206 repetitions=8",
+      "m4_3_4_shape_fixture=ordinary_visible_perspective_1 plain_us=523 shaped_us=537 repetitions=8",
+      "m4_3_4_shape_fixture=hidden_information_perspective_0 plain_us=531 shaped_us=536 repetitions=8",
+      "m4_3_4_shape_fixture=hidden_information_perspective_1 plain_us=658 shaped_us=659 repetitions=8",
+      "m4_3_4_shape_fixture=paired_world_privacy plain_us=556 shaped_us=565 repetitions=8",
+      "m4_3_4_shape_fixture=terminal plain_us=1135 shaped_us=1170 repetitions=8"
+    ],
+    "pass": true,
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stdout_sha256": "02a08353c8ec42218cc3ca00a9d5cb79a857d7b357ae4110ce76ae8817abe599",
+    "timing_is_diagnostic_only": true
+  },
+  "gate_provenance": {
+    "evidence": {
+      "candidate_observation_consistency": {
+        "command": [
+          "ctest",
+          "--test-dir",
+          "build/m4-3-4-shape",
+          "--output-on-failure",
+          "-R",
+          "^(observation_builder_test|m4_worker_integration_test)$"
+        ],
+        "elapsed_us": 98978437,
+        "returncode": 0,
+        "started_utc": "2026-08-25T03:56:59.075555+00:00",
+        "stderr_bytes": 0,
+        "stderr_path": "C:\\yogiohML-m4-3-1\\artifacts\\m4\\m4-3-4\\gate_evidence\\logs\\candidate_observation_consistency.stderr.txt",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout_bytes": 352,
+        "stdout_path": "C:\\yogiohML-m4-3-1\\artifacts\\m4\\m4-3-4\\gate_evidence\\logs\\candidate_observation_consistency.stdout.txt",
+        "stdout_sha256": "69d06fd1132db1dabb31a161cb186a595d95945a5f44befb25912c7c995b8890"
+      },
+      "canonical_section_byte_integrity": "derived from exact emitted section-span sum",
+      "ctests": {
+        "command": [
+          "ctest",
+          "--test-dir",
+          "build/m4-3-4-shape",
+          "--output-on-failure"
+        ],
+        "elapsed_us": 164713205,
+        "returncode": 0,
+        "started_utc": "2026-08-25T03:35:32.294617+00:00",
+        "stderr_bytes": 0,
+        "stderr_path": "C:\\yogiohML-m4-3-1\\artifacts\\m4\\m4-3-4\\gate_evidence\\logs\\ctests.stderr.txt",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout_bytes": 10586,
+        "stdout_path": "C:\\yogiohML-m4-3-1\\artifacts\\m4\\m4-3-4\\gate_evidence\\logs\\ctests.stdout.txt",
+        "stdout_sha256": "664796a1a27fdf8c3d62ee50e9d6da6ad185402d3b72a9da73612c10fd055fda"
+      },
+      "focused_shape_equivalence": "derived from six-fixture shape/no-shape byte/hash test marker",
+      "gate_evidence_complete": "derived from non-empty evidence for every externally declared PASS gate",
+      "m3_python_tests": {
+        "command": [
+          "C:\\Users\\chris\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests/m3",
+          "-v"
+        ],
+        "elapsed_us": 493186,
+        "returncode": 0,
+        "started_utc": "2026-08-25T03:38:17.148051+00:00",
+        "stderr_bytes": 2742,
+        "stderr_path": "C:\\yogiohML-m4-3-1\\artifacts\\m4\\m4-3-4\\gate_evidence\\logs\\m3_python_tests.stderr.txt",
+        "stderr_sha256": "23e934ddf57946a760b9bc3a0fe6105da5d7204f2f484852d8c4855c7141e1db",
+        "stdout_bytes": 0,
+        "stdout_path": "C:\\yogiohML-m4-3-1\\artifacts\\m4\\m4-3-4\\gate_evidence\\logs\\m3_python_tests.stdout.txt",
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "m4_python_tests": {
+        "command": [
+          "C:\\Users\\chris\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests/m4",
+          "-v"
+        ],
+        "elapsed_us": 1121236244,
+        "returncode": 0,
+        "started_utc": "2026-08-25T03:38:17.642574+00:00",
+        "stderr_bytes": 20742,
+        "stderr_path": "C:\\yogiohML-m4-3-1\\artifacts\\m4\\m4-3-4\\gate_evidence\\logs\\m4_python_tests.stderr.txt",
+        "stderr_sha256": "5d41a9c0954eee1d4be60ae69f9fe2a21c65993c5fe08d94b9cf35cbde8a6616",
+        "stdout_bytes": 0,
+        "stdout_path": "C:\\yogiohML-m4-3-1\\artifacts\\m4\\m4-3-4\\gate_evidence\\logs\\m4_python_tests.stdout.txt",
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "measured_run_binary_identity": "derived from run-time worker SHA-256 and source identity binding",
+      "privacy_tests": {
+        "command": [
+          "ctest",
+          "--test-dir",
+          "build/m4-3-4-shape",
+          "--output-on-failure",
+          "-R",
+          "^(privacy_projection_test|continuation_privacy_test|m3_real_deck_privacy_test)$"
+        ],
+        "elapsed_us": 193794,
+        "returncode": 0,
+        "started_utc": "2026-08-25T03:56:58.880272+00:00",
+        "stderr_bytes": 0,
+        "stderr_path": "C:\\yogiohML-m4-3-1\\artifacts\\m4\\m4-3-4\\gate_evidence\\logs\\privacy_tests.stderr.txt",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout_bytes": 460,
+        "stdout_path": "C:\\yogiohML-m4-3-1\\artifacts\\m4\\m4-3-4\\gate_evidence\\logs\\privacy_tests.stdout.txt",
+        "stdout_sha256": "67597fedd7b2505d7cd25d16db663107dd21ee6a9548044d0272ef4cd806abef"
+      },
+      "repository_python_tests": {
+        "command": [
+          "C:\\Users\\chris\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests/python",
+          "-v"
+        ],
+        "elapsed_us": 137004,
+        "returncode": 0,
+        "started_utc": "2026-08-25T03:38:17.009333+00:00",
+        "stderr_bytes": 1228,
+        "stderr_path": "C:\\yogiohML-m4-3-1\\artifacts\\m4\\m4-3-4\\gate_evidence\\logs\\repository_python_tests.stderr.txt",
+        "stderr_sha256": "487db73442a4563479f1226f08555420823807f0c3dd8b4208574ee715770741",
+        "stdout_bytes": 0,
+        "stdout_path": "C:\\yogiohML-m4-3-1\\artifacts\\m4\\m4-3-4\\gate_evidence\\logs\\repository_python_tests.stdout.txt",
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "residual_timing_integrity": "derived from explicit per-record residual-underflow flags and zero aggregate underflows",
+      "semantic_trace_equivalence": "derived from frozen-reference trace, observation-hash, gameplay-hash, and step equality",
+      "shape_record_completeness": "derived from sidecar completeness and shape/lifecycle key join",
+      "worker_count_semantic_gate": {
+        "command": [
+          "C:\\Users\\chris\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe",
+          "-m",
+          "unittest",
+          "tests.m4.test_worker_integration.NativeWorkerIntegrationTests.test_worker_counts_preserve_semantics_and_trace_hashes",
+          "-v"
+        ],
+        "elapsed_us": 816425202,
+        "returncode": 0,
+        "started_utc": "2026-08-25T03:58:38.055535+00:00",
+        "stderr_bytes": 286,
+        "stderr_path": "C:\\yogiohML-m4-3-1\\artifacts\\m4\\m4-3-4\\gate_evidence\\logs\\worker_count_semantic_gate.stderr.txt",
+        "stderr_sha256": "83673a2041b88471c4f346e6e69b99c5f77bd019fa07fc0767b190fe90552490",
+        "stdout_bytes": 0,
+        "stdout_path": "C:\\yogiohML-m4-3-1\\artifacts\\m4\\m4-3-4\\gate_evidence\\logs\\worker_count_semantic_gate.stdout.txt",
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    "evidence_complete": true,
+    "manifest": {
+      "evidence": {
+        "candidate_observation_consistency": {
+          "command": [
+            "ctest",
+            "--test-dir",
+            "build/m4-3-4-shape",
+            "--output-on-failure",
+            "-R",
+            "^(observation_builder_test|m4_worker_integration_test)$"
+          ],
+          "elapsed_us": 98978437,
+          "returncode": 0,
+          "started_utc": "2026-08-25T03:56:59.075555+00:00",
+          "stderr_bytes": 0,
+          "stderr_path": "C:\\yogiohML-m4-3-1\\artifacts\\m4\\m4-3-4\\gate_evidence\\logs\\candidate_observation_consistency.stderr.txt",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout_bytes": 352,
+          "stdout_path": "C:\\yogiohML-m4-3-1\\artifacts\\m4\\m4-3-4\\gate_evidence\\logs\\candidate_observation_consistency.stdout.txt",
+          "stdout_sha256": "69d06fd1132db1dabb31a161cb186a595d95945a5f44befb25912c7c995b8890"
+        },
+        "ctests": {
+          "command": [
+            "ctest",
+            "--test-dir",
+            "build/m4-3-4-shape",
+            "--output-on-failure"
+          ],
+          "elapsed_us": 164713205,
+          "returncode": 0,
+          "started_utc": "2026-08-25T03:35:32.294617+00:00",
+          "stderr_bytes": 0,
+          "stderr_path": "C:\\yogiohML-m4-3-1\\artifacts\\m4\\m4-3-4\\gate_evidence\\logs\\ctests.stderr.txt",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout_bytes": 10586,
+          "stdout_path": "C:\\yogiohML-m4-3-1\\artifacts\\m4\\m4-3-4\\gate_evidence\\logs\\ctests.stdout.txt",
+          "stdout_sha256": "664796a1a27fdf8c3d62ee50e9d6da6ad185402d3b72a9da73612c10fd055fda"
+        },
+        "m3_python_tests": {
+          "command": [
+            "C:\\Users\\chris\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe",
+            "-m",
+            "unittest",
+            "discover",
+            "-s",
+            "tests/m3",
+            "-v"
+          ],
+          "elapsed_us": 493186,
+          "returncode": 0,
+          "started_utc": "2026-08-25T03:38:17.148051+00:00",
+          "stderr_bytes": 2742,
+          "stderr_path": "C:\\yogiohML-m4-3-1\\artifacts\\m4\\m4-3-4\\gate_evidence\\logs\\m3_python_tests.stderr.txt",
+          "stderr_sha256": "23e934ddf57946a760b9bc3a0fe6105da5d7204f2f484852d8c4855c7141e1db",
+          "stdout_bytes": 0,
+          "stdout_path": "C:\\yogiohML-m4-3-1\\artifacts\\m4\\m4-3-4\\gate_evidence\\logs\\m3_python_tests.stdout.txt",
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "m4_python_tests": {
+          "command": [
+            "C:\\Users\\chris\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe",
+            "-m",
+            "unittest",
+            "discover",
+            "-s",
+            "tests/m4",
+            "-v"
+          ],
+          "elapsed_us": 1121236244,
+          "returncode": 0,
+          "started_utc": "2026-08-25T03:38:17.642574+00:00",
+          "stderr_bytes": 20742,
+          "stderr_path": "C:\\yogiohML-m4-3-1\\artifacts\\m4\\m4-3-4\\gate_evidence\\logs\\m4_python_tests.stderr.txt",
+          "stderr_sha256": "5d41a9c0954eee1d4be60ae69f9fe2a21c65993c5fe08d94b9cf35cbde8a6616",
+          "stdout_bytes": 0,
+          "stdout_path": "C:\\yogiohML-m4-3-1\\artifacts\\m4\\m4-3-4\\gate_evidence\\logs\\m4_python_tests.stdout.txt",
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "privacy_tests": {
+          "command": [
+            "ctest",
+            "--test-dir",
+            "build/m4-3-4-shape",
+            "--output-on-failure",
+            "-R",
+            "^(privacy_projection_test|continuation_privacy_test|m3_real_deck_privacy_test)$"
+          ],
+          "elapsed_us": 193794,
+          "returncode": 0,
+          "started_utc": "2026-08-25T03:56:58.880272+00:00",
+          "stderr_bytes": 0,
+          "stderr_path": "C:\\yogiohML-m4-3-1\\artifacts\\m4\\m4-3-4\\gate_evidence\\logs\\privacy_tests.stderr.txt",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdout_bytes": 460,
+          "stdout_path": "C:\\yogiohML-m4-3-1\\artifacts\\m4\\m4-3-4\\gate_evidence\\logs\\privacy_tests.stdout.txt",
+          "stdout_sha256": "67597fedd7b2505d7cd25d16db663107dd21ee6a9548044d0272ef4cd806abef"
+        },
+        "repository_python_tests": {
+          "command": [
+            "C:\\Users\\chris\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe",
+            "-m",
+            "unittest",
+            "discover",
+            "-s",
+            "tests/python",
+            "-v"
+          ],
+          "elapsed_us": 137004,
+          "returncode": 0,
+          "started_utc": "2026-08-25T03:38:17.009333+00:00",
+          "stderr_bytes": 1228,
+          "stderr_path": "C:\\yogiohML-m4-3-1\\artifacts\\m4\\m4-3-4\\gate_evidence\\logs\\repository_python_tests.stderr.txt",
+          "stderr_sha256": "487db73442a4563479f1226f08555420823807f0c3dd8b4208574ee715770741",
+          "stdout_bytes": 0,
+          "stdout_path": "C:\\yogiohML-m4-3-1\\artifacts\\m4\\m4-3-4\\gate_evidence\\logs\\repository_python_tests.stdout.txt",
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "worker_count_semantic_gate": {
+          "command": [
+            "C:\\Users\\chris\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe",
+            "-m",
+            "unittest",
+            "tests.m4.test_worker_integration.NativeWorkerIntegrationTests.test_worker_counts_preserve_semantics_and_trace_hashes",
+            "-v"
+          ],
+          "elapsed_us": 816425202,
+          "returncode": 0,
+          "started_utc": "2026-08-25T03:58:38.055535+00:00",
+          "stderr_bytes": 286,
+          "stderr_path": "C:\\yogiohML-m4-3-1\\artifacts\\m4\\m4-3-4\\gate_evidence\\logs\\worker_count_semantic_gate.stderr.txt",
+          "stderr_sha256": "83673a2041b88471c4f346e6e69b99c5f77bd019fa07fc0767b190fe90552490",
+          "stdout_bytes": 0,
+          "stdout_path": "C:\\yogiohML-m4-3-1\\artifacts\\m4\\m4-3-4\\gate_evidence\\logs\\worker_count_semantic_gate.stdout.txt",
+          "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "manifest_path": "C:\\yogiohML-m4-3-1\\artifacts\\m4\\m4-3-4\\gate_evidence\\gate_evidence.json",
+      "manifest_sha256": "0534b794acf69439342d8c351a5daaf8974e02269c4cad67b11080048a220487",
+      "status": "PASS"
+    },
+    "mode": "PASS statuses are bound to an immutable gate-evidence manifest with exit codes and stdout/stderr hashes; internal gates are derived from the run and report invariants."
+  },
+  "gates": {
+    "candidate_observation_consistency": "PASS",
+    "canonical_section_byte_integrity": "PASS",
+    "ctests": "PASS",
+    "focused_shape_equivalence": "PASS",
+    "gate_evidence_complete": "PASS",
+    "m3_python_tests": "PASS",
+    "m4_python_tests": "PASS",
+    "measured_run_binary_identity": "PASS",
+    "privacy_tests": "PASS",
+    "repository_python_tests": "PASS",
+    "residual_timing_integrity": "PASS",
+    "semantic_trace_equivalence": "PASS",
+    "shape_record_completeness": "PASS",
+    "worker_count_semantic_gate": "PASS"
+  },
+  "integrity": {
+    "canonical_bytes": 1345246987,
+    "lifecycle": {
+      "canonical_serialize_bytes": 0,
+      "canonical_serialize_calls": 0,
+      "canonical_serialize_calls_zero_in_throughput": true,
+      "canonical_serialize_consumed_in_throughput": false,
+      "duplicate_job_lifecycle_ids": 0,
+      "lifecycle_records": 9908,
+      "one_serialize_without_hash_per_lifecycle": true,
+      "one_sha256_per_lifecycle": true,
+      "same_mutation_epoch_duplicate_calls": 0,
+      "same_mutation_epoch_duplicate_calls_zero": true,
+      "serialize_without_hash_bytes": 1345246987,
+      "serialize_without_hash_calls": 9908,
+      "sha256_calls": 9908,
+      "sha256_calls_match_observations": true,
+      "shape_and_lifecycle_bytes_match": true,
+      "shape_and_lifecycle_calls_match": true,
+      "shape_and_lifecycle_keys_match": true,
+      "unique_job_lifecycle_ids": 9908
+    },
+    "observation_count": 9908,
+    "sections_sum_exact": true,
+    "trace_reference_artifact": "C:\\yogiohML-m4-3-1\\artifacts\\m4\\m4-3-3\\semantic\\release\\traces"
+  },
+  "m4_3_3_comparison_and_instrumentation_overhead": {
+    "current_runtime": {
+      "games": 16,
+      "games_per_second": 0.46297731,
+      "max_steps": 2200,
+      "worker_count": 1,
+      "worker_local_simulation_runtime_seconds": 34.558929,
+      "worker_local_simulation_runtime_us": 34558929
+    },
+    "current_shape_worker_audit": {
+      "counters": {
+        "allocation_copy_events": 3970235,
+        "current_property_projections": 526004,
+        "entities_projected": 526004,
+        "identity_known_entities": 526004,
+        "observations": 9908,
+        "query_field_calls": 19816,
+        "query_individual_calls": 0,
+        "query_location_calls": 118896,
+        "redacted_entities": 0,
+        "relationship_objects": 0,
+        "script_loads": 1232,
+        "static_card_data_lookups": 526004
+      },
+      "observation_timing_us": {
+        "observation_candidate_consistency": {
+          "calls": 33247,
+          "mean_us_per_call": 0.002617,
+          "total_us": 87
+        },
+        "observation_canonical_serialization": {
+          "calls": 9908,
+          "mean_us_per_call": 2258.0761,
+          "total_us": 22373018
+        },
+        "observation_entity_projection": {
+          "calls": 526004,
+          "mean_us_per_call": 0.000669,
+          "total_us": 352
+        },
+        "observation_hash": {
+          "calls": 9908,
+          "mean_us_per_call": 469.598809,
+          "total_us": 4652785
+        },
+        "observation_other": {
+          "calls": 9908,
+          "mean_us_per_call": 158.003936,
+          "total_us": 1565503
+        },
+        "observation_query_decode": {
+          "calls": 128804,
+          "mean_us_per_call": 20.586612,
+          "total_us": 2651638
+        },
+        "observation_query_field": {
+          "calls": 9908,
+          "mean_us_per_call": 0.008781,
+          "total_us": 87
+        },
+        "observation_query_individual": {
+          "calls": 0,
+          "mean_us_per_call": 0.0,
+          "total_us": 0
+        },
+        "observation_query_location": {
+          "calls": 118896,
+          "mean_us_per_call": 3.889399,
+          "total_us": 462434
+        },
+        "observation_relationship_projection": {
+          "calls": 9908,
+          "mean_us_per_call": 0.0,
+          "total_us": 0
+        },
+        "observation_visibility_privacy": {
+          "calls": 1476104,
+          "mean_us_per_call": 0.00014,
+          "total_us": 207
+        },
+        "observation_zone_projection": {
+          "calls": 508088,
+          "mean_us_per_call": 0.000195,
+          "total_us": 99
+        }
+      },
+      "observation_total_us": 31706210
+    },
+    "frozen_m4_3_3_release_reference": {
+      "audit_path": "C:\\yogiohML-m4-3-1\\artifacts\\m4\\m4-3-3\\performance-release\\audit.json",
+      "games_per_second": 0.492808735,
+      "observation_canonical_serialization_us": 20329019,
+      "outer_observation_us": 29713129,
+      "worker_local_simulation_runtime_us": 32466957
+    },
+    "instrumentation_overhead_check": {
+      "interpretation": "The delta measures the effect of the optional shape probe plus run-to-run machine variation. It is diagnostic evidence only and is not a throughput claim or an optimization authorization.",
+      "method": "Compare the shape-enabled Release worker against a same-source, same-toolchain Release control compiled with YGO_M4_PERFORMANCE_AUDIT but without YGO_M4_SERIALIZATION_SHAPE_AUDIT. This is a workload-level overhead signal, not an isolated microbenchmark.",
+      "shape_serializer_internal_total_us": 22332015,
+      "shape_worker_vs_no_shape_control": {
+        "observation_canonical_serialization_us": {
+          "delta_percent": -15.311843,
+          "delta_us": -4045101,
+          "no_shape_control": 26418119,
+          "shape_worker": 22373018
+        },
+        "outer_observation_us": {
+          "delta_percent": -16.298377,
+          "delta_us": -6173832,
+          "no_shape_control": 37880042,
+          "shape_worker": 31706210
+        },
+        "worker_local_runtime_us": {
+          "delta_percent": -17.365555,
+          "delta_us": -7262528,
+          "no_shape_control": 41821457,
+          "shape_worker": 34558929
+        }
+      },
+      "status": "MEASURED_SAME_HEAD_CONTROL"
+    },
+    "reference_available": true,
+    "same_head_release_no_shape_control": {
+      "audit_path": "C:\\yogiohML-m4-3-1\\artifacts\\m4\\m4-3-4\\control_audit.json",
+      "games_per_second": 0.382578732,
+      "observation_canonical_serialization_us": 26418119,
+      "outer_observation_us": 37880042,
+      "worker_identity": {
+        "worker": "C:\\yogiohML-m4-3-1\\build\\m4-3-4-control\\ygo_m4_worker.exe",
+        "worker_sha256": "9976bd08ab501248a71bb4331dcb16d9f34d01d5b21417cbb5e8583f5778ff48"
+      },
+      "worker_local_simulation_runtime_us": 41821457
+    }
+  },
+  "measured_run_identity": {
+    "current_source": {
+      "git_head": "cf16e9b23b909f37c3921f41afefeb3692c8c2a8",
+      "repository_root": "C:\\yogiohML-m4-3-1",
+      "status_lines": [
+        " M include/ygo/observation/performance_audit.hpp",
+        " M src/observation/serialization.cpp",
+        " M tests/observation/observation_builder_test.cpp",
+        " M tools/ygo_m4_worker/json_protocol.cpp",
+        " M tools/ygo_m4_worker/json_protocol.hpp",
+        " M tools/ygo_m4_worker/main.cpp",
+        "?? docs/superpowers/plans/2026-08-25-m4-3-4-serialization-shape-audit.md",
+        "?? tools/m4/compare_serialization_shape.py",
+        "?? tools/m4/record_serialization_shape_gate_evidence.py",
+        "?? tools/m4/report_serialization_shape.py"
+      ],
+      "status_sha256": "cc9378e9bd5a7ac9fc645e279d7678f7ba94c746cc9d08084433579dba7c3161",
+      "tracked_diff_sha256": "cca6dbbf34dbb6983f6deb81950f788122e4a181c3da95412ab6647abef679f3",
+      "untracked_files": [
+        {
+          "bytes": 7383,
+          "path": "docs/superpowers/plans/2026-08-25-m4-3-4-serialization-shape-audit.md",
+          "sha256": "9e31cef64fc1be27d8d52d8a144e513c3dbd0ad8f9aad49e20cbac1bc938725e"
+        },
+        {
+          "bytes": 17397,
+          "path": "tools/m4/compare_serialization_shape.py",
+          "sha256": "e13543f11cdf0f44f6a74f8ccf0e608fb666ed01c723cdd95684e5bd03c1bc14"
+        },
+        {
+          "bytes": 3510,
+          "path": "tools/m4/record_serialization_shape_gate_evidence.py",
+          "sha256": "f2267fd7d442350853d49d9ac3c4a5be253aea2dc0d344fe8a8d264dc0cacb1a"
+        },
+        {
+          "bytes": 72486,
+          "path": "tools/m4/report_serialization_shape.py",
+          "sha256": "301d14206148c4b3e27f47eb67a779a7a1434be268d23c89aff1b10b7a2875ac"
+        }
+      ]
+    },
+    "reported_worker_matches_measured_run": true,
+    "source": {
+      "git_head": "cf16e9b23b909f37c3921f41afefeb3692c8c2a8",
+      "repository_root": "C:\\yogiohML-m4-3-1",
+      "status_lines": [
+        " M include/ygo/observation/performance_audit.hpp",
+        " M src/observation/serialization.cpp",
+        " M tests/observation/observation_builder_test.cpp",
+        " M tools/ygo_m4_worker/json_protocol.cpp",
+        " M tools/ygo_m4_worker/json_protocol.hpp",
+        " M tools/ygo_m4_worker/main.cpp",
+        "?? docs/superpowers/plans/2026-08-25-m4-3-4-serialization-shape-audit.md",
+        "?? tools/m4/compare_serialization_shape.py",
+        "?? tools/m4/record_serialization_shape_gate_evidence.py",
+        "?? tools/m4/report_serialization_shape.py"
+      ],
+      "status_sha256": "cc9378e9bd5a7ac9fc645e279d7678f7ba94c746cc9d08084433579dba7c3161",
+      "tracked_diff_sha256": "cca6dbbf34dbb6983f6deb81950f788122e4a181c3da95412ab6647abef679f3",
+      "untracked_files": [
+        {
+          "bytes": 7383,
+          "path": "docs/superpowers/plans/2026-08-25-m4-3-4-serialization-shape-audit.md",
+          "sha256": "9e31cef64fc1be27d8d52d8a144e513c3dbd0ad8f9aad49e20cbac1bc938725e"
+        },
+        {
+          "bytes": 17397,
+          "path": "tools/m4/compare_serialization_shape.py",
+          "sha256": "e13543f11cdf0f44f6a74f8ccf0e608fb666ed01c723cdd95684e5bd03c1bc14"
+        },
+        {
+          "bytes": 3510,
+          "path": "tools/m4/record_serialization_shape_gate_evidence.py",
+          "sha256": "f2267fd7d442350853d49d9ac3c4a5be253aea2dc0d344fe8a8d264dc0cacb1a"
+        },
+        {
+          "bytes": 72486,
+          "path": "tools/m4/report_serialization_shape.py",
+          "sha256": "301d14206148c4b3e27f47eb67a779a7a1434be268d23c89aff1b10b7a2875ac"
+        }
+      ]
+    },
+    "source_matches_current": true,
+    "throughput_worker_sha256": "97634b6ba007393d0c3cd4199f29c926920c497a7f37ad40fc7488cfb83469a7",
+    "worker": {
+      "path": "C:\\yogiohML-m4-3-1\\build\\m4-3-4-shape\\ygo_m4_worker.exe",
+      "sha256": "97634b6ba007393d0c3cd4199f29c926920c497a7f37ad40fc7488cfb83469a7"
+    }
+  },
+  "optimization_candidates": [
+    {
+      "evidence": {
+        "measurement_kind": "residual_partition_after_copy_sort_escape_extraction",
+        "rendering_calls": 9908,
+        "rendering_us": 22061367,
+        "serialize_total_us": 22332015,
+        "unmeasured_residual_components": "remaining stream formatting, primitive formatting, output construction, and probe overhead"
+      },
+      "expected_affected_bucket": "observation_canonical_serialization / observation_other",
+      "implementation_complexity": "HIGH",
+      "measured_bytes_fraction_percent": 100.0,
+      "measured_runtime_fraction_percent": 98.788072,
+      "measurement_kind": "residual_partition",
+      "name": "rendering_output_stream",
+      "proposed_optimization_concept": "A/B test a reserve-backed append implementation while preserving the exact existing field order and escaping.",
+      "rank": 1,
+      "required_equivalence_test": "All 9,908 canonical-without-hash byte strings and observation hashes, trace hashes, privacy fixtures, and candidate consistency must match.",
+      "semantic_privacy_risk": "High byte-contract risk; any delimiter, number, escape, ordering, or redaction drift is unacceptable.",
+      "suspected_redundant_work": "std::ostringstream performs much of the remaining stream formatting and output construction for every observation; this phase is a residual partition, not an isolated ostringstream timer.",
+      "time_measurement_direct": false
+    },
+    {
+      "evidence": {
+        "copy_and_sort_percent": 0.586741,
+        "copy_us": 59822,
+        "sort_us": 71209
+      },
+      "expected_affected_bucket": "observation_canonical_serialization",
+      "implementation_complexity": "MEDIUM",
+      "measured_bytes_fraction_percent": null,
+      "measured_runtime_fraction_percent": 0.586741,
+      "name": "copy_and_sort_preparation",
+      "proposed_optimization_concept": "A later experiment could compare sorted views or indexes, but only after proving byte and stability equivalence.",
+      "rank": 2,
+      "required_equivalence_test": "Exact canonical bytes/hashes, stable ordering, privacy, and trace equivalence.",
+      "semantic_privacy_risk": "Medium-high; order is canonical and in-place mutation is forbidden without proof.",
+      "suspected_redundant_work": "Multiple vectors are copied and sorted before every rendering pass.",
+      "time_measurement_direct": true
+    },
+    {
+      "evidence": {
+        "escaping_us": 54807,
+        "input_bytes": 75663795,
+        "json_escape_calls": 6651912,
+        "output_bytes": 88967619
+      },
+      "expected_affected_bucket": "observation_canonical_serialization",
+      "implementation_complexity": "MEDIUM",
+      "measured_bytes_fraction_percent": null,
+      "measured_runtime_fraction_percent": 0.245419,
+      "name": "json_escaping",
+      "proposed_optimization_concept": "Characterize a narrowly scoped escaping implementation only after output-construction results; no rewrite in this audit.",
+      "rank": 3,
+      "required_equivalence_test": "Escaping fixtures plus all final canonical byte/hash/privacy gates.",
+      "semantic_privacy_risk": "High; escaping changes canonical bytes and can expose contract drift.",
+      "suspected_redundant_work": "String values are escaped into temporary ostringstream instances during every observation.",
+      "time_measurement_direct": true
+    },
+    {
+      "evidence": {
+        "repetition_factor_lower_bound": 157.923398,
+        "serialized_event_instances": 3362505,
+        "unique_visible_event_identities_seen": 21292,
+        "visible_event_bytes": 940315868,
+        "visible_event_bytes_percent": 69.899125
+      },
+      "expected_affected_bucket": "observation_canonical_serialization / observation_visibility_privacy",
+      "implementation_complexity": "HIGH",
+      "measured_bytes_fraction_percent": 69.899125,
+      "measured_runtime_fraction_percent": null,
+      "name": "visible_event_history_growth",
+      "proposed_optimization_concept": "First isolate event-history representation or serialization cost in a byte-preserving experiment; do not use deltas or truncation in M4.3.4.",
+      "rank": 4,
+      "required_equivalence_test": "Per-observation visible-event arrays, canonical bytes, hashes, paired-world privacy, and trace equivalence.",
+      "semantic_privacy_risk": "Very high; event history order, perspective filtering, and privacy visibility are contract data.",
+      "suspected_redundant_work": "Historical visible events are copied and rendered again in later cumulative observations.",
+      "time_measurement_direct": false
+    },
+    {
+      "evidence": {
+        "entity_bytes": 367534943,
+        "entity_bytes_percent": 27.321001,
+        "printed_current_property_bytes": "see entity audit"
+      },
+      "expected_affected_bucket": "observation_entity_projection / observation_canonical_serialization",
+      "implementation_complexity": "MEDIUM",
+      "measured_bytes_fraction_percent": 27.321001,
+      "measured_runtime_fraction_percent": null,
+      "name": "entity_property_representation",
+      "proposed_optimization_concept": "Measure a representation-level separation of immutable printed metadata before proposing reuse.",
+      "rank": 5,
+      "required_equivalence_test": "Per-entity canonical bytes, identity-known/redacted fixtures, hashes, and privacy tests.",
+      "semantic_privacy_risk": "High; redaction and current-versus-printed semantics must remain identical.",
+      "suspected_redundant_work": "Printed and current property objects are reconstructed and rendered for each projected entity.",
+      "time_measurement_direct": false
+    },
+    {
+      "evidence": {
+        "match_context_bytes": 6068492,
+        "match_context_bytes_percent": 0.451106
+      },
+      "expected_affected_bucket": "observation_canonical_serialization",
+      "implementation_complexity": "MEDIUM",
+      "measured_bytes_fraction_percent": 0.451106,
+      "measured_runtime_fraction_percent": null,
+      "name": "static_match_context_repetition",
+      "proposed_optimization_concept": "Evaluate model-facing separation only after a public observation-contract design; do not remove fields here.",
+      "rank": 6,
+      "required_equivalence_test": "Exact final observations for both perspectives and all deck-knowledge/privacy fixtures.",
+      "semantic_privacy_risk": "High; deck knowledge and public/private context are part of the observation contract.",
+      "suspected_redundant_work": "Immutable deck and match-context fields are emitted in every observation.",
+      "time_measurement_direct": false
+    }
+  ],
+  "performance_audit": {
+    "counters": {
+      "allocation_copy_events": 3970235,
+      "current_property_projections": 526004,
+      "entities_projected": 526004,
+      "identity_known_entities": 526004,
+      "observations": 9908,
+      "query_field_calls": 19816,
+      "query_individual_calls": 0,
+      "query_location_calls": 118896,
+      "redacted_entities": 0,
+      "relationship_objects": 0,
+      "script_loads": 1232,
+      "static_card_data_lookups": 526004
+    },
+    "observation_timing_us": {
+      "observation_candidate_consistency": {
+        "calls": 33247,
+        "mean_us_per_call": 0.002617,
+        "total_us": 87
+      },
+      "observation_canonical_serialization": {
+        "calls": 9908,
+        "mean_us_per_call": 2258.0761,
+        "total_us": 22373018
+      },
+      "observation_entity_projection": {
+        "calls": 526004,
+        "mean_us_per_call": 0.000669,
+        "total_us": 352
+      },
+      "observation_hash": {
+        "calls": 9908,
+        "mean_us_per_call": 469.598809,
+        "total_us": 4652785
+      },
+      "observation_other": {
+        "calls": 9908,
+        "mean_us_per_call": 158.003936,
+        "total_us": 1565503
+      },
+      "observation_query_decode": {
+        "calls": 128804,
+        "mean_us_per_call": 20.586612,
+        "total_us": 2651638
+      },
+      "observation_query_field": {
+        "calls": 9908,
+        "mean_us_per_call": 0.008781,
+        "total_us": 87
+      },
+      "observation_query_individual": {
+        "calls": 0,
+        "mean_us_per_call": 0.0,
+        "total_us": 0
+      },
+      "observation_query_location": {
+        "calls": 118896,
+        "mean_us_per_call": 3.889399,
+        "total_us": 462434
+      },
+      "observation_relationship_projection": {
+        "calls": 9908,
+        "mean_us_per_call": 0.0,
+        "total_us": 0
+      },
+      "observation_visibility_privacy": {
+        "calls": 1476104,
+        "mean_us_per_call": 0.00014,
+        "total_us": 207
+      },
+      "observation_zone_projection": {
+        "calls": 508088,
+        "mean_us_per_call": 0.000195,
+        "total_us": 99
+      }
+    },
+    "observation_total_us": 31706210
+  },
+  "raw_artifact": {
+    "shape_workload": "C:\\yogiohML-m4-3-1\\artifacts\\m4\\m4-3-4\\run10\\shape_workload.json",
+    "sidecar_record_policy": "Checked-in report contains aggregate scalars and lifecycle proof; raw per-observation shape records remain in the ignored workload artifact."
+  },
+  "recommendation": {
+    "first_optimization_experiment": {
+      "candidate": "rendering_output_stream",
+      "concept": "Isolated A/B output-construction experiment targeting the rendering residual, with a reserve-backed builder evaluated only against exact byte/hash/privacy equivalence.",
+      "reason": "Rendering is the largest measured residual Release serialization partition; copy, sorting, and escaping are much smaller in this workload.",
+      "scope_boundary": "Recommendation only. No serializer, event history, static context, hash, ocgcore, or M5 change is implemented by M4.3.4."
+    }
+  },
+  "runtime": {
+    "games": 16,
+    "games_per_second": 0.46297731,
+    "max_steps": 2200,
+    "worker_count": 1,
+    "worker_local_simulation_runtime_seconds": 34.558929,
+    "worker_local_simulation_runtime_us": 34558929
+  },
+  "schema": "ocgforge.m4.m4_3_4_serialization_shape_audit.v1",
+  "scope": {
+    "canonical_format_changed": false,
+    "card_scripts_modified": false,
+    "event_history_semantics_changed": false,
+    "hash_algorithm_changed": false,
+    "m5_started": false,
+    "ocgcore_modified": false,
+    "optimization_implemented": false,
+    "static_match_context_removed": false
+  },
+  "semantic_equivalence": {
+    "jobs": [
+      {
+        "actual_observation_count": 613,
+        "actual_trace": "a96426706b98d68036b43b0f046bf399203964fa48bd3c466144f4fb3cb0738d",
+        "job_id": "m4-000000",
+        "observation_hashes_equal": true,
+        "pass": true,
+        "reference_observation_count": 613,
+        "reference_trace": "a96426706b98d68036b43b0f046bf399203964fa48bd3c466144f4fb3cb0738d",
+        "semantic_fields_and_footers_equal": true,
+        "trace_bytes_equal": true,
+        "trace_steps_equal": true
+      },
+      {
+        "actual_observation_count": 622,
+        "actual_trace": "47c84e56cf69dd2febf7feaabe51ebdd7a3ebad0b9d4ca38568b3470d80f3d73",
+        "job_id": "m4-000001",
+        "observation_hashes_equal": true,
+        "pass": true,
+        "reference_observation_count": 622,
+        "reference_trace": "47c84e56cf69dd2febf7feaabe51ebdd7a3ebad0b9d4ca38568b3470d80f3d73",
+        "semantic_fields_and_footers_equal": true,
+        "trace_bytes_equal": true,
+        "trace_steps_equal": true
+      },
+      {
+        "actual_observation_count": 622,
+        "actual_trace": "0f9122c8fa4c4418a681ffefd4dca7af3774d53a4829fb0f34cf46704b558692",
+        "job_id": "m4-000002",
+        "observation_hashes_equal": true,
+        "pass": true,
+        "reference_observation_count": 622,
+        "reference_trace": "0f9122c8fa4c4418a681ffefd4dca7af3774d53a4829fb0f34cf46704b558692",
+        "semantic_fields_and_footers_equal": true,
+        "trace_bytes_equal": true,
+        "trace_steps_equal": true
+      },
+      {
+        "actual_observation_count": 613,
+        "actual_trace": "ad0f4a9fe33ce7645d444729a5b8c313a56bb7ba84706581a340e3a415b0f160",
+        "job_id": "m4-000003",
+        "observation_hashes_equal": true,
+        "pass": true,
+        "reference_observation_count": 613,
+        "reference_trace": "ad0f4a9fe33ce7645d444729a5b8c313a56bb7ba84706581a340e3a415b0f160",
+        "semantic_fields_and_footers_equal": true,
+        "trace_bytes_equal": true,
+        "trace_steps_equal": true
+      },
+      {
+        "actual_observation_count": 613,
+        "actual_trace": "8765ff157b1a9f07c6ed8456dfb49aebf0be51c7deb0227fdda628187526c11a",
+        "job_id": "m4-000004",
+        "observation_hashes_equal": true,
+        "pass": true,
+        "reference_observation_count": 613,
+        "reference_trace": "8765ff157b1a9f07c6ed8456dfb49aebf0be51c7deb0227fdda628187526c11a",
+        "semantic_fields_and_footers_equal": true,
+        "trace_bytes_equal": true,
+        "trace_steps_equal": true
+      },
+      {
+        "actual_observation_count": 629,
+        "actual_trace": "30c26376e61f55bea7fff52ca5c1db47f1450fbd38798b6741d05470ca4b3bc6",
+        "job_id": "m4-000005",
+        "observation_hashes_equal": true,
+        "pass": true,
+        "reference_observation_count": 629,
+        "reference_trace": "30c26376e61f55bea7fff52ca5c1db47f1450fbd38798b6741d05470ca4b3bc6",
+        "semantic_fields_and_footers_equal": true,
+        "trace_bytes_equal": true,
+        "trace_steps_equal": true
+      },
+      {
+        "actual_observation_count": 622,
+        "actual_trace": "ac3d630e0809ffc9e7e4c46e077751f1d4629d1fdfbb63cfffd9c862536fa05b",
+        "job_id": "m4-000006",
+        "observation_hashes_equal": true,
+        "pass": true,
+        "reference_observation_count": 622,
+        "reference_trace": "ac3d630e0809ffc9e7e4c46e077751f1d4629d1fdfbb63cfffd9c862536fa05b",
+        "semantic_fields_and_footers_equal": true,
+        "trace_bytes_equal": true,
+        "trace_steps_equal": true
+      },
+      {
+        "actual_observation_count": 620,
+        "actual_trace": "eedad6472598f40a6de9b512d83438e82f04b7699166129163ca9259637d249f",
+        "job_id": "m4-000007",
+        "observation_hashes_equal": true,
+        "pass": true,
+        "reference_observation_count": 620,
+        "reference_trace": "eedad6472598f40a6de9b512d83438e82f04b7699166129163ca9259637d249f",
+        "semantic_fields_and_footers_equal": true,
+        "trace_bytes_equal": true,
+        "trace_steps_equal": true
+      },
+      {
+        "actual_observation_count": 620,
+        "actual_trace": "05c4f09394660e31e309daf70fd86999ad49796444b1ece554070bf3e7774331",
+        "job_id": "m4-000008",
+        "observation_hashes_equal": true,
+        "pass": true,
+        "reference_observation_count": 620,
+        "reference_trace": "05c4f09394660e31e309daf70fd86999ad49796444b1ece554070bf3e7774331",
+        "semantic_fields_and_footers_equal": true,
+        "trace_bytes_equal": true,
+        "trace_steps_equal": true
+      },
+      {
+        "actual_observation_count": 622,
+        "actual_trace": "d290aeff0187c49ea8044f0b68212df217fa2073b5ff1dfeb984f3accea8b141",
+        "job_id": "m4-000009",
+        "observation_hashes_equal": true,
+        "pass": true,
+        "reference_observation_count": 622,
+        "reference_trace": "d290aeff0187c49ea8044f0b68212df217fa2073b5ff1dfeb984f3accea8b141",
+        "semantic_fields_and_footers_equal": true,
+        "trace_bytes_equal": true,
+        "trace_steps_equal": true
+      },
+      {
+        "actual_observation_count": 622,
+        "actual_trace": "6a6602a4944a52e2afeb1c8dd0aeb8ed75ac2380cae5dbb11bda99507e39b9e6",
+        "job_id": "m4-000010",
+        "observation_hashes_equal": true,
+        "pass": true,
+        "reference_observation_count": 622,
+        "reference_trace": "6a6602a4944a52e2afeb1c8dd0aeb8ed75ac2380cae5dbb11bda99507e39b9e6",
+        "semantic_fields_and_footers_equal": true,
+        "trace_bytes_equal": true,
+        "trace_steps_equal": true
+      },
+      {
+        "actual_observation_count": 613,
+        "actual_trace": "1be98cd012d23379e2c0af7f27ecec4b36078554cd7da6cc32c4885e5573ff44",
+        "job_id": "m4-000011",
+        "observation_hashes_equal": true,
+        "pass": true,
+        "reference_observation_count": 613,
+        "reference_trace": "1be98cd012d23379e2c0af7f27ecec4b36078554cd7da6cc32c4885e5573ff44",
+        "semantic_fields_and_footers_equal": true,
+        "trace_bytes_equal": true,
+        "trace_steps_equal": true
+      },
+      {
+        "actual_observation_count": 620,
+        "actual_trace": "8f93682d63e97fe629b7bc272b9a75a6afdf41bc40a6ecf904f37022262a31e6",
+        "job_id": "m4-000012",
+        "observation_hashes_equal": true,
+        "pass": true,
+        "reference_observation_count": 620,
+        "reference_trace": "8f93682d63e97fe629b7bc272b9a75a6afdf41bc40a6ecf904f37022262a31e6",
+        "semantic_fields_and_footers_equal": true,
+        "trace_bytes_equal": true,
+        "trace_steps_equal": true
+      },
+      {
+        "actual_observation_count": 622,
+        "actual_trace": "c029a2399603441b206d39956fc68baaecba9e99ff5ff16429da64e951c5df12",
+        "job_id": "m4-000013",
+        "observation_hashes_equal": true,
+        "pass": true,
+        "reference_observation_count": 622,
+        "reference_trace": "c029a2399603441b206d39956fc68baaecba9e99ff5ff16429da64e951c5df12",
+        "semantic_fields_and_footers_equal": true,
+        "trace_bytes_equal": true,
+        "trace_steps_equal": true
+      },
+      {
+        "actual_observation_count": 622,
+        "actual_trace": "1dce94c87a7743e58589e378b94c006e092f926805ad85fa5c10ff5c98d42b14",
+        "job_id": "m4-000014",
+        "observation_hashes_equal": true,
+        "pass": true,
+        "reference_observation_count": 622,
+        "reference_trace": "1dce94c87a7743e58589e378b94c006e092f926805ad85fa5c10ff5c98d42b14",
+        "semantic_fields_and_footers_equal": true,
+        "trace_bytes_equal": true,
+        "trace_steps_equal": true
+      },
+      {
+        "actual_observation_count": 613,
+        "actual_trace": "007ce18841141b63e7b78e516daa230b5b6ac1397f91ce52ba79703071dced89",
+        "job_id": "m4-000015",
+        "observation_hashes_equal": true,
+        "pass": true,
+        "reference_observation_count": 613,
+        "reference_trace": "007ce18841141b63e7b78e516daa230b5b6ac1397f91ce52ba79703071dced89",
+        "semantic_fields_and_footers_equal": true,
+        "trace_bytes_equal": true,
+        "trace_steps_equal": true
+      }
+    ],
+    "observation_count": 9908,
+    "pass": true,
+    "reference_trace_dir": "C:\\yogiohML-m4-3-1\\artifacts\\m4\\m4-3-3\\semantic\\release\\traces"
+  },
+  "serialization": {
+    "copy_stats": {
+      "chain_targets": {
+        "approximate_bytes": 0,
+        "calls": 176,
+        "elements": 0,
+        "mean_us_per_call": 0.0,
+        "total_us": 0
+      },
+      "counters": {
+        "approximate_bytes": 0,
+        "calls": 1052008,
+        "elements": 0,
+        "mean_us_per_call": 8.9e-05,
+        "total_us": 94
+      },
+      "decision_references": {
+        "approximate_bytes": 723647,
+        "calls": 9908,
+        "elements": 21926,
+        "mean_us_per_call": 0.000202,
+        "total_us": 2
+      },
+      "event_targets": {
+        "approximate_bytes": 0,
+        "calls": 3362505,
+        "elements": 0,
+        "mean_us_per_call": 0.000113,
+        "total_us": 379
+      },
+      "link_markers": {
+        "approximate_bytes": 1541408,
+        "calls": 1052008,
+        "elements": 385352,
+        "mean_us_per_call": 0.000192,
+        "total_us": 202
+      },
+      "opponent_deck": {
+        "approximate_bytes": 0,
+        "calls": 19816,
+        "elements": 0,
+        "mean_us_per_call": 0.0,
+        "total_us": 0
+      },
+      "own_deck": {
+        "approximate_bytes": 1585280,
+        "calls": 19816,
+        "elements": 396320,
+        "mean_us_per_call": 0.000757,
+        "total_us": 15
+      },
+      "top_level_entities": {
+        "approximate_bytes": 394173303,
+        "calls": 9908,
+        "elements": 526004,
+        "mean_us_per_call": 2.253532,
+        "total_us": 22328
+      },
+      "top_level_relationships": {
+        "approximate_bytes": 0,
+        "calls": 9908,
+        "elements": 0,
+        "mean_us_per_call": 0.0,
+        "total_us": 0
+      },
+      "top_level_visible_events": {
+        "approximate_bytes": 551987388,
+        "calls": 9908,
+        "elements": 3362505,
+        "mean_us_per_call": 3.710739,
+        "total_us": 36766
+      },
+      "top_level_zones": {
+        "approximate_bytes": 4755840,
+        "calls": 9908,
+        "elements": 198160,
+        "mean_us_per_call": 0.003633,
+        "total_us": 36
+      }
+    },
+    "formatting": {
+      "boolean_values": 1825712,
+      "json_escape_calls": 6651912,
+      "json_escape_input_bytes": 75663795,
+      "json_escape_output_bytes": 88967619,
+      "null_values": 40138903,
+      "numeric_values": 23762126
+    },
+    "lifecycle_context_complete": true,
+    "lifecycle_id_proof": {
+      "duplicate_job_lifecycle_ids": 0,
+      "first": {
+        "job_id": "m4-000000",
+        "lifecycle_id": 1
+      },
+      "last": {
+        "job_id": "m4-000015",
+        "lifecycle_id": 613
+      },
+      "records": 9908,
+      "unique_job_lifecycle_ids": 9908
+    },
+    "phase_sum_matches_serialize_total": true,
+    "phase_sum_us": 22332015,
+    "phase_timing_us": {
+      "escaping": {
+        "calls": 6651912,
+        "fraction_of_serialize_percent": 0.245419,
+        "mean_us_per_call": 0.008239,
+        "total_us": 54807
+      },
+      "final_extraction": {
+        "calls": 9908,
+        "fraction_of_serialize_percent": 0.379769,
+        "mean_us_per_call": 8.55975,
+        "total_us": 84810
+      },
+      "preparation_copy": {
+        "calls": 9908,
+        "fraction_of_serialize_percent": 0.267876,
+        "mean_us_per_call": 6.037747,
+        "total_us": 59822
+      },
+      "rendering": {
+        "calls": 9908,
+        "fraction_of_serialize_percent": 98.788072,
+        "mean_us_per_call": 2226.621619,
+        "total_us": 22061367
+      },
+      "sorting": {
+        "calls": 9908,
+        "fraction_of_serialize_percent": 0.318865,
+        "mean_us_per_call": 7.187021,
+        "total_us": 71209
+      }
+    },
+    "residual_underflow_count": 0,
+    "serialize_without_hash": {
+      "bytes": 1345246987,
+      "calls": 9908,
+      "mean_bytes_per_call": 135773.817824,
+      "mean_us_per_call": 2253.937727,
+      "residual_underflow_count": 0,
+      "total_us": 22332015
+    },
+    "sort_stats": {
+      "chain_targets": {
+        "calls": 176,
+        "elements": 0,
+        "mean_us_per_call": 0.0,
+        "total_us": 0
+      },
+      "counters": {
+        "calls": 1052008,
+        "elements": 0,
+        "mean_us_per_call": 0.000125,
+        "total_us": 132
+      },
+      "decision_references": {
+        "calls": 9908,
+        "elements": 21926,
+        "mean_us_per_call": 0.000505,
+        "total_us": 5
+      },
+      "decks": {
+        "calls": 39632,
+        "elements": 396320,
+        "mean_us_per_call": 0.006888,
+        "total_us": 273
+      },
+      "entities": {
+        "calls": 9908,
+        "elements": 526004,
+        "mean_us_per_call": 6.73365,
+        "total_us": 66717
+      },
+      "event_targets": {
+        "calls": 3362505,
+        "elements": 0,
+        "mean_us_per_call": 0.000108,
+        "total_us": 363
+      },
+      "link_markers": {
+        "calls": 1052008,
+        "elements": 385352,
+        "mean_us_per_call": 0.000156,
+        "total_us": 164
+      },
+      "relationships": {
+        "calls": 9908,
+        "elements": 0,
+        "mean_us_per_call": 0.001413,
+        "total_us": 14
+      },
+      "visible_events": {
+        "calls": 9908,
+        "elements": 3362505,
+        "mean_us_per_call": 0.357186,
+        "total_us": 3539
+      },
+      "zones": {
+        "calls": 9908,
+        "elements": 198160,
+        "mean_us_per_call": 0.000202,
+        "total_us": 2
+      }
+    },
+    "visible_events": {
+      "serialized_instances": 3362505,
+      "unique_events_seen": 21292
+    }
+  },
+  "size_correlations": {
+    "canonical_bytes_vs_chain_length": -0.012898,
+    "canonical_bytes_vs_decision_index": 0.999923,
+    "canonical_bytes_vs_engine_step_index": 0.999945,
+    "canonical_bytes_vs_entity_count": 0.999767,
+    "canonical_bytes_vs_visible_event_count": 0.999973,
+    "interpretation": "Correlations are descriptive only and do not establish causation."
+  },
+  "size_distribution": {
+    "maximum_bytes": 254096,
+    "mean_bytes": 135773.817824,
+    "median_bytes": 135488,
+    "minimum_bytes": 21124,
+    "p95_bytes": 239608,
+    "p99_bytes": 249174,
+    "percentile_definition": "nearest rank; rank = ceil(p * n)"
+  },
+  "static_match_context": {
+    "cumulative_bytes_over_workload": 5890148,
+    "mean_bytes_per_observation": {
+      "opponent_deck_bytes": 46.0,
+      "other_match_context_bytes": 145.0,
+      "own_deck_bytes": 403.484053
+    },
+    "opponent_deck_bytes": 455768,
+    "other_match_context_bytes": 1436660,
+    "own_deck_bytes": 3997720,
+    "total_static_match_context_bytes": 5890148,
+    "total_static_match_context_percent_of_canonical_bytes": 0.437849
+  },
+  "status": "M4.3.4 SERIALIZATION CHARACTERIZATION PASS",
+  "visible_event_growth": {
+    "cumulative_history_observed": true,
+    "generation_identity_basis": "The canonical simulation constructs one ObservationSession per perspective and never calls clear(); ObservationSession::ingest assigns monotonically increasing event_index values. The uniqueness set is therefore a per-job diagnostic proxy for generated-event identity in this workload, not a durable or canonical event ID. ObservationSession::clear resets that index, and tuple collisions could undercount unique events; both are outside or conservative caveats for this controlled workload.",
+    "identity_is_durable_canonical": false,
+    "identity_scope": "per-job diagnostic proxy tuple (perspective, event_index, engine_step_index, kind)",
+    "per_job": [
+      {
+        "final": {
+          "bytes": 184290,
+          "event_count": 660
+        },
+        "first": {
+          "bytes": 2999,
+          "event_count": 11
+        },
+        "job_id": "m4-000000",
+        "maximum": {
+          "bytes": 184290,
+          "event_count": 660
+        },
+        "median_event_count": 340,
+        "observations": 613,
+        "p95_event_count": 628
+      },
+      {
+        "final": {
+          "bytes": 186239,
+          "event_count": 667
+        },
+        "first": {
+          "bytes": 2999,
+          "event_count": 11
+        },
+        "job_id": "m4-000001",
+        "maximum": {
+          "bytes": 186267,
+          "event_count": 667
+        },
+        "median_event_count": 339,
+        "observations": 622,
+        "p95_event_count": 638
+      },
+      {
+        "final": {
+          "bytes": 187088,
+          "event_count": 670
+        },
+        "first": {
+          "bytes": 2999,
+          "event_count": 11
+        },
+        "job_id": "m4-000002",
+        "maximum": {
+          "bytes": 187088,
+          "event_count": 670
+        },
+        "median_event_count": 340,
+        "observations": 622,
+        "p95_event_count": 636
+      },
+      {
+        "final": {
+          "bytes": 184276,
+          "event_count": 660
+        },
+        "first": {
+          "bytes": 2999,
+          "event_count": 11
+        },
+        "job_id": "m4-000003",
+        "maximum": {
+          "bytes": 184276,
+          "event_count": 660
+        },
+        "median_event_count": 334,
+        "observations": 613,
+        "p95_event_count": 628
+      },
+      {
+        "final": {
+          "bytes": 184290,
+          "event_count": 660
+        },
+        "first": {
+          "bytes": 2999,
+          "event_count": 11
+        },
+        "job_id": "m4-000004",
+        "maximum": {
+          "bytes": 184290,
+          "event_count": 660
+        },
+        "median_event_count": 337,
+        "observations": 613,
+        "p95_event_count": 628
+      },
+      {
+        "final": {
+          "bytes": 188338,
+          "event_count": 675
+        },
+        "first": {
+          "bytes": 2999,
+          "event_count": 11
+        },
+        "job_id": "m4-000005",
+        "maximum": {
+          "bytes": 188363,
+          "event_count": 675
+        },
+        "median_event_count": 343,
+        "observations": 629,
+        "p95_event_count": 642
+      },
+      {
+        "final": {
+          "bytes": 187088,
+          "event_count": 670
+        },
+        "first": {
+          "bytes": 2999,
+          "event_count": 11
+        },
+        "job_id": "m4-000006",
+        "maximum": {
+          "bytes": 187088,
+          "event_count": 670
+        },
+        "median_event_count": 340,
+        "observations": 622,
+        "p95_event_count": 636
+      },
+      {
+        "final": {
+          "bytes": 185818,
+          "event_count": 666
+        },
+        "first": {
+          "bytes": 2999,
+          "event_count": 11
+        },
+        "job_id": "m4-000007",
+        "maximum": {
+          "bytes": 185818,
+          "event_count": 666
+        },
+        "median_event_count": 340,
+        "observations": 620,
+        "p95_event_count": 633
+      },
+      {
+        "final": {
+          "bytes": 185829,
+          "event_count": 666
+        },
+        "first": {
+          "bytes": 2999,
+          "event_count": 11
+        },
+        "job_id": "m4-000008",
+        "maximum": {
+          "bytes": 185829,
+          "event_count": 666
+        },
+        "median_event_count": 338,
+        "observations": 620,
+        "p95_event_count": 633
+      },
+      {
+        "final": {
+          "bytes": 186793,
+          "event_count": 669
+        },
+        "first": {
+          "bytes": 2999,
+          "event_count": 11
+        },
+        "job_id": "m4-000009",
+        "maximum": {
+          "bytes": 186822,
+          "event_count": 669
+        },
+        "median_event_count": 342,
+        "observations": 622,
+        "p95_event_count": 636
+      },
+      {
+        "final": {
+          "bytes": 187091,
+          "event_count": 670
+        },
+        "first": {
+          "bytes": 2999,
+          "event_count": 11
+        },
+        "job_id": "m4-000010",
+        "maximum": {
+          "bytes": 187091,
+          "event_count": 670
+        },
+        "median_event_count": 340,
+        "observations": 622,
+        "p95_event_count": 636
+      },
+      {
+        "final": {
+          "bytes": 183724,
+          "event_count": 658
+        },
+        "first": {
+          "bytes": 2999,
+          "event_count": 11
+        },
+        "job_id": "m4-000011",
+        "maximum": {
+          "bytes": 183724,
+          "event_count": 658
+        },
+        "median_event_count": 334,
+        "observations": 613,
+        "p95_event_count": 629
+      },
+      {
+        "final": {
+          "bytes": 185829,
+          "event_count": 666
+        },
+        "first": {
+          "bytes": 2999,
+          "event_count": 11
+        },
+        "job_id": "m4-000012",
+        "maximum": {
+          "bytes": 185829,
+          "event_count": 666
+        },
+        "median_event_count": 340,
+        "observations": 620,
+        "p95_event_count": 633
+      },
+      {
+        "final": {
+          "bytes": 186793,
+          "event_count": 669
+        },
+        "first": {
+          "bytes": 2999,
+          "event_count": 11
+        },
+        "job_id": "m4-000013",
+        "maximum": {
+          "bytes": 186822,
+          "event_count": 669
+        },
+        "median_event_count": 339,
+        "observations": 622,
+        "p95_event_count": 636
+      },
+      {
+        "final": {
+          "bytes": 187087,
+          "event_count": 670
+        },
+        "first": {
+          "bytes": 2999,
+          "event_count": 11
+        },
+        "job_id": "m4-000014",
+        "maximum": {
+          "bytes": 187087,
+          "event_count": 670
+        },
+        "median_event_count": 341,
+        "observations": 622,
+        "p95_event_count": 636
+      },
+      {
+        "final": {
+          "bytes": 183721,
+          "event_count": 658
+        },
+        "first": {
+          "bytes": 2999,
+          "event_count": 11
+        },
+        "job_id": "m4-000015",
+        "maximum": {
+          "bytes": 183721,
+          "event_count": 658
+        },
+        "median_event_count": 334,
+        "observations": 613,
+        "p95_event_count": 629
+      }
+    ],
+    "repetition_factor_lower_bound": 157.923398,
+    "same_historical_event_can_appear_in_later_observations": true,
+    "serialized_event_instances": 3362505,
+    "tuple_collisions_can_undercount_unique_events": true,
+    "unique_visible_event_identities_seen": 21292,
+    "workload_final": {
+      "bytes": 183721,
+      "event_count": 658,
+      "job_id": "m4-000015"
+    },
+    "workload_first": {
+      "bytes": 2999,
+      "event_count": 11,
+      "job_id": "m4-000000"
+    },
+    "workload_maximum": {
+      "bytes": 188363,
+      "event_count": 675
+    },
+    "workload_median_bytes": 94609,
+    "workload_median_event_count": 340,
+    "workload_p95_bytes": 177017,
+    "workload_p95_event_count": 634
+  },
+  "workload": {
+    "games": 16,
+    "master_seed": 20260815,
+    "matchup": "Swordsoul Tenyi ML v1 vs Salamangreat ML v1",
+    "max_steps": 2200,
+    "observation_mode": "full",
+    "semantic_mode": "conformance",
+    "throughput_mode": "throughput",
+    "trace_persistence_throughput": false,
+    "workers": 1
+  }
+}

@@ -612,6 +612,109 @@ void append_worker_object(std::ostringstream& output, const ygo::simulation::Sim
     output << '}';
 }
 
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+void append_audit_timing_bucket(std::ostringstream& output, const std::string_view name,
+                                const ygo::observation::PerformanceAuditTiming& timing,
+                                const bool comma) {
+    if (comma) {
+        output << ',';
+    }
+    output << json_escape(name) << ":{";
+    append_json_unsigned(output, "total_us", timing.total_us, false);
+    append_json_unsigned(output, "calls", timing.calls);
+    append_json_unsigned(output, "mean_us_per_call", timing.mean_us_per_call());
+    output << '}';
+}
+
+void append_observation_audit_timing(std::ostringstream& output,
+                                     const ygo::observation::PerformanceAuditSnapshot& audit) {
+    output << ",\"observation_timing_us\":{";
+    for (std::size_t index = 0; index < audit.observation_timing.size(); ++index) {
+        append_audit_timing_bucket(
+            output,
+            ygo::observation::PerformanceAuditCollector::bucket_name(
+                static_cast<ygo::observation::PerformanceAuditBucket>(index)),
+            audit.observation_timing[index], index != 0);
+    }
+    output << '}';
+}
+
+void append_auxiliary_audit_timing(std::ostringstream& output,
+                                   const ygo::observation::PerformanceAuditSnapshot& audit) {
+    output << ",\"auxiliary_timing_us\":{";
+    for (std::size_t index = 0; index < audit.auxiliary_timing.size(); ++index) {
+        append_audit_timing_bucket(
+            output,
+            ygo::observation::PerformanceAuditCollector::auxiliary_bucket_name(
+                static_cast<ygo::observation::PerformanceAuditAuxiliaryBucket>(index)),
+            audit.auxiliary_timing[index], index != 0);
+    }
+    output << '}';
+}
+
+void append_setup_audit_timing(std::ostringstream& output,
+                               const ygo::observation::PerformanceAuditSnapshot& audit) {
+    output << ",\"setup_timing_us\":{";
+    for (std::size_t index = 0; index < audit.setup_timing.size(); ++index) {
+        append_audit_timing_bucket(
+            output,
+            ygo::observation::PerformanceAuditCollector::setup_bucket_name(
+                static_cast<ygo::observation::PerformanceAuditSetupBucket>(index)),
+            audit.setup_timing[index], index != 0);
+    }
+    output << '}';
+}
+
+void append_performance_audit_counters(
+    std::ostringstream& output, const ygo::observation::PerformanceAuditSnapshot& audit) {
+    const auto& counters = audit.counters;
+    output << ",\"observation_counters\":{";
+    append_json_unsigned(output, "observations", counters.observations, false);
+    append_json_unsigned(output, "query_field_calls", counters.query_field_calls);
+    append_json_unsigned(output, "query_location_calls", counters.query_location_calls);
+    append_json_unsigned(output, "query_individual_calls", counters.query_individual_calls);
+    append_json_unsigned(output, "entities_projected", counters.entities_projected);
+    append_json_unsigned(output, "identity_known_entities", counters.identity_known_entities);
+    append_json_unsigned(output, "redacted_entities", counters.redacted_entities);
+    append_json_unsigned(output, "static_card_data_lookups", counters.static_card_data_lookups);
+    append_json_unsigned(output, "current_property_projections", counters.current_property_projections);
+    append_json_unsigned(output, "relationship_objects", counters.relationship_objects);
+    append_json_unsigned(output, "allocation_copy_events", counters.allocation_copy_events);
+    append_json_unsigned(output, "script_loads", counters.script_loads);
+    output << '}';
+
+    const auto& detail = audit.detail_counters;
+    output << ",\"observation_detail_counters\":{";
+    append_json_unsigned(output, "query_decode_calls", detail.query_decode_calls, false);
+    append_json_unsigned(output, "zone_projection_calls", detail.zone_projection_calls);
+    append_json_unsigned(output, "relationship_resolution_events", detail.relationship_resolution_events);
+    append_json_unsigned(output, "observation_query_field_calls", detail.observation_query_field_calls);
+    append_json_unsigned(output, "public_state_hash_query_field_calls",
+                         detail.public_state_hash_query_field_calls);
+    append_json_unsigned(output, "script_reader_requests", detail.script_reader_requests);
+    output << '}';
+}
+
+void append_entities_by_zone(std::ostringstream& output,
+                             const ygo::observation::PerformanceAuditSnapshot& audit) {
+    output << ",\"entities_by_zone\":{";
+    for (std::size_t index = 0; index < audit.entities_by_zone.size(); ++index) {
+        if (index != 0) {
+            output << ',';
+        }
+        const auto zone = static_cast<ygo::observation::SemanticZone>(index);
+        output << json_escape(ygo::observation::semantic_zone_name(zone)) << ":{";
+        const auto& counters = audit.entities_by_zone[index];
+        append_json_unsigned(output, "entities_projected", counters.entities_projected, false);
+        append_json_unsigned(output, "identity_known", counters.identity_known);
+        append_json_unsigned(output, "redacted", counters.redacted);
+        output << '}';
+    }
+    output << '}';
+}
+
+#endif
+
 }  // namespace
 
 std::string serialize_ready(const WorkerReadyInfo& worker,
@@ -708,6 +811,227 @@ std::string serialize_result(const ygo::simulation::SimulationResult& result,
     output << '}';
     return output.str();
 }
+
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+std::string serialize_performance_audit(
+    const std::string& job_id,
+    const ygo::observation::PerformanceAuditSnapshot& audit) {
+    std::ostringstream output;
+    output << '{';
+    append_json_string(output, "schema", "ocgforge.m4.performance_audit.v1", false);
+    append_json_string(output, "type", "performance_audit");
+    append_json_string(output, "job_id", job_id);
+    append_json_unsigned(output, "observation_total_us", audit.observation_total_us);
+    append_observation_audit_timing(output, audit);
+    append_performance_audit_counters(output, audit);
+    append_setup_audit_timing(output, audit);
+    append_auxiliary_audit_timing(output, audit);
+    append_entities_by_zone(output, audit);
+    output << '}';
+    return output.str();
+}
+
+std::string serialize_serialization_lifecycle(
+    const std::string& job_id,
+    const ygo::observation::PerformanceAuditSnapshot& audit) {
+    std::uint64_t serialize_without_hash_calls = 0;
+    std::uint64_t serialize_without_hash_bytes = 0;
+    std::uint64_t sha256_calls = 0;
+    std::uint64_t canonical_serialize_calls = 0;
+    std::uint64_t canonical_serialize_bytes = 0;
+    std::uint64_t same_mutation_epoch_duplicate_calls = 0;
+    for (const auto& lifecycle : audit.serialization_lifecycles) {
+        serialize_without_hash_calls += lifecycle.serialize_without_hash_calls;
+        serialize_without_hash_bytes += lifecycle.serialize_without_hash_bytes;
+        sha256_calls += lifecycle.sha256_calls;
+        canonical_serialize_calls += lifecycle.canonical_serialize_calls;
+        canonical_serialize_bytes += lifecycle.canonical_serialize_bytes;
+        same_mutation_epoch_duplicate_calls += lifecycle.same_mutation_epoch_duplicate_calls;
+    }
+
+    std::ostringstream output;
+    output << '{';
+    append_json_string(output, "schema", "ocgforge.m4.serialization_lifecycle.v1", false);
+    append_json_string(output, "type", "serialization_lifecycle");
+    append_json_string(output, "job_id", job_id);
+    append_json_unsigned(output, "lifecycle_count", audit.serialization_lifecycles.size());
+    append_json_unsigned(output, "serialize_without_hash_calls", serialize_without_hash_calls);
+    append_json_unsigned(output, "serialize_without_hash_bytes", serialize_without_hash_bytes);
+    append_json_unsigned(output, "sha256_calls", sha256_calls);
+    append_json_unsigned(output, "canonical_serialize_calls", canonical_serialize_calls);
+    append_json_unsigned(output, "canonical_serialize_bytes", canonical_serialize_bytes);
+    append_json_unsigned(output, "same_mutation_epoch_duplicate_calls", same_mutation_epoch_duplicate_calls);
+    append_json_bool(output, "canonical_serialize_called", canonical_serialize_calls != 0);
+    output << ",\"lifecycle_records\":[";
+    for (std::size_t index = 0; index < audit.serialization_lifecycles.size(); ++index) {
+        if (index != 0) {
+            output << ',';
+        }
+        const auto& lifecycle = audit.serialization_lifecycles[index];
+        output << '{';
+        append_json_unsigned(output, "lifecycle_id", lifecycle.lifecycle_id, false);
+        append_json_unsigned(output, "mutation_count", lifecycle.mutation_count);
+        append_json_unsigned(output, "serialize_without_hash_calls",
+                             lifecycle.serialize_without_hash_calls);
+        append_json_unsigned(output, "serialize_without_hash_bytes",
+                             lifecycle.serialize_without_hash_bytes);
+        append_json_unsigned(output, "sha256_calls", lifecycle.sha256_calls);
+        append_json_unsigned(output, "canonical_serialize_calls", lifecycle.canonical_serialize_calls);
+        append_json_unsigned(output, "canonical_serialize_bytes", lifecycle.canonical_serialize_bytes);
+        append_json_unsigned(output, "same_mutation_epoch_duplicate_calls",
+                             lifecycle.same_mutation_epoch_duplicate_calls);
+        output << '}';
+    }
+    output << "]}";
+    return output.str();
+}
+
+#ifdef YGO_M4_SERIALIZATION_SHAPE_AUDIT
+std::string serialize_serialization_shape(
+    const std::string& job_id,
+    const ygo::observation::PerformanceAuditSnapshot& audit) {
+    using ShapePhase = ygo::observation::PerformanceAuditSerializationShapePhase;
+    using ShapeSection = ygo::observation::PerformanceAuditSerializationShapeSection;
+    using ShapeCopy = ygo::observation::PerformanceAuditSerializationShapeCopyKind;
+    using ShapeSort = ygo::observation::PerformanceAuditSerializationShapeSortKind;
+    const auto& shape = audit.serialization_shape;
+    constexpr std::array<std::string_view, static_cast<std::size_t>(ShapePhase::Count)> phase_names = {
+        "preparation_copy", "sorting", "rendering", "escaping", "final_extraction"};
+    constexpr std::array<std::string_view, static_cast<std::size_t>(ShapeSection::Count)> section_names = {
+        "schema_basic_header", "globals", "zones", "entities", "relationships",
+        "chain", "visible_events", "decision_context", "match_context"};
+    constexpr std::array<std::string_view, static_cast<std::size_t>(ShapeCopy::Count)> copy_names = {
+        "top_level_zones", "top_level_entities", "top_level_relationships",
+        "top_level_visible_events", "chain_targets", "event_targets",
+        "decision_references", "link_markers", "counters", "own_deck", "opponent_deck"};
+    constexpr std::array<std::string_view, static_cast<std::size_t>(ShapeSort::Count)> sort_names = {
+        "zones", "entities", "relationships", "visible_events", "chain_targets",
+        "event_targets", "decision_references", "link_markers", "counters", "decks"};
+
+    std::ostringstream output;
+    output << '{';
+    append_json_string(output, "schema", "ocgforge.m4.serialization_shape.v1", false);
+    append_json_string(output, "type", "serialization_shape");
+    append_json_string(output, "job_id", job_id);
+    output << ",\"serialize_without_hash\":{";
+    append_json_unsigned(output, "calls", shape.serialize_without_hash_calls, false);
+    append_json_unsigned(output, "bytes", shape.serialize_without_hash_bytes);
+    append_json_unsigned(output, "total_us", shape.serialize_without_hash_total_us);
+    append_json_unsigned(output, "residual_underflow_count", shape.residual_underflow_count);
+    output << '}';
+
+    output << ",\"phase_timing_us\":{";
+    for (std::size_t index = 0; index < phase_names.size(); ++index) {
+        append_audit_timing_bucket(output, phase_names[index], shape.phase_timing[index], index != 0);
+    }
+    output << '}';
+
+    output << ",\"copy_stats\":{";
+    for (std::size_t index = 0; index < copy_names.size(); ++index) {
+        if (index != 0) {
+            output << ',';
+        }
+        const auto& stats = shape.copy_stats[index];
+        output << json_escape(copy_names[index]) << ":{";
+        append_json_unsigned(output, "calls", stats.calls, false);
+        append_json_unsigned(output, "elements", stats.elements);
+        append_json_unsigned(output, "approximate_bytes", stats.approximate_bytes);
+        append_json_unsigned(output, "total_us", stats.total_us);
+        output << '}';
+    }
+    output << '}';
+
+    output << ",\"sort_stats\":{";
+    for (std::size_t index = 0; index < sort_names.size(); ++index) {
+        if (index != 0) {
+            output << ',';
+        }
+        const auto& stats = shape.sort_stats[index];
+        output << json_escape(sort_names[index]) << ":{";
+        append_json_unsigned(output, "calls", stats.calls, false);
+        append_json_unsigned(output, "elements", stats.elements);
+        append_json_unsigned(output, "total_us", stats.total_us);
+        output << '}';
+    }
+    output << '}';
+
+    output << ",\"formatting\":{";
+    append_json_unsigned(output, "json_escape_calls", shape.json_escape_calls, false);
+    append_json_unsigned(output, "json_escape_input_bytes", shape.json_escape_input_bytes);
+    append_json_unsigned(output, "json_escape_output_bytes", shape.json_escape_output_bytes);
+    append_json_unsigned(output, "numeric_values", shape.numeric_values);
+    append_json_unsigned(output, "boolean_values", shape.boolean_values);
+    append_json_unsigned(output, "null_values", shape.null_values);
+    output << '}';
+
+    output << ",\"visible_events\":{";
+    append_json_unsigned(output, "serialized_instances", shape.visible_event_instances, false);
+    append_json_unsigned(output, "unique_events_seen", shape.unique_visible_event_count);
+    append_json_bool(output, "records_complete", shape.records_complete);
+    append_json_bool(output, "unique_event_tracking_complete",
+                     shape.unique_visible_event_tracking_complete);
+    output << '}';
+    append_json_bool(output, "lifecycle_context_complete", shape.lifecycle_context_complete);
+
+    output << ",\"records\":[";
+    for (std::size_t index = 0; index < shape.records.size(); ++index) {
+        if (index != 0) {
+            output << ',';
+        }
+        const auto& record = shape.records[index];
+        output << '{';
+        append_json_unsigned(output, "lifecycle_id", record.lifecycle_id, false);
+        append_json_unsigned(output, "perspective_player", record.perspective_player);
+        append_json_unsigned(output, "decision_index", record.decision_index);
+        append_json_unsigned(output, "engine_step_index", record.engine_step_index);
+        append_json_unsigned(output, "canonical_bytes", record.canonical_bytes);
+        append_json_unsigned(output, "total_us", record.total_us);
+        append_json_unsigned(output, "preparation_copy_us", record.preparation_copy_us);
+        append_json_unsigned(output, "sorting_us", record.sorting_us);
+        append_json_unsigned(output, "rendering_us", record.rendering_us);
+        append_json_bool(output, "rendering_residual_clamped", record.rendering_residual_clamped);
+        append_json_unsigned(output, "escaping_us", record.escaping_us);
+        append_json_unsigned(output, "final_extraction_us", record.final_extraction_us);
+        output << ",\"section_bytes\":{";
+        for (std::size_t section = 0; section < section_names.size(); ++section) {
+            append_json_unsigned(output, section_names[section], record.section_bytes[section],
+                                 section != 0);
+        }
+        output << '}';
+        append_json_unsigned(output, "entity_instances", record.entity_instances);
+        append_json_unsigned(output, "entity_bytes", record.entity_bytes);
+        append_json_unsigned(output, "printed_property_objects", record.printed_property_objects);
+        append_json_unsigned(output, "printed_property_bytes", record.printed_property_bytes);
+        append_json_unsigned(output, "current_property_objects", record.current_property_objects);
+        append_json_unsigned(output, "current_property_bytes", record.current_property_bytes);
+        append_json_unsigned(output, "counter_instances", record.counter_instances);
+        append_json_unsigned(output, "counter_bytes", record.counter_bytes);
+        append_json_unsigned(output, "link_marker_instances", record.link_marker_instances);
+        append_json_unsigned(output, "link_marker_bytes", record.link_marker_bytes);
+        append_json_unsigned(output, "visible_event_instances", record.visible_event_instances);
+        append_json_unsigned(output, "visible_event_bytes", record.visible_event_bytes);
+        append_json_unsigned(output, "chain_length", record.chain_length);
+        append_json_unsigned(output, "own_deck_bytes", record.own_deck_bytes);
+        append_json_unsigned(output, "opponent_deck_bytes", record.opponent_deck_bytes);
+        append_json_unsigned(output, "other_match_context_bytes", record.other_match_context_bytes);
+        append_json_unsigned(output, "copy_calls", record.copy_calls);
+        append_json_unsigned(output, "copy_elements", record.copy_elements);
+        append_json_unsigned(output, "copy_approximate_bytes", record.copy_approximate_bytes);
+        append_json_unsigned(output, "sort_calls", record.sort_calls);
+        append_json_unsigned(output, "sort_elements", record.sort_elements);
+        append_json_unsigned(output, "json_escape_calls", record.json_escape_calls);
+        append_json_unsigned(output, "json_escape_input_bytes", record.json_escape_input_bytes);
+        append_json_unsigned(output, "json_escape_output_bytes", record.json_escape_output_bytes);
+        append_json_unsigned(output, "numeric_values", record.numeric_values);
+        append_json_unsigned(output, "boolean_values", record.boolean_values);
+        append_json_unsigned(output, "null_values", record.null_values);
+        output << '}';
+    }
+    output << "]}";
+    return output.str();
+}
+#endif
+#endif
 
 std::string serialize_protocol_error(const ProtocolParseResult& parse_result) {
     std::ostringstream output;

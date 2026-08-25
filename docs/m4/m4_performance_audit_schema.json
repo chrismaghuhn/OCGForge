@@ -1,0 +1,832 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "ocgforge.m4.performance_audit.v1",
+  "title": "OCGForge M4.2 observation-path performance audit",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "status",
+    "optimization_implemented",
+    "begin_m5",
+    "off_diagnostic_label",
+    "workload",
+    "provenance",
+    "canonical_identity",
+    "samples",
+    "query_call_site_classification",
+    "entity_projection_audit",
+    "candidate_audit",
+    "optimization_candidates",
+    "cross_check",
+    "gates",
+    "recommendation"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "ocgforge.m4.performance_audit.v1"
+    },
+    "status": {
+      "const": "M4.2 PERFORMANCE AUDIT PASS"
+    },
+    "optimization_implemented": {
+      "const": false
+    },
+    "begin_m5": {
+      "const": false
+    },
+    "off_diagnostic_label": {
+      "const": "DIAGNOSTIC ONLY — NOT TRAINING THROUGHPUT"
+    },
+    "workload": {
+      "$ref": "#/$defs/workload"
+    },
+    "provenance": {
+      "$ref": "#/$defs/provenance"
+    },
+    "canonical_identity": {
+      "$ref": "#/$defs/canonical_identity"
+    },
+    "samples": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["full", "off_diagnostic"],
+      "properties": {
+        "full": {
+          "$ref": "#/$defs/sample"
+        },
+        "off_diagnostic": {
+          "$ref": "#/$defs/sample"
+        }
+      }
+    },
+    "query_call_site_classification": {
+      "type": "array",
+      "minItems": 4,
+      "items": {
+        "$ref": "#/$defs/query_site"
+      }
+    },
+    "entity_projection_audit": {
+      "$ref": "#/$defs/entity_audit"
+    },
+    "candidate_audit": {
+      "$ref": "#/$defs/candidate_audit"
+    },
+    "optimization_candidates": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/optimization_candidate"
+      }
+    },
+    "cross_check": {
+      "$ref": "#/$defs/cross_check"
+    },
+    "gates": {
+      "$ref": "#/$defs/gates"
+    },
+    "recommendation": {
+      "$ref": "#/$defs/recommendation"
+    }
+  },
+  "$defs": {
+    "nonnegative_integer": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "positive_integer": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "finite_nonnegative_number": {
+      "type": "number",
+      "minimum": 0
+    },
+    "timing_stat": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["total_us", "calls", "mean_us_per_call"],
+      "properties": {
+        "total_us": { "$ref": "#/$defs/nonnegative_integer" },
+        "calls": { "$ref": "#/$defs/nonnegative_integer" },
+        "mean_us_per_call": { "$ref": "#/$defs/nonnegative_integer" }
+      }
+    },
+    "observation_timing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "observation_query_field",
+        "observation_query_location",
+        "observation_query_individual",
+        "observation_query_decode",
+        "observation_zone_projection",
+        "observation_entity_projection",
+        "observation_relationship_projection",
+        "observation_visibility_privacy",
+        "observation_candidate_consistency",
+        "observation_canonical_serialization",
+        "observation_hash",
+        "observation_other"
+      ],
+      "properties": {
+        "observation_query_field": { "$ref": "#/$defs/timing_stat" },
+        "observation_query_location": { "$ref": "#/$defs/timing_stat" },
+        "observation_query_individual": { "$ref": "#/$defs/timing_stat" },
+        "observation_query_decode": { "$ref": "#/$defs/timing_stat" },
+        "observation_zone_projection": { "$ref": "#/$defs/timing_stat" },
+        "observation_entity_projection": { "$ref": "#/$defs/timing_stat" },
+        "observation_relationship_projection": { "$ref": "#/$defs/timing_stat" },
+        "observation_visibility_privacy": { "$ref": "#/$defs/timing_stat" },
+        "observation_candidate_consistency": { "$ref": "#/$defs/timing_stat" },
+        "observation_canonical_serialization": { "$ref": "#/$defs/timing_stat" },
+        "observation_hash": { "$ref": "#/$defs/timing_stat" },
+        "observation_other": { "$ref": "#/$defs/timing_stat" }
+      }
+    },
+    "setup_timing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["core_host_setup", "fixture_script_load", "script_load"],
+      "properties": {
+        "core_host_setup": { "$ref": "#/$defs/timing_stat" },
+        "fixture_script_load": { "$ref": "#/$defs/timing_stat" },
+        "script_load": { "$ref": "#/$defs/timing_stat" }
+      }
+    },
+    "auxiliary_timing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["public_state_hash", "public_state_hash_query_field"],
+      "properties": {
+        "public_state_hash": { "$ref": "#/$defs/timing_stat" },
+        "public_state_hash_query_field": { "$ref": "#/$defs/timing_stat" }
+      }
+    },
+    "coordinator_timing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "worker_compute_wait",
+        "pipe_read_write_cpu",
+        "json_encode_decode_cpu",
+        "dispatch_queue_overhead",
+        "other"
+      ],
+      "properties": {
+        "worker_compute_wait": { "$ref": "#/$defs/timing_stat" },
+        "pipe_read_write_cpu": { "$ref": "#/$defs/timing_stat" },
+        "json_encode_decode_cpu": { "$ref": "#/$defs/timing_stat" },
+        "dispatch_queue_overhead": { "$ref": "#/$defs/timing_stat" },
+        "other": { "$ref": "#/$defs/timing_stat" }
+      }
+    },
+    "observation_counters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "observations",
+        "query_field_calls",
+        "query_location_calls",
+        "query_individual_calls",
+        "entities_projected",
+        "identity_known_entities",
+        "redacted_entities",
+        "static_card_data_lookups",
+        "current_property_projections",
+        "relationship_objects",
+        "allocation_copy_events",
+        "script_loads"
+      ],
+      "properties": {
+        "observations": { "$ref": "#/$defs/nonnegative_integer" },
+        "query_field_calls": { "$ref": "#/$defs/nonnegative_integer" },
+        "query_location_calls": { "$ref": "#/$defs/nonnegative_integer" },
+        "query_individual_calls": { "$ref": "#/$defs/nonnegative_integer" },
+        "entities_projected": { "$ref": "#/$defs/nonnegative_integer" },
+        "identity_known_entities": { "$ref": "#/$defs/nonnegative_integer" },
+        "redacted_entities": { "$ref": "#/$defs/nonnegative_integer" },
+        "static_card_data_lookups": { "$ref": "#/$defs/nonnegative_integer" },
+        "current_property_projections": { "$ref": "#/$defs/nonnegative_integer" },
+        "relationship_objects": { "$ref": "#/$defs/nonnegative_integer" },
+        "allocation_copy_events": { "$ref": "#/$defs/nonnegative_integer" },
+        "script_loads": { "$ref": "#/$defs/nonnegative_integer" }
+      }
+    },
+    "detail_counters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "query_decode_calls",
+        "zone_projection_calls",
+        "relationship_resolution_events",
+        "observation_query_field_calls",
+        "public_state_hash_query_field_calls",
+        "script_reader_requests"
+      ],
+      "properties": {
+        "query_decode_calls": { "$ref": "#/$defs/nonnegative_integer" },
+        "zone_projection_calls": { "$ref": "#/$defs/nonnegative_integer" },
+        "relationship_resolution_events": { "$ref": "#/$defs/nonnegative_integer" },
+        "observation_query_field_calls": { "$ref": "#/$defs/nonnegative_integer" },
+        "public_state_hash_query_field_calls": { "$ref": "#/$defs/nonnegative_integer" },
+        "script_reader_requests": { "$ref": "#/$defs/nonnegative_integer" }
+      }
+    },
+    "zone_counters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["entities_projected", "identity_known", "redacted"],
+      "properties": {
+        "entities_projected": { "$ref": "#/$defs/nonnegative_integer" },
+        "identity_known": { "$ref": "#/$defs/nonnegative_integer" },
+        "redacted": { "$ref": "#/$defs/nonnegative_integer" }
+      }
+    },
+    "entities_by_zone": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "UNKNOWN",
+        "MAIN_DECK",
+        "HAND",
+        "MONSTER_ZONE",
+        "SPELL_TRAP_ZONE",
+        "GRAVEYARD",
+        "BANISHED",
+        "EXTRA_DECK",
+        "FIELD_ZONE",
+        "PENDULUM_RELEVANT_STATE",
+        "OVERLAY"
+      ],
+      "properties": {
+        "UNKNOWN": { "$ref": "#/$defs/zone_counters" },
+        "MAIN_DECK": { "$ref": "#/$defs/zone_counters" },
+        "HAND": { "$ref": "#/$defs/zone_counters" },
+        "MONSTER_ZONE": { "$ref": "#/$defs/zone_counters" },
+        "SPELL_TRAP_ZONE": { "$ref": "#/$defs/zone_counters" },
+        "GRAVEYARD": { "$ref": "#/$defs/zone_counters" },
+        "BANISHED": { "$ref": "#/$defs/zone_counters" },
+        "EXTRA_DECK": { "$ref": "#/$defs/zone_counters" },
+        "FIELD_ZONE": { "$ref": "#/$defs/zone_counters" },
+        "PENDULUM_RELEVANT_STATE": { "$ref": "#/$defs/zone_counters" },
+        "OVERLAY": { "$ref": "#/$defs/zone_counters" }
+      }
+    },
+    "primary_timing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "core_process",
+        "protocol_candidate",
+        "continuation",
+        "observation",
+        "trace_hash",
+        "serialization",
+        "other",
+        "trace_persistence"
+      ],
+      "properties": {
+        "core_process": { "$ref": "#/$defs/nonnegative_integer" },
+        "protocol_candidate": { "$ref": "#/$defs/nonnegative_integer" },
+        "continuation": { "$ref": "#/$defs/nonnegative_integer" },
+        "observation": { "$ref": "#/$defs/nonnegative_integer" },
+        "trace_hash": { "$ref": "#/$defs/nonnegative_integer" },
+        "serialization": { "$ref": "#/$defs/nonnegative_integer" },
+        "other": { "$ref": "#/$defs/nonnegative_integer" },
+        "trace_persistence": { "$ref": "#/$defs/nonnegative_integer" }
+      }
+    },
+    "primary_counters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ocg_duel_process",
+        "ocg_duel_query",
+        "ocg_duel_query_location",
+        "ocg_duel_query_field",
+        "ocg_duel_query_count",
+        "script_reader_requests",
+        "script_loads",
+        "observations",
+        "entities_projected",
+        "candidate_sets",
+        "candidate_total",
+        "candidate_max",
+        "semantic_hashes",
+        "trace_bytes_serialized"
+      ],
+      "properties": {
+        "ocg_duel_process": { "$ref": "#/$defs/nonnegative_integer" },
+        "ocg_duel_query": { "$ref": "#/$defs/nonnegative_integer" },
+        "ocg_duel_query_location": { "$ref": "#/$defs/nonnegative_integer" },
+        "ocg_duel_query_field": { "$ref": "#/$defs/nonnegative_integer" },
+        "ocg_duel_query_count": { "$ref": "#/$defs/nonnegative_integer" },
+        "script_reader_requests": { "$ref": "#/$defs/nonnegative_integer" },
+        "script_loads": { "$ref": "#/$defs/nonnegative_integer" },
+        "observations": { "$ref": "#/$defs/nonnegative_integer" },
+        "entities_projected": { "$ref": "#/$defs/nonnegative_integer" },
+        "candidate_sets": { "$ref": "#/$defs/nonnegative_integer" },
+        "candidate_total": { "$ref": "#/$defs/nonnegative_integer" },
+        "candidate_max": { "$ref": "#/$defs/nonnegative_integer" },
+        "semantic_hashes": { "$ref": "#/$defs/nonnegative_integer" },
+        "trace_bytes_serialized": { "$ref": "#/$defs/nonnegative_integer" }
+      }
+    },
+    "primary_errors": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "retries",
+        "unsupported",
+        "automatic",
+        "truncated",
+        "core_errors",
+        "worker_errors",
+        "coordinator"
+      ],
+      "properties": {
+        "retries": { "$ref": "#/$defs/nonnegative_integer" },
+        "unsupported": { "$ref": "#/$defs/nonnegative_integer" },
+        "automatic": { "$ref": "#/$defs/nonnegative_integer" },
+        "truncated": { "$ref": "#/$defs/nonnegative_integer" },
+        "core_errors": { "$ref": "#/$defs/nonnegative_integer" },
+        "worker_errors": { "$ref": "#/$defs/nonnegative_integer" },
+        "coordinator": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "retries",
+            "handshake",
+            "malformed_protocol",
+            "failed_games",
+            "worker_crashes",
+            "worker_restarts"
+          ],
+          "properties": {
+            "retries": { "$ref": "#/$defs/nonnegative_integer" },
+            "handshake": { "$ref": "#/$defs/nonnegative_integer" },
+            "malformed_protocol": { "$ref": "#/$defs/nonnegative_integer" },
+            "failed_games": { "$ref": "#/$defs/nonnegative_integer" },
+            "worker_crashes": { "$ref": "#/$defs/nonnegative_integer" },
+            "worker_restarts": { "$ref": "#/$defs/nonnegative_integer" }
+          }
+        }
+      }
+    },
+    "primary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "games_requested",
+        "games_completed",
+        "terminal_games",
+        "failed_games",
+        "job_ids",
+        "gameplay_hashes",
+        "integrity_gate",
+        "lifecycle_gate",
+        "timing_buckets_us",
+        "operation_counters",
+        "errors"
+      ],
+      "properties": {
+        "games_requested": { "$ref": "#/$defs/nonnegative_integer" },
+        "games_completed": { "$ref": "#/$defs/nonnegative_integer" },
+        "terminal_games": { "$ref": "#/$defs/nonnegative_integer" },
+        "failed_games": { "$ref": "#/$defs/nonnegative_integer" },
+        "job_ids": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "gameplay_hashes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["job_id", "gameplay_hash"],
+            "properties": {
+              "job_id": { "type": "string" },
+              "gameplay_hash": {
+                "type": "string",
+                "pattern": "^[0-9a-fA-F]{64}$"
+              }
+            }
+          }
+        },
+        "integrity_gate": { "const": true },
+        "lifecycle_gate": { "const": true },
+        "timing_buckets_us": { "$ref": "#/$defs/primary_timing" },
+        "operation_counters": { "$ref": "#/$defs/primary_counters" },
+        "errors": { "$ref": "#/$defs/primary_errors" }
+      }
+    },
+    "sample": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "observation_mode",
+        "classification_label",
+        "training_throughput_eligible",
+        "primary",
+        "timing_us",
+        "counters",
+        "runtime"
+      ],
+      "properties": {
+        "observation_mode": { "enum": ["full", "off_diagnostic"] },
+        "classification_label": { "type": "string" },
+        "training_throughput_eligible": { "type": "boolean" },
+        "primary": { "$ref": "#/$defs/primary" },
+        "timing_us": { "$ref": "#/$defs/sample_timing" },
+        "counters": { "$ref": "#/$defs/sample_counters" },
+        "runtime": { "$ref": "#/$defs/sample_runtime" }
+      }
+    },
+    "sample_timing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "outer_observation",
+        "observation",
+        "setup",
+        "auxiliary",
+        "coordinator",
+        "coordinator_wall_clock_us",
+        "coordinator_cpu_us",
+        "coordinator_cpu_domain_total_us",
+        "coordinator_cpu_domain_gap_us"
+      ],
+      "properties": {
+        "outer_observation": { "$ref": "#/$defs/timing_stat" },
+        "observation": { "$ref": "#/$defs/observation_timing" },
+        "setup": { "$ref": "#/$defs/setup_timing" },
+        "auxiliary": { "$ref": "#/$defs/auxiliary_timing" },
+        "coordinator": { "$ref": "#/$defs/coordinator_timing" },
+        "coordinator_wall_clock_us": { "$ref": "#/$defs/nonnegative_integer" },
+        "coordinator_cpu_us": { "$ref": "#/$defs/nonnegative_integer" },
+        "coordinator_cpu_domain_total_us": { "$ref": "#/$defs/nonnegative_integer" },
+        "coordinator_cpu_domain_gap_us": { "$ref": "#/$defs/nonnegative_integer" }
+      }
+    },
+    "sample_counters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["observation", "detail", "entities_by_zone"],
+      "properties": {
+        "observation": { "$ref": "#/$defs/observation_counters" },
+        "detail": { "$ref": "#/$defs/detail_counters" },
+        "entities_by_zone": { "$ref": "#/$defs/entities_by_zone" }
+      }
+    },
+    "sample_runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "worker_local_simulation_elapsed_total_us",
+        "primary_observation_total_us",
+        "outer_observation_total_us",
+        "observation_fraction_of_simulation_percent",
+        "outer_observation_fraction_of_simulation_percent",
+        "protocol_candidate_fraction_of_simulation_percent",
+        "script_loads",
+        "script_reader_requests",
+        "worker_compute_wait_is_not_cpu"
+      ],
+      "properties": {
+        "worker_local_simulation_elapsed_total_us": { "$ref": "#/$defs/positive_integer" },
+        "primary_observation_total_us": { "$ref": "#/$defs/nonnegative_integer" },
+        "outer_observation_total_us": { "$ref": "#/$defs/nonnegative_integer" },
+        "observation_fraction_of_simulation_percent": { "$ref": "#/$defs/finite_nonnegative_number" },
+        "outer_observation_fraction_of_simulation_percent": { "$ref": "#/$defs/finite_nonnegative_number" },
+        "protocol_candidate_fraction_of_simulation_percent": { "$ref": "#/$defs/finite_nonnegative_number" },
+        "script_loads": { "$ref": "#/$defs/nonnegative_integer" },
+        "script_reader_requests": { "$ref": "#/$defs/nonnegative_integer" },
+        "worker_compute_wait_is_not_cpu": { "const": true }
+      }
+    },
+    "workload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "matchup",
+        "master_seed",
+        "games",
+        "max_steps",
+        "workers",
+        "mode",
+        "instrumentation",
+        "persist_trace",
+        "job_index_range"
+      ],
+      "properties": {
+        "matchup": {
+          "const": "Swordsoul Tenyi ML v1 vs Salamangreat ML v1"
+        },
+        "master_seed": { "$ref": "#/$defs/nonnegative_integer" },
+        "games": { "$ref": "#/$defs/positive_integer" },
+        "max_steps": { "$ref": "#/$defs/positive_integer" },
+        "workers": { "const": 1 },
+        "mode": { "const": "throughput" },
+        "instrumentation": { "const": false },
+        "persist_trace": { "const": false },
+        "job_index_range": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["start", "stop", "count"],
+          "properties": {
+            "start": { "const": 0 },
+            "stop": { "$ref": "#/$defs/positive_integer" },
+            "count": { "$ref": "#/$defs/positive_integer" }
+          }
+        }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "worker_command",
+        "native_sidecar_prefix",
+        "native_sidecar_schema",
+        "hardware"
+      ],
+      "properties": {
+        "worker_command": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "native_sidecar_prefix": { "const": "M4_PERFORMANCE_AUDIT " },
+        "native_sidecar_schema": {
+          "const": "ocgforge.m4.performance_audit.v1"
+        },
+        "hardware": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "platform",
+            "system",
+            "machine",
+            "processor",
+            "python_version",
+            "physical_memory_bytes"
+          ],
+          "properties": {
+            "platform": { "type": "string" },
+            "system": { "type": "string" },
+            "machine": { "type": "string" },
+            "processor": { "type": "string" },
+            "python_version": { "type": "string" },
+            "physical_memory_bytes": {
+              "oneOf": [
+                { "$ref": "#/$defs/nonnegative_integer" },
+                { "const": "NOT_MEASURED" }
+              ]
+            }
+          }
+        }
+      }
+    },
+    "canonical_ready": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "protocol_version",
+        "worker_identity",
+        "rules_bundle_id",
+        "core_patchset_sha256",
+        "deck_hashes",
+        "format_id",
+        "duel_mode_name",
+        "duel_flags",
+        "compiler_identity",
+        "build_type"
+      ],
+      "properties": {
+        "schema": { "const": "ocgforge.m4.worker.v1" },
+        "protocol_version": { "type": "string" },
+        "worker_identity": { "type": "string" },
+        "rules_bundle_id": { "type": "string" },
+        "core_patchset_sha256": { "type": "string" },
+        "deck_hashes": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": { "type": "string" }
+        },
+        "format_id": { "type": "string" },
+        "duel_mode_name": { "type": "string" },
+        "duel_flags": { "$ref": "#/$defs/nonnegative_integer" },
+        "compiler_identity": { "type": "string" },
+        "build_type": { "type": "string" }
+      }
+    },
+    "canonical_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["full", "off_diagnostic", "same_across_samples"],
+      "properties": {
+        "full": { "$ref": "#/$defs/canonical_ready" },
+        "off_diagnostic": { "$ref": "#/$defs/canonical_ready" },
+        "same_across_samples": { "const": true }
+      }
+    },
+    "query_site": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "call_site",
+        "query_type",
+        "calls_per_observation",
+        "purpose",
+        "same_state_duplicate",
+        "duplicate_classification",
+        "safe_candidate_for_reuse",
+        "measured_total_calls",
+        "measured_calls_per_observation"
+      ],
+      "properties": {
+        "call_site": { "type": "string" },
+        "query_type": { "type": "string" },
+        "calls_per_observation": { "$ref": "#/$defs/nonnegative_integer" },
+        "purpose": { "type": "string" },
+        "same_state_duplicate": { "type": "boolean" },
+        "duplicate_classification": { "type": "string" },
+        "safe_candidate_for_reuse": { "type": "string" },
+        "measured_total_calls": { "$ref": "#/$defs/nonnegative_integer" },
+        "measured_calls_per_observation": { "$ref": "#/$defs/finite_nonnegative_number" }
+      }
+    },
+    "entity_audit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "every_zone_reported",
+        "entities_by_zone",
+        "entities_projected",
+        "identity_known",
+        "redacted",
+        "static_printed_metadata_lookups",
+        "current_property_projections",
+        "relationship_objects",
+        "relationship_resolution_events",
+        "allocation_copy_events",
+        "immutable_printed_metadata_reconstructed",
+        "evidence",
+        "representation_changed",
+        "privacy_partition_closes"
+      ],
+      "properties": {
+        "every_zone_reported": { "const": true },
+        "entities_by_zone": { "$ref": "#/$defs/entities_by_zone" },
+        "entities_projected": { "$ref": "#/$defs/nonnegative_integer" },
+        "identity_known": { "$ref": "#/$defs/nonnegative_integer" },
+        "redacted": { "$ref": "#/$defs/nonnegative_integer" },
+        "static_printed_metadata_lookups": { "$ref": "#/$defs/nonnegative_integer" },
+        "current_property_projections": { "$ref": "#/$defs/nonnegative_integer" },
+        "relationship_objects": { "$ref": "#/$defs/nonnegative_integer" },
+        "relationship_resolution_events": { "$ref": "#/$defs/nonnegative_integer" },
+        "allocation_copy_events": { "$ref": "#/$defs/nonnegative_integer" },
+        "immutable_printed_metadata_reconstructed": { "type": "boolean" },
+        "evidence": { "type": "string" },
+        "representation_changed": { "const": false },
+        "privacy_partition_closes": { "const": true }
+      }
+    },
+    "candidate_audit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidate_max",
+        "baseline_evidence",
+        "sample_candidate_max",
+        "sample_candidate_max_per_game",
+        "baseline_protocol_candidate_fraction_percent",
+        "measured_protocol_candidate_fraction_percent",
+        "candidate_generation_optimization_proposed",
+        "classification"
+      ],
+      "properties": {
+        "candidate_max": { "const": 1344 },
+        "baseline_evidence": { "type": "string" },
+        "sample_candidate_max": { "$ref": "#/$defs/nonnegative_integer" },
+        "sample_candidate_max_per_game": { "$ref": "#/$defs/nonnegative_integer" },
+        "baseline_protocol_candidate_fraction_percent": { "$ref": "#/$defs/finite_nonnegative_number" },
+        "measured_protocol_candidate_fraction_percent": { "$ref": "#/$defs/finite_nonnegative_number" },
+        "candidate_generation_optimization_proposed": { "const": false },
+        "classification": { "type": "string" }
+      }
+    },
+    "optimization_candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidate",
+        "bucket",
+        "semantic_risk",
+        "complexity",
+        "suspected_redundant_work",
+        "proposed_optimization_concept",
+        "semantic_privacy_risk",
+        "required_equivalence_test",
+        "measured_total_us",
+        "measured_runtime_fraction_percent",
+        "rank"
+      ],
+      "properties": {
+        "candidate": { "type": "string" },
+        "bucket": { "type": "string" },
+        "semantic_risk": { "enum": ["low", "medium", "high"] },
+        "complexity": { "enum": ["low", "medium", "high"] },
+        "suspected_redundant_work": { "type": "string" },
+        "proposed_optimization_concept": { "type": "string" },
+        "semantic_privacy_risk": { "type": "string" },
+        "required_equivalence_test": { "type": "string" },
+        "measured_total_us": { "$ref": "#/$defs/nonnegative_integer" },
+        "measured_runtime_fraction_percent": { "$ref": "#/$defs/finite_nonnegative_number" },
+        "rank": { "$ref": "#/$defs/positive_integer" }
+      }
+    },
+    "cross_check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "same_canonical_identity",
+        "same_canonical_workload",
+        "gameplay_hashes_equal",
+        "full_worker_local_runtime_us",
+        "off_worker_local_runtime_us",
+        "worker_local_runtime_delta_us",
+        "full_outer_observation_total_us",
+        "off_observation_total_us",
+        "off_is_diagnostic_only",
+        "off_training_throughput_eligible"
+      ],
+      "properties": {
+        "same_canonical_identity": { "const": true },
+        "same_canonical_workload": { "const": true },
+        "gameplay_hashes_equal": { "const": true },
+        "full_worker_local_runtime_us": { "$ref": "#/$defs/positive_integer" },
+        "off_worker_local_runtime_us": { "$ref": "#/$defs/positive_integer" },
+        "worker_local_runtime_delta_us": { "type": "integer" },
+        "full_outer_observation_total_us": { "$ref": "#/$defs/nonnegative_integer" },
+        "off_observation_total_us": { "const": 0 },
+        "off_is_diagnostic_only": { "const": true },
+        "off_training_throughput_eligible": { "const": false }
+      }
+    },
+    "gates": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "full_primary_results",
+        "off_primary_results",
+        "lifecycle_clean",
+        "sidecars_complete",
+        "canonical_identity",
+        "canonical_workload",
+        "gameplay_equivalence",
+        "query_count_explanation",
+        "privacy_partition",
+        "off_diagnostic_label",
+        "optimization_implemented",
+        "begin_m5",
+        "schema_validation"
+      ],
+      "properties": {
+        "full_primary_results": { "const": true },
+        "off_primary_results": { "const": true },
+        "lifecycle_clean": { "const": true },
+        "sidecars_complete": { "const": true },
+        "canonical_identity": { "const": true },
+        "canonical_workload": { "const": true },
+        "gameplay_equivalence": { "const": true },
+        "query_count_explanation": { "const": true },
+        "privacy_partition": { "const": true },
+        "off_diagnostic_label": { "const": true },
+        "optimization_implemented": { "const": false },
+        "begin_m5": { "const": false },
+        "schema_validation": { "const": true }
+      }
+    },
+    "recommendation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "first_m4_3_experiment",
+        "basis",
+        "required_equivalence_test",
+        "expected_affected_bucket"
+      ],
+      "properties": {
+        "first_m4_3_experiment": { "type": "string" },
+        "basis": { "type": "string" },
+        "required_equivalence_test": { "type": "string" },
+        "expected_affected_bucket": { "type": "string" }
+      }
+    }
+  }
+}

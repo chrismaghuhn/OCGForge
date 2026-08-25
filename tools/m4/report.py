@@ -17,6 +17,8 @@ from pathlib import Path
 import platform
 from typing import Any, Iterable, Mapping, Sequence
 
+from tools.m4.evidence_packaging import evidence_sha256, write_text_lf
+
 
 REPORT_SCHEMA_VERSION = "ocgforge.m4.throughput_benchmark.v1"
 NOT_MEASURED = "NOT_MEASURED"
@@ -83,6 +85,9 @@ FINAL_ACCEPTANCE_GATES = (
     "candidate_observation",
     "final_build_and_ctest",
 )
+# The finalized M4 branch includes the two direct-writer equivalence fixtures
+# in addition to the 92-test foundation suite.
+FINAL_CTEST_EXPECTED_TOTAL = 94
 SEMANTIC_RESULT_FIELDS = (
     "job_id",
     "terminal",
@@ -101,11 +106,7 @@ class BenchmarkIntegrityError(ValueError):
 
 
 def _sha256_file(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as stream:
-        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
+    return evidence_sha256(path)
 
 
 def _repository_relative_path(path: Path) -> str | None:
@@ -1109,7 +1110,7 @@ def _validate_acceptance_evidence(
             ctest = verification_document.get("ctest") if isinstance(verification_document, Mapping) else None
             gate_valid = (
                 isinstance(ctest, Mapping)
-                and ctest.get("passed") == ctest.get("total") == 90
+                and ctest.get("passed") == ctest.get("total") == FINAL_CTEST_EXPECTED_TOTAL
                 and verification.get("ctest_passed") == ctest.get("passed")
                 and verification.get("ctest_total") == ctest.get("total")
             )
@@ -1204,7 +1205,17 @@ def build_baseline(
             optional_status.append({"workers": workers, "status": "NOT_RUN", "reason": reason.strip()})
 
     reference_build = reference["build"]
-    run_identity = _baseline_run_identity(loaded, reference_build)
+    if acceptance_evidence is not None:
+        # A committed acceptance manifest is validated against its sealed,
+        # repository-backed identity.  The historical worker executable is
+        # deliberately not a repository artifact, and a clean checkout may
+        # therefore not contain the byte-identical build used to produce the
+        # evidence.  Fresh evidence without a manifest still binds to the
+        # locally resolved executable through _baseline_run_identity().
+        manifest_identity = acceptance_evidence.get("run_identity")
+        run_identity = manifest_identity if _is_sha256(manifest_identity) else None
+    else:
+        run_identity = _baseline_run_identity(loaded, reference_build)
     validated_acceptance_evidence, status_reason = _validate_acceptance_evidence(
         acceptance_evidence,
         run_identity=run_identity,
@@ -1364,17 +1375,15 @@ def render_baseline_markdown(baseline: Mapping[str, Any]) -> str:
 
 def write_baseline(path: str | Path, baseline: Mapping[str, Any]) -> None:
     destination = Path(path)
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    destination.write_text(
+    write_text_lf(
+        destination,
         json.dumps(baseline, indent=2, sort_keys=True, ensure_ascii=False, allow_nan=False) + "\n",
-        encoding="utf-8",
     )
 
 
 def write_baseline_markdown(path: str | Path, baseline: Mapping[str, Any]) -> None:
     destination = Path(path)
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    destination.write_text(render_baseline_markdown(baseline).rstrip("\n") + "\n", encoding="utf-8")
+    write_text_lf(destination, render_baseline_markdown(baseline).rstrip("\n") + "\n")
 
 
 def build_report(

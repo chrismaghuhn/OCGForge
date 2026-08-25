@@ -158,6 +158,20 @@ int run_worker() {
         result.worker_pid = worker.pid;
         result.coordinator_elapsed_us = 0;
         emit_line(ygo::m4::worker::serialize_result(result, worker));
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+        std::cerr << ygo::m4::worker::kPerformanceAuditSidecarPrefix
+                  << ygo::m4::worker::serialize_performance_audit(result.job_id, result.performance_audit)
+                  << '\n';
+        std::cerr << ygo::m4::worker::kSerializationLifecycleSidecarPrefix
+                  << ygo::m4::worker::serialize_serialization_lifecycle(result.job_id, result.performance_audit)
+                  << '\n';
+#ifdef YGO_M4_SERIALIZATION_SHAPE_AUDIT
+        std::cerr << ygo::m4::worker::kSerializationShapeSidecarPrefix
+                  << ygo::m4::worker::serialize_serialization_shape(result.job_id, result.performance_audit)
+                  << '\n';
+#endif
+        std::cerr.flush();
+#endif
     }
     return 0;
 }

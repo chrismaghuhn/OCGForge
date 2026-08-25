@@ -31,6 +31,18 @@
         "CMAKE_MAKE_PROGRAM": "${sourceDir}/.cache/toolchain/ninja/ninja.exe",
         "M0_AUTO_FETCH_RULES": "ON"
       }
+    },
+    {
+      "name": "release-windows-zig",
+      "displayName": "M0 Windows local Zig release characterization",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/release-windows-zig",
+      "toolchainFile": "${sourceDir}/cmake/zig-toolchain.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_MAKE_PROGRAM": "${sourceDir}/.cache/toolchain/ninja/ninja.exe",
+        "M0_AUTO_FETCH_RULES": "ON"
+      }
     }
   ],
   "buildPresets": [
@@ -45,6 +57,10 @@
     {
       "name": "dev-windows-zig",
       "configurePreset": "dev-windows-zig"
+    },
+    {
+      "name": "release-windows-zig",
+      "configurePreset": "release-windows-zig"
     }
   ],
   "testPresets": [
@@ -65,6 +81,13 @@
     {
       "name": "dev-windows-zig",
       "configurePreset": "dev-windows-zig",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "release-windows-zig",
+      "configurePreset": "release-windows-zig",
       "output": {
         "outputOnFailure": true
       }

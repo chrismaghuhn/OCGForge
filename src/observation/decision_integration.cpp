@@ -16,9 +16,22 @@ std::optional<ObservationLocator> resolve_card(const PlayerObservation& observat
                                                std::uint32_t code,
                                                std::uint8_t controller,
                                                std::uint32_t location,
-                                               std::uint32_t sequence) {
+                                               std::uint32_t sequence
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+                                               , PerformanceAuditCollector* audit
+#endif
+                                               ) {
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+    PerformanceAuditCollector::Scope zone_scope(audit, PerformanceAuditBucket::ZoneProjection);
+    if (audit != nullptr) {
+        audit->record_zone_projection();
+    }
     const auto zone = detail::project_zone(location, controller, sequence,
                                            static_cast<std::uint32_t>(observation.match_context.duel_flags)).zone;
+#else
+    const auto zone = detail::project_zone(location, controller, sequence,
+                                           static_cast<std::uint32_t>(observation.match_context.duel_flags)).zone;
+#endif
     for (const auto& entity : observation.entities) {
         if (entity.controller.value_or(2) != controller || entity.zone != zone) {
             continue;
@@ -47,29 +60,59 @@ bool card_reference_consistent(const PlayerObservation& observation,
                                std::uint32_t code,
                                std::uint8_t controller,
                                std::uint32_t location,
-                               std::uint32_t sequence) {
-    return resolve_card(observation, code, controller, location, sequence).has_value();
+                               std::uint32_t sequence
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+                               , PerformanceAuditCollector* audit
+#endif
+                               ) {
+    return resolve_card(observation, code, controller, location, sequence
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+                        , audit
+#endif
+    ).has_value();
 }
 
 void append_reference(PlayerObservation& observation,
                       std::uint32_t code,
                       std::uint8_t controller,
                       std::uint32_t location,
-                      std::uint32_t sequence) {
-    if (const auto locator = resolve_card(observation, code, controller, location, sequence);
+                      std::uint32_t sequence
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+                      , PerformanceAuditCollector* audit
+#endif
+                      ) {
+    if (const auto locator = resolve_card(observation, code, controller, location, sequence
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+                                          , audit
+#endif
+    );
         locator.has_value()) {
         if (std::find(observation.decision_context.referenced_entities.begin(),
                       observation.decision_context.referenced_entities.end(), *locator) ==
             observation.decision_context.referenced_entities.end()) {
             observation.decision_context.referenced_entities.push_back(*locator);
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+            if (audit != nullptr) {
+                audit->record_copy_event();
+            }
+#endif
         }
     }
 }
 
 }  // namespace
 
-void attach_decision_context(PlayerObservation& observation,
-                             const ygo::protocol::DecisionRequest& request) {
+void attach_decision_context_impl(PlayerObservation& observation,
+                                  const ygo::protocol::DecisionRequest& request
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+                                  , PerformanceAuditCollector* audit
+#endif
+                                  ) {
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+    if (audit != nullptr) {
+        audit->record_observation_mutation();
+    }
+#endif
     DecisionContext context;
     context.decision_id = request.decision_id;
     context.kind = ygo::protocol::decision_kind_name(request.kind);
@@ -85,31 +128,89 @@ void attach_decision_context(PlayerObservation& observation,
     for (const auto& candidate : request.candidates) {
         if (candidate.source_card != 0 && candidate.source_location != 0) {
             append_reference(observation, candidate.source_card, candidate.source_controller,
-                             candidate.source_location, candidate.source_sequence);
+                             candidate.source_location, candidate.source_sequence
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+                             , audit
+#endif
+            );
         }
         if (candidate.target_card != 0 && candidate.target_location != 0) {
             append_reference(observation, candidate.target_card, candidate.target_controller,
-                             candidate.target_location, candidate.target_sequence);
+                             candidate.target_location, candidate.target_sequence
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+                             , audit
+#endif
+            );
         }
     }
     std::sort(observation.decision_context.referenced_entities.begin(),
               observation.decision_context.referenced_entities.end());
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+    observation.observation_hash = observation_hash(observation, audit);
+#else
     observation.observation_hash = observation_hash(observation);
+#endif
 }
 
-bool candidate_observation_consistent(const PlayerObservation& observation,
-                                      const ygo::protocol::ActionCandidate& candidate) {
+void attach_decision_context(PlayerObservation& observation,
+                             const ygo::protocol::DecisionRequest& request) {
+    attach_decision_context_impl(observation, request
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+                                 , nullptr
+#endif
+    );
+}
+
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+void attach_decision_context(PlayerObservation& observation,
+                             const ygo::protocol::DecisionRequest& request,
+                             PerformanceAuditCollector* audit) {
+    attach_decision_context_impl(observation, request, audit);
+}
+#endif
+
+bool candidate_observation_consistent_impl(const PlayerObservation& observation,
+                                           const ygo::protocol::ActionCandidate& candidate
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+                                           , PerformanceAuditCollector* audit
+#endif
+                                           ) {
     if (candidate.source_card != 0 && candidate.source_location != 0 &&
         !card_reference_consistent(observation, candidate.source_card, candidate.source_controller,
-                                   candidate.source_location, candidate.source_sequence)) {
+                                   candidate.source_location, candidate.source_sequence
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+                                   , audit
+#endif
+    )) {
         return false;
     }
     if (candidate.target_card != 0 && candidate.target_location != 0 &&
         !card_reference_consistent(observation, candidate.target_card, candidate.target_controller,
-                                   candidate.target_location, candidate.target_sequence)) {
+                                   candidate.target_location, candidate.target_sequence
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+                                   , audit
+#endif
+    )) {
         return false;
     }
     return true;
 }
+
+bool candidate_observation_consistent(const PlayerObservation& observation,
+                                      const ygo::protocol::ActionCandidate& candidate) {
+    return candidate_observation_consistent_impl(observation, candidate
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+                                                 , nullptr
+#endif
+    );
+}
+
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+bool candidate_observation_consistent(const PlayerObservation& observation,
+                                      const ygo::protocol::ActionCandidate& candidate,
+                                      PerformanceAuditCollector* audit) {
+    return candidate_observation_consistent_impl(observation, candidate, audit);
+}
+#endif
 
 }  // namespace ygo::observation

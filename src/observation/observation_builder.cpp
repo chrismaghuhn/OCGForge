@@ -66,6 +66,40 @@ bool keep_entity(const detail::RawCardQuery& query, std::uint8_t perspective,
     return true;
 }
 
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+bool audited_card_identity_visible(const detail::RawCardQuery& query,
+                                   std::uint8_t perspective, std::uint8_t owner,
+                                   SemanticZone zone, PerformanceAuditCollector* audit) {
+    PerformanceAuditCollector::Scope scope(audit, PerformanceAuditBucket::VisibilityPrivacy);
+    return card_identity_visible(query, perspective, owner, zone);
+}
+
+bool audited_overlay_material_identity_visible(const detail::RawCardQuery& material,
+                                               bool parent_identity_visible,
+                                               PerformanceAuditCollector* audit) {
+    PerformanceAuditCollector::Scope scope(audit, PerformanceAuditBucket::VisibilityPrivacy);
+    return overlay_material_identity_visible(material, parent_identity_visible);
+}
+
+bool audited_keep_entity(const detail::RawCardQuery& query, std::uint8_t perspective,
+                         std::uint8_t owner, SemanticZone zone,
+                         PerformanceAuditCollector* audit) {
+    PerformanceAuditCollector::Scope scope(audit, PerformanceAuditBucket::VisibilityPrivacy);
+    return keep_entity(query, perspective, owner, zone);
+}
+
+detail::ZoneProjection audited_project_zone(std::uint32_t engine_location,
+                                            std::uint8_t controller, std::uint32_t sequence,
+                                            std::uint64_t duel_flags,
+                                            PerformanceAuditCollector* audit) {
+    PerformanceAuditCollector::Scope scope(audit, PerformanceAuditBucket::ZoneProjection);
+    if (audit != nullptr) {
+        audit->record_zone_projection();
+    }
+    return detail::project_zone(engine_location, controller, sequence, duel_flags);
+}
+#endif
+
 std::string zone_token(SemanticZone zone) {
     return semantic_zone_name(zone);
 }
@@ -78,9 +112,13 @@ EntityKey entity_key(std::uint8_t controller, SemanticZone zone, std::uint32_t s
     return {controller, zone, sequence, overlay_sequence};
 }
 
-detail::RawCardQuery query_card(const ygo::core::CoreHost& host, std::uint8_t controller,
-                                std::uint32_t location, std::uint32_t sequence,
-                                std::optional<std::uint32_t> overlay_sequence = std::nullopt) {
+detail::RawCardQuery query_card_impl(const ygo::core::CoreHost& host, std::uint8_t controller,
+                                     std::uint32_t location, std::uint32_t sequence,
+                                     std::optional<std::uint32_t> overlay_sequence
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+                                     , PerformanceAuditCollector* audit
+#endif
+                                     ) {
     OCG_QueryInfo info{};
     info.flags = kCardQueryFlags;
     info.con = controller;
@@ -90,9 +128,49 @@ detail::RawCardQuery query_card(const ygo::core::CoreHost& host, std::uint8_t co
         info.loc |= LOCATION_OVERLAY;
         info.overlay_seq = *overlay_sequence;
     }
+
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+    std::vector<std::uint8_t> bytes;
+    {
+        PerformanceAuditCollector::Scope scope(audit, PerformanceAuditBucket::QueryIndividual);
+        if (audit != nullptr) {
+            audit->record_query_individual_call();
+        }
+        bytes = host.query(info);
+    }
+    if (bytes.empty()) {
+        return detail::RawCardQuery{};
+    }
+    {
+        PerformanceAuditCollector::Scope scope(audit, PerformanceAuditBucket::QueryDecode);
+        if (audit != nullptr) {
+            audit->record_query_decode();
+        }
+        return detail::decode_card_query(bytes);
+    }
+#else
     const auto bytes = host.query(info);
     return bytes.empty() ? detail::RawCardQuery{} : detail::decode_card_query(bytes);
+#endif
 }
+
+#ifndef YGO_M4_PERFORMANCE_AUDIT
+detail::RawCardQuery query_card(const ygo::core::CoreHost& host, std::uint8_t controller,
+                                std::uint32_t location, std::uint32_t sequence,
+                                std::optional<std::uint32_t> overlay_sequence = std::nullopt) {
+    return query_card_impl(host, controller, location, sequence, overlay_sequence
+    );
+}
+#endif
+
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+detail::RawCardQuery query_card(const ygo::core::CoreHost& host, std::uint8_t controller,
+                                std::uint32_t location, std::uint32_t sequence,
+                                std::optional<std::uint32_t> overlay_sequence,
+                                PerformanceAuditCollector* audit) {
+    return query_card_impl(host, controller, location, sequence, overlay_sequence, audit);
+}
+#endif
 
 std::string locator_for(std::uint8_t controller, SemanticZone zone, std::uint32_t sequence,
                         const detail::RawCardQuery& query, bool sequence_visible,
@@ -124,7 +202,11 @@ bool sequence_is_visible(SemanticZone zone, std::uint8_t owner, std::uint8_t per
 }
 
 void add_zone_counts(PlayerObservation& observation, const ygo::core::CoreHost& host,
-                     const detail::RawFieldSnapshot& field, std::uint8_t perspective) {
+                     const detail::RawFieldSnapshot& field, std::uint8_t perspective
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+                     , PerformanceAuditCollector* audit
+#endif
+                     ) {
     for (std::uint8_t player = 0; player < 2; ++player) {
         const auto& source = field.players[player];
         const auto add = [&observation, player](SemanticZone kind, std::uint32_t total,
@@ -161,16 +243,35 @@ void add_zone_counts(PlayerObservation& observation, const ygo::core::CoreHost& 
                 }
                 overlay_count += slot.overlay_count;
                 if (slot.overlay_count != 0) {
-                    const auto parent = query_card(host, player, LOCATION_MZONE, sequence);
+                    const auto parent = query_card(host, player, LOCATION_MZONE, sequence
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+                                                   , std::nullopt, audit
+#endif
+                    );
                     const auto owner = static_cast<std::uint8_t>(parent.owner.value_or(player));
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+                    const bool parent_identity_visible =
+                        audited_card_identity_visible(parent, perspective, owner,
+                                                      SemanticZone::MonsterZone, audit);
+#else
                     const bool parent_identity_visible =
                         card_identity_visible(parent, perspective, owner, SemanticZone::MonsterZone);
+#endif
                     if (parent_identity_visible) {
                         for (std::uint32_t overlay_sequence = 0;
                              overlay_sequence < slot.overlay_count; ++overlay_sequence) {
                             const auto material = query_card(host, player, LOCATION_MZONE, sequence,
-                                                             overlay_sequence);
+                                                             overlay_sequence
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+                                                             , audit
+#endif
+                            );
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+                            if (audited_overlay_material_identity_visible(material, parent_identity_visible,
+                                                                           audit)) {
+#else
                             if (overlay_material_identity_visible(material, parent_identity_visible)) {
+#endif
                                 ++overlay_public;
                             }
                         }
@@ -183,7 +284,12 @@ void add_zone_counts(PlayerObservation& observation, const ygo::core::CoreHost& 
             if (!slot.occupied) {
                 continue;
             }
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+            const auto projected = audited_project_zone(LOCATION_SZONE, player, sequence,
+                                                        field.duel_options, audit).zone;
+#else
             const auto projected = detail::project_zone(LOCATION_SZONE, player, sequence, field.duel_options).zone;
+#endif
             if (projected == SemanticZone::FieldZone) {
                 ++field_count;
                 if (slot.position & POS_FACEUP) {
@@ -222,9 +328,18 @@ std::optional<ObservationLocator> add_card_entity(
     const detail::RawCardQuery& query, std::uint8_t owner, std::uint8_t controller,
     SemanticZone zone, std::uint32_t sequence, std::uint8_t perspective,
     std::map<std::pair<std::uint8_t, std::uint32_t>, std::uint32_t>& ordinals,
-    std::map<EntityKey, ObservationLocator>& locator_index) {
+    std::map<EntityKey, ObservationLocator>& locator_index
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+    , PerformanceAuditCollector* audit
+#endif
+    ) {
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+    const bool identity_visible = audited_card_identity_visible(query, perspective, owner, zone, audit);
+    if (!audited_keep_entity(query, perspective, owner, zone, audit)) {
+#else
     const bool identity_visible = card_identity_visible(query, perspective, owner, zone);
     if (!keep_entity(query, perspective, owner, zone)) {
+#endif
         return std::nullopt;
     }
     detail::CardProjectionInput input;
@@ -239,18 +354,53 @@ std::optional<ObservationLocator> add_card_entity(
     input.current_features_visible = identity_visible;
     input.sequence_visible = sequence_is_visible(zone, owner, perspective);
     if (identity_visible && query.code.has_value()) {
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+        if (audit != nullptr) {
+            audit->record_static_card_data_lookup();
+        }
+#endif
         input.printed = host.static_card_data(*query.code);
     }
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+    if (identity_visible && query.code.has_value() && input.current_features_visible) {
+        if (audit != nullptr) {
+            audit->record_current_property_projection();
+        }
+    }
+    ObservedCard projected;
+    {
+        PerformanceAuditCollector::Scope scope(audit, PerformanceAuditBucket::EntityProjection);
+        projected = detail::project_card(input);
+    }
+    if (audit != nullptr) {
+        audit->record_entity(zone, projected.identity_known);
+    }
+#else
     auto projected = detail::project_card(input);
+#endif
     locator_index[entity_key(controller, zone, sequence)] = projected.locator;
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+    if (audit != nullptr) {
+        audit->record_copy_event();
+    }
+#endif
     observation.entities.push_back(projected);
     return projected.locator;
 }
 
 std::optional<ObservationLocator> find_locator(
     const std::map<EntityKey, ObservationLocator>& locator_index, const detail::RawLocation& location,
-    std::uint64_t duel_flags) {
+    std::uint64_t duel_flags
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+    , PerformanceAuditCollector* audit
+#endif
+    ) {
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+    const auto zone = audited_project_zone(location.location, location.controller, location.sequence,
+                                           duel_flags, audit).zone;
+#else
     const auto zone = detail::project_zone(location.location, location.controller, location.sequence, duel_flags).zone;
+#endif
     const auto overlay_sequence = zone == SemanticZone::Overlay ? location.position : kNoOverlaySequence;
     const auto it = locator_index.find(entity_key(location.controller, zone, location.sequence, overlay_sequence));
     if (it == locator_index.end()) {
@@ -262,8 +412,16 @@ std::optional<ObservationLocator> find_locator(
 std::optional<ObservationLocator> add_overlay_material(
     PlayerObservation& observation, const ygo::core::CoreHost& host, std::uint8_t controller,
     std::uint32_t parent_location, std::uint32_t parent_sequence, std::uint32_t overlay_sequence,
-    bool parent_identity_visible, std::map<EntityKey, ObservationLocator>& locator_index) {
-    const auto query = query_card(host, controller, parent_location, parent_sequence, overlay_sequence);
+    bool parent_identity_visible, std::map<EntityKey, ObservationLocator>& locator_index
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+    , PerformanceAuditCollector* audit
+#endif
+    ) {
+    const auto query = query_card(host, controller, parent_location, parent_sequence, overlay_sequence
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+                                   , audit
+#endif
+    );
     detail::CardProjectionInput input;
     input.query = query;
     input.owner = query.owner.value_or(controller);
@@ -273,14 +431,44 @@ std::optional<ObservationLocator> add_overlay_material(
     input.overlay_sequence = overlay_sequence;
     input.locator = {player_prefix(controller) + ":OVERLAY:" + std::to_string(parent_sequence) + ":" +
                      std::to_string(overlay_sequence)};
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+    input.identity_visible = audited_overlay_material_identity_visible(query, parent_identity_visible, audit);
+#else
     input.identity_visible = overlay_material_identity_visible(query, parent_identity_visible);
+#endif
     input.current_features_visible = input.identity_visible;
     input.sequence_visible = true;
     if (input.identity_visible && query.code.has_value()) {
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+        if (audit != nullptr) {
+            audit->record_static_card_data_lookup();
+        }
+#endif
         input.printed = host.static_card_data(*query.code);
     }
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+    if (input.identity_visible && query.code.has_value() && input.current_features_visible) {
+        if (audit != nullptr) {
+            audit->record_current_property_projection();
+        }
+    }
+    ObservedCard projected;
+    {
+        PerformanceAuditCollector::Scope scope(audit, PerformanceAuditBucket::EntityProjection);
+        projected = detail::project_card(input);
+    }
+    if (audit != nullptr) {
+        audit->record_entity(SemanticZone::Overlay, projected.identity_known);
+    }
+#else
     auto projected = detail::project_card(input);
+#endif
     locator_index[entity_key(controller, SemanticZone::Overlay, parent_sequence, overlay_sequence)] = projected.locator;
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+    if (audit != nullptr) {
+        audit->record_copy_event();
+    }
+#endif
     observation.entities.push_back(projected);
     return projected.locator;
 }
@@ -322,11 +510,37 @@ PlayerObservation build_player_observation(const ygo::core::CoreHost& host,
     if (perspective_player > 1) {
         throw std::invalid_argument("observation perspective must be player 0 or 1");
     }
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+    detail::RawFieldSnapshot field;
+    std::vector<std::uint8_t> field_bytes;
+    {
+        PerformanceAuditCollector::Scope scope(config.performance_audit,
+                                               PerformanceAuditBucket::QueryField);
+        if (config.performance_audit != nullptr) {
+            config.performance_audit->record_query_field_call(true);
+        }
+        field_bytes = host.query_field();
+    }
+    {
+        PerformanceAuditCollector::Scope scope(config.performance_audit,
+                                               PerformanceAuditBucket::QueryDecode);
+        if (config.performance_audit != nullptr) {
+            config.performance_audit->record_query_decode();
+        }
+        field = detail::decode_field_query(field_bytes);
+    }
+#else
     const auto field = detail::decode_field_query(host.query_field());
+#endif
     PlayerObservation observation;
     observation.perspective_player = perspective_player;
     observation.decision_index = config.decision_index;
     observation.engine_step_index = config.engine_step_index;
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+    if (config.performance_audit != nullptr && !config.visible_events.empty()) {
+        config.performance_audit->record_copy_event();
+    }
+#endif
     observation.visible_events = config.visible_events;
     if (config.decision_context.has_value()) {
         observation.decision_context = *config.decision_context;
@@ -349,7 +563,11 @@ PlayerObservation build_player_observation(const ygo::core::CoreHost& host,
         observation.match_context.opponent_deck = {};
     }
 
-    add_zone_counts(observation, host, field, perspective_player);
+    add_zone_counts(observation, host, field, perspective_player
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+                    , config.performance_audit
+#endif
+    );
 
     const std::array<std::uint32_t, 5> locations = {
         LOCATION_HAND, LOCATION_MZONE, LOCATION_SZONE, LOCATION_GRAVE, LOCATION_REMOVED};
@@ -367,16 +585,47 @@ PlayerObservation build_player_observation(const ygo::core::CoreHost& host,
             info.flags = kCardQueryFlags;
             info.con = player;
             info.loc = location;
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+            detail::RawLocationSnapshot decoded;
+            std::vector<std::uint8_t> location_bytes;
+            {
+                PerformanceAuditCollector::Scope scope(config.performance_audit,
+                                                       PerformanceAuditBucket::QueryLocation);
+                if (config.performance_audit != nullptr) {
+                    config.performance_audit->record_query_location_call();
+                }
+                location_bytes = host.query_location(info);
+            }
+            {
+                PerformanceAuditCollector::Scope scope(config.performance_audit,
+                                                       PerformanceAuditBucket::QueryDecode);
+                if (config.performance_audit != nullptr) {
+                    config.performance_audit->record_query_decode();
+                }
+                decoded = detail::decode_location_query(location_bytes);
+            }
+#else
             const auto decoded = detail::decode_location_query(host.query_location(info));
+#endif
             for (std::uint32_t sequence = 0; sequence < decoded.entries.size(); ++sequence) {
                 if (!decoded.entries[sequence].has_value()) {
                     continue;
                 }
                 const auto& query = *decoded.entries[sequence];
                 const auto owner = static_cast<std::uint8_t>(query.owner.value_or(player));
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+                const auto projected_zone = audited_project_zone(location, player, sequence,
+                                                                  field.duel_options,
+                                                                  config.performance_audit).zone;
+#else
                 const auto projected_zone = detail::project_zone(location, player, sequence, field.duel_options).zone;
+#endif
                 const auto source = add_card_entity(observation, host, query, owner, player, projected_zone, sequence,
-                                                    perspective_player, ordinals, locator_index);
+                                                    perspective_player, ordinals, locator_index
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+                                                    , config.performance_audit
+#endif
+                );
                 if (!source.has_value()) {
                     continue;
                 }
@@ -388,11 +637,21 @@ PlayerObservation build_player_observation(const ygo::core::CoreHost& host,
                 }
                 for (std::uint32_t overlay_sequence = 0;
                      overlay_sequence < query.overlay_codes.size(); ++overlay_sequence) {
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+                    const auto parent_identity_visible =
+                        audited_card_identity_visible(query, perspective_player, owner, projected_zone,
+                                                      config.performance_audit);
+#else
+                    const auto parent_identity_visible =
+                        card_identity_visible(query, perspective_player, owner, projected_zone);
+#endif
                     const auto material = add_overlay_material(observation, host, player, location, sequence,
-                                                               overlay_sequence,
-                                                               card_identity_visible(query, perspective_player, owner,
-                                                                                     projected_zone),
-                                                               locator_index);
+                                                               overlay_sequence, parent_identity_visible,
+                                                               locator_index
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+                                                               , config.performance_audit
+#endif
+                    );
                     if (material.has_value()) {
                         pending_relationships.push_back({RelationshipKind::XyzMaterial, *material, detail::RawLocation{
                                                                                                           player,
@@ -408,7 +667,28 @@ PlayerObservation build_player_observation(const ygo::core::CoreHost& host,
         extra_info.flags = kCardQueryFlags;
         extra_info.con = player;
         extra_info.loc = LOCATION_EXTRA;
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+        detail::RawLocationSnapshot extra;
+        std::vector<std::uint8_t> extra_bytes;
+        {
+            PerformanceAuditCollector::Scope scope(config.performance_audit,
+                                                   PerformanceAuditBucket::QueryLocation);
+            if (config.performance_audit != nullptr) {
+                config.performance_audit->record_query_location_call();
+            }
+            extra_bytes = host.query_location(extra_info);
+        }
+        {
+            PerformanceAuditCollector::Scope scope(config.performance_audit,
+                                                   PerformanceAuditBucket::QueryDecode);
+            if (config.performance_audit != nullptr) {
+                config.performance_audit->record_query_decode();
+            }
+            extra = detail::decode_location_query(extra_bytes);
+        }
+#else
         const auto extra = detail::decode_location_query(host.query_location(extra_info));
+#endif
         for (std::uint32_t sequence = 0; sequence < extra.entries.size(); ++sequence) {
             if (!extra.entries[sequence].has_value()) {
                 continue;
@@ -416,14 +696,39 @@ PlayerObservation build_player_observation(const ygo::core::CoreHost& host,
             const auto& query = *extra.entries[sequence];
             const auto owner = static_cast<std::uint8_t>(query.owner.value_or(player));
             (void)add_card_entity(observation, host, query, owner, player, SemanticZone::ExtraDeck, sequence,
-                                  perspective_player, ordinals, locator_index);
+                                  perspective_player, ordinals, locator_index
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+                                  , config.performance_audit
+#endif
+            );
         }
     }
 
-    for (const auto& pending : pending_relationships) {
-        const auto target = find_locator(locator_index, pending.target, field.duel_options);
-        if (target.has_value()) {
-            observation.relationships.push_back({pending.kind, pending.source, *target});
+    {
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+        PerformanceAuditCollector::Scope scope(config.performance_audit,
+                                               PerformanceAuditBucket::RelationshipProjection);
+#endif
+        for (const auto& pending : pending_relationships) {
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+            if (config.performance_audit != nullptr) {
+                config.performance_audit->record_relationship_resolution();
+            }
+#endif
+            const auto target = find_locator(locator_index, pending.target, field.duel_options
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+                                             , config.performance_audit
+#endif
+            );
+            if (target.has_value()) {
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+                if (config.performance_audit != nullptr) {
+                    config.performance_audit->record_relationship_object();
+                    config.performance_audit->record_copy_event();
+                }
+#endif
+                observation.relationships.push_back({pending.kind, pending.source, *target});
+            }
         }
     }
 
@@ -433,8 +738,14 @@ PlayerObservation build_player_observation(const ygo::core::CoreHost& host,
         ChainLink link;
         link.index = index;
         link.activating_player = raw.triggering_player;
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+        link.activation_zone = audited_project_zone(raw.source.location, raw.source.controller,
+                                                     raw.source.sequence, field.duel_options,
+                                                     config.performance_audit).zone;
+#else
         link.activation_zone = detail::project_zone(raw.source.location, raw.source.controller,
                                                      raw.source.sequence, field.duel_options).zone;
+#endif
         const auto source_it = std::find_if(
             observation.entities.begin(), observation.entities.end(), [&](const ObservedCard& card) {
                 return card.controller.value_or(2) == raw.source.controller &&
@@ -450,10 +761,21 @@ PlayerObservation build_player_observation(const ygo::core::CoreHost& host,
                 }
             }
         }
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+        if (config.performance_audit != nullptr) {
+            config.performance_audit->record_copy_event();
+        }
+#endif
         observation.chain.links.push_back(link);
     }
 
-    observation.observation_hash = observation_hash(observation);
+    if (config.finalization == ObservationFinalization::Immediate) {
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+        observation.observation_hash = observation_hash(observation, config.performance_audit);
+#else
+        observation.observation_hash = observation_hash(observation);
+#endif
+    }
     return observation;
 }
 

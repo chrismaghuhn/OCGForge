@@ -1,0 +1,1402 @@
+{
+  "acceptance_rule": {
+    "materiality": {
+      "control_serializer_median_us": 17873983,
+      "control_worker_median_us": 28179174,
+      "experiment_serializer_median_us": 17800239,
+      "experiment_worker_median_us": 28129048,
+      "materiality_rule": {
+        "paired_repetitions_improving_min": 2,
+        "serializer_median_improvement_percent_min": 5.0,
+        "worker_median_improvement_percent_min": 3.0
+      },
+      "paired_serializer_improvements": 3,
+      "paired_worker_improvements": 2,
+      "pass": false,
+      "serializer_speedup_percent": 0.4125773197837326,
+      "worker_speedup_percent": 0.17788314164212193
+    },
+    "requires_all_gates_pass": true,
+    "requires_equivalence": true,
+    "requires_material_timing": true
+  },
+  "builds": {
+    "control": {
+      "build_configuration": {
+        "build_dir": "C:\\yogiohML-m4-3-1\\build\\m4-3-5-control",
+        "cmake": {
+          "CMAKE_BUILD_TYPE": "Release",
+          "CMAKE_CXX_COMPILER": "C:/yogiohML-m4-3-1/tools/zig-cxx.cmd",
+          "CMAKE_CXX_COMPILER_ID": "NOT_RECORDED",
+          "CMAKE_CXX_COMPILER_VERSION": "NOT_RECORDED",
+          "CMAKE_CXX_FLAGS": "-DYGO_M4_PERFORMANCE_AUDIT",
+          "CMAKE_GENERATOR": "Ninja"
+        },
+        "cmake_cache_sha256": "80c006c3e51cba38e1b2beef65b34b2ad396747e7e8746c4b1018e75c8d41040",
+        "compiler_identity_from_ready": "Clang-19.1.7",
+        "expected_variant": "control",
+        "forbidden_flags": [],
+        "ordinary_release_policy_pass": true,
+        "release_flags_observed": "-O3 -DNDEBUG",
+        "reserve_macro_present": false,
+        "shape_instrumentation_present": false,
+        "worker": "C:\\yogiohML-m4-3-1\\build\\m4-3-5-control\\ygo_m4_worker.exe",
+        "worker_sha256_current_path": "eb54e71502c3da04c273f3c2bc5c02723d9d563926438f33020d47078eb104dc"
+      },
+      "build_dir": "C:\\yogiohML-m4-3-1\\build\\m4-3-5-control",
+      "cmake_cache": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_CXX_COMPILER": "C:/yogiohML-m4-3-1/tools/zig-cxx.cmd",
+        "CMAKE_CXX_COMPILER_ID": "NOT_RECORDED",
+        "CMAKE_CXX_COMPILER_VERSION": "NOT_RECORDED",
+        "CMAKE_CXX_FLAGS": "-DYGO_M4_PERFORMANCE_AUDIT",
+        "CMAKE_GENERATOR": "Ninja"
+      },
+      "cmake_cache_sha256": "80c006c3e51cba38e1b2beef65b34b2ad396747e7e8746c4b1018e75c8d41040",
+      "current_path_matches_measured": true,
+      "expected_variant": "control",
+      "forbidden_flags": [],
+      "measured_binary_hash_captured_at_run": true,
+      "measured_worker_sha256": "eb54e71502c3da04c273f3c2bc5c02723d9d563926438f33020d47078eb104dc",
+      "ordinary_release_policy_pass": true,
+      "ready": [
+        {
+          "build_type": "Release",
+          "compiler_identity": "Clang-19.1.7",
+          "core_patchset_sha256": "6b5421b3a852085f48fa161a5ba1540f902aa00784a337694b21c9efc34f69bd",
+          "deck_hashes": [
+            "8ee4b699de19ff256e388d46f35b8696a60ff6ec59f0324f060a2468876711b7",
+            "6041abe0a59463d0715ae1da9100090ad487de02a02794e8ec0686d4c0513188"
+          ],
+          "duel_flags": 190464,
+          "duel_mode_name": "DUEL_MODE_MR5",
+          "format_id": "TCG_ADVANCED_2026_05_18",
+          "pid": 6084,
+          "protocol_version": "ocgforge.m4.worker.v1",
+          "rules_bundle_id": "3adfe6b4cfe2c2805e50b389fc0eb4e70a3b0b6107436614d328fddc865e585f",
+          "schema": "ocgforge.m4.worker.v1",
+          "type": "ready",
+          "worker_identity": "ocgforge.m4.native_worker.v1"
+        }
+      ],
+      "release_flags_observed": "-O3 -DNDEBUG",
+      "reserve_macro_present": false,
+      "shape_instrumentation_present": false,
+      "worker": "C:\\yogiohML-m4-3-1\\build\\m4-3-5-control\\ygo_m4_worker.exe",
+      "worker_sha256": "eb54e71502c3da04c273f3c2bc5c02723d9d563926438f33020d47078eb104dc"
+    },
+    "experiment": {
+      "build_configuration": {
+        "build_dir": "C:\\yogiohML-m4-3-1\\build\\m4-3-5-experiment",
+        "cmake": {
+          "CMAKE_BUILD_TYPE": "Release",
+          "CMAKE_CXX_COMPILER": "C:/yogiohML-m4-3-1/tools/zig-cxx.cmd",
+          "CMAKE_CXX_COMPILER_ID": "NOT_RECORDED",
+          "CMAKE_CXX_COMPILER_VERSION": "NOT_RECORDED",
+          "CMAKE_CXX_FLAGS": "-DYGO_M4_PERFORMANCE_AUDIT -DYGO_M4_RESERVE_BACKED_SERIALIZATION",
+          "CMAKE_GENERATOR": "Ninja"
+        },
+        "cmake_cache_sha256": "6c147afe51c6372b418e2bba6019b5077319ce72bd8858699aa7ad992071b841",
+        "compiler_identity_from_ready": "Clang-19.1.7",
+        "expected_variant": "experiment",
+        "forbidden_flags": [],
+        "ordinary_release_policy_pass": true,
+        "release_flags_observed": "-O3 -DNDEBUG",
+        "reserve_macro_present": true,
+        "shape_instrumentation_present": false,
+        "worker": "C:\\yogiohML-m4-3-1\\build\\m4-3-5-experiment\\ygo_m4_worker.exe",
+        "worker_sha256_current_path": "55214361dee1e8df48629156fb7c7bad7b0aa5693c0fa225500eaabdb3513038"
+      },
+      "build_dir": "C:\\yogiohML-m4-3-1\\build\\m4-3-5-experiment",
+      "cmake_cache": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_CXX_COMPILER": "C:/yogiohML-m4-3-1/tools/zig-cxx.cmd",
+        "CMAKE_CXX_COMPILER_ID": "NOT_RECORDED",
+        "CMAKE_CXX_COMPILER_VERSION": "NOT_RECORDED",
+        "CMAKE_CXX_FLAGS": "-DYGO_M4_PERFORMANCE_AUDIT -DYGO_M4_RESERVE_BACKED_SERIALIZATION",
+        "CMAKE_GENERATOR": "Ninja"
+      },
+      "cmake_cache_sha256": "6c147afe51c6372b418e2bba6019b5077319ce72bd8858699aa7ad992071b841",
+      "current_path_matches_measured": true,
+      "expected_variant": "experiment",
+      "forbidden_flags": [],
+      "measured_binary_hash_captured_at_run": true,
+      "measured_worker_sha256": "55214361dee1e8df48629156fb7c7bad7b0aa5693c0fa225500eaabdb3513038",
+      "ordinary_release_policy_pass": true,
+      "ready": [
+        {
+          "build_type": "Release",
+          "compiler_identity": "Clang-19.1.7",
+          "core_patchset_sha256": "6b5421b3a852085f48fa161a5ba1540f902aa00784a337694b21c9efc34f69bd",
+          "deck_hashes": [
+            "8ee4b699de19ff256e388d46f35b8696a60ff6ec59f0324f060a2468876711b7",
+            "6041abe0a59463d0715ae1da9100090ad487de02a02794e8ec0686d4c0513188"
+          ],
+          "duel_flags": 190464,
+          "duel_mode_name": "DUEL_MODE_MR5",
+          "format_id": "TCG_ADVANCED_2026_05_18",
+          "pid": 11144,
+          "protocol_version": "ocgforge.m4.worker.v1",
+          "rules_bundle_id": "3adfe6b4cfe2c2805e50b389fc0eb4e70a3b0b6107436614d328fddc865e585f",
+          "schema": "ocgforge.m4.worker.v1",
+          "type": "ready",
+          "worker_identity": "ocgforge.m4.native_worker.v1"
+        }
+      ],
+      "release_flags_observed": "-O3 -DNDEBUG",
+      "reserve_macro_present": true,
+      "shape_instrumentation_present": false,
+      "worker": "C:\\yogiohML-m4-3-1\\build\\m4-3-5-experiment\\ygo_m4_worker.exe",
+      "worker_sha256": "55214361dee1e8df48629156fb7c7bad7b0aa5693c0fa225500eaabdb3513038"
+    },
+    "release_flags_policy": "ordinary Release -O3 -DNDEBUG; no LTO/PGO/CPU-specific flags",
+    "shape_instrumentation_used_for_timing": false
+  },
+  "canonical_workload": {
+    "canonical_without_hash_bytes": 1345246987,
+    "mean_bytes_per_observation": 135773.81782398061,
+    "observations": 9908
+  },
+  "conformance_comparison_artifact": "C:\\yogiohML-m4-3-1\\artifacts\\m4\\m4-3-5\\final\\conformance-comparison-hardening2.json",
+  "equivalence": {
+    "all_9908_observation_hashes_equal": true,
+    "build_compiler_identity_equal": true,
+    "build_ready_identity_equal": true,
+    "canonical_serialize_bytes_equal": true,
+    "canonical_without_hash_bytes_equal": true,
+    "conformance_comparison_pass": true,
+    "conformance_runner": {
+      "command": [
+        "C:\\Users\\chris\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe",
+        "tools/m4/compare_build_modes.py",
+        "--debug-worker",
+        "C:\\yogiohML-m4-3-1\\build\\m4-3-5-control\\ygo_m4_worker.exe",
+        "--release-worker",
+        "C:\\yogiohML-m4-3-1\\build\\m4-3-5-experiment\\ygo_m4_worker.exe",
+        "--master-seed",
+        "20260815",
+        "--games",
+        "16",
+        "--max-steps",
+        "2200",
+        "--output-dir",
+        "C:\\yogiohML-m4-3-1\\artifacts\\m4\\m4-3-5\\final\\runs-hardening2\\conformance",
+        "--output",
+        "C:\\yogiohML-m4-3-1\\artifacts\\m4\\m4-3-5\\final\\conformance-comparison-hardening2.json"
+      ],
+      "exit_code": 0,
+      "stderr": "",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout": "{\"normalized_trace_hash_equal\": true, \"observation_hashes_equal\": true, \"pass\": true, \"raw_trace_hash_equal\": true, \"rows\": [{\"debug_normalized_trace_sha256\": \"1caa0ba00601ee8d77f0beb146f7dc031bbc1134f4d4d6d8423991ef5238f085\", \"debug_trace_hash\": \"e9d9a9d1ac28267075c02a6be771c7d2d5d70b3c15e5cf5cdfba45c25c158df6\", \"debug_trace_sha256\": \"a96426706b98d68036b43b0f046bf399203964fa48bd3c466144f4fb3cb0738d\", \"job_id\": \"m4-000000\", \"normalized_trace_hash_equal\": true, \"observation_count\": 613, \"observation_hashes_equal\": true, \"pass\": true, \"raw_trace_hash_equal\": true, \"release_normalized_trace_sha256\": \"1caa0ba00601ee8d77f0beb146f7dc031bbc1134f4d4d6d8423991ef5238f085\", \"release_trace_hash\": \"e9d9a9d1ac28267075c02a6be771c7d2d5d70b3c15e5cf5cdfba45c25c158df6\", \"release_trace_sha256\": \"a96426706b98d68036b43b0f046bf399203964fa48bd3c466144f4fb3cb0738d\", \"semantic_fields_equal\": true, \"trace_step_bytes_equal\": true, \"trace_steps_equal\": true}, {\"debug_normalized_trace_sha256\": \"f84292038e68df440ea3fad296eb6faada2e5814439bf3d02e946225da2edc16\", \"debug_trace_hash\": \"409a452d98f9fb461a3548a571a8bac041d1d3da2c1bd88e22ca41c3de1dc16e\", \"debug_trace_sha256\": \"47c84e56cf69dd2febf7feaabe51ebdd7a3ebad0b9d4ca38568b3470d80f3d73\", \"job_id\": \"m4-000001\", \"normalized_trace_hash_equal\": true, \"observation_count\": 622, \"observation_hashes_equal\": true, \"pass\": true, \"raw_trace_hash_equal\": true, \"release_normalized_trace_sha256\": \"f84292038e68df440ea3fad296eb6faada2e5814439bf3d02e946225da2edc16\", \"release_trace_hash\": \"409a452d98f9fb461a3548a571a8bac041d1d3da2c1bd88e22ca41c3de1dc16e\", \"release_trace_sha256\": \"47c84e56cf69dd2febf7feaabe51ebdd7a3ebad0b9d4ca38568b3470d80f3d73\", \"semantic_fields_equal\": true, \"trace_step_bytes_equal\": true, \"trace_steps_equal\": true}, {\"debug_normalized_trace_sha256\": \"d2729372bec90aac6046708fb75cf3aa76bee1e18398e3f9f2007415a909e112\", \"debug_trace_hash\": \"2dd4fd25b07200ea2e538b68627612f929c395a6da5679127f022218e42da6d3\", \"debug_trace_sha256\": \"0f9122c8fa4c4418a681ffefd4dca7af3774d53a4829fb0f34cf46704b558692\", \"job_id\": \"m4-000002\", \"normalized_trace_hash_equal\": true, \"observation_count\": 622, \"observation_hashes_equal\": true, \"pass\": true, \"raw_trace_hash_equal\": true, \"release_normalized_trace_sha256\": \"d2729372bec90aac6046708fb75cf3aa76bee1e18398e3f9f2007415a909e112\", \"release_trace_hash\": \"2dd4fd25b07200ea2e538b68627612f929c395a6da5679127f022218e42da6d3\", \"release_trace_sha256\": \"0f9122c8fa4c4418a681ffefd4dca7af3774d53a4829fb0f34cf46704b558692\", \"semantic_fields_equal\": true, \"trace_step_bytes_equal\": true, \"trace_steps_equal\": true}, {\"debug_normalized_trace_sha256\": \"482e68448fc4e1764b56b2fea7159ac0a09483a5ea2bd440d0b04401c9b046cd\", \"debug_trace_hash\": \"d2cb9329e33d82aa15f8274d2eb6c623d0454a21de90369fb27b7f52fda3df43\", \"debug_trace_sha256\": \"ad0f4a9fe33ce7645d444729a5b8c313a56bb7ba84706581a340e3a415b0f160\", \"job_id\": \"m4-000003\", \"normalized_trace_hash_equal\": true, \"observation_count\": 613, \"observation_hashes_equal\": true, \"pass\": true, \"raw_trace_hash_equal\": true, \"release_normalized_trace_sha256\": \"482e68448fc4e1764b56b2fea7159ac0a09483a5ea2bd440d0b04401c9b046cd\", \"release_trace_hash\": \"d2cb9329e33d82aa15f8274d2eb6c623d0454a21de90369fb27b7f52fda3df43\", \"release_trace_sha256\": \"ad0f4a9fe33ce7645d444729a5b8c313a56bb7ba84706581a340e3a415b0f160\", \"semantic_fields_equal\": true, \"trace_step_bytes_equal\": true, \"trace_steps_equal\": true}, {\"debug_normalized_trace_sha256\": \"1c39ac22208e76a78d6e7d829462a9d8691205cf72e6603c9eec89723be97f7f\", \"debug_trace_hash\": \"9923227cc7c7f166b300267be8dc1aeb2bcc3ab03ca7cff9850fcf3baf33e5f6\", \"debug_trace_sha256\": \"8765ff157b1a9f07c6ed8456dfb49aebf0be51c7deb0227fdda628187526c11a\", \"job_id\": \"m4-000004\", \"normalized_trace_hash_equal\": true, \"observation_count\": 613, \"observation_hashes_equal\": true, \"pass\": true, \"raw_trace_hash_equal\": true, \"release_normalized_trace_sha256\": \"1c39ac22208e76a78d6e7d829462a9d8691205cf72e6603c9eec89723be97f7f\", \"release_trace_hash\": \"9923227cc7c7f166b300267be8dc1aeb2bcc3ab03ca7cff9850fcf3baf33e5f6\", \"release_trace_sha256\": \"8765ff157b1a9f07c6ed8456dfb49aebf0be51c7deb0227fdda628187526c11a\", \"semantic_fields_equal\": true, \"trace_step_bytes_equal\": true, \"trace_steps_equal\": true}, {\"debug_normalized_trace_sha256\": \"f897123d0d259fa8e180d1df3d2f08000330989639e4aa62d9e031382cfb3cf9\", \"debug_trace_hash\": \"c41a46b02dda7425058de07930859bf769c8a0b1d00b0e6c98512a63638fba50\", \"debug_trace_sha256\": \"30c26376e61f55bea7fff52ca5c1db47f1450fbd38798b6741d05470ca4b3bc6\", \"job_id\": \"m4-000005\", \"normalized_trace_hash_equal\": true, \"observation_count\": 629, \"observation_hashes_equal\": true, \"pass\": true, \"raw_trace_hash_equal\": true, \"release_normalized_trace_sha256\": \"f897123d0d259fa8e180d1df3d2f08000330989639e4aa62d9e031382cfb3cf9\", \"release_trace_hash\": \"c41a46b02dda7425058de07930859bf769c8a0b1d00b0e6c98512a63638fba50\", \"release_trace_sha256\": \"30c26376e61f55bea7fff52ca5c1db47f1450fbd38798b6741d05470ca4b3bc6\", \"semantic_fields_equal\": true, \"trace_step_bytes_equal\": true, \"trace_steps_equal\": true}, {\"debug_normalized_trace_sha256\": \"53b954a374bdf15dc922ad3b0fd18b86343cc3fb1f04d0b6604bd8ffd093a5f7\", \"debug_trace_hash\": \"9c9ebf72f7b851f5ccb121c4fc37f090fd9b152a2972e960110d31b865077ee9\", \"debug_trace_sha256\": \"ac3d630e0809ffc9e7e4c46e077751f1d4629d1fdfbb63cfffd9c862536fa05b\", \"job_id\": \"m4-000006\", \"normalized_trace_hash_equal\": true, \"observation_count\": 622, \"observation_hashes_equal\": true, \"pass\": true, \"raw_trace_hash_equal\": true, \"release_normalized_trace_sha256\": \"53b954a374bdf15dc922ad3b0fd18b86343cc3fb1f04d0b6604bd8ffd093a5f7\", \"release_trace_hash\": \"9c9ebf72f7b851f5ccb121c4fc37f090fd9b152a2972e960110d31b865077ee9\", \"release_trace_sha256\": \"ac3d630e0809ffc9e7e4c46e077751f1d4629d1fdfbb63cfffd9c862536fa05b\", \"semantic_fields_equal\": true, \"trace_step_bytes_equal\": true, \"trace_steps_equal\": true}, {\"debug_normalized_trace_sha256\": \"723b4a25ca3836dd6ca071abf375255e11ea4b3063823949104e113731ab4833\", \"debug_trace_hash\": \"c2362f85d66cc17840b930d0ae4993fde97d7f9d15a7a750c6d798e30d6d1c17\", \"debug_trace_sha256\": \"eedad6472598f40a6de9b512d83438e82f04b7699166129163ca9259637d249f\", \"job_id\": \"m4-000007\", \"normalized_trace_hash_equal\": true, \"observation_count\": 620, \"observation_hashes_equal\": true, \"pass\": true, \"raw_trace_hash_equal\": true, \"release_normalized_trace_sha256\": \"723b4a25ca3836dd6ca071abf375255e11ea4b3063823949104e113731ab4833\", \"release_trace_hash\": \"c2362f85d66cc17840b930d0ae4993fde97d7f9d15a7a750c6d798e30d6d1c17\", \"release_trace_sha256\": \"eedad6472598f40a6de9b512d83438e82f04b7699166129163ca9259637d249f\", \"semantic_fields_equal\": true, \"trace_step_bytes_equal\": true, \"trace_steps_equal\": true}, {\"debug_normalized_trace_sha256\": \"80497f1683301f6be437ec501ff98ee813b9da9af44a9e083fc03dbb53d06b00\", \"debug_trace_hash\": \"f305f765f64663ef646cc955e8485935a6e2a8e8fb7e0d261a8eb3ca0f3b1518\", \"debug_trace_sha256\": \"05c4f09394660e31e309daf70fd86999ad49796444b1ece554070bf3e7774331\", \"job_id\": \"m4-000008\", \"normalized_trace_hash_equal\": true, \"observation_count\": 620, \"observation_hashes_equal\": true, \"pass\": true, \"raw_trace_hash_equal\": true, \"release_normalized_trace_sha256\": \"80497f1683301f6be437ec501ff98ee813b9da9af44a9e083fc03dbb53d06b00\", \"release_trace_hash\": \"f305f765f64663ef646cc955e8485935a6e2a8e8fb7e0d261a8eb3ca0f3b1518\", \"release_trace_sha256\": \"05c4f09394660e31e309daf70fd86999ad49796444b1ece554070bf3e7774331\", \"semantic_fields_equal\": true, \"trace_step_bytes_equal\": true, \"trace_steps_equal\": true}, {\"debug_normalized_trace_sha256\": \"b203a56268da6e8899f1da94819105c43322e99d27afa54a82c1ffddd36786b2\", \"debug_trace_hash\": \"c050c30f73decfdbf54feb2163e19ade47ac4d22387328cc9d96464bd5070f90\", \"debug_trace_sha256\": \"d290aeff0187c49ea8044f0b68212df217fa2073b5ff1dfeb984f3accea8b141\", \"job_id\": \"m4-000009\", \"normalized_trace_hash_equal\": true, \"observation_count\": 622, \"observation_hashes_equal\": true, \"pass\": true, \"raw_trace_hash_equal\": true, \"release_normalized_trace_sha256\": \"b203a56268da6e8899f1da94819105c43322e99d27afa54a82c1ffddd36786b2\", \"release_trace_hash\": \"c050c30f73decfdbf54feb2163e19ade47ac4d22387328cc9d96464bd5070f90\", \"release_trace_sha256\": \"d290aeff0187c49ea8044f0b68212df217fa2073b5ff1dfeb984f3accea8b141\", \"semantic_fields_equal\": true, \"trace_step_bytes_equal\": true, \"trace_steps_equal\": true}, {\"debug_normalized_trace_sha256\": \"619a9ea75b01c3b6c2b41b8cae07482327e2f8e90cd5368fb486cd8f8dd56307\", \"debug_trace_hash\": \"d7812993389f1e98fdef9ed484c0d4e2c59b503553095f808cccc9a443abc0f3\", \"debug_trace_sha256\": \"6a6602a4944a52e2afeb1c8dd0aeb8ed75ac2380cae5dbb11bda99507e39b9e6\", \"job_id\": \"m4-000010\", \"normalized_trace_hash_equal\": true, \"observation_count\": 622, \"observation_hashes_equal\": true, \"pass\": true, \"raw_trace_hash_equal\": true, \"release_normalized_trace_sha256\": \"619a9ea75b01c3b6c2b41b8cae07482327e2f8e90cd5368fb486cd8f8dd56307\", \"release_trace_hash\": \"d7812993389f1e98fdef9ed484c0d4e2c59b503553095f808cccc9a443abc0f3\", \"release_trace_sha256\": \"6a6602a4944a52e2afeb1c8dd0aeb8ed75ac2380cae5dbb11bda99507e39b9e6\", \"semantic_fields_equal\": true, \"trace_step_bytes_equal\": true, \"trace_steps_equal\": true}, {\"debug_normalized_trace_sha256\": \"3ce46577a3a91142e61b97677c2cc3f1c2c2f86b8c78106c1cae862ac296537a\", \"debug_trace_hash\": \"9dac5b32a6f213862a7ff2f8014799ebed2883fbdf73d12dcf0c5f47bb0c62e8\", \"debug_trace_sha256\": \"1be98cd012d23379e2c0af7f27ecec4b36078554cd7da6cc32c4885e5573ff44\", \"job_id\": \"m4-000011\", \"normalized_trace_hash_equal\": true, \"observation_count\": 613, \"observation_hashes_equal\": true, \"pass\": true, \"raw_trace_hash_equal\": true, \"release_normalized_trace_sha256\": \"3ce46577a3a91142e61b97677c2cc3f1c2c2f86b8c78106c1cae862ac296537a\", \"release_trace_hash\": \"9dac5b32a6f213862a7ff2f8014799ebed2883fbdf73d12dcf0c5f47bb0c62e8\", \"release_trace_sha256\": \"1be98cd012d23379e2c0af7f27ecec4b36078554cd7da6cc32c4885e5573ff44\", \"semantic_fields_equal\": true, \"trace_step_bytes_equal\": true, \"trace_steps_equal\": true}, {\"debug_normalized_trace_sha256\": \"dba2e10223dfdd40bcdc2fd94ef5c638b8528dea81287d3711a791743a3a2594\", \"debug_trace_hash\": \"9e1bb2fdd9106ba4ec7dc3fa1f8eca4370862e8878b13f3f8e7cbd5ee7be0961\", \"debug_trace_sha256\": \"8f93682d63e97fe629b7bc272b9a75a6afdf41bc40a6ecf904f37022262a31e6\", \"job_id\": \"m4-000012\", \"normalized_trace_hash_equal\": true, \"observation_count\": 620, \"observation_hashes_equal\": true, \"pass\": true, \"raw_trace_hash_equal\": true, \"release_normalized_trace_sha256\": \"dba2e10223dfdd40bcdc2fd94ef5c638b8528dea81287d3711a791743a3a2594\", \"release_trace_hash\": \"9e1bb2fdd9106ba4ec7dc3fa1f8eca4370862e8878b13f3f8e7cbd5ee7be0961\", \"release_trace_sha256\": \"8f93682d63e97fe629b7bc272b9a75a6afdf41bc40a6ecf904f37022262a31e6\", \"semantic_fields_equal\": true, \"trace_step_bytes_equal\": true, \"trace_steps_equal\": true}, {\"debug_normalized_trace_sha256\": \"303f4c5f1aaca895aae004cfc196587392b3827bc353ad51c579b42b22b36163\", \"debug_trace_hash\": \"cc3554bbd99f72dcc330c3cc71ec4f223e69b0483a1472a61a7669f6978514ba\", \"debug_trace_sha256\": \"c029a2399603441b206d39956fc68baaecba9e99ff5ff16429da64e951c5df12\", \"job_id\": \"m4-000013\", \"normalized_trace_hash_equal\": true, \"observation_count\": 622, \"observation_hashes_equal\": true, \"pass\": true, \"raw_trace_hash_equal\": true, \"release_normalized_trace_sha256\": \"303f4c5f1aaca895aae004cfc196587392b3827bc353ad51c579b42b22b36163\", \"release_trace_hash\": \"cc3554bbd99f72dcc330c3cc71ec4f223e69b0483a1472a61a7669f6978514ba\", \"release_trace_sha256\": \"c029a2399603441b206d39956fc68baaecba9e99ff5ff16429da64e951c5df12\", \"semantic_fields_equal\": true, \"trace_step_bytes_equal\": true, \"trace_steps_equal\": true}, {\"debug_normalized_trace_sha256\": \"a756ecbf7eb1e59603ffab5f5fdca1801a0ecb3e109efdde782e9aab9835545d\", \"debug_trace_hash\": \"7202f3af8bfaade9a19ab33cbb16ec5fbc8db2d13334a2fa522d1e27dec074cf\", \"debug_trace_sha256\": \"1dce94c87a7743e58589e378b94c006e092f926805ad85fa5c10ff5c98d42b14\", \"job_id\": \"m4-000014\", \"normalized_trace_hash_equal\": true, \"observation_count\": 622, \"observation_hashes_equal\": true, \"pass\": true, \"raw_trace_hash_equal\": true, \"release_normalized_trace_sha256\": \"a756ecbf7eb1e59603ffab5f5fdca1801a0ecb3e109efdde782e9aab9835545d\", \"release_trace_hash\": \"7202f3af8bfaade9a19ab33cbb16ec5fbc8db2d13334a2fa522d1e27dec074cf\", \"release_trace_sha256\": \"1dce94c87a7743e58589e378b94c006e092f926805ad85fa5c10ff5c98d42b14\", \"semantic_fields_equal\": true, \"trace_step_bytes_equal\": true, \"trace_steps_equal\": true}, {\"debug_normalized_trace_sha256\": \"f15eb6367942aa4b6de184c69a413e954768c7eacf5c02b099af1289a692b1bd\", \"debug_trace_hash\": \"ba4a8f13f43644038e729e36c7be98076afdef60dc3d14d2d07d5c3b5a0db504\", \"debug_trace_sha256\": \"007ce18841141b63e7b78e516daa230b5b6ac1397f91ce52ba79703071dced89\", \"job_id\": \"m4-000015\", \"normalized_trace_hash_equal\": true, \"observation_count\": 613, \"observation_hashes_equal\": true, \"pass\": true, \"raw_trace_hash_equal\": true, \"release_normalized_trace_sha256\": \"f15eb6367942aa4b6de184c69a413e954768c7eacf5c02b099af1289a692b1bd\", \"release_trace_hash\": \"ba4a8f13f43644038e729e36c7be98076afdef60dc3d14d2d07d5c3b5a0db504\", \"release_trace_sha256\": \"007ce18841141b63e7b78e516daa230b5b6ac1397f91ce52ba79703071dced89\", \"semantic_fields_equal\": true, \"trace_step_bytes_equal\": true, \"trace_steps_equal\": true}]}\r\n",
+      "stdout_sha256": "f930cd47b4953383080f31b05d13955c40de02deb20f612974f025389459a6b9"
+    },
+    "error_counters_zero": true,
+    "fixture_comparison_pass": true,
+    "fixture_runner": {
+      "command": [
+        "C:\\Users\\chris\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe",
+        "tools/m4/compare_reserve_serialization.py",
+        "--control-fixture",
+        "C:\\yogiohML-m4-3-1\\build\\m4-3-5-control\\m4_3_5_serialization_fixture_test.exe",
+        "--experiment-fixture",
+        "C:\\yogiohML-m4-3-1\\build\\m4-3-5-experiment\\m4_3_5_serialization_fixture_test.exe",
+        "--control-builder",
+        "C:\\yogiohML-m4-3-1\\build\\m4-3-5-control\\observation_builder_test.exe",
+        "--experiment-builder",
+        "C:\\yogiohML-m4-3-1\\build\\m4-3-5-experiment\\observation_builder_test.exe",
+        "--output-json",
+        "C:\\yogiohML-m4-3-1\\artifacts\\m4\\m4-3-5\\final\\fixture-comparison-hardening2.json"
+      ],
+      "exit_code": 0,
+      "stderr": "",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout": "{\"builder\": {\"both_exitcodes_zero\": true, \"exitcodes_equal\": true, \"pass\": true, \"stderr_byte_exact\": true, \"stderr_bytes_equal\": true, \"stderr_sha256_equal\": true, \"stdout_byte_exact\": true, \"stdout_bytes_equal\": true, \"stdout_sha256_equal\": true}, \"fixture\": {\"both_exitcodes_zero\": true, \"digest_lines_equal\": true, \"exitcodes_equal\": true, \"fixture_contract_valid\": true, \"pass\": true, \"stderr_byte_exact\": true, \"stderr_bytes_equal\": true, \"stderr_sha256_equal\": true, \"stdout_byte_exact\": true, \"stdout_bytes_equal\": true, \"stdout_sha256_equal\": true}, \"pass\": true}\r\n",
+      "stdout_sha256": "24cf336e081c566dc6787738f780b6265131f2795881ef07da5fbab9170e3384"
+    },
+    "observation_hashes_equal": true,
+    "operation_counters_equal": true,
+    "privacy_equal": true
+  },
+  "final_status": "M4.3.5 REJECTED — NO MATERIAL BENEFIT",
+  "fixture_comparison_artifact": "C:\\yogiohML-m4-3-1\\artifacts\\m4\\m4-3-5\\final\\fixture-comparison-hardening2.json",
+  "gate_artifact_validation": {
+    "canonical_fixed_deck_regression": {
+      "all_rows_pass": true,
+      "artifact": "C:\\yogiohML-m4-3-1\\artifacts\\m4\\m4-3-5\\final\\gates\\fixed_deck\\full_fixed_deck_results.json",
+      "both_start_player_partitions": true,
+      "complete_games": 16
+    },
+    "determinism": {
+      "artifact": "C:\\yogiohML-m4-3-1\\artifacts\\m4\\m4-3-5\\final\\gates\\determinism\\m3_determinism_results.json",
+      "crlf_semantic_replay_match": true,
+      "independent_process_match": true,
+      "semantic_action_reexecution_match": true,
+      "starting_player_partitions": [
+        0,
+        1
+      ]
+    },
+    "reserve_output_contract": {
+      "artifact": "C:\\yogiohML-m4-3-1\\artifacts\\m4\\m4-3-5\\final\\runs-hardening2\\throughput\\B1\\worker-000.stderr.log",
+      "calls": 613,
+      "final_bytes": 82600414,
+      "mode": "reserve_backed"
+    }
+  },
+  "gate_freshness": "The frozen regression gates ran on the M4.3.5 Release A/B builds; the hardening2 A/B rerun revalidated the current post-reversion control against the preserved experiment binary; post_reversion_release_smoke ran against the ordinary Release binary.",
+  "gate_output_hashes": "NOT_CAPTURED; machine-readable comparison, fixed-deck, determinism, and sidecar artifacts retain their own hashes where applicable.",
+  "gate_summary_artifact": "C:\\yogiohML-m4-3-1\\artifacts\\m4\\m4-3-5\\final\\gates\\gate-summary.json",
+  "gates": {
+    "candidate_observation_consistency": {
+      "command": "ctest --test-dir build/m4-3-5-experiment --output-on-failure -R ^(observation_builder_test|m4_worker_integration_test)$",
+      "passed": 2,
+      "status": "PASS",
+      "total": 2
+    },
+    "candidate_observation_consistency_control": {
+      "command": "ctest --test-dir build/m4-3-5-control --output-on-failure -R ^(observation_builder_test|m4_worker_integration_test)$",
+      "passed": 2,
+      "status": "PASS",
+      "total": 2
+    },
+    "canonical_fixed_deck_regression": {
+      "artifact": "artifacts/m4/m4-3-5/final/gates/fixed_deck/full_fixed_deck_results.json",
+      "both_start_player_partitions": true,
+      "command": "python tests/m3/full_game/full_fixed_deck_test.py --probe build/m4-3-5-experiment/ygo_core_probe.exe --games 16 --max-steps 2200 --timeout 240 --output artifacts/m4/m4-3-5/final/gates/fixed_deck",
+      "complete_games": 16,
+      "required_complete_games": 16,
+      "status": "PASS"
+    },
+    "determinism": {
+      "artifact": "artifacts/m4/m4-3-5/final/gates/determinism/m3_determinism_results.json",
+      "command": "python tests/m3/determinism/m3_determinism_test.py --probe build/m4-3-5-experiment/ygo_core_probe.exe --output artifacts/m4/m4-3-5/final/gates/determinism --timeout 240",
+      "crlf_semantic_replay_match": true,
+      "independent_process_match": true,
+      "semantic_action_reexecution_match": true,
+      "starting_player_partitions": [
+        0,
+        1
+      ],
+      "status": "PASS"
+    },
+    "full_ctest": {
+      "command": "ctest --test-dir build/m4-3-5-experiment --output-on-failure",
+      "passed": 92,
+      "status": "PASS",
+      "total": 92
+    },
+    "full_ctest_control": {
+      "command": "ctest --test-dir build/m4-3-5-control --output-on-failure",
+      "passed": 92,
+      "status": "PASS",
+      "total": 92
+    },
+    "m3_python": {
+      "command": "python -B -m unittest discover -s tests/m3 -v",
+      "passed": 17,
+      "status": "PASS",
+      "total": 17
+    },
+    "m4_python": {
+      "command": "python -B -m unittest discover -s tests/m4 -v",
+      "passed": 123,
+      "skipped": 3,
+      "status": "PASS",
+      "total": 123
+    },
+    "post_reversion_release_smoke": {
+      "command": "ctest --test-dir build/release-windows-zig --output-on-failure -R ^(m4_3_5_serialization_fixture_test|observation_builder_test|privacy_projection_test|continuation_privacy_test|sha256_known_answer_test)$",
+      "passed": 5,
+      "status": "PASS",
+      "total": 5
+    },
+    "privacy": {
+      "command": "ctest --test-dir build/m4-3-5-experiment --output-on-failure -R ^(privacy_projection_test|continuation_privacy_test|m3_real_deck_privacy_test)$",
+      "passed": 3,
+      "status": "PASS",
+      "total": 3
+    },
+    "privacy_control": {
+      "command": "ctest --test-dir build/m4-3-5-control --output-on-failure -R ^(privacy_projection_test|continuation_privacy_test|m3_real_deck_privacy_test)$",
+      "passed": 3,
+      "status": "PASS",
+      "total": 3
+    },
+    "repository_python": {
+      "command": "python -B -m unittest discover -s tests/python -v",
+      "passed": 8,
+      "status": "PASS",
+      "total": 8
+    },
+    "reserve_output_contract": {
+      "artifact": "artifacts/m4/m4-3-5/final/runs-hardening2/throughput/B1/worker-000.stderr.log",
+      "command": "python tools/m4/test_reserve_output_contract.py --sidecar artifacts/m4/m4-3-5/final/runs-hardening2/throughput/B1/worker-000.stderr.log",
+      "status": "PASS"
+    }
+  },
+  "post_reversion_build": {
+    "build_dir": "C:\\yogiohML-m4-3-1\\build\\release-windows-zig",
+    "cmake": {
+      "CMAKE_BUILD_TYPE": "Release",
+      "CMAKE_CXX_COMPILER": "C:/yogiohML-m4-3-1/cmake/../tools/zig-cxx.cmd",
+      "CMAKE_CXX_COMPILER_ID": "NOT_RECORDED",
+      "CMAKE_CXX_COMPILER_VERSION": "NOT_RECORDED",
+      "CMAKE_CXX_FLAGS": "",
+      "CMAKE_GENERATOR": "Ninja"
+    },
+    "cmake_cache_sha256": "ba3a4e661ad7736e0288a1d12ee38365e6f13f16bad1c211cc25aeaead0a3bef",
+    "compiler_identity_from_ready": "Clang-19.1.7",
+    "expected_variant": "control",
+    "forbidden_flags": [],
+    "ordinary_release_policy_pass": true,
+    "release_flags_observed": "-O3 -DNDEBUG",
+    "reserve_macro_present": false,
+    "shape_instrumentation_present": false,
+    "worker": "C:\\yogiohML-m4-3-1\\build\\release-windows-zig\\ygo_m4_worker.exe",
+    "worker_sha256_current_path": "7375e79b550f2c36c9ce41c4c4cef821417abaaa8b51bbff0b04d1c59678715f"
+  },
+  "recommendation": "Do not carry the reserve-backed streambuf forward. If another serializer experiment is authorized, isolate stream construction with a tighter measured capacity model; do not infer a speedup or begin M5.",
+  "repetitions": [
+    {
+      "label": "A1",
+      "summary": {
+        "entity_projection_us": 241,
+        "error_counters": {
+          "automatic": 0,
+          "core_errors": 0,
+          "retries": 0,
+          "truncated": 0,
+          "unsupported": 0,
+          "worker_errors": 0
+        },
+        "games": 16,
+        "games_per_second": 0.5665323760682985,
+        "hash_fraction_of_worker_percent": 15.247655910329538,
+        "hash_us": 4306241,
+        "job_ids": [
+          "m4-000000",
+          "m4-000001",
+          "m4-000002",
+          "m4-000003",
+          "m4-000004",
+          "m4-000005",
+          "m4-000006",
+          "m4-000007",
+          "m4-000008",
+          "m4-000009",
+          "m4-000010",
+          "m4-000011",
+          "m4-000012",
+          "m4-000013",
+          "m4-000014",
+          "m4-000015"
+        ],
+        "lifecycle": {
+          "canonical_serialize_bytes": 0,
+          "canonical_serialize_calls": 0,
+          "same_mutation_epoch_duplicate_calls": 0,
+          "serialize_without_hash_bytes": 1345246987,
+          "serialize_without_hash_calls": 9908,
+          "sha256_calls": 9908
+        },
+        "observation_fraction_of_worker_percent": 92.46446788605915,
+        "operation_counters": {
+          "candidate_max": 336,
+          "candidate_sets": 9892,
+          "candidate_total": 46897,
+          "entities_projected": 526004,
+          "observations": 9908,
+          "ocg_duel_process": 24272,
+          "ocg_duel_query": 0,
+          "ocg_duel_query_count": 0,
+          "ocg_duel_query_field": 19816,
+          "ocg_duel_query_location": 118896,
+          "script_loads": 1232,
+          "script_reader_requests": 1200,
+          "semantic_hashes": 16,
+          "trace_bytes_serialized": 0
+        },
+        "outer_observation_us": 26113803,
+        "privacy_us": 221,
+        "query_decode_us": 2304768,
+        "query_field_us": 30,
+        "query_location_us": 330202,
+        "ready": [
+          {
+            "build_type": "Release",
+            "compiler_identity": "Clang-19.1.7",
+            "core_patchset_sha256": "6b5421b3a852085f48fa161a5ba1540f902aa00784a337694b21c9efc34f69bd",
+            "deck_hashes": [
+              "8ee4b699de19ff256e388d46f35b8696a60ff6ec59f0324f060a2468876711b7",
+              "6041abe0a59463d0715ae1da9100090ad487de02a02794e8ec0686d4c0513188"
+            ],
+            "duel_flags": 190464,
+            "duel_mode_name": "DUEL_MODE_MR5",
+            "format_id": "TCG_ADVANCED_2026_05_18",
+            "pid": 6084,
+            "protocol_version": "ocgforge.m4.worker.v1",
+            "rules_bundle_id": "3adfe6b4cfe2c2805e50b389fc0eb4e70a3b0b6107436614d328fddc865e585f",
+            "schema": "ocgforge.m4.worker.v1",
+            "type": "ready",
+            "worker_identity": "ocgforge.m4.native_worker.v1"
+          }
+        ],
+        "reserve_output": {
+          "calls": 9908,
+          "final_bytes": 1345246987,
+          "final_capacity": 0,
+          "growth_events": 0,
+          "mode": "ostringstream",
+          "requested_capacity": 0,
+          "unused_capacity": 0
+        },
+        "serializer_fraction_of_worker_percent": 63.28868786746485,
+        "serializer_us": 17873983,
+        "worker_local_simulation_us": 28241987,
+        "worker_result_evidence": {
+          "bytes": 32597,
+          "path": "artifacts\\m4\\m4-3-5\\final\\runs-hardening2\\throughput\\A1\\worker-results.json",
+          "sha256": "a02ace7d3b83b9b54df44b8d12ea909e61bb658aa9f66fef5f4767a9457e0de7"
+        },
+        "worker_stderr": [
+          {
+            "bytes": 2307496,
+            "path": "artifacts\\m4\\m4-3-5\\final\\runs-hardening2\\throughput\\A1\\worker-000.stderr.log",
+            "sha256": "c5577e15cdcc45615c0137231f00b0b825468a3b2b6978e3ff0c570253f56c90"
+          }
+        ]
+      },
+      "variant": "control"
+    },
+    {
+      "label": "B1",
+      "summary": {
+        "entity_projection_us": 231,
+        "error_counters": {
+          "automatic": 0,
+          "core_errors": 0,
+          "retries": 0,
+          "truncated": 0,
+          "unsupported": 0,
+          "worker_errors": 0
+        },
+        "games": 16,
+        "games_per_second": 0.5679352826386728,
+        "hash_fraction_of_worker_percent": 15.327692978729687,
+        "hash_us": 4318152,
+        "job_ids": [
+          "m4-000000",
+          "m4-000001",
+          "m4-000002",
+          "m4-000003",
+          "m4-000004",
+          "m4-000005",
+          "m4-000006",
+          "m4-000007",
+          "m4-000008",
+          "m4-000009",
+          "m4-000010",
+          "m4-000011",
+          "m4-000012",
+          "m4-000013",
+          "m4-000014",
+          "m4-000015"
+        ],
+        "lifecycle": {
+          "canonical_serialize_bytes": 0,
+          "canonical_serialize_calls": 0,
+          "same_mutation_epoch_duplicate_calls": 0,
+          "serialize_without_hash_bytes": 1345246987,
+          "serialize_without_hash_calls": 9908,
+          "sha256_calls": 9908
+        },
+        "observation_fraction_of_worker_percent": 92.40709217703224,
+        "operation_counters": {
+          "candidate_max": 336,
+          "candidate_sets": 9892,
+          "candidate_total": 46897,
+          "entities_projected": 526004,
+          "observations": 9908,
+          "ocg_duel_process": 24272,
+          "ocg_duel_query": 0,
+          "ocg_duel_query_count": 0,
+          "ocg_duel_query_field": 19816,
+          "ocg_duel_query_location": 118896,
+          "script_loads": 1232,
+          "script_reader_requests": 1200,
+          "semantic_hashes": 16,
+          "trace_bytes_serialized": 0
+        },
+        "outer_observation_us": 26033133,
+        "privacy_us": 147,
+        "query_decode_us": 2226872,
+        "query_field_us": 26,
+        "query_location_us": 335303,
+        "ready": [
+          {
+            "build_type": "Release",
+            "compiler_identity": "Clang-19.1.7",
+            "core_patchset_sha256": "6b5421b3a852085f48fa161a5ba1540f902aa00784a337694b21c9efc34f69bd",
+            "deck_hashes": [
+              "8ee4b699de19ff256e388d46f35b8696a60ff6ec59f0324f060a2468876711b7",
+              "6041abe0a59463d0715ae1da9100090ad487de02a02794e8ec0686d4c0513188"
+            ],
+            "duel_flags": 190464,
+            "duel_mode_name": "DUEL_MODE_MR5",
+            "format_id": "TCG_ADVANCED_2026_05_18",
+            "pid": 11144,
+            "protocol_version": "ocgforge.m4.worker.v1",
+            "rules_bundle_id": "3adfe6b4cfe2c2805e50b389fc0eb4e70a3b0b6107436614d328fddc865e585f",
+            "schema": "ocgforge.m4.worker.v1",
+            "type": "ready",
+            "worker_identity": "ocgforge.m4.native_worker.v1"
+          }
+        ],
+        "reserve_output": {
+          "calls": 9908,
+          "final_bytes": 1345246987,
+          "final_capacity": 2887160556,
+          "growth_events": 0,
+          "mode": "reserve_backed",
+          "requested_capacity": 2887091200,
+          "unused_capacity": 1541913569
+        },
+        "serializer_fraction_of_worker_percent": 63.2293886347063,
+        "serializer_us": 17813125,
+        "worker_local_simulation_us": 28172224,
+        "worker_result_evidence": {
+          "bytes": 32629,
+          "path": "artifacts\\m4\\m4-3-5\\final\\runs-hardening2\\throughput\\B1\\worker-results.json",
+          "sha256": "842fe4caf8967d5489c226a16c6f16447ecd7b73baec4a1fe16ae5cc35dc9ad9"
+        },
+        "worker_stderr": [
+          {
+            "bytes": 2310607,
+            "path": "artifacts\\m4\\m4-3-5\\final\\runs-hardening2\\throughput\\B1\\worker-000.stderr.log",
+            "sha256": "64a3bb7a184f76330bad7c9aaf0e39fc09a7e1d59d2ab1309299bba68fcef617"
+          }
+        ]
+      },
+      "variant": "experiment"
+    },
+    {
+      "label": "A2",
+      "summary": {
+        "entity_projection_us": 243,
+        "error_counters": {
+          "automatic": 0,
+          "core_errors": 0,
+          "retries": 0,
+          "truncated": 0,
+          "unsupported": 0,
+          "worker_errors": 0
+        },
+        "games": 16,
+        "games_per_second": 0.5677952093272854,
+        "hash_fraction_of_worker_percent": 15.338405589887055,
+        "hash_us": 4322236,
+        "job_ids": [
+          "m4-000000",
+          "m4-000001",
+          "m4-000002",
+          "m4-000003",
+          "m4-000004",
+          "m4-000005",
+          "m4-000006",
+          "m4-000007",
+          "m4-000008",
+          "m4-000009",
+          "m4-000010",
+          "m4-000011",
+          "m4-000012",
+          "m4-000013",
+          "m4-000014",
+          "m4-000015"
+        ],
+        "lifecycle": {
+          "canonical_serialize_bytes": 0,
+          "canonical_serialize_calls": 0,
+          "same_mutation_epoch_duplicate_calls": 0,
+          "serialize_without_hash_bytes": 1345246987,
+          "serialize_without_hash_calls": 9908,
+          "sha256_calls": 9908
+        },
+        "observation_fraction_of_worker_percent": 92.43950159788218,
+        "operation_counters": {
+          "candidate_max": 336,
+          "candidate_sets": 9892,
+          "candidate_total": 46897,
+          "entities_projected": 526004,
+          "observations": 9908,
+          "ocg_duel_process": 24272,
+          "ocg_duel_query": 0,
+          "ocg_duel_query_count": 0,
+          "ocg_duel_query_field": 19816,
+          "ocg_duel_query_location": 118896,
+          "script_loads": 1232,
+          "script_reader_requests": 1200,
+          "semantic_hashes": 16,
+          "trace_bytes_serialized": 0
+        },
+        "outer_observation_us": 26048688,
+        "privacy_us": 228,
+        "query_decode_us": 2228257,
+        "query_field_us": 23,
+        "query_location_us": 331253,
+        "ready": [
+          {
+            "build_type": "Release",
+            "compiler_identity": "Clang-19.1.7",
+            "core_patchset_sha256": "6b5421b3a852085f48fa161a5ba1540f902aa00784a337694b21c9efc34f69bd",
+            "deck_hashes": [
+              "8ee4b699de19ff256e388d46f35b8696a60ff6ec59f0324f060a2468876711b7",
+              "6041abe0a59463d0715ae1da9100090ad487de02a02794e8ec0686d4c0513188"
+            ],
+            "duel_flags": 190464,
+            "duel_mode_name": "DUEL_MODE_MR5",
+            "format_id": "TCG_ADVANCED_2026_05_18",
+            "pid": 21444,
+            "protocol_version": "ocgforge.m4.worker.v1",
+            "rules_bundle_id": "3adfe6b4cfe2c2805e50b389fc0eb4e70a3b0b6107436614d328fddc865e585f",
+            "schema": "ocgforge.m4.worker.v1",
+            "type": "ready",
+            "worker_identity": "ocgforge.m4.native_worker.v1"
+          }
+        ],
+        "reserve_output": {
+          "calls": 9908,
+          "final_bytes": 1345246987,
+          "final_capacity": 0,
+          "growth_events": 0,
+          "mode": "ostringstream",
+          "requested_capacity": 0,
+          "unused_capacity": 0
+        },
+        "serializer_fraction_of_worker_percent": 63.4353512278252,
+        "serializer_us": 17875558,
+        "worker_local_simulation_us": 28179174,
+        "worker_result_evidence": {
+          "bytes": 32629,
+          "path": "artifacts\\m4\\m4-3-5\\final\\runs-hardening2\\throughput\\A2\\worker-results.json",
+          "sha256": "d77ec69b57c16242412df69888dfbd61be071cff2c578a6c9a59935c74614bd7"
+        },
+        "worker_stderr": [
+          {
+            "bytes": 2307497,
+            "path": "artifacts\\m4\\m4-3-5\\final\\runs-hardening2\\throughput\\A2\\worker-000.stderr.log",
+            "sha256": "93a55e4ad31235a4c9e9c1a1a5694a41d48d5beb547ff4480edc394b30c08537"
+          }
+        ]
+      },
+      "variant": "control"
+    },
+    {
+      "label": "B2",
+      "summary": {
+        "entity_projection_us": 208,
+        "error_counters": {
+          "automatic": 0,
+          "core_errors": 0,
+          "retries": 0,
+          "truncated": 0,
+          "unsupported": 0,
+          "worker_errors": 0
+        },
+        "games": 16,
+        "games_per_second": 0.568807021126346,
+        "hash_fraction_of_worker_percent": 15.34267707886879,
+        "hash_us": 4315749,
+        "job_ids": [
+          "m4-000000",
+          "m4-000001",
+          "m4-000002",
+          "m4-000003",
+          "m4-000004",
+          "m4-000005",
+          "m4-000006",
+          "m4-000007",
+          "m4-000008",
+          "m4-000009",
+          "m4-000010",
+          "m4-000011",
+          "m4-000012",
+          "m4-000013",
+          "m4-000014",
+          "m4-000015"
+        ],
+        "lifecycle": {
+          "canonical_serialize_bytes": 0,
+          "canonical_serialize_calls": 0,
+          "same_mutation_epoch_duplicate_calls": 0,
+          "serialize_without_hash_bytes": 1345246987,
+          "serialize_without_hash_calls": 9908,
+          "sha256_calls": 9908
+        },
+        "observation_fraction_of_worker_percent": 92.43191237755363,
+        "operation_counters": {
+          "candidate_max": 336,
+          "candidate_sets": 9892,
+          "candidate_total": 46897,
+          "entities_projected": 526004,
+          "observations": 9908,
+          "ocg_duel_process": 24272,
+          "ocg_duel_query": 0,
+          "ocg_duel_query_count": 0,
+          "ocg_duel_query_field": 19816,
+          "ocg_duel_query_location": 118896,
+          "script_loads": 1232,
+          "script_reader_requests": 1200,
+          "semantic_hashes": 16,
+          "trace_bytes_serialized": 0
+        },
+        "outer_observation_us": 26000217,
+        "privacy_us": 100,
+        "query_decode_us": 2216617,
+        "query_field_us": 25,
+        "query_location_us": 336216,
+        "ready": [
+          {
+            "build_type": "Release",
+            "compiler_identity": "Clang-19.1.7",
+            "core_patchset_sha256": "6b5421b3a852085f48fa161a5ba1540f902aa00784a337694b21c9efc34f69bd",
+            "deck_hashes": [
+              "8ee4b699de19ff256e388d46f35b8696a60ff6ec59f0324f060a2468876711b7",
+              "6041abe0a59463d0715ae1da9100090ad487de02a02794e8ec0686d4c0513188"
+            ],
+            "duel_flags": 190464,
+            "duel_mode_name": "DUEL_MODE_MR5",
+            "format_id": "TCG_ADVANCED_2026_05_18",
+            "pid": 16100,
+            "protocol_version": "ocgforge.m4.worker.v1",
+            "rules_bundle_id": "3adfe6b4cfe2c2805e50b389fc0eb4e70a3b0b6107436614d328fddc865e585f",
+            "schema": "ocgforge.m4.worker.v1",
+            "type": "ready",
+            "worker_identity": "ocgforge.m4.native_worker.v1"
+          }
+        ],
+        "reserve_output": {
+          "calls": 9908,
+          "final_bytes": 1345246987,
+          "final_capacity": 2887160556,
+          "growth_events": 0,
+          "mode": "reserve_backed",
+          "requested_capacity": 2887091200,
+          "unused_capacity": 1541913569
+        },
+        "serializer_fraction_of_worker_percent": 63.231937319741505,
+        "serializer_us": 17786542,
+        "worker_local_simulation_us": 28129048,
+        "worker_result_evidence": {
+          "bytes": 32629,
+          "path": "artifacts\\m4\\m4-3-5\\final\\runs-hardening2\\throughput\\B2\\worker-results.json",
+          "sha256": "3cde6dd6de0d10ab0d9adebe8874b8e691c32dcc65a26cbe04acae4b28fe04f9"
+        },
+        "worker_stderr": [
+          {
+            "bytes": 2310611,
+            "path": "artifacts\\m4\\m4-3-5\\final\\runs-hardening2\\throughput\\B2\\worker-000.stderr.log",
+            "sha256": "27e0f10c8c88e420c3a7fb5bf943cf1f62f89c11db6574fce96626565574fec8"
+          }
+        ]
+      },
+      "variant": "experiment"
+    },
+    {
+      "label": "A3",
+      "summary": {
+        "entity_projection_us": 235,
+        "error_counters": {
+          "automatic": 0,
+          "core_errors": 0,
+          "retries": 0,
+          "truncated": 0,
+          "unsupported": 0,
+          "worker_errors": 0
+        },
+        "games": 16,
+        "games_per_second": 0.570432738475378,
+        "hash_fraction_of_worker_percent": 15.359956784015733,
+        "hash_us": 4308296,
+        "job_ids": [
+          "m4-000000",
+          "m4-000001",
+          "m4-000002",
+          "m4-000003",
+          "m4-000004",
+          "m4-000005",
+          "m4-000006",
+          "m4-000007",
+          "m4-000008",
+          "m4-000009",
+          "m4-000010",
+          "m4-000011",
+          "m4-000012",
+          "m4-000013",
+          "m4-000014",
+          "m4-000015"
+        ],
+        "lifecycle": {
+          "canonical_serialize_bytes": 0,
+          "canonical_serialize_calls": 0,
+          "same_mutation_epoch_duplicate_calls": 0,
+          "serialize_without_hash_bytes": 1345246987,
+          "serialize_without_hash_calls": 9908,
+          "sha256_calls": 9908
+        },
+        "observation_fraction_of_worker_percent": 92.47698330639287,
+        "operation_counters": {
+          "candidate_max": 336,
+          "candidate_sets": 9892,
+          "candidate_total": 46897,
+          "entities_projected": 526004,
+          "observations": 9908,
+          "ocg_duel_process": 24272,
+          "ocg_duel_query": 0,
+          "ocg_duel_query_count": 0,
+          "ocg_duel_query_field": 19816,
+          "ocg_duel_query_location": 118896,
+          "script_loads": 1232,
+          "script_reader_requests": 1200,
+          "semantic_hashes": 16,
+          "trace_bytes_serialized": 0
+        },
+        "outer_observation_us": 25938759,
+        "privacy_us": 173,
+        "query_decode_us": 2200260,
+        "query_field_us": 43,
+        "query_location_us": 327300,
+        "ready": [
+          {
+            "build_type": "Release",
+            "compiler_identity": "Clang-19.1.7",
+            "core_patchset_sha256": "6b5421b3a852085f48fa161a5ba1540f902aa00784a337694b21c9efc34f69bd",
+            "deck_hashes": [
+              "8ee4b699de19ff256e388d46f35b8696a60ff6ec59f0324f060a2468876711b7",
+              "6041abe0a59463d0715ae1da9100090ad487de02a02794e8ec0686d4c0513188"
+            ],
+            "duel_flags": 190464,
+            "duel_mode_name": "DUEL_MODE_MR5",
+            "format_id": "TCG_ADVANCED_2026_05_18",
+            "pid": 11816,
+            "protocol_version": "ocgforge.m4.worker.v1",
+            "rules_bundle_id": "3adfe6b4cfe2c2805e50b389fc0eb4e70a3b0b6107436614d328fddc865e585f",
+            "schema": "ocgforge.m4.worker.v1",
+            "type": "ready",
+            "worker_identity": "ocgforge.m4.native_worker.v1"
+          }
+        ],
+        "reserve_output": {
+          "calls": 9908,
+          "final_bytes": 1345246987,
+          "final_capacity": 0,
+          "growth_events": 0,
+          "mode": "ostringstream",
+          "requested_capacity": 0,
+          "unused_capacity": 0
+        },
+        "serializer_fraction_of_worker_percent": 63.50789181215465,
+        "serializer_us": 17813253,
+        "worker_local_simulation_us": 28048881,
+        "worker_result_evidence": {
+          "bytes": 32629,
+          "path": "artifacts\\m4\\m4-3-5\\final\\runs-hardening2\\throughput\\A3\\worker-results.json",
+          "sha256": "4ff9047dc4ad14b3dfdfa96ef08f73daec83f467402298238980aa233f2fa0b7"
+        },
+        "worker_stderr": [
+          {
+            "bytes": 2307496,
+            "path": "artifacts\\m4\\m4-3-5\\final\\runs-hardening2\\throughput\\A3\\worker-000.stderr.log",
+            "sha256": "7ceee4cc46e17fa2e4a962152513e9e8e78fe096663eae035b7e081ad8c9845f"
+          }
+        ]
+      },
+      "variant": "control"
+    },
+    {
+      "label": "B3",
+      "summary": {
+        "entity_projection_us": 416,
+        "error_counters": {
+          "automatic": 0,
+          "core_errors": 0,
+          "retries": 0,
+          "truncated": 0,
+          "unsupported": 0,
+          "worker_errors": 0
+        },
+        "games": 16,
+        "games_per_second": 0.5692800475348839,
+        "hash_fraction_of_worker_percent": 15.393133237326625,
+        "hash_us": 4326344,
+        "job_ids": [
+          "m4-000000",
+          "m4-000001",
+          "m4-000002",
+          "m4-000003",
+          "m4-000004",
+          "m4-000005",
+          "m4-000006",
+          "m4-000007",
+          "m4-000008",
+          "m4-000009",
+          "m4-000010",
+          "m4-000011",
+          "m4-000012",
+          "m4-000013",
+          "m4-000014",
+          "m4-000015"
+        ],
+        "lifecycle": {
+          "canonical_serialize_bytes": 0,
+          "canonical_serialize_calls": 0,
+          "same_mutation_epoch_duplicate_calls": 0,
+          "serialize_without_hash_bytes": 1345246987,
+          "serialize_without_hash_calls": 9908,
+          "sha256_calls": 9908
+        },
+        "observation_fraction_of_worker_percent": 92.5457509915702,
+        "operation_counters": {
+          "candidate_max": 336,
+          "candidate_sets": 9892,
+          "candidate_total": 46897,
+          "entities_projected": 526004,
+          "observations": 9908,
+          "ocg_duel_process": 24272,
+          "ocg_duel_query": 0,
+          "ocg_duel_query_count": 0,
+          "ocg_duel_query_field": 19816,
+          "ocg_duel_query_location": 118896,
+          "script_loads": 1232,
+          "script_reader_requests": 1200,
+          "semantic_hashes": 16,
+          "trace_bytes_serialized": 0
+        },
+        "outer_observation_us": 26010608,
+        "privacy_us": 145,
+        "query_decode_us": 2226930,
+        "query_field_us": 34,
+        "query_location_us": 330881,
+        "ready": [
+          {
+            "build_type": "Release",
+            "compiler_identity": "Clang-19.1.7",
+            "core_patchset_sha256": "6b5421b3a852085f48fa161a5ba1540f902aa00784a337694b21c9efc34f69bd",
+            "deck_hashes": [
+              "8ee4b699de19ff256e388d46f35b8696a60ff6ec59f0324f060a2468876711b7",
+              "6041abe0a59463d0715ae1da9100090ad487de02a02794e8ec0686d4c0513188"
+            ],
+            "duel_flags": 190464,
+            "duel_mode_name": "DUEL_MODE_MR5",
+            "format_id": "TCG_ADVANCED_2026_05_18",
+            "pid": 16312,
+            "protocol_version": "ocgforge.m4.worker.v1",
+            "rules_bundle_id": "3adfe6b4cfe2c2805e50b389fc0eb4e70a3b0b6107436614d328fddc865e585f",
+            "schema": "ocgforge.m4.worker.v1",
+            "type": "ready",
+            "worker_identity": "ocgforge.m4.native_worker.v1"
+          }
+        ],
+        "reserve_output": {
+          "calls": 9908,
+          "final_bytes": 1345246987,
+          "final_capacity": 2887160556,
+          "growth_events": 0,
+          "mode": "reserve_backed",
+          "requested_capacity": 2887091200,
+          "unused_capacity": 1541913569
+        },
+        "serializer_fraction_of_worker_percent": 63.33325565032685,
+        "serializer_us": 17800239,
+        "worker_local_simulation_us": 28105675,
+        "worker_result_evidence": {
+          "bytes": 32629,
+          "path": "artifacts\\m4\\m4-3-5\\final\\runs-hardening2\\throughput\\B3\\worker-results.json",
+          "sha256": "7b945eb31a3ae943e80dbac5b6f11fb56827ac5b85eabd9989a76ed9c1f166f5"
+        },
+        "worker_stderr": [
+          {
+            "bytes": 2310608,
+            "path": "artifacts\\m4\\m4-3-5\\final\\runs-hardening2\\throughput\\B3\\worker-000.stderr.log",
+            "sha256": "a0da389221acf610a5a1e5396d50a94d748fd6da4378967f6dfebf7a09fca03f"
+          }
+        ]
+      },
+      "variant": "experiment"
+    }
+  ],
+  "repository": {
+    "binary_replacement_evidence": {
+      "control": {
+        "current_path_matches_measured": true,
+        "reason": "measured A/B binary remains at its recorded path"
+      },
+      "experiment": {
+        "current_path_matches_measured": true,
+        "reason": "measured A/B binary remains at its recorded path"
+      }
+    },
+    "final_head": "db7e5af2c97d9b6eccd697b903e9ba6fcea70a30",
+    "m4_3_4_freeze_commit": "76c1a028f1c99a8ed46b63da3c3b93b64cf3a0e8",
+    "post_reversion_worktree_status": " M CMakeLists.txt\n M tools/m4/compare_build_modes.py\n?? docs/m4/M4_3_5_RESERVE_BACKED_SERIALIZATION.md\n?? docs/m4/m4_3_5_reserve_backed_serialization.json\n?? tests/m4/test_m4_3_5_harness.py\n?? tests/observation/m4_3_5_serialization_fixture_test.cpp\n?? tools/m4/compare_reserve_serialization.py\n?? tools/m4/finalize_m4_3_5_report.py\n?? tools/m4/run_m4_3_5_reserve_ab.py\n?? tools/m4/test_reserve_output_contract.py\n",
+    "production_files_clean_against_starting_head": true,
+    "production_optimization_reverted": true,
+    "reverted_production_files": [
+      "src/observation/serialization.cpp",
+      "include/ygo/observation/performance_audit.hpp",
+      "tools/ygo_m4_worker/json_protocol.cpp"
+    ],
+    "starting_head": "db7e5af2c97d9b6eccd697b903e9ba6fcea70a30",
+    "worktree_status": " M CMakeLists.txt\n M tools/m4/compare_build_modes.py\n?? docs/m4/M4_3_5_RESERVE_BACKED_SERIALIZATION.md\n?? docs/m4/m4_3_5_reserve_backed_serialization.json\n?? tests/m4/test_m4_3_5_harness.py\n?? tests/observation/m4_3_5_serialization_fixture_test.cpp\n?? tools/m4/compare_reserve_serialization.py\n?? tools/m4/finalize_m4_3_5_report.py\n?? tools/m4/run_m4_3_5_reserve_ab.py\n?? tools/m4/test_reserve_output_contract.py\n"
+  },
+  "reserve_telemetry": {
+    "calls": 9908,
+    "final_bytes": 1345246987,
+    "final_capacity": 2887160556,
+    "growth_events": 0,
+    "identical_across_experiment_repetitions": true,
+    "mode": "reserve_backed",
+    "requested_capacity": 2887091200,
+    "unused_capacity": 1541913569
+  },
+  "schema": "ocgforge.m4.m4_3_5_reserve_backed_serialization.v1",
+  "sidecar_validation": {
+    "A1": {
+      "job_ids_verified": [
+        "m4-000000",
+        "m4-000001",
+        "m4-000002",
+        "m4-000003",
+        "m4-000004",
+        "m4-000005",
+        "m4-000006",
+        "m4-000007",
+        "m4-000008",
+        "m4-000009",
+        "m4-000010",
+        "m4-000011",
+        "m4-000012",
+        "m4-000013",
+        "m4-000014",
+        "m4-000015"
+      ],
+      "lifecycle_records_verified": 9908,
+      "reserve_records_verified": 16,
+      "sidecar_count": 1,
+      "sidecar_sha256_verified": true,
+      "timing_totals_verified": {
+        "entity_projection_us": 241,
+        "hash_us": 4306241,
+        "outer_observation_us": 26113803,
+        "privacy_us": 221,
+        "query_decode_us": 2304768,
+        "query_field_us": 30,
+        "query_location_us": 330202,
+        "serializer_us": 17873983
+      },
+      "worker_results_verified": 16
+    },
+    "A2": {
+      "job_ids_verified": [
+        "m4-000000",
+        "m4-000001",
+        "m4-000002",
+        "m4-000003",
+        "m4-000004",
+        "m4-000005",
+        "m4-000006",
+        "m4-000007",
+        "m4-000008",
+        "m4-000009",
+        "m4-000010",
+        "m4-000011",
+        "m4-000012",
+        "m4-000013",
+        "m4-000014",
+        "m4-000015"
+      ],
+      "lifecycle_records_verified": 9908,
+      "reserve_records_verified": 16,
+      "sidecar_count": 1,
+      "sidecar_sha256_verified": true,
+      "timing_totals_verified": {
+        "entity_projection_us": 243,
+        "hash_us": 4322236,
+        "outer_observation_us": 26048688,
+        "privacy_us": 228,
+        "query_decode_us": 2228257,
+        "query_field_us": 23,
+        "query_location_us": 331253,
+        "serializer_us": 17875558
+      },
+      "worker_results_verified": 16
+    },
+    "A3": {
+      "job_ids_verified": [
+        "m4-000000",
+        "m4-000001",
+        "m4-000002",
+        "m4-000003",
+        "m4-000004",
+        "m4-000005",
+        "m4-000006",
+        "m4-000007",
+        "m4-000008",
+        "m4-000009",
+        "m4-000010",
+        "m4-000011",
+        "m4-000012",
+        "m4-000013",
+        "m4-000014",
+        "m4-000015"
+      ],
+      "lifecycle_records_verified": 9908,
+      "reserve_records_verified": 16,
+      "sidecar_count": 1,
+      "sidecar_sha256_verified": true,
+      "timing_totals_verified": {
+        "entity_projection_us": 235,
+        "hash_us": 4308296,
+        "outer_observation_us": 25938759,
+        "privacy_us": 173,
+        "query_decode_us": 2200260,
+        "query_field_us": 43,
+        "query_location_us": 327300,
+        "serializer_us": 17813253
+      },
+      "worker_results_verified": 16
+    },
+    "B1": {
+      "job_ids_verified": [
+        "m4-000000",
+        "m4-000001",
+        "m4-000002",
+        "m4-000003",
+        "m4-000004",
+        "m4-000005",
+        "m4-000006",
+        "m4-000007",
+        "m4-000008",
+        "m4-000009",
+        "m4-000010",
+        "m4-000011",
+        "m4-000012",
+        "m4-000013",
+        "m4-000014",
+        "m4-000015"
+      ],
+      "lifecycle_records_verified": 9908,
+      "reserve_records_verified": 16,
+      "sidecar_count": 1,
+      "sidecar_sha256_verified": true,
+      "timing_totals_verified": {
+        "entity_projection_us": 231,
+        "hash_us": 4318152,
+        "outer_observation_us": 26033133,
+        "privacy_us": 147,
+        "query_decode_us": 2226872,
+        "query_field_us": 26,
+        "query_location_us": 335303,
+        "serializer_us": 17813125
+      },
+      "worker_results_verified": 16
+    },
+    "B2": {
+      "job_ids_verified": [
+        "m4-000000",
+        "m4-000001",
+        "m4-000002",
+        "m4-000003",
+        "m4-000004",
+        "m4-000005",
+        "m4-000006",
+        "m4-000007",
+        "m4-000008",
+        "m4-000009",
+        "m4-000010",
+        "m4-000011",
+        "m4-000012",
+        "m4-000013",
+        "m4-000014",
+        "m4-000015"
+      ],
+      "lifecycle_records_verified": 9908,
+      "reserve_records_verified": 16,
+      "sidecar_count": 1,
+      "sidecar_sha256_verified": true,
+      "timing_totals_verified": {
+        "entity_projection_us": 208,
+        "hash_us": 4315749,
+        "outer_observation_us": 26000217,
+        "privacy_us": 100,
+        "query_decode_us": 2216617,
+        "query_field_us": 25,
+        "query_location_us": 336216,
+        "serializer_us": 17786542
+      },
+      "worker_results_verified": 16
+    },
+    "B3": {
+      "job_ids_verified": [
+        "m4-000000",
+        "m4-000001",
+        "m4-000002",
+        "m4-000003",
+        "m4-000004",
+        "m4-000005",
+        "m4-000006",
+        "m4-000007",
+        "m4-000008",
+        "m4-000009",
+        "m4-000010",
+        "m4-000011",
+        "m4-000012",
+        "m4-000013",
+        "m4-000014",
+        "m4-000015"
+      ],
+      "lifecycle_records_verified": 9908,
+      "reserve_records_verified": 16,
+      "sidecar_count": 1,
+      "sidecar_sha256_verified": true,
+      "timing_totals_verified": {
+        "entity_projection_us": 416,
+        "hash_us": 4326344,
+        "outer_observation_us": 26010608,
+        "privacy_us": 145,
+        "query_decode_us": 2226930,
+        "query_field_us": 34,
+        "query_location_us": 330881,
+        "serializer_us": 17800239
+      },
+      "worker_results_verified": 16
+    }
+  },
+  "status": "M4.3.5 REJECTED — NO MATERIAL BENEFIT",
+  "timing_decision": {
+    "control_serializer_median_us": 17873983,
+    "control_worker_median_us": 28179174,
+    "experiment_serializer_median_us": 17800239,
+    "experiment_worker_median_us": 28129048,
+    "materiality_rule": {
+      "paired_repetitions_improving_min": 2,
+      "serializer_median_improvement_percent_min": 5.0,
+      "worker_median_improvement_percent_min": 3.0
+    },
+    "paired_serializer_improvements": 3,
+    "paired_worker_improvements": 2,
+    "pass": false,
+    "serializer_speedup_percent": 0.4125773197837326,
+    "worker_speedup_percent": 0.17788314164212193
+  },
+  "timing_summary": {
+    "control": {
+      "games_per_second": {
+        "max": 0.570432738475378,
+        "median": 0.5677952093272854,
+        "min": 0.5665323760682985,
+        "range": [
+          0.5665323760682985,
+          0.570432738475378
+        ]
+      },
+      "hash_us": {
+        "max": 4322236,
+        "median": 4308296,
+        "min": 4306241,
+        "range": [
+          4306241,
+          4322236
+        ]
+      },
+      "outer_observation_us": {
+        "max": 26113803,
+        "median": 26048688,
+        "min": 25938759,
+        "range": [
+          25938759,
+          26113803
+        ]
+      },
+      "serializer_us": {
+        "max": 17875558,
+        "median": 17873983,
+        "min": 17813253,
+        "range": [
+          17813253,
+          17875558
+        ]
+      },
+      "worker_local_simulation_us": {
+        "max": 28241987,
+        "median": 28179174,
+        "min": 28048881,
+        "range": [
+          28048881,
+          28241987
+        ]
+      }
+    },
+    "experiment": {
+      "games_per_second": {
+        "max": 0.5692800475348839,
+        "median": 0.568807021126346,
+        "min": 0.5679352826386728,
+        "range": [
+          0.5679352826386728,
+          0.5692800475348839
+        ]
+      },
+      "hash_us": {
+        "max": 4326344,
+        "median": 4318152,
+        "min": 4315749,
+        "range": [
+          4315749,
+          4326344
+        ]
+      },
+      "outer_observation_us": {
+        "max": 26033133,
+        "median": 26010608,
+        "min": 26000217,
+        "range": [
+          26000217,
+          26033133
+        ]
+      },
+      "serializer_us": {
+        "max": 17813125,
+        "median": 17800239,
+        "min": 17786542,
+        "range": [
+          17786542,
+          17813125
+        ]
+      },
+      "worker_local_simulation_us": {
+        "max": 28172224,
+        "median": 28129048,
+        "min": 28105675,
+        "range": [
+          28105675,
+          28172224
+        ]
+      }
+    },
+    "materiality_rule_pass": false,
+    "paired_serializer_improvements": 3,
+    "paired_worker_improvements": 2,
+    "serializer_speedup_percent": 0.4125773197837326,
+    "worker_speedup_percent": 0.17788314164212193
+  },
+  "workload": {
+    "games": 16,
+    "master_seed": 20260815,
+    "matchup": "Swordsoul Tenyi ML v1 vs Salamangreat ML v1",
+    "max_steps": 2200,
+    "mode": "throughput",
+    "observation_mode": "full",
+    "trace_persistence": false,
+    "workers": 1
+  }
+}

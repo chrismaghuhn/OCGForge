@@ -1,0 +1,9 @@
+schema=ocgforge.m4.failure_isolation_evidence.v1
+command=["C:\\Users\\chris\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe", "C:\\yogiohML-m4-finalization\\tests\\m4\\fake_worker_crash.py", "--behavior", "one-hung-one-periodic", "--marker", "<TEMP>/roles.marker"]
+failure_class=worker_timeout
+report_written=false
+python_main_return_code=2
+observed_error=timed out waiting for a worker result (worker(s): 0)
+worker_crashes=0
+worker_restarts=0
+retries=0

@@ -10,6 +10,10 @@
 #include "ygo/core/rules_bundle.hpp"
 #include "ygo/core/seed_bundle.hpp"
 
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+#include "ygo/observation/performance_audit.hpp"
+#endif
+
 struct OCG_QueryInfo;
 
 namespace ygo::core {
@@ -23,6 +27,9 @@ struct CoreHostConfig {
     std::uint32_t draw_count_per_turn = 1;
     std::optional<std::uint8_t> starting_player;
     std::vector<std::uint32_t> required_script_codes;
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+    ygo::observation::PerformanceAuditCollector* performance_audit = nullptr;
+#endif
 
     std::uint8_t effective_starting_player() const noexcept {
         return starting_player.value_or(0);

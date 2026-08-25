@@ -1,0 +1,197 @@
+Test project C:/yogiohML-m4-finalization/build/release-windows-zig
+      Start  1: m4_simulation_contract_test
+ 1/94 Test  #1: m4_simulation_contract_test ............   Passed    0.01 sec
+      Start  2: protocol_test
+ 2/94 Test  #2: protocol_test ..........................   Passed    0.01 sec
+      Start  3: continuation_core_test
+ 3/94 Test  #3: continuation_core_test .................   Passed    0.01 sec
+      Start  4: response_builder_test
+ 4/94 Test  #4: response_builder_test ..................   Passed    0.01 sec
+      Start  5: decision_family_test
+ 5/94 Test  #5: decision_family_test ...................   Passed    0.01 sec
+      Start  6: continuation_oracle_test
+ 6/94 Test  #6: continuation_oracle_test ...............   Passed    0.01 sec
+      Start  7: decision_fail_closed_test
+ 7/94 Test  #7: decision_fail_closed_test ..............   Passed    0.01 sec
+      Start  8: trace_semantics_test
+ 8/94 Test  #8: trace_semantics_test ...................   Passed    0.01 sec
+      Start  9: sha256_known_answer_test
+ 9/94 Test  #9: sha256_known_answer_test ...............   Passed    0.02 sec
+      Start 10: m35_probe_trace_starting_player_test
+10/94 Test #10: m35_probe_trace_starting_player_test ...   Passed    0.18 sec
+      Start 11: player_view_test
+11/94 Test #11: player_view_test .......................   Passed    0.01 sec
+      Start 12: observation_contract_test
+12/94 Test #12: observation_contract_test ..............   Passed    0.01 sec
+      Start 13: card_catalog_test
+13/94 Test #13: card_catalog_test ......................   Passed    0.03 sec
+      Start 14: query_decoder_test
+14/94 Test #14: query_decoder_test .....................   Passed    0.01 sec
+      Start 15: zone_projection_test
+15/94 Test #15: zone_projection_test ...................   Passed    0.01 sec
+      Start 16: privacy_projection_test
+16/94 Test #16: privacy_projection_test ................   Passed    0.01 sec
+      Start 17: observation_builder_test
+17/94 Test #17: observation_builder_test ...............   Passed    0.25 sec
+      Start 18: m4_3_5_serialization_fixture_test
+18/94 Test #18: m4_3_5_serialization_fixture_test ......   Passed    0.01 sec
+      Start 19: m4_3_6_direct_writer_test
+19/94 Test #19: m4_3_6_direct_writer_test ..............   Passed    0.01 sec
+      Start 20: mechanics_projection_test
+20/94 Test #20: mechanics_projection_test ..............   Passed    0.04 sec
+      Start 21: m2_1_xyz_api_test
+21/94 Test #21: m2_1_xyz_api_test ......................   Passed    0.07 sec
+      Start 22: m35_xyz_material_query_test
+22/94 Test #22: m35_xyz_material_query_test ............   Passed    0.06 sec
+      Start 23: m35_starting_player_api_test
+23/94 Test #23: m35_starting_player_api_test ...........   Passed    0.08 sec
+      Start 24: event_projection_test
+24/94 Test #24: event_projection_test ..................   Passed    0.01 sec
+      Start 25: observation_probe_test
+25/94 Test #25: observation_probe_test .................   Passed    0.04 sec
+      Start 26: observation_coverage_test
+26/94 Test #26: observation_coverage_test ..............   Passed    0.05 sec
+      Start 27: decision_observation_test
+27/94 Test #27: decision_observation_test ..............   Passed    0.01 sec
+      Start 28: continuation_privacy_test
+28/94 Test #28: continuation_privacy_test ..............   Passed    0.01 sec
+      Start 29: core_lifecycle_test
+29/94 Test #29: core_lifecycle_test ....................   Passed    0.03 sec
+      Start 30: core_metrics_test
+30/94 Test #30: core_metrics_test ......................   Passed    0.04 sec
+      Start 31: m3_rules_mode_test
+31/94 Test #31: m3_rules_mode_test .....................   Passed    0.03 sec
+      Start 32: deck_loader_test
+32/94 Test #32: deck_loader_test .......................   Passed    0.04 sec
+      Start 33: card_instantiation_test
+33/94 Test #33: card_instantiation_test ................   Passed    0.04 sec
+      Start 34: m3_ss01_fixture
+34/94 Test #34: m3_ss01_fixture ........................   Passed    0.10 sec
+      Start 35: m3_ss07_fixture
+35/94 Test #35: m3_ss07_fixture ........................   Passed    0.11 sec
+      Start 36: m3_ss08_fixture
+36/94 Test #36: m3_ss08_fixture ........................   Passed    0.10 sec
+      Start 37: m3_ss12_condition_fixture
+37/94 Test #37: m3_ss12_condition_fixture ..............   Passed    0.10 sec
+      Start 38: m3_ss18_fixture
+38/94 Test #38: m3_ss18_fixture ........................   Passed    0.10 sec
+      Start 39: m3_ss05_fixture
+39/94 Test #39: m3_ss05_fixture ........................   Passed    0.08 sec
+      Start 40: m3_ss06_fixture
+40/94 Test #40: m3_ss06_fixture ........................   Passed    0.10 sec
+      Start 41: m3_int01_fixture
+41/94 Test #41: m3_int01_fixture .......................   Passed    0.07 sec
+      Start 42: m3_int02_fixture
+42/94 Test #42: m3_int02_fixture .......................   Passed    0.07 sec
+      Start 43: m3_int03_fixture
+43/94 Test #43: m3_int03_fixture .......................   Passed    0.07 sec
+      Start 44: m3_int04_fixture
+44/94 Test #44: m3_int04_fixture .......................   Passed    0.07 sec
+      Start 45: m3_int05_fixture
+45/94 Test #45: m3_int05_fixture .......................   Passed    0.07 sec
+      Start 46: m3_sg01_fixture
+46/94 Test #46: m3_sg01_fixture ........................   Passed    0.08 sec
+      Start 47: m3_sg02_fixture
+47/94 Test #47: m3_sg02_fixture ........................   Passed    0.07 sec
+      Start 48: m3_sg03_fixture
+48/94 Test #48: m3_sg03_fixture ........................   Passed    0.06 sec
+      Start 49: m3_sg04_fixture
+49/94 Test #49: m3_sg04_fixture ........................   Passed    0.08 sec
+      Start 50: m3_ss10_fixture
+50/94 Test #50: m3_ss10_fixture ........................   Passed    0.08 sec
+      Start 51: m3_ss10_banish_fixture
+51/94 Test #51: m3_ss10_banish_fixture .................   Passed    0.11 sec
+      Start 52: m3_ss12_fixture
+52/94 Test #52: m3_ss12_fixture ........................   Passed    0.07 sec
+      Start 53: m3_ss14_fixture
+53/94 Test #53: m3_ss14_fixture ........................   Passed    0.35 sec
+      Start 54: m3_ss15_fixture
+54/94 Test #54: m3_ss15_fixture ........................   Passed    0.07 sec
+      Start 55: m3_ss16_fixture
+55/94 Test #55: m3_ss16_fixture ........................   Passed    0.07 sec
+      Start 56: m3_ss16_chengying_fixture
+56/94 Test #56: m3_ss16_chengying_fixture ..............   Passed    0.11 sec
+      Start 57: m3_ss17_fixture
+57/94 Test #57: m3_ss17_fixture ........................   Passed    0.13 sec
+      Start 58: m3_sg05_fixture
+58/94 Test #58: m3_sg05_fixture ........................   Passed    0.10 sec
+      Start 59: m3_sg06_fixture
+59/94 Test #59: m3_sg06_fixture ........................   Passed    0.10 sec
+      Start 60: m3_sg07_jack_fixture
+60/94 Test #60: m3_sg07_jack_fixture ...................   Passed    0.11 sec
+      Start 61: m3_sg07_weasel_fixture
+61/94 Test #61: m3_sg07_weasel_fixture .................   Passed    0.13 sec
+      Start 62: m3_sg07_falco_fixture
+62/94 Test #62: m3_sg07_falco_fixture ..................   Passed    0.10 sec
+      Start 63: m3_sg08_real_fixture
+63/94 Test #63: m3_sg08_real_fixture ...................   Passed    0.18 sec
+      Start 64: m3_sg09_direct_fixture
+64/94 Test #64: m3_sg09_direct_fixture .................   Passed    0.27 sec
+      Start 65: m3_sg11_fixture
+65/94 Test #65: m3_sg11_fixture ........................   Passed    0.10 sec
+      Start 66: m3_sg12_fixture
+66/94 Test #66: m3_sg12_fixture ........................   Passed    0.13 sec
+      Start 67: m3_sg13_fixture
+67/94 Test #67: m3_sg13_fixture ........................   Passed    0.14 sec
+      Start 68: m3_sg14_fixture
+68/94 Test #68: m3_sg14_fixture ........................   Passed    0.14 sec
+      Start 69: m3_sg15_fixture
+69/94 Test #69: m3_sg15_fixture ........................   Passed    0.15 sec
+      Start 70: m3_sg18_fixture
+70/94 Test #70: m3_sg18_fixture ........................   Passed    0.13 sec
+      Start 71: m3_sg19_fixture
+71/94 Test #71: m3_sg19_fixture ........................   Passed    0.12 sec
+      Start 72: m3_sg19_no_target_fixture
+72/94 Test #72: m3_sg19_no_target_fixture ..............   Passed    0.11 sec
+      Start 73: m3_sg16_negate_fixture
+73/94 Test #73: m3_sg16_negate_fixture .................   Passed    0.10 sec
+      Start 74: m3_sg16_recovery_fixture
+74/94 Test #74: m3_sg16_recovery_fixture ...............   Passed    0.14 sec
+      Start 75: m3_sg17_fixture
+75/94 Test #75: m3_sg17_fixture ........................   Passed    0.11 sec
+      Start 76: m3_btl01_fixture
+76/94 Test #76: m3_btl01_fixture .......................   Passed    0.20 sec
+      Start 77: m3_sg20_fixture
+77/94 Test #77: m3_sg20_fixture ........................   Passed    0.11 sec
+      Start 78: m3_real_deck_privacy_test
+78/94 Test #78: m3_real_deck_privacy_test ..............   Passed    0.13 sec
+      Start 79: m1_engine_fixture_test
+79/94 Test #79: m1_engine_fixture_test .................   Passed    0.04 sec
+      Start 80: m1_engine_select_card_multi
+80/94 Test #80: m1_engine_select_card_multi ............   Passed    0.03 sec
+      Start 81: m1_engine_select_option
+81/94 Test #81: m1_engine_select_option ................   Passed    0.03 sec
+      Start 82: m1_engine_select_sum
+82/94 Test #82: m1_engine_select_sum ...................   Passed    0.03 sec
+      Start 83: m1_engine_select_counter
+83/94 Test #83: m1_engine_select_counter ...............   Passed    0.03 sec
+      Start 84: m1_engine_sort_card
+84/94 Test #84: m1_engine_sort_card ....................   Passed    0.03 sec
+      Start 85: m1_engine_select_disfield
+85/94 Test #85: m1_engine_select_disfield ..............   Passed    0.03 sec
+      Start 86: m1_engine_semantic_determinism_test
+86/94 Test #86: m1_engine_semantic_determinism_test ....   Passed    0.43 sec
+      Start 87: determinism_test
+87/94 Test #87: determinism_test .......................   Passed    3.54 sec
+      Start 88: fixture_deck_test
+88/94 Test #88: fixture_deck_test ......................   Passed    0.08 sec
+      Start 89: unsupported_diagnostic_test
+89/94 Test #89: unsupported_diagnostic_test ............   Passed    0.09 sec
+      Start 90: decision_coverage_test
+90/94 Test #90: decision_coverage_test .................   Passed    0.05 sec
+      Start 91: m4_worker_protocol_test
+91/94 Test #91: m4_worker_protocol_test ................   Passed    0.11 sec
+      Start 92: m4_failure_isolation_test
+92/94 Test #92: m4_failure_isolation_test ..............   Passed   47.11 sec
+      Start 93: m4_worker_integration_test
+93/94 Test #93: m4_worker_integration_test .............   Passed   49.64 sec
+      Start 94: m4_worker_integration_fast_test
+94/94 Test #94: m4_worker_integration_fast_test ........   Passed    7.74 sec
+
+100% tests passed, 0 tests failed out of 94
+
+Label Time Summary:
+M4_ACCEPTANCE_SCALE    =  49.64 sec*proc (1 test)
+M4_HOSTED_FAST         =   7.74 sec*proc (1 test)
+
+Total Test time (real) = 115.44 sec
