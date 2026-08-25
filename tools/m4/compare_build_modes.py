@@ -175,6 +175,7 @@ def _compare(debug: Mapping[str, Any], release: Mapping[str, Any]) -> dict[str, 
             and steps_equal
             and normalized_trace_equal
             and step_bytes_equal
+            and raw_trace_hash_equal
         )
         semantic_ok = semantic_ok and row_ok
         rows.append(

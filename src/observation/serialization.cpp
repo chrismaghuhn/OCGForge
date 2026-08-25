@@ -10,6 +10,9 @@
 #include <utility>
 #include <vector>
 
+#ifdef YGO_M4_DIRECT_CANONICAL_WRITER
+#include "direct_canonical_writer.hpp"
+#endif
 #include "ygo/trace/sha256.hpp"
 
 namespace ygo::observation {
@@ -52,10 +55,28 @@ constexpr std::uint8_t kPrimitiveNumeric = 0;
 constexpr std::uint8_t kPrimitiveBoolean = 1;
 constexpr std::uint8_t kPrimitiveNull = 2;
 
-std::size_t output_offset(std::ostringstream& output) {
+#ifdef YGO_M4_DIRECT_CANONICAL_WRITER
+using CanonicalOutput = detail::DirectCanonicalWriter;
+
+std::size_t output_offset(CanonicalOutput& output) {
+    return output.size();
+}
+
+std::string output_extract(CanonicalOutput& output) {
+    return output.take();
+}
+#else
+using CanonicalOutput = std::ostringstream;
+
+std::size_t output_offset(CanonicalOutput& output) {
     const auto position = output.tellp();
     return position < 0 ? 0 : static_cast<std::size_t>(position);
 }
+
+std::string output_extract(CanonicalOutput& output) {
+    return output.str();
+}
+#endif
 
 template <typename T>
 std::uint64_t approximate_fixed_vector_bytes(const std::vector<T>& values) {
@@ -400,7 +421,7 @@ std::string json_escape(const std::string& value) {
 }
 
 template <typename T>
-void write_optional_number(std::ostringstream& out,
+void write_optional_number(CanonicalOutput& out,
                            const std::optional<T>& value,
                            SerializationShapeProbe& shape) {
     if (value.has_value()) {
@@ -412,7 +433,7 @@ void write_optional_number(std::ostringstream& out,
     }
 }
 
-void write_optional_string(std::ostringstream& out,
+void write_optional_string(CanonicalOutput& out,
                            const std::optional<std::string>& value,
                            SerializationShapeProbe& shape) {
     if (value.has_value()) {
@@ -423,7 +444,7 @@ void write_optional_string(std::ostringstream& out,
     }
 }
 
-void write_optional_locator(std::ostringstream& out,
+void write_optional_locator(CanonicalOutput& out,
                             const std::optional<ObservationLocator>& value,
                             SerializationShapeProbe& shape) {
     if (value.has_value()) {
@@ -434,7 +455,7 @@ void write_optional_locator(std::ostringstream& out,
     }
 }
 
-void write_optional_zone(std::ostringstream& out,
+void write_optional_zone(CanonicalOutput& out,
                          const std::optional<SemanticZone>& value,
                          SerializationShapeProbe& shape) {
     if (value.has_value()) {
@@ -445,7 +466,7 @@ void write_optional_zone(std::ostringstream& out,
     }
 }
 
-void write_optional_u8(std::ostringstream& out,
+void write_optional_u8(CanonicalOutput& out,
                        const std::optional<std::uint8_t>& value,
                        SerializationShapeProbe& shape) {
     if (value.has_value()) {
@@ -458,7 +479,7 @@ void write_optional_u8(std::ostringstream& out,
 }
 
 template <typename T, typename Writer>
-void write_array(std::ostringstream& out, const std::vector<T>& values, Writer writer) {
+void write_array(CanonicalOutput& out, const std::vector<T>& values, Writer writer) {
     out << '[';
     for (std::size_t index = 0; index < values.size(); ++index) {
         if (index != 0) {
@@ -469,7 +490,7 @@ void write_array(std::ostringstream& out, const std::vector<T>& values, Writer w
     out << ']';
 }
 
-void write_counters(std::ostringstream& out,
+void write_counters(CanonicalOutput& out,
                     const std::vector<Counter>& input,
                     SerializationShapeProbe& shape) {
     auto values = shape.copy(kCopyCounters, input.size(), approximate_fixed_vector_bytes(input),
@@ -480,7 +501,7 @@ void write_counters(std::ostringstream& out,
         });
     });
     const auto start = output_offset(out);
-    write_array(out, values, [&shape](std::ostringstream& stream, const Counter& counter) {
+    write_array(out, values, [&shape](CanonicalOutput& stream, const Counter& counter) {
         shape.record_primitive(kPrimitiveNumeric);
         shape.record_primitive(kPrimitiveNumeric);
         stream << "{\"type\":" << counter.type << ",\"count\":" << counter.count << '}';
@@ -488,7 +509,7 @@ void write_counters(std::ostringstream& out,
     shape.record_nested_bytes(kNestedCounters, values.size(), output_offset(out) - start);
 }
 
-void write_properties(std::ostringstream& out,
+void write_properties(CanonicalOutput& out,
                       const std::optional<CardProperties>& properties,
                       const std::uint8_t property_kind,
                       SerializationShapeProbe& shape) {
@@ -530,7 +551,7 @@ void write_properties(std::ostringstream& out,
     write_optional_number(out, value.link_rating, shape);
     out << ",\"link_markers\":";
     const auto marker_start = output_offset(out);
-    write_array(out, markers, [&shape](std::ostringstream& stream, LinkMarker marker) {
+    write_array(out, markers, [&shape](CanonicalOutput& stream, LinkMarker marker) {
         stream << json_escape(link_marker_name(marker), shape);
     });
     shape.record_nested_bytes(kNestedLinkMarkers, markers.size(), output_offset(out) - marker_start);
@@ -546,7 +567,7 @@ void write_properties(std::ostringstream& out,
     shape.record_property(property_kind, true, output_offset(out) - start);
 }
 
-void write_card(std::ostringstream& out,
+void write_card(CanonicalOutput& out,
                 const ObservedCard& card,
                 SerializationShapeProbe& shape) {
     out << "{\"locator\":" << json_escape(card.locator.value, shape);
@@ -575,7 +596,7 @@ void write_card(std::ostringstream& out,
     out << '}';
 }
 
-void write_event(std::ostringstream& out,
+void write_event(CanonicalOutput& out,
                  const VisibleGameEvent& event,
                  SerializationShapeProbe& shape) {
     auto targets = shape.copy(kCopyEventTargets, event.targets.size(),
@@ -614,13 +635,13 @@ void write_event(std::ostringstream& out,
     out << ",\"effect_description\":";
     write_optional_number(out, event.effect_description, shape);
     out << ",\"targets\":";
-    write_array(out, targets, [&shape](std::ostringstream& stream, const ObservationLocator& locator) {
+    write_array(out, targets, [&shape](CanonicalOutput& stream, const ObservationLocator& locator) {
         stream << json_escape(locator.value, shape);
     });
     out << '}';
 }
 
-void write_match_context(std::ostringstream& out,
+void write_match_context(CanonicalOutput& out,
                          const MatchContext& context,
                          SerializationShapeProbe& shape) {
     const auto write_deck = [&out, &shape](const StaticDeckContext& deck,
@@ -635,12 +656,12 @@ void write_match_context(std::ostringstream& out,
         shape.sort(kSortDecks, extra.size(), [&extra]() { std::sort(extra.begin(), extra.end()); });
         shape.record_primitive(kPrimitiveBoolean);
         out << "{\"known\":" << (deck.known ? "true" : "false") << ",\"main_deck\":";
-        write_array(out, main, [&shape](std::ostringstream& stream, std::uint32_t code) {
+        write_array(out, main, [&shape](CanonicalOutput& stream, std::uint32_t code) {
             shape.record_primitive(kPrimitiveNumeric);
             stream << code;
         });
         out << ",\"extra_deck\":";
-        write_array(out, extra, [&shape](std::ostringstream& stream, std::uint32_t code) {
+        write_array(out, extra, [&shape](CanonicalOutput& stream, std::uint32_t code) {
             shape.record_primitive(kPrimitiveNumeric);
             stream << code;
         });
@@ -759,7 +780,7 @@ std::string serialize_without_hash(
         });
     });
 
-    std::ostringstream out;
+    CanonicalOutput out;
     out << "{\"schema_version\":" << json_escape(observation.schema_version, shape)
         << ",\"perspective_player\":" << static_cast<unsigned>(observation.perspective_player)
         << ",\"decision_index\":" << observation.decision_index
@@ -774,7 +795,7 @@ std::string serialize_without_hash(
     shape.record_primitive(kPrimitiveNumeric);
     out << "\"duel_flags\":" << observation.globals.duel_flags << ",\"life_points\":";
     write_array(out, observation.globals.life_points,
-                [&shape](std::ostringstream& stream, std::uint32_t value) {
+                [&shape](CanonicalOutput& stream, std::uint32_t value) {
                     shape.record_primitive(kPrimitiveNumeric);
                     stream << value;
                 });
@@ -797,7 +818,7 @@ std::string serialize_without_hash(
 
     section_start = output_offset(out);
     out << ",\"zones\":";
-    write_array(out, zones, [&shape](std::ostringstream& stream, const ObservedZone& zone) {
+    write_array(out, zones, [&shape](CanonicalOutput& stream, const ObservedZone& zone) {
         for (int index = 0; index < 5; ++index) {
             shape.record_primitive(kPrimitiveNumeric);
         }
@@ -826,7 +847,7 @@ std::string serialize_without_hash(
 
     section_start = output_offset(out);
     out << ",\"relationships\":";
-    write_array(out, relationships, [&shape](std::ostringstream& stream, const Relationship& relationship) {
+    write_array(out, relationships, [&shape](CanonicalOutput& stream, const Relationship& relationship) {
         stream << "{\"kind\":" << json_escape(relationship_kind_name(relationship.kind), shape)
                << ",\"source\":" << json_escape(relationship.source.value, shape)
                << ",\"target\":" << json_escape(relationship.target.value, shape) << '}';
@@ -836,7 +857,7 @@ std::string serialize_without_hash(
     section_start = output_offset(out);
     shape.record_primitive(kPrimitiveNumeric);
     out << ",\"chain\":{\"length\":" << observation.chain.length << ",\"links\":";
-    write_array(out, observation.chain.links, [&shape](std::ostringstream& stream, const ChainLink& link) {
+    write_array(out, observation.chain.links, [&shape](CanonicalOutput& stream, const ChainLink& link) {
         auto targets = shape.copy(kCopyChainTargets, link.targets.size(),
                                   approximate_locator_vector_bytes(link.targets), [&link]() {
                                       return link.targets;
@@ -855,7 +876,7 @@ std::string serialize_without_hash(
         stream << ",\"effect_description\":";
         write_optional_number(stream, link.effect_description, shape);
         stream << ",\"targets\":";
-        write_array(stream, targets, [&shape](std::ostringstream& target_stream,
+        write_array(stream, targets, [&shape](CanonicalOutput& target_stream,
                                              const ObservationLocator& locator) {
             target_stream << json_escape(locator.value, shape);
         });
@@ -903,7 +924,7 @@ std::string serialize_without_hash(
     shape.sort(kSortDecisionReferences, references.size(), [&references]() {
         std::sort(references.begin(), references.end());
     });
-    write_array(out, references, [&shape](std::ostringstream& stream, const ObservationLocator& locator) {
+    write_array(out, references, [&shape](CanonicalOutput& stream, const ObservationLocator& locator) {
         stream << json_escape(locator.value, shape);
     });
     out << '}';
@@ -914,24 +935,17 @@ std::string serialize_without_hash(
     write_match_context(out, observation.match_context, shape);
     out << '}';
     shape.record_section(8, section_start, output_offset(out));
-#ifdef YGO_M4_PERFORMANCE_AUDIT
     const auto extraction_start = SerializationClock::now();
-    auto serialized = out.str();
+    auto serialized = output_extract(out);
     shape.record_final_extraction(static_cast<std::uint64_t>(
         std::chrono::duration_cast<std::chrono::microseconds>(SerializationClock::now() - extraction_start).count()));
     shape.finish(serialized.size());
+#ifdef YGO_M4_PERFORMANCE_AUDIT
     if (audit != nullptr) {
         audit->record_serialize_without_hash(serialized.size());
     }
-    return serialized;
-#else
-    const auto extraction_start = SerializationClock::now();
-    auto serialized = out.str();
-    shape.record_final_extraction(static_cast<std::uint64_t>(
-        std::chrono::duration_cast<std::chrono::microseconds>(SerializationClock::now() - extraction_start).count()));
-    shape.finish(serialized.size());
-    return serialized;
 #endif
+    return serialized;
 }
 
 }  // namespace
