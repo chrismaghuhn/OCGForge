@@ -1,0 +1,489 @@
+{
+  "schema": "ocgforge.edopro_windbot.research_evidence.v1",
+  "research_date": "2026-08-25",
+  "scope": "research-analysis-recommendation-only",
+  "repository_identities": {
+    "OCGForge": {
+      "repository": "https://github.com/chrismaghuhn/OCGForge",
+      "default_branch": "main",
+      "commit": "588f02b4ef879fee999c921c114937a6a1e48557",
+      "commit_url": "https://github.com/chrismaghuhn/OCGForge/commit/588f02b4ef879fee999c921c114937a6a1e48557",
+      "note": "Live default-branch head inspected during the research session."
+    },
+    "EDOPro": {
+      "repository": "https://github.com/edo9300/edopro",
+      "default_branch": "master",
+      "commit": "54ea755aa0243e2f18bb6bd2187fc9b2f7e29788",
+      "commit_url": "https://github.com/edo9300/edopro/commit/54ea755aa0243e2f18bb6bd2187fc9b2f7e29788",
+      "note": "Live default-branch head inspected during the research session."
+    },
+    "WindBot": {
+      "repository": "https://github.com/ProjectIgnis/windbot",
+      "default_branch": "master",
+      "commit": "fa0ae767967afc6a820784837f11cd3fabb9c47c",
+      "commit_url": "https://github.com/ProjectIgnis/windbot/commit/fa0ae767967afc6a820784837f11cd3fabb9c47c",
+      "note": "Live default-branch head inspected during the research session."
+    },
+    "ygopro-core": {
+      "repository": "https://github.com/edo9300/ygopro-core",
+      "default_branch": "master",
+      "commit": "46779fbe40e6a9bd8967f5dc6a03f4eaa6550d57",
+      "commit_url": "https://github.com/edo9300/ygopro-core/commit/46779fbe40e6a9bd8967f5dc6a03f4eaa6550d57",
+      "note": "Current edo9300 core fork head inspected; this is NOT OCGForge's pinned rules-authority commit."
+    },
+    "CardScripts": {
+      "repository": "https://github.com/ProjectIgnis/CardScripts",
+      "default_branch": "master",
+      "commit": "150ec5170097128b675b8d5b257b793a6ad6c91e",
+      "commit_url": "https://github.com/ProjectIgnis/CardScripts/commit/150ec5170097128b675b8d5b257b793a6ad6c91e",
+      "note": "Live reference head inspected for rules-bundle comparison only."
+    },
+    "BabelCDB": {
+      "repository": "https://github.com/ProjectIgnis/BabelCDB",
+      "default_branch": "master",
+      "commit": "d1cf9e0aa888255f6031196053a8a9303c887667",
+      "commit_url": "https://github.com/ProjectIgnis/BabelCDB/commit/d1cf9e0aa888255f6031196053a8a9303c887667",
+      "note": "Live reference head inspected for database/rules-bundle comparison only."
+    }
+  },
+  "sources": [
+    {
+      "project": "OCGForge",
+      "commit": "588f02b4ef879fee999c921c114937a6a1e48557",
+      "path": "src/protocol/message_decoder.cpp",
+      "url": "https://github.com/chrismaghuhn/OCGForge/blob/588f02b4ef879fee999c921c114937a6a1e48557/src/protocol/message_decoder.cpp",
+      "symbols": [
+        "decode_messages",
+        "decode_idle",
+        "decode_battle",
+        "decode_card_selection",
+        "decode_tribute",
+        "decode_sum",
+        "decode_counter",
+        "decode_ordering",
+        "decode_unselect",
+        "is_unsupported_interactive",
+        "validate_candidate_set"
+      ]
+    },
+    {
+      "project": "OCGForge",
+      "commit": "588f02b4ef879fee999c921c114937a6a1e48557",
+      "path": "src/protocol/response_builder.cpp",
+      "url": "https://github.com/chrismaghuhn/OCGForge/blob/588f02b4ef879fee999c921c114937a6a1e48557/src/protocol/response_builder.cpp",
+      "symbols": [
+        "encode_card_index_response",
+        "encode_zone_response",
+        "encode_counter_response",
+        "encode_order_response",
+        "encode_order_bypass_response"
+      ]
+    },
+    {
+      "project": "OCGForge",
+      "commit": "588f02b4ef879fee999c921c114937a6a1e48557",
+      "path": "src/protocol/continuation.cpp",
+      "url": "https://github.com/chrismaghuhn/OCGForge/blob/588f02b4ef879fee999c921c114937a6a1e48557/src/protocol/continuation.cpp",
+      "symbols": [
+        "terminal_response",
+        "add_unordered_candidates",
+        "add_tribute_candidates",
+        "add_sum_candidates",
+        "add_zone_candidates",
+        "add_ordering_candidates",
+        "add_counter_candidates"
+      ]
+    },
+    {
+      "project": "OCGForge",
+      "commit": "588f02b4ef879fee999c921c114937a6a1e48557",
+      "path": "docs/m3/MECHANICS_COVERAGE.md",
+      "url": "https://github.com/chrismaghuhn/OCGForge/blob/588f02b4ef879fee999c921c114937a6a1e48557/docs/m3/MECHANICS_COVERAGE.md",
+      "symbols": [
+        "M3 mechanics coverage matrix"
+      ]
+    },
+    {
+      "project": "OCGForge",
+      "commit": "588f02b4ef879fee999c921c114937a6a1e48557",
+      "path": "third_party/rules_bundle.lock.json",
+      "url": "https://github.com/chrismaghuhn/OCGForge/blob/588f02b4ef879fee999c921c114937a6a1e48557/third_party/rules_bundle.lock.json",
+      "symbols": [
+        "canonical pinned core/CardScripts/BabelCDB identities",
+        "patchset identity"
+      ]
+    },
+    {
+      "project": "EDOPro",
+      "commit": "54ea755aa0243e2f18bb6bd2187fc9b2f7e29788",
+      "path": "gframe/duelclient.cpp",
+      "url": "https://github.com/edo9300/edopro/blob/54ea755aa0243e2f18bb6bd2187fc9b2f7e29788/gframe/duelclient.cpp",
+      "symbols": [
+        "DuelClient::ClientAnalyze",
+        "DuelClient::SendResponse",
+        "MSG_SELECT_SUM",
+        "MSG_SORT_CARD",
+        "MSG_SHUFFLE_DECK",
+        "MSG_SHUFFLE_HAND",
+        "MSG_SHUFFLE_EXTRA",
+        "MSG_ANNOUNCE_CARD"
+      ]
+    },
+    {
+      "project": "EDOPro",
+      "commit": "54ea755aa0243e2f18bb6bd2187fc9b2f7e29788",
+      "path": "gframe/client_field.cpp",
+      "url": "https://github.com/edo9300/edopro/blob/54ea755aa0243e2f18bb6bd2187fc9b2f7e29788/gframe/client_field.cpp",
+      "symbols": [
+        "ClientField::Initial",
+        "ClientField::AddCard",
+        "ClientField::RemoveCard",
+        "ClientField::UpdateCard",
+        "ClientField::UpdateFieldCard"
+      ]
+    },
+    {
+      "project": "EDOPro",
+      "commit": "54ea755aa0243e2f18bb6bd2187fc9b2f7e29788",
+      "path": "gframe/single_mode.cpp",
+      "url": "https://github.com/edo9300/edopro/blob/54ea755aa0243e2f18bb6bd2187fc9b2f7e29788/gframe/single_mode.cpp",
+      "symbols": [
+        "SingleMode::SetResponse",
+        "SingleMode::SinglePlayThread"
+      ]
+    },
+    {
+      "project": "EDOPro",
+      "commit": "54ea755aa0243e2f18bb6bd2187fc9b2f7e29788",
+      "path": "gframe/replay.h",
+      "url": "https://github.com/edo9300/edopro/blob/54ea755aa0243e2f18bb6bd2187fc9b2f7e29788/gframe/replay.h",
+      "symbols": [
+        "ReplayHeader",
+        "ExtendedReplayHeader",
+        "ReplayDeck",
+        "ReplayResponse",
+        "Replay"
+      ]
+    },
+    {
+      "project": "EDOPro",
+      "commit": "54ea755aa0243e2f18bb6bd2187fc9b2f7e29788",
+      "path": "gframe/replay.cpp",
+      "url": "https://github.com/edo9300/edopro/blob/54ea755aa0243e2f18bb6bd2187fc9b2f7e29788/gframe/replay.cpp",
+      "symbols": [
+        "Replay::WritePacket",
+        "Replay::WriteStream",
+        "Replay::ParseStream",
+        "Replay::ParseResponses"
+      ]
+    },
+    {
+      "project": "EDOPro",
+      "commit": "54ea755aa0243e2f18bb6bd2187fc9b2f7e29788",
+      "path": "gframe/replay_mode.cpp",
+      "url": "https://github.com/edo9300/edopro/blob/54ea755aa0243e2f18bb6bd2187fc9b2f7e29788/gframe/replay_mode.cpp",
+      "symbols": [
+        "ReplayMode::ReplayThread",
+        "ReplayMode::ReplayAnalyze"
+      ]
+    },
+    {
+      "project": "EDOPro",
+      "commit": "54ea755aa0243e2f18bb6bd2187fc9b2f7e29788",
+      "path": "gframe/replay_mode_yrp.cpp",
+      "url": "https://github.com/edo9300/edopro/blob/54ea755aa0243e2f18bb6bd2187fc9b2f7e29788/gframe/replay_mode_yrp.cpp",
+      "symbols": [
+        "ReplayMode::OldReplayThread",
+        "ReplayMode::StartDuel",
+        "ReplayMode::OldReplayAnalyze",
+        "ReplayMode::ReplayRefresh"
+      ]
+    },
+    {
+      "project": "EDOPro",
+      "commit": "54ea755aa0243e2f18bb6bd2187fc9b2f7e29788",
+      "path": "gframe/generic_duel.cpp",
+      "url": "https://github.com/edo9300/edopro/blob/54ea755aa0243e2f18bb6bd2187fc9b2f7e29788/gframe/generic_duel.cpp",
+      "symbols": [
+        "GenericDuel::Process",
+        "GenericDuel::Catchup",
+        "GenericDuel::JoinGame"
+      ]
+    },
+    {
+      "project": "EDOPro",
+      "commit": "54ea755aa0243e2f18bb6bd2187fc9b2f7e29788",
+      "path": "gframe/netserver.cpp",
+      "url": "https://github.com/edo9300/edopro/blob/54ea755aa0243e2f18bb6bd2187fc9b2f7e29788/gframe/netserver.cpp",
+      "symbols": [
+        "NetServer::HandleCTOSPacket",
+        "NetServer::ServerEchoRead"
+      ]
+    },
+    {
+      "project": "EDOPro",
+      "commit": "54ea755aa0243e2f18bb6bd2187fc9b2f7e29788",
+      "path": "gframe/windbot.cpp",
+      "url": "https://github.com/edo9300/edopro/blob/54ea755aa0243e2f18bb6bd2187fc9b2f7e29788/gframe/windbot.cpp",
+      "symbols": [
+        "WindBot::Launch",
+        "WindBot::AddDatabase"
+      ]
+    },
+    {
+      "project": "EDOPro",
+      "commit": "54ea755aa0243e2f18bb6bd2187fc9b2f7e29788",
+      "path": "gframe/dllinterface.cpp",
+      "url": "https://github.com/edo9300/edopro/blob/54ea755aa0243e2f18bb6bd2187fc9b2f7e29788/gframe/dllinterface.cpp",
+      "symbols": [
+        "Core::check_api_version",
+        "Core::LoadBundled",
+        "Core::Load",
+        "Core::CreateDuel"
+      ]
+    },
+    {
+      "project": "EDOPro",
+      "commit": "54ea755aa0243e2f18bb6bd2187fc9b2f7e29788",
+      "path": "gframe/data_manager.cpp",
+      "url": "https://github.com/edo9300/edopro/blob/54ea755aa0243e2f18bb6bd2187fc9b2f7e29788/gframe/data_manager.cpp",
+      "symbols": [
+        "DataManager::DataManager",
+        "DataManager::ParseDB",
+        "DataManager::OpenDb"
+      ]
+    },
+    {
+      "project": "EDOPro",
+      "commit": "54ea755aa0243e2f18bb6bd2187fc9b2f7e29788",
+      "path": "gframe/repo_manager.cpp",
+      "url": "https://github.com/edo9300/edopro/blob/54ea755aa0243e2f18bb6bd2187fc9b2f7e29788/gframe/repo_manager.cpp",
+      "symbols": [
+        "RepoManager::LoadRepositoriesFromJson",
+        "RepoManager::CloneOrUpdateTask"
+      ]
+    },
+    {
+      "project": "ygopro-core",
+      "commit": "46779fbe40e6a9bd8967f5dc6a03f4eaa6550d57",
+      "path": "playerop.cpp",
+      "url": "https://github.com/edo9300/ygopro-core/blob/46779fbe40e6a9bd8967f5dc6a03f4eaa6550d57/playerop.cpp",
+      "symbols": [
+        "field::process(Processors::SelectBattleCmd)",
+        "SelectIdleCmd",
+        "SelectCard",
+        "SelectUnselectCard",
+        "SelectChain",
+        "SelectPlace",
+        "SelectPosition",
+        "SelectTributeP",
+        "SelectCounter",
+        "SelectSum",
+        "SortCard",
+        "AnnounceRace",
+        "AnnounceAttribute",
+        "AnnounceCard",
+        "AnnounceNumber",
+        "parse_response_cards"
+      ]
+    },
+    {
+      "project": "WindBot",
+      "commit": "fa0ae767967afc6a820784837f11cd3fabb9c47c",
+      "path": "Program.cs",
+      "url": "https://github.com/ProjectIgnis/windbot/blob/fa0ae767967afc6a820784837f11cd3fabb9c47c/Program.cs",
+      "symbols": [
+        "Program.Rand",
+        "InitDatas",
+        "Run"
+      ]
+    },
+    {
+      "project": "WindBot",
+      "commit": "fa0ae767967afc6a820784837f11cd3fabb9c47c",
+      "path": "ExecutorBase/Game/AI/Executor.cs",
+      "url": "https://github.com/ProjectIgnis/windbot/blob/fa0ae767967afc6a820784837f11cd3fabb9c47c/ExecutorBase/Game/AI/Executor.cs",
+      "symbols": [
+        "Executor",
+        "AddExecutor",
+        "Rand"
+      ]
+    },
+    {
+      "project": "WindBot",
+      "commit": "fa0ae767967afc6a820784837f11cd3fabb9c47c",
+      "path": "ExecutorBase/Game/AI/DefaultExecutor.cs",
+      "url": "https://github.com/ProjectIgnis/windbot/blob/fa0ae767967afc6a820784837f11cd3fabb9c47c/ExecutorBase/Game/AI/DefaultExecutor.cs",
+      "symbols": [
+        "DefaultExecutor generic heuristics"
+      ]
+    },
+    {
+      "project": "WindBot",
+      "commit": "fa0ae767967afc6a820784837f11cd3fabb9c47c",
+      "path": "ExecutorBase/Game/AI/AIUtil.cs",
+      "url": "https://github.com/ProjectIgnis/windbot/blob/fa0ae767967afc6a820784837f11cd3fabb9c47c/ExecutorBase/Game/AI/AIUtil.cs",
+      "symbols": [
+        "AIUtil"
+      ]
+    },
+    {
+      "project": "WindBot",
+      "commit": "fa0ae767967afc6a820784837f11cd3fabb9c47c",
+      "path": "ExecutorBase/Game/GameAI.cs",
+      "url": "https://github.com/ProjectIgnis/windbot/blob/fa0ae767967afc6a820784837f11cd3fabb9c47c/ExecutorBase/Game/GameAI.cs",
+      "symbols": [
+        "GameAI",
+        "SelectCard",
+        "SelectMaterials",
+        "selection queues"
+      ]
+    },
+    {
+      "project": "WindBot",
+      "commit": "fa0ae767967afc6a820784837f11cd3fabb9c47c",
+      "path": "Game/GameBehavior.cs",
+      "url": "https://github.com/ProjectIgnis/windbot/blob/fa0ae767967afc6a820784837f11cd3fabb9c47c/Game/GameBehavior.cs",
+      "symbols": [
+        "GameBehavior",
+        "protocol handlers",
+        "state updates"
+      ]
+    },
+    {
+      "project": "WindBot",
+      "commit": "fa0ae767967afc6a820784837f11cd3fabb9c47c",
+      "path": "ExecutorBase/Game/ClientField.cs",
+      "url": "https://github.com/ProjectIgnis/windbot/blob/fa0ae767967afc6a820784837f11cd3fabb9c47c/ExecutorBase/Game/ClientField.cs",
+      "symbols": [
+        "ClientField"
+      ]
+    },
+    {
+      "project": "WindBot",
+      "commit": "fa0ae767967afc6a820784837f11cd3fabb9c47c",
+      "path": "ExecutorBase/Game/ClientCard.cs",
+      "url": "https://github.com/ProjectIgnis/windbot/blob/fa0ae767967afc6a820784837f11cd3fabb9c47c/ExecutorBase/Game/ClientCard.cs",
+      "symbols": [
+        "ClientCard"
+      ]
+    },
+    {
+      "project": "WindBot",
+      "commit": "fa0ae767967afc6a820784837f11cd3fabb9c47c",
+      "path": "Game/AI/Decks/SalamangreatExecutor.cs",
+      "url": "https://github.com/ProjectIgnis/windbot/blob/fa0ae767967afc6a820784837f11cd3fabb9c47c/Game/AI/Decks/SalamangreatExecutor.cs",
+      "symbols": [
+        "SalamangreatExecutor"
+      ]
+    },
+    {
+      "project": "WindBot",
+      "commit": "fa0ae767967afc6a820784837f11cd3fabb9c47c",
+      "path": "Game/AI/Decks/SwordsoulExecutor.cs",
+      "url": "https://github.com/ProjectIgnis/windbot/blob/fa0ae767967afc6a820784837f11cd3fabb9c47c/Game/AI/Decks/SwordsoulExecutor.cs",
+      "symbols": [
+        "SwordsoulExecutor"
+      ]
+    },
+    {
+      "project": "WindBot",
+      "commit": "fa0ae767967afc6a820784837f11cd3fabb9c47c",
+      "path": "Game/AI/Decks/AlbazExecutor.cs",
+      "url": "https://github.com/ProjectIgnis/windbot/blob/fa0ae767967afc6a820784837f11cd3fabb9c47c/Game/AI/Decks/AlbazExecutor.cs",
+      "symbols": [
+        "AlbazExecutor"
+      ]
+    },
+    {
+      "project": "WindBot",
+      "commit": "fa0ae767967afc6a820784837f11cd3fabb9c47c",
+      "path": "Game/AI/Decks/LabrynthExecutor.cs",
+      "url": "https://github.com/ProjectIgnis/windbot/blob/fa0ae767967afc6a820784837f11cd3fabb9c47c/Game/AI/Decks/LabrynthExecutor.cs",
+      "symbols": [
+        "LabrynthExecutor"
+      ]
+    },
+    {
+      "project": "WindBot",
+      "commit": "fa0ae767967afc6a820784837f11cd3fabb9c47c",
+      "path": "Game/AI/Decks/TearlamentsExecutor.cs",
+      "url": "https://github.com/ProjectIgnis/windbot/blob/fa0ae767967afc6a820784837f11cd3fabb9c47c/Game/AI/Decks/TearlamentsExecutor.cs",
+      "symbols": [
+        "TearlamentsExecutor"
+      ]
+    },
+    {
+      "project": "WindBot",
+      "commit": "fa0ae767967afc6a820784837f11cd3fabb9c47c",
+      "path": "Game/AI/Decks/SkyStrikerExecutor.cs",
+      "url": "https://github.com/ProjectIgnis/windbot/blob/fa0ae767967afc6a820784837f11cd3fabb9c47c/Game/AI/Decks/SkyStrikerExecutor.cs",
+      "symbols": [
+        "SkyStrikerExecutor"
+      ]
+    },
+    {
+      "project": "WindBot",
+      "commit": "fa0ae767967afc6a820784837f11cd3fabb9c47c",
+      "path": "Game/AI/Decks/ExosisterExecutor.cs",
+      "url": "https://github.com/ProjectIgnis/windbot/blob/fa0ae767967afc6a820784837f11cd3fabb9c47c/Game/AI/Decks/ExosisterExecutor.cs",
+      "symbols": [
+        "ExosisterExecutor"
+      ]
+    },
+    {
+      "project": "WindBot",
+      "commit": "fa0ae767967afc6a820784837f11cd3fabb9c47c",
+      "path": "Game/AI/Decks/ZefraExecutor.cs",
+      "url": "https://github.com/ProjectIgnis/windbot/blob/fa0ae767967afc6a820784837f11cd3fabb9c47c/Game/AI/Decks/ZefraExecutor.cs",
+      "symbols": [
+        "ZefraExecutor"
+      ]
+    }
+  ],
+  "key_findings": [
+    {
+      "severity": "MAJOR",
+      "id": "protocol-long-tail",
+      "fact": "OCGForge live decoder supports many interactive families but explicitly fails closed on MSG_ANNOUNCE_CARD, MSG_ROCK_PAPER_SCISSORS and MSG_REQUEST_DECK.",
+      "recommendation": "Prioritize differential protocol fixtures, especially MSG_ANNOUNCE_CARD and combinatorial families."
+    },
+    {
+      "severity": "MAJOR",
+      "id": "windbot-interface-mismatch",
+      "fact": "WindBot uses mutable Duel/ClientField/ClientCard state, ordered executors and queued selection callbacks; Program and Executor instantiate Random without an explicit OCGForge seed contract.",
+      "recommendation": "Adapt semantic heuristic ideas to PlayerObservation + ActionCandidate rather than porting the state model."
+    },
+    {
+      "severity": "MAJOR",
+      "id": "replay-provenance",
+      "fact": "EDOPro replay records seed/configuration/responses or a packet stream, but does not encode the complete OCGForge rules-bundle and schema provenance required for deterministic historical reproduction.",
+      "recommendation": "Use YRP/YRPX only as design reference/import evidence for a future OCGForge replay ADR."
+    }
+  ],
+  "primary_one_week_recommendation": {
+    "activity": "Build a pinned differential interactive decision-protocol corpus and completeness ledger.",
+    "comparison": [
+      "pinned ocgcore behavior",
+      "EDOPro interpretation/response encoding",
+      "OCGForge semantic decision/response encoding"
+    ],
+    "priority_families": [
+      "MSG_SELECT_SUM",
+      "MSG_SELECT_COUNTER",
+      "MSG_SELECT_UNSELECT_CARD",
+      "MSG_SORT_CARD",
+      "MSG_SORT_CHAIN",
+      "MSG_SELECT_TRIBUTE",
+      "MSG_SELECT_PLACE",
+      "MSG_SELECT_DISFIELD",
+      "MSG_SELECT_CHAIN",
+      "MSG_SELECT_IDLECMD",
+      "MSG_SELECT_BATTLECMD",
+      "MSG_ANNOUNCE_CARD",
+      "MSG_ANNOUNCE_RACE",
+      "MSG_ANNOUNCE_ATTRIB",
+      "MSG_ANNOUNCE_NUMBER"
+    ]
+  }
+}
