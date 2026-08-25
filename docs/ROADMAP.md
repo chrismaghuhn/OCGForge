@@ -213,10 +213,12 @@ Parallelism must not introduce nondeterministic authoritative ordering.
 
 Potential scope:
 
-- versioned trajectory schema;
+- versioned trajectory, observation, and action schema identities;
 - observation/action/reward/termination records;
-- provenance and bundle IDs;
-- policy/model version metadata.
+- rules/environment/bundle provenance;
+- behavior-policy and opponent-policy provenance where applicable;
+- transactional shard publication and hash-verifiable dataset manifests;
+- algorithm-specific metadata only through explicit versioned extensions.
 
 Do not begin algorithm selection by assuming PPO, BC, self-play, or another method is correct before environment and data semantics are stable.
 
@@ -224,18 +226,20 @@ Do not begin algorithm selection by assuming PPO, BC, self-play, or another meth
 
 Potential scope:
 
-- independently validated CPU actor pools on heterogeneous machines;
+- independently validated CPU actor backends on heterogeneous machines;
 - local Windows and generic Linux execution profiles over the same environment semantics;
 - provider-specific deployment profiles, including ephemeral hosted CPU sessions when useful;
-- immutable, hash-verifiable trajectory shards as the integration boundary;
+- transactional, immutable, hash-verifiable trajectory shards as the integration boundary;
+- semantic job identity plus fail-closed duplicate/conflict rejection during dataset merge;
 - per-host concurrency calibration rather than one globally hard-coded worker count;
+- explicit separation of environment reproducibility from ML-run reproducibility;
 - GPU resources reserved primarily for batched neural inference and learning.
 
-Provider quotas, accelerator types, session counts, and pricing are operational configuration, not gameplay contracts.
+Provider quotas, accelerator types, concrete hardware shapes, session counts, and pricing are operational configuration, not gameplay contracts. Provider backends must use normal supported mechanisms and current quotas rather than relying on circumvention behavior.
 
-Cross-platform actors must not become training-data sources until deterministic gameplay, complete candidate domains, perspective-safe observations, and trajectory provenance are proven equivalent under the relevant contracts.
+Cross-platform actors must not become training-data sources until deterministic gameplay, complete candidate domains, perspective-safe observations, and trajectory provenance are proven equivalent under the relevant contracts. This portability gate is post-M4 future work unless separately admitted; it does not silently expand M4's scope.
 
-See `docs/KAGGLE_ACTOR_FARM_STRATEGY.md` for the preserved architecture note. This is future intent only and does not authorize distributed ML before the episodic, trajectory, model-facing, and data-trust layers exist.
+See `docs/PORTABLE_ACTOR_LEARNER_COMPUTE_STRATEGY.md` for the preserved architecture note. This is future intent only and does not authorize distributed ML before the episodic, trajectory, model-facing, and data-trust layers exist.
 
 ## Milestone admission rule
 
