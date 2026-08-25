@@ -2021,7 +2021,7 @@
     }
   },
   "manifest_path": "docs/m4/m4_acceptance_manifest.json",
-  "manifest_sha256": "52f56946a4a7088457a23a7a363875a7e53b2e4285bb8fd7f344740206bbdd57",
-  "run_identity": "88a355cf2c345105c496d19288dec9e92019cfcb8b26f3bedeb3e8cdc168cfa4",
+  "manifest_sha256": "2fe9d2c473ea198736fbd7667d0ccc4172cf1b57661eb782984b67f4fe60810f",
+  "run_identity": "8ddeadc9def8fe217c5e52f99fff19126f095e863e3e355a9e7536a2383fae61",
   "schema_version": "ocgforge.m4.acceptance.v1"
 }

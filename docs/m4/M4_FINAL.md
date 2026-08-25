@@ -3,7 +3,7 @@
 **M4 FINAL PASS**
 
 Source commit: `a49639bbb7ef8ce3406ac0d9aad295272872dda9`
-Baseline evidence identity: `88a355cf2c345105c496d19288dec9e92019cfcb8b26f3bedeb3e8cdc168cfa4`
+Baseline evidence identity: `8ddeadc9def8fe217c5e52f99fff19126f095e863e3e355a9e7536a2383fae61`
 
 M4 closes the parallel-simulation foundation with fresh Release evidence. It does not claim ML readiness and does not start M5.
 

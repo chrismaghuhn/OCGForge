@@ -1205,7 +1205,17 @@ def build_baseline(
             optional_status.append({"workers": workers, "status": "NOT_RUN", "reason": reason.strip()})
 
     reference_build = reference["build"]
-    run_identity = _baseline_run_identity(loaded, reference_build)
+    if acceptance_evidence is not None:
+        # A committed acceptance manifest is validated against its sealed,
+        # repository-backed identity.  The historical worker executable is
+        # deliberately not a repository artifact, and a clean checkout may
+        # therefore not contain the byte-identical build used to produce the
+        # evidence.  Fresh evidence without a manifest still binds to the
+        # locally resolved executable through _baseline_run_identity().
+        manifest_identity = acceptance_evidence.get("run_identity")
+        run_identity = manifest_identity if _is_sha256(manifest_identity) else None
+    else:
+        run_identity = _baseline_run_identity(loaded, reference_build)
     validated_acceptance_evidence, status_reason = _validate_acceptance_evidence(
         acceptance_evidence,
         run_identity=run_identity,

@@ -78,7 +78,7 @@
         ],
         "evidence": "Canonical fixed-deck corpus completed all required games with complete candidate domains and zero truncation/automatic/core errors.",
         "fresh": true,
-        "run_identity": "88a355cf2c345105c496d19288dec9e92019cfcb8b26f3bedeb3e8cdc168cfa4",
+        "run_identity": "8ddeadc9def8fe217c5e52f99fff19126f095e863e3e355a9e7536a2383fae61",
         "status": "PASS",
         "verification": {
           "canonical_result": {
@@ -124,7 +124,7 @@
         ],
         "evidence": "Native CTest and repository/M3/M4 Python suites passed from the Release build.",
         "fresh": true,
-        "run_identity": "88a355cf2c345105c496d19288dec9e92019cfcb8b26f3bedeb3e8cdc168cfa4",
+        "run_identity": "8ddeadc9def8fe217c5e52f99fff19126f095e863e3e355a9e7536a2383fae61",
         "status": "PASS",
         "verification": {
           "commands": [
@@ -178,7 +178,7 @@
         ],
         "evidence": "Fail-closed worker timeout produces no result report and no retry.",
         "fresh": true,
-        "run_identity": "88a355cf2c345105c496d19288dec9e92019cfcb8b26f3bedeb3e8cdc168cfa4",
+        "run_identity": "8ddeadc9def8fe217c5e52f99fff19126f095e863e3e355a9e7536a2383fae61",
         "status": "PASS",
         "verification": {
           "commands": [
@@ -202,7 +202,7 @@
         ],
         "evidence": "Final Release build and complete native CTest passed.",
         "fresh": true,
-        "run_identity": "88a355cf2c345105c496d19288dec9e92019cfcb8b26f3bedeb3e8cdc168cfa4",
+        "run_identity": "8ddeadc9def8fe217c5e52f99fff19126f095e863e3e355a9e7536a2383fae61",
         "status": "PASS",
         "verification": {
           "commands": [
@@ -763,7 +763,7 @@
         ],
         "evidence": "Every matrix row completed the native worker handshake with the canonical worker identity.",
         "fresh": true,
-        "run_identity": "88a355cf2c345105c496d19288dec9e92019cfcb8b26f3bedeb3e8cdc168cfa4",
+        "run_identity": "8ddeadc9def8fe217c5e52f99fff19126f095e863e3e355a9e7536a2383fae61",
         "status": "PASS",
         "verification": {
           "commands": [
@@ -1331,7 +1331,7 @@
         ],
         "evidence": "All matrix rows have complete terminal games and zero semantic/protocol/error counters.",
         "fresh": true,
-        "run_identity": "88a355cf2c345105c496d19288dec9e92019cfcb8b26f3bedeb3e8cdc168cfa4",
+        "run_identity": "8ddeadc9def8fe217c5e52f99fff19126f095e863e3e355a9e7536a2383fae61",
         "status": "PASS",
         "verification": {
           "commands": [
@@ -1376,7 +1376,7 @@
         ],
         "evidence": "Fresh Release conformance, throughput, and observation-off diagnostic reports have identical semantic fingerprints.",
         "fresh": true,
-        "run_identity": "88a355cf2c345105c496d19288dec9e92019cfcb8b26f3bedeb3e8cdc168cfa4",
+        "run_identity": "8ddeadc9def8fe217c5e52f99fff19126f095e863e3e355a9e7536a2383fae61",
         "status": "PASS",
         "verification": {
           "commands": [
@@ -1428,7 +1428,7 @@
         ],
         "evidence": "Fresh Release matrix, all measured rows semantically match the one-worker reference.",
         "fresh": true,
-        "run_identity": "88a355cf2c345105c496d19288dec9e92019cfcb8b26f3bedeb3e8cdc168cfa4",
+        "run_identity": "8ddeadc9def8fe217c5e52f99fff19126f095e863e3e355a9e7536a2383fae61",
         "status": "PASS",
         "verification": {
           "commands": [
@@ -1997,7 +1997,7 @@
         ],
         "evidence": "Matrix stderr is empty and throughput trace persistence is disabled; focused privacy/paired-world tests pass in CTest.",
         "fresh": true,
-        "run_identity": "88a355cf2c345105c496d19288dec9e92019cfcb8b26f3bedeb3e8cdc168cfa4",
+        "run_identity": "8ddeadc9def8fe217c5e52f99fff19126f095e863e3e355a9e7536a2383fae61",
         "status": "PASS",
         "verification": {
           "commands": [
@@ -2031,8 +2031,8 @@
       }
     },
     "manifest_path": "docs/m4/m4_acceptance_manifest.json",
-    "manifest_sha256": "52f56946a4a7088457a23a7a363875a7e53b2e4285bb8fd7f344740206bbdd57",
-    "run_identity": "88a355cf2c345105c496d19288dec9e92019cfcb8b26f3bedeb3e8cdc168cfa4",
+    "manifest_sha256": "2fe9d2c473ea198736fbd7667d0ccc4172cf1b57661eb782984b67f4fe60810f",
+    "run_identity": "8ddeadc9def8fe217c5e52f99fff19126f095e863e3e355a9e7536a2383fae61",
     "schema_version": "ocgforge.m4.acceptance.v1"
   },
   "build_identity": {
@@ -2717,7 +2717,7 @@
       "simulation_elapsed_us": "worker-local fresh CoreHost through result assembly"
     }
   },
-  "evidence_identity": "88a355cf2c345105c496d19288dec9e92019cfcb8b26f3bedeb3e8cdc168cfa4",
+  "evidence_identity": "8ddeadc9def8fe217c5e52f99fff19126f095e863e3e355a9e7536a2383fae61",
   "hardware": {
     "machine": "AMD64",
     "physical_memory_bytes": 34278862848,
