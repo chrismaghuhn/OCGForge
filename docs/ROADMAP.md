@@ -110,7 +110,7 @@ Outcome:
 
 Status: **M3.5 FINAL PASS recorded**.
 
-### M4 — Parallel-simulation foundation and baseline checkpoint
+### M4 — Parallel-simulation foundation and final acceptance
 
 Outcome:
 
@@ -118,7 +118,11 @@ Outcome:
 - one-worker and multi-worker benchmark report generation;
 - semantic, privacy, failure-isolation, and benchmark-integrity contracts;
 - coordinator timing documented as end-to-end dispatch/result latency;
-- no observation or engine optimization included in this checkpoint.
+- accepted semantic-equivalent internal optimizations only: M4.3.1 deferred
+  decision-observation finalization, M4.3.2 one serialize/hash operation per
+  observation epoch, and M4.3.6 Direct Canonical Writer;
+- no observation schema, privacy, event-history, trace, rules, or deck contract
+  change; M4.3.5 remains **REJECTED — NO MATERIAL BENEFIT**.
 
 Status: **M4 FINAL PASS**. Fresh Release evidence is committed and independently
 verifiable from a clean checkout. Semantic equivalence is validated through 64
