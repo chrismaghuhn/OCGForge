@@ -220,6 +220,23 @@ Potential scope:
 
 Do not begin algorithm selection by assuming PPO, BC, self-play, or another method is correct before environment and data semantics are stable.
 
+### G. Portable distributed actor / learner compute
+
+Potential scope:
+
+- independently validated CPU actor pools on heterogeneous machines;
+- local Windows and generic Linux execution profiles over the same environment semantics;
+- provider-specific deployment profiles, including ephemeral hosted CPU sessions when useful;
+- immutable, hash-verifiable trajectory shards as the integration boundary;
+- per-host concurrency calibration rather than one globally hard-coded worker count;
+- GPU resources reserved primarily for batched neural inference and learning.
+
+Provider quotas, accelerator types, session counts, and pricing are operational configuration, not gameplay contracts.
+
+Cross-platform actors must not become training-data sources until deterministic gameplay, complete candidate domains, perspective-safe observations, and trajectory provenance are proven equivalent under the relevant contracts.
+
+See `docs/KAGGLE_ACTOR_FARM_STRATEGY.md` for the preserved architecture note. This is future intent only and does not authorize distributed ML before the episodic, trajectory, model-facing, and data-trust layers exist.
+
 ## Milestone admission rule
 
 Before assigning a future milestone a `PASS`, define:
