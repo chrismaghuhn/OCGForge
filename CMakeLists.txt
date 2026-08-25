@@ -145,8 +145,8 @@ target_compile_definitions(ygo_m0 PUBLIC
     YGO_M3_CORE_PATCHSET_SHA256="${M0_RULES_CORE_PATCHSET_SHA256}"
 )
 option(YGO_M4_DIRECT_CANONICAL_WRITER
-       "Use the experimental direct canonical serializer writer"
-       OFF)
+       "Use the direct canonical serializer writer"
+       ON)
 if(YGO_M4_DIRECT_CANONICAL_WRITER)
     target_compile_definitions(ygo_m0 PRIVATE YGO_M4_DIRECT_CANONICAL_WRITER)
 endif()
