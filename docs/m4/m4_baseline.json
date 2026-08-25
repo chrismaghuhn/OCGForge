@@ -1,0 +1,1364 @@
+{
+  "acceptance_evidence": null,
+  "build_identity": {
+    "build_type": "Debug",
+    "compiler_identity": "Clang-19.1.7",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "protocol_schema": "ocgforge.m4.worker.v1",
+    "protocol_version": "ocgforge.m4.worker.v1",
+    "worker_identity": "ocgforge.m4.native_worker.v1"
+  },
+  "canonical_environment": {
+    "babelcdb_commit": "89ad6837b0766a52984d8c715a7d5d4f8447946b",
+    "cardscripts_commit": "f337c87018ca723c1aded5143e616bb649555273",
+    "core_patchset_id": "ocgforge.ocgcore.api_hardening.v1",
+    "core_patchset_sha256": "6b5421b3a852085f48fa161a5ba1540f902aa00784a337694b21c9efc34f69bd",
+    "deck_hashes": [
+      "8ee4b699de19ff256e388d46f35b8696a60ff6ec59f0324f060a2468876711b7",
+      "6041abe0a59463d0715ae1da9100090ad487de02a02794e8ec0686d4c0513188"
+    ],
+    "duel_flags": 190464,
+    "duel_mode_name": "DUEL_MODE_MR5",
+    "format_id": "TCG_ADVANCED_2026_05_18",
+    "ocg_api_version": "11.0",
+    "ocgcore_commit": "9a0c558c2d686542f7914a6d529fd7aa57746aed",
+    "rule_affecting_inputs": {
+      "card_scripts": {
+        "commit": "f337c87018ca723c1aded5143e616bb649555273",
+        "repository": "https://github.com/ProjectIgnis/CardScripts.git",
+        "resolved_checkout_sha256": "ce53e1033ea7a3057745bbe143c1803a4a0c7db7f6cded4c28b0170536320e3c"
+      },
+      "core": {
+        "api_version": "11.0",
+        "commit": "9a0c558c2d686542f7914a6d529fd7aa57746aed",
+        "patchset": {
+          "id": "ocgforge.ocgcore.api_hardening.v1",
+          "ordered_patches": [
+            {
+              "name": "0001-fix-overlay-seq-parent-query.patch",
+              "sha256": "5238201c1b5fbce6623432f87ec0b39dbc2639bae107549c02c5e756e4180dd8"
+            },
+            {
+              "name": "0002-add-starting-player-control.patch",
+              "sha256": "85e4e725c351609816277a93af7f281e488e6c15cb218bbc821f649eaf4fe0ad"
+            }
+          ],
+          "sha256": "6b5421b3a852085f48fa161a5ba1540f902aa00784a337694b21c9efc34f69bd"
+        },
+        "repository": "https://github.com/edo9300/ygopro-core.git",
+        "resolved_checkout_sha256": "161849049d34de7ea60b2f370cc35f903262c14769e399d0bf43a381d295d7f3"
+      },
+      "database": {
+        "artifact": {
+          "path": "cards.cdb",
+          "sha256": "7a6570fe313ae0affe4e1e2047c564b669397500777da6c3d76e79aac393726f"
+        },
+        "commit": "89ad6837b0766a52984d8c715a7d5d4f8447946b",
+        "repository": "https://github.com/ProjectIgnis/BabelCDB.git",
+        "resolved_checkout_sha256": "acef726f8fb74d7f2b3a43dc14088f117012dbf9c7eab35612716cb8e79df4d1"
+      },
+      "duel_flags": {
+        "names": [
+          "DUEL_PZONE",
+          "DUEL_EMZONE",
+          "DUEL_FSX_MMZONE",
+          "DUEL_TRAP_MONSTERS_NOT_USE_ZONE",
+          "DUEL_TRIGGER_ONLY_IN_LOCATION"
+        ],
+        "value": 190464
+      },
+      "duel_mode": "DUEL_MODE_MR5",
+      "format_id": "TCG_ADVANCED_2026_05_18",
+      "protocol_slice": "m0.normal_monster_fixture.v1"
+    },
+    "rules_bundle_id": "3adfe6b4cfe2c2805e50b389fc0eb4e70a3b0b6107436614d328fddc865e585f",
+    "worker_identity": "ocgforge.m4.native_worker.v1"
+  },
+  "evidence": {
+    "performance_audit_candidates": [
+      {
+        "basis": "measured observation timing bucket",
+        "candidate": "observation-path audit"
+      },
+      {
+        "basis": "measured dispatch_to_receipt timing bucket",
+        "candidate": "dispatch/result latency audit"
+      },
+      {
+        "basis": "measured script_loads counter",
+        "candidate": "script-load audit"
+      },
+      {
+        "basis": "measured candidate_total counter",
+        "candidate": "candidate-set audit"
+      }
+    ],
+    "rows_by_worker": {
+      "1": {
+        "engine_steps_per_second": 42.17262141721146,
+        "errors": {
+          "automatic": 0,
+          "coordinator_failed_games": 0,
+          "coordinator_handshake": 0,
+          "coordinator_malformed_protocol": 0,
+          "coordinator_retries": 0,
+          "coordinator_worker_crashes": 0,
+          "coordinator_worker_restarts": 0,
+          "core_errors": 0,
+          "retries": 0,
+          "truncated": 0,
+          "unsupported": 0,
+          "worker_errors": 0
+        },
+        "games": 64,
+        "games_per_second": 0.027832121047491477,
+        "interactive_decisions_per_second": 17.18589986993462,
+        "memory": {
+          "memory_per_active_environment_bytes": 19742720,
+          "peak_percent_of_physical_memory": 0.057594,
+          "peak_total_working_set_bytes": 19742720,
+          "peak_worker_working_set_bytes": 19742720,
+          "physical_memory_bytes": 34278862848,
+          "process_count": 2
+        },
+        "operation_counters": {
+          "candidate_max": 1344,
+          "candidate_sets": 39519,
+          "candidate_total": 187025,
+          "entities_projected": 2100038,
+          "observations": 39583,
+          "ocg_duel_process": 96976,
+          "ocg_duel_query": 0,
+          "ocg_duel_query_count": 0,
+          "ocg_duel_query_field": 79166,
+          "ocg_duel_query_location": 474996,
+          "script_loads": 4928,
+          "script_reader_requests": 4800,
+          "semantic_hashes": 64,
+          "trace_bytes_serialized": 0
+        },
+        "parallel_efficiency": 1.0,
+        "result_timeout_seconds": 120.0,
+        "simulation_elapsed_us": {
+          "max": 46252056,
+          "mean": 35870808.484375,
+          "min": 34415568,
+          "p50": 35302045,
+          "p95": 42816128,
+          "p99": 46252056,
+          "sample_count": 64
+        },
+        "speedup": 1.0,
+        "stderr_bytes": 0,
+        "timing_buckets_us": {
+          "continuation": 0,
+          "coordinator_other": 0,
+          "core_process": 94448884,
+          "dispatch_to_receipt": 2295923877,
+          "observation": 2170381294,
+          "other": 17508628,
+          "protocol_candidate": 4346660,
+          "serialization": 0,
+          "trace_hash": 9046277,
+          "trace_persistence": 0
+        },
+        "timing_percentages": {
+          "continuation": 0.0,
+          "coordinator_other": 0.0,
+          "core_process": 4.114108,
+          "dispatch_to_receipt": 100.0,
+          "observation": 94.539848,
+          "other": 0.76266,
+          "protocol_candidate": 0.189337,
+          "serialization": 0.0,
+          "trace_hash": 0.394048,
+          "trace_persistence": 0.0
+        },
+        "wall_clock_seconds": 2299.5013528,
+        "workers": 1
+      },
+      "16": {
+        "engine_steps_per_second": 363.72124533829174,
+        "errors": {
+          "automatic": 0,
+          "coordinator_failed_games": 0,
+          "coordinator_handshake": 0,
+          "coordinator_malformed_protocol": 0,
+          "coordinator_retries": 0,
+          "coordinator_worker_crashes": 0,
+          "coordinator_worker_restarts": 0,
+          "core_errors": 0,
+          "retries": 0,
+          "truncated": 0,
+          "unsupported": 0,
+          "worker_errors": 0
+        },
+        "games": 64,
+        "games_per_second": 0.2400404192960183,
+        "interactive_decisions_per_second": 148.2212082837398,
+        "memory": {
+          "memory_per_active_environment_bytes": 17441536,
+          "peak_percent_of_physical_memory": 0.814101,
+          "peak_total_working_set_bytes": 279064576,
+          "peak_worker_working_set_bytes": 18231296,
+          "physical_memory_bytes": 34278862848,
+          "process_count": 17
+        },
+        "operation_counters": {
+          "candidate_max": 1344,
+          "candidate_sets": 39519,
+          "candidate_total": 187025,
+          "entities_projected": 2100038,
+          "observations": 39583,
+          "ocg_duel_process": 96976,
+          "ocg_duel_query": 0,
+          "ocg_duel_query_count": 0,
+          "ocg_duel_query_field": 79166,
+          "ocg_duel_query_location": 474996,
+          "script_loads": 4928,
+          "script_reader_requests": 4800,
+          "semantic_hashes": 64,
+          "trace_bytes_serialized": 0
+        },
+        "parallel_efficiency": 0.5390363954080793,
+        "result_timeout_seconds": 120.0,
+        "simulation_elapsed_us": {
+          "max": 69919230,
+          "mean": 65273640.8125,
+          "min": 61668354,
+          "p50": 65302555,
+          "p95": 68506236,
+          "p99": 69919230,
+          "sample_count": 64
+        },
+        "speedup": 8.62458232652927,
+        "stderr_bytes": 0,
+        "timing_buckets_us": {
+          "continuation": 0,
+          "coordinator_other": 0,
+          "core_process": 152156891,
+          "dispatch_to_receipt": 4178027456,
+          "observation": 3971485562,
+          "other": 30374615,
+          "protocol_candidate": 6971401,
+          "serialization": 0,
+          "trace_hash": 16524543,
+          "trace_persistence": 0
+        },
+        "timing_percentages": {
+          "continuation": 0.0,
+          "coordinator_other": 0.0,
+          "core_process": 3.642284,
+          "dispatch_to_receipt": 100.0,
+          "observation": 95.068179,
+          "other": 0.727098,
+          "protocol_candidate": 0.166879,
+          "serialization": 0.0,
+          "trace_hash": 0.395559,
+          "trace_persistence": 0.0
+        },
+        "wall_clock_seconds": 266.6217639,
+        "workers": 16
+      },
+      "2": {
+        "engine_steps_per_second": 60.0821841332618,
+        "errors": {
+          "automatic": 0,
+          "coordinator_failed_games": 0,
+          "coordinator_handshake": 0,
+          "coordinator_malformed_protocol": 0,
+          "coordinator_retries": 0,
+          "coordinator_worker_crashes": 0,
+          "coordinator_worker_restarts": 0,
+          "core_errors": 0,
+          "retries": 0,
+          "truncated": 0,
+          "unsupported": 0,
+          "worker_errors": 0
+        },
+        "games": 64,
+        "games_per_second": 0.039651664169781754,
+        "interactive_decisions_per_second": 24.48428306758758,
+        "memory": {
+          "memory_per_active_environment_bytes": 18792448,
+          "peak_percent_of_physical_memory": 0.109645,
+          "peak_total_working_set_bytes": 37584896,
+          "peak_worker_working_set_bytes": 18882560,
+          "physical_memory_bytes": 34278862848,
+          "process_count": 3
+        },
+        "operation_counters": {
+          "candidate_max": 1344,
+          "candidate_sets": 39519,
+          "candidate_total": 187025,
+          "entities_projected": 2100038,
+          "observations": 39583,
+          "ocg_duel_process": 96976,
+          "ocg_duel_query": 0,
+          "ocg_duel_query_count": 0,
+          "ocg_duel_query_field": 79166,
+          "ocg_duel_query_location": 474996,
+          "script_loads": 4928,
+          "script_reader_requests": 4800,
+          "semantic_hashes": 64,
+          "trace_bytes_serialized": 0
+        },
+        "parallel_efficiency": 0.7123363703061283,
+        "result_timeout_seconds": 120.0,
+        "simulation_elapsed_us": {
+          "max": 54816396,
+          "mean": 50373951.71875,
+          "min": 48096008,
+          "p50": 50268280,
+          "p95": 52156549,
+          "p99": 54816396,
+          "sample_count": 64
+        },
+        "speedup": 1.4246727406122566,
+        "stderr_bytes": 0,
+        "timing_buckets_us": {
+          "continuation": 0,
+          "coordinator_other": 0,
+          "core_process": 120719518,
+          "dispatch_to_receipt": 3224171162,
+          "observation": 3061720317,
+          "other": 22927975,
+          "protocol_candidate": 5589432,
+          "serialization": 0,
+          "trace_hash": 12975668,
+          "trace_persistence": 0
+        },
+        "timing_percentages": {
+          "continuation": 0.0,
+          "coordinator_other": 0.0,
+          "core_process": 3.74448,
+          "dispatch_to_receipt": 100.0,
+          "observation": 94.968487,
+          "other": 0.71118,
+          "protocol_candidate": 0.173373,
+          "serialization": 0.0,
+          "trace_hash": 0.402479,
+          "trace_persistence": 0.0
+        },
+        "wall_clock_seconds": 1614.055837,
+        "workers": 2
+      },
+      "32": {
+        "engine_steps_per_second": 355.4894406063713,
+        "errors": {
+          "automatic": 0,
+          "coordinator_failed_games": 0,
+          "coordinator_handshake": 0,
+          "coordinator_malformed_protocol": 0,
+          "coordinator_retries": 0,
+          "coordinator_worker_crashes": 0,
+          "coordinator_worker_restarts": 0,
+          "core_errors": 0,
+          "retries": 0,
+          "truncated": 0,
+          "unsupported": 0,
+          "worker_errors": 0
+        },
+        "games": 64,
+        "games_per_second": 0.23460778129442095,
+        "interactive_decisions_per_second": 144.8666392027222,
+        "memory": {
+          "memory_per_active_environment_bytes": 15694336,
+          "peak_percent_of_physical_memory": 1.465097,
+          "peak_total_working_set_bytes": 502218752,
+          "peak_worker_working_set_bytes": 17555456,
+          "physical_memory_bytes": 34278862848,
+          "process_count": 33
+        },
+        "operation_counters": {
+          "candidate_max": 1344,
+          "candidate_sets": 39519,
+          "candidate_total": 187025,
+          "entities_projected": 2100038,
+          "observations": 39583,
+          "ocg_duel_process": 96976,
+          "ocg_duel_query": 0,
+          "ocg_duel_query_count": 0,
+          "ocg_duel_query_field": 79166,
+          "ocg_duel_query_location": 474996,
+          "script_loads": 4928,
+          "script_reader_requests": 4800,
+          "semantic_hashes": 64,
+          "trace_bytes_serialized": 0
+        },
+        "parallel_efficiency": 0.26341841331246457,
+        "result_timeout_seconds": 300.0,
+        "simulation_elapsed_us": {
+          "max": 236910562,
+          "mean": 116939068.375,
+          "min": 62838100,
+          "p50": 105635458,
+          "p95": 204366384,
+          "p99": 236910562,
+          "sample_count": 64
+        },
+        "speedup": 8.429389225998866,
+        "stderr_bytes": 0,
+        "timing_buckets_us": {
+          "continuation": 0,
+          "coordinator_other": 0,
+          "core_process": 316440183,
+          "dispatch_to_receipt": 7485516183,
+          "observation": 7021464281,
+          "other": 102903346,
+          "protocol_candidate": 14830223,
+          "serialization": 0,
+          "trace_hash": 28462343,
+          "trace_persistence": 0
+        },
+        "timing_percentages": {
+          "continuation": 0.0,
+          "coordinator_other": 0.0,
+          "core_process": 4.228166,
+          "dispatch_to_receipt": 100.0,
+          "observation": 93.818414,
+          "other": 1.374959,
+          "protocol_candidate": 0.198156,
+          "serialization": 0.0,
+          "trace_hash": 0.380304,
+          "trace_persistence": 0.0
+        },
+        "wall_clock_seconds": 272.7957259,
+        "workers": 32
+      },
+      "4": {
+        "engine_steps_per_second": 111.02051175185603,
+        "errors": {
+          "automatic": 0,
+          "coordinator_failed_games": 0,
+          "coordinator_handshake": 0,
+          "coordinator_malformed_protocol": 0,
+          "coordinator_retries": 0,
+          "coordinator_worker_crashes": 0,
+          "coordinator_worker_restarts": 0,
+          "core_errors": 0,
+          "retries": 0,
+          "truncated": 0,
+          "unsupported": 0,
+          "worker_errors": 0
+        },
+        "games": 64,
+        "games_per_second": 0.0732687752858314,
+        "interactive_decisions_per_second": 45.24232391438705,
+        "memory": {
+          "memory_per_active_environment_bytes": 17925120,
+          "peak_percent_of_physical_memory": 0.209168,
+          "peak_total_working_set_bytes": 71700480,
+          "peak_worker_working_set_bytes": 18427904,
+          "physical_memory_bytes": 34278862848,
+          "process_count": 5
+        },
+        "operation_counters": {
+          "candidate_max": 1344,
+          "candidate_sets": 39519,
+          "candidate_total": 187025,
+          "entities_projected": 2100038,
+          "observations": 39583,
+          "ocg_duel_process": 96976,
+          "ocg_duel_query": 0,
+          "ocg_duel_query_count": 0,
+          "ocg_duel_query_field": 79166,
+          "ocg_duel_query_location": 474996,
+          "script_loads": 4928,
+          "script_reader_requests": 4800,
+          "semantic_hashes": 64,
+          "trace_bytes_serialized": 0
+        },
+        "parallel_efficiency": 0.6581314370615956,
+        "result_timeout_seconds": 120.0,
+        "simulation_elapsed_us": {
+          "max": 61238466,
+          "mean": 54358792.375,
+          "min": 50758803,
+          "p50": 54321911,
+          "p95": 59179521,
+          "p99": 61238466,
+          "sample_count": 64
+        },
+        "speedup": 2.6325257482463824,
+        "stderr_bytes": 0,
+        "timing_buckets_us": {
+          "continuation": 0,
+          "coordinator_other": 0,
+          "core_process": 130598269,
+          "dispatch_to_receipt": 3479266414,
+          "observation": 3303453564,
+          "other": 24766413,
+          "protocol_candidate": 6042691,
+          "serialization": 0,
+          "trace_hash": 14101775,
+          "trace_persistence": 0
+        },
+        "timing_percentages": {
+          "continuation": 0.0,
+          "coordinator_other": 0.0,
+          "core_process": 3.753943,
+          "dispatch_to_receipt": 100.0,
+          "observation": 94.95513,
+          "other": 0.711891,
+          "protocol_candidate": 0.173692,
+          "serialization": 0.0,
+          "trace_hash": 0.405344,
+          "trace_persistence": 0.0
+        },
+        "wall_clock_seconds": 873.4962438,
+        "workers": 4
+      },
+      "64": {
+        "engine_steps_per_second": 355.58921010009965,
+        "errors": {
+          "automatic": 0,
+          "coordinator_failed_games": 0,
+          "coordinator_handshake": 0,
+          "coordinator_malformed_protocol": 0,
+          "coordinator_retries": 0,
+          "coordinator_worker_crashes": 0,
+          "coordinator_worker_restarts": 0,
+          "core_errors": 0,
+          "retries": 0,
+          "truncated": 0,
+          "unsupported": 0,
+          "worker_errors": 0
+        },
+        "games": 64,
+        "games_per_second": 0.23467362488044852,
+        "interactive_decisions_per_second": 144.9072965882882,
+        "memory": {
+          "memory_per_active_environment_bytes": 14318592,
+          "peak_percent_of_physical_memory": 2.673338,
+          "peak_total_working_set_bytes": 916389888,
+          "peak_worker_working_set_bytes": 17801216,
+          "physical_memory_bytes": 34278862848,
+          "process_count": 65
+        },
+        "operation_counters": {
+          "candidate_max": 1344,
+          "candidate_sets": 39519,
+          "candidate_total": 187025,
+          "entities_projected": 2100038,
+          "observations": 39583,
+          "ocg_duel_process": 96976,
+          "ocg_duel_query": 0,
+          "ocg_duel_query_count": 0,
+          "ocg_duel_query_field": 79166,
+          "ocg_duel_query_location": 474996,
+          "script_loads": 4928,
+          "script_reader_requests": 4800,
+          "semantic_hashes": 64,
+          "trace_bytes_serialized": 0
+        },
+        "parallel_efficiency": 0.13174617135719507,
+        "result_timeout_seconds": 600.0,
+        "simulation_elapsed_us": {
+          "max": 272598239,
+          "mean": 187804613.734375,
+          "min": 63028628,
+          "p50": 205705649,
+          "p95": 268876855,
+          "p99": 272598239,
+          "sample_count": 64
+        },
+        "speedup": 8.431754966860485,
+        "stderr_bytes": 0,
+        "timing_buckets_us": {
+          "continuation": 0,
+          "coordinator_other": 0,
+          "core_process": 579145531,
+          "dispatch_to_receipt": 12023005262,
+          "observation": 11124945548,
+          "other": 243051144,
+          "protocol_candidate": 27147041,
+          "serialization": 0,
+          "trace_hash": 45206015,
+          "trace_persistence": 0
+        },
+        "timing_percentages": {
+          "continuation": 0.0,
+          "coordinator_other": 0.0,
+          "core_process": 4.818385,
+          "dispatch_to_receipt": 100.0,
+          "observation": 92.55751,
+          "other": 2.022141,
+          "protocol_candidate": 0.225858,
+          "serialization": 0.0,
+          "trace_hash": 0.376106,
+          "trace_persistence": 0.0
+        },
+        "wall_clock_seconds": 272.7191862,
+        "workers": 64
+      },
+      "8": {
+        "engine_steps_per_second": 223.88633630173942,
+        "errors": {
+          "automatic": 0,
+          "coordinator_failed_games": 0,
+          "coordinator_handshake": 0,
+          "coordinator_malformed_protocol": 0,
+          "coordinator_retries": 0,
+          "coordinator_worker_crashes": 0,
+          "coordinator_worker_restarts": 0,
+          "core_errors": 0,
+          "retries": 0,
+          "truncated": 0,
+          "unsupported": 0,
+          "worker_errors": 0
+        },
+        "games": 64,
+        "games_per_second": 0.14775537785958714,
+        "interactive_decisions_per_second": 91.236637150516,
+        "memory": {
+          "memory_per_active_environment_bytes": 17655808,
+          "peak_percent_of_physical_memory": 0.412051,
+          "peak_total_working_set_bytes": 141246464,
+          "peak_worker_working_set_bytes": 18350080,
+          "physical_memory_bytes": 34278862848,
+          "process_count": 9
+        },
+        "operation_counters": {
+          "candidate_max": 1344,
+          "candidate_sets": 39519,
+          "candidate_total": 187025,
+          "entities_projected": 2100038,
+          "observations": 39583,
+          "ocg_duel_process": 96976,
+          "ocg_duel_query": 0,
+          "ocg_duel_query_count": 0,
+          "ocg_duel_query_field": 79166,
+          "ocg_duel_query_location": 474996,
+          "script_loads": 4928,
+          "script_reader_requests": 4800,
+          "semantic_hashes": 64,
+          "trace_bytes_serialized": 0
+        },
+        "parallel_efficiency": 0.6636009595148356,
+        "result_timeout_seconds": 120.0,
+        "simulation_elapsed_us": {
+          "max": 55570216,
+          "mean": 53867049.71875,
+          "min": 52637486,
+          "p50": 53867432,
+          "p95": 54943598,
+          "p99": 55570216,
+          "sample_count": 64
+        },
+        "speedup": 5.308807676118684,
+        "stderr_bytes": 0,
+        "timing_buckets_us": {
+          "continuation": 0,
+          "coordinator_other": 0,
+          "core_process": 128184837,
+          "dispatch_to_receipt": 3447797263,
+          "observation": 3275104359,
+          "other": 24649512,
+          "protocol_candidate": 5818113,
+          "serialization": 0,
+          "trace_hash": 13734361,
+          "trace_persistence": 0
+        },
+        "timing_percentages": {
+          "continuation": 0.0,
+          "coordinator_other": 0.0,
+          "core_process": 3.718206,
+          "dispatch_to_receipt": 100.0,
+          "observation": 94.999644,
+          "other": 0.714999,
+          "protocol_candidate": 0.168764,
+          "serialization": 0.0,
+          "trace_hash": 0.398387,
+          "trace_persistence": 0.0
+        },
+        "wall_clock_seconds": 433.1483627,
+        "workers": 8
+      }
+    },
+    "timing_domains": {
+      "coordinator_elapsed_us": "end-to-end dispatch write/flush through validated result receipt; includes worker-compute wait and is not isolated IPC CPU",
+      "games_per_second": "steady-state coordinator wall clock",
+      "simulation_elapsed_us": "worker-local fresh CoreHost through result assembly"
+    }
+  },
+  "evidence_identity": "UNVERIFIED",
+  "hardware": {
+    "machine": "AMD64",
+    "physical_memory_bytes": 34278862848,
+    "platform": "Windows-11-10.0.26200-SP0",
+    "processor": "AMD64 Family 25 Model 33 Stepping 2, AuthenticAMD",
+    "python_version": "3.14.5",
+    "system": "Windows"
+  },
+  "matrix_policy": {
+    "games": 64,
+    "instrumentation": true,
+    "master_seed": 20260815,
+    "mode": "throughput",
+    "observation_mode": "full",
+    "seat_mode": "balanced",
+    "starting_player_mode": "balanced",
+    "trace_persistence": false,
+    "warmup_games": 4
+  },
+  "optional_rows": [
+    {
+      "status": "MEASURED",
+      "workers": 64
+    },
+    {
+      "reason": "NOT_RUN - measured 64-worker throughput did not improve over 32 workers; no measured usefulness for another oversubscribed row",
+      "status": "NOT_RUN",
+      "workers": 128
+    }
+  ],
+  "required_workers": [
+    1,
+    2,
+    4,
+    8,
+    16,
+    32
+  ],
+  "scaling": [
+    {
+      "engine_steps_per_second": 42.17262141721146,
+      "errors": {
+        "automatic": 0,
+        "coordinator_failed_games": 0,
+        "coordinator_handshake": 0,
+        "coordinator_malformed_protocol": 0,
+        "coordinator_retries": 0,
+        "coordinator_worker_crashes": 0,
+        "coordinator_worker_restarts": 0,
+        "core_errors": 0,
+        "retries": 0,
+        "truncated": 0,
+        "unsupported": 0,
+        "worker_errors": 0
+      },
+      "games": 64,
+      "games_per_second": 0.027832121047491477,
+      "interactive_decisions_per_second": 17.18589986993462,
+      "memory": {
+        "memory_per_active_environment_bytes": 19742720,
+        "peak_percent_of_physical_memory": 0.057594,
+        "peak_total_working_set_bytes": 19742720,
+        "peak_worker_working_set_bytes": 19742720,
+        "physical_memory_bytes": 34278862848,
+        "process_count": 2
+      },
+      "operation_counters": {
+        "candidate_max": 1344,
+        "candidate_sets": 39519,
+        "candidate_total": 187025,
+        "entities_projected": 2100038,
+        "observations": 39583,
+        "ocg_duel_process": 96976,
+        "ocg_duel_query": 0,
+        "ocg_duel_query_count": 0,
+        "ocg_duel_query_field": 79166,
+        "ocg_duel_query_location": 474996,
+        "script_loads": 4928,
+        "script_reader_requests": 4800,
+        "semantic_hashes": 64,
+        "trace_bytes_serialized": 0
+      },
+      "parallel_efficiency": 1.0,
+      "result_timeout_seconds": 120.0,
+      "simulation_elapsed_us": {
+        "max": 46252056,
+        "mean": 35870808.484375,
+        "min": 34415568,
+        "p50": 35302045,
+        "p95": 42816128,
+        "p99": 46252056,
+        "sample_count": 64
+      },
+      "speedup": 1.0,
+      "stderr_bytes": 0,
+      "timing_buckets_us": {
+        "continuation": 0,
+        "coordinator_other": 0,
+        "core_process": 94448884,
+        "dispatch_to_receipt": 2295923877,
+        "observation": 2170381294,
+        "other": 17508628,
+        "protocol_candidate": 4346660,
+        "serialization": 0,
+        "trace_hash": 9046277,
+        "trace_persistence": 0
+      },
+      "timing_percentages": {
+        "continuation": 0.0,
+        "coordinator_other": 0.0,
+        "core_process": 4.114108,
+        "dispatch_to_receipt": 100.0,
+        "observation": 94.539848,
+        "other": 0.76266,
+        "protocol_candidate": 0.189337,
+        "serialization": 0.0,
+        "trace_hash": 0.394048,
+        "trace_persistence": 0.0
+      },
+      "wall_clock_seconds": 2299.5013528,
+      "workers": 1
+    },
+    {
+      "engine_steps_per_second": 60.0821841332618,
+      "errors": {
+        "automatic": 0,
+        "coordinator_failed_games": 0,
+        "coordinator_handshake": 0,
+        "coordinator_malformed_protocol": 0,
+        "coordinator_retries": 0,
+        "coordinator_worker_crashes": 0,
+        "coordinator_worker_restarts": 0,
+        "core_errors": 0,
+        "retries": 0,
+        "truncated": 0,
+        "unsupported": 0,
+        "worker_errors": 0
+      },
+      "games": 64,
+      "games_per_second": 0.039651664169781754,
+      "interactive_decisions_per_second": 24.48428306758758,
+      "memory": {
+        "memory_per_active_environment_bytes": 18792448,
+        "peak_percent_of_physical_memory": 0.109645,
+        "peak_total_working_set_bytes": 37584896,
+        "peak_worker_working_set_bytes": 18882560,
+        "physical_memory_bytes": 34278862848,
+        "process_count": 3
+      },
+      "operation_counters": {
+        "candidate_max": 1344,
+        "candidate_sets": 39519,
+        "candidate_total": 187025,
+        "entities_projected": 2100038,
+        "observations": 39583,
+        "ocg_duel_process": 96976,
+        "ocg_duel_query": 0,
+        "ocg_duel_query_count": 0,
+        "ocg_duel_query_field": 79166,
+        "ocg_duel_query_location": 474996,
+        "script_loads": 4928,
+        "script_reader_requests": 4800,
+        "semantic_hashes": 64,
+        "trace_bytes_serialized": 0
+      },
+      "parallel_efficiency": 0.7123363703061283,
+      "result_timeout_seconds": 120.0,
+      "simulation_elapsed_us": {
+        "max": 54816396,
+        "mean": 50373951.71875,
+        "min": 48096008,
+        "p50": 50268280,
+        "p95": 52156549,
+        "p99": 54816396,
+        "sample_count": 64
+      },
+      "speedup": 1.4246727406122566,
+      "stderr_bytes": 0,
+      "timing_buckets_us": {
+        "continuation": 0,
+        "coordinator_other": 0,
+        "core_process": 120719518,
+        "dispatch_to_receipt": 3224171162,
+        "observation": 3061720317,
+        "other": 22927975,
+        "protocol_candidate": 5589432,
+        "serialization": 0,
+        "trace_hash": 12975668,
+        "trace_persistence": 0
+      },
+      "timing_percentages": {
+        "continuation": 0.0,
+        "coordinator_other": 0.0,
+        "core_process": 3.74448,
+        "dispatch_to_receipt": 100.0,
+        "observation": 94.968487,
+        "other": 0.71118,
+        "protocol_candidate": 0.173373,
+        "serialization": 0.0,
+        "trace_hash": 0.402479,
+        "trace_persistence": 0.0
+      },
+      "wall_clock_seconds": 1614.055837,
+      "workers": 2
+    },
+    {
+      "engine_steps_per_second": 111.02051175185603,
+      "errors": {
+        "automatic": 0,
+        "coordinator_failed_games": 0,
+        "coordinator_handshake": 0,
+        "coordinator_malformed_protocol": 0,
+        "coordinator_retries": 0,
+        "coordinator_worker_crashes": 0,
+        "coordinator_worker_restarts": 0,
+        "core_errors": 0,
+        "retries": 0,
+        "truncated": 0,
+        "unsupported": 0,
+        "worker_errors": 0
+      },
+      "games": 64,
+      "games_per_second": 0.0732687752858314,
+      "interactive_decisions_per_second": 45.24232391438705,
+      "memory": {
+        "memory_per_active_environment_bytes": 17925120,
+        "peak_percent_of_physical_memory": 0.209168,
+        "peak_total_working_set_bytes": 71700480,
+        "peak_worker_working_set_bytes": 18427904,
+        "physical_memory_bytes": 34278862848,
+        "process_count": 5
+      },
+      "operation_counters": {
+        "candidate_max": 1344,
+        "candidate_sets": 39519,
+        "candidate_total": 187025,
+        "entities_projected": 2100038,
+        "observations": 39583,
+        "ocg_duel_process": 96976,
+        "ocg_duel_query": 0,
+        "ocg_duel_query_count": 0,
+        "ocg_duel_query_field": 79166,
+        "ocg_duel_query_location": 474996,
+        "script_loads": 4928,
+        "script_reader_requests": 4800,
+        "semantic_hashes": 64,
+        "trace_bytes_serialized": 0
+      },
+      "parallel_efficiency": 0.6581314370615956,
+      "result_timeout_seconds": 120.0,
+      "simulation_elapsed_us": {
+        "max": 61238466,
+        "mean": 54358792.375,
+        "min": 50758803,
+        "p50": 54321911,
+        "p95": 59179521,
+        "p99": 61238466,
+        "sample_count": 64
+      },
+      "speedup": 2.6325257482463824,
+      "stderr_bytes": 0,
+      "timing_buckets_us": {
+        "continuation": 0,
+        "coordinator_other": 0,
+        "core_process": 130598269,
+        "dispatch_to_receipt": 3479266414,
+        "observation": 3303453564,
+        "other": 24766413,
+        "protocol_candidate": 6042691,
+        "serialization": 0,
+        "trace_hash": 14101775,
+        "trace_persistence": 0
+      },
+      "timing_percentages": {
+        "continuation": 0.0,
+        "coordinator_other": 0.0,
+        "core_process": 3.753943,
+        "dispatch_to_receipt": 100.0,
+        "observation": 94.95513,
+        "other": 0.711891,
+        "protocol_candidate": 0.173692,
+        "serialization": 0.0,
+        "trace_hash": 0.405344,
+        "trace_persistence": 0.0
+      },
+      "wall_clock_seconds": 873.4962438,
+      "workers": 4
+    },
+    {
+      "engine_steps_per_second": 223.88633630173942,
+      "errors": {
+        "automatic": 0,
+        "coordinator_failed_games": 0,
+        "coordinator_handshake": 0,
+        "coordinator_malformed_protocol": 0,
+        "coordinator_retries": 0,
+        "coordinator_worker_crashes": 0,
+        "coordinator_worker_restarts": 0,
+        "core_errors": 0,
+        "retries": 0,
+        "truncated": 0,
+        "unsupported": 0,
+        "worker_errors": 0
+      },
+      "games": 64,
+      "games_per_second": 0.14775537785958714,
+      "interactive_decisions_per_second": 91.236637150516,
+      "memory": {
+        "memory_per_active_environment_bytes": 17655808,
+        "peak_percent_of_physical_memory": 0.412051,
+        "peak_total_working_set_bytes": 141246464,
+        "peak_worker_working_set_bytes": 18350080,
+        "physical_memory_bytes": 34278862848,
+        "process_count": 9
+      },
+      "operation_counters": {
+        "candidate_max": 1344,
+        "candidate_sets": 39519,
+        "candidate_total": 187025,
+        "entities_projected": 2100038,
+        "observations": 39583,
+        "ocg_duel_process": 96976,
+        "ocg_duel_query": 0,
+        "ocg_duel_query_count": 0,
+        "ocg_duel_query_field": 79166,
+        "ocg_duel_query_location": 474996,
+        "script_loads": 4928,
+        "script_reader_requests": 4800,
+        "semantic_hashes": 64,
+        "trace_bytes_serialized": 0
+      },
+      "parallel_efficiency": 0.6636009595148356,
+      "result_timeout_seconds": 120.0,
+      "simulation_elapsed_us": {
+        "max": 55570216,
+        "mean": 53867049.71875,
+        "min": 52637486,
+        "p50": 53867432,
+        "p95": 54943598,
+        "p99": 55570216,
+        "sample_count": 64
+      },
+      "speedup": 5.308807676118684,
+      "stderr_bytes": 0,
+      "timing_buckets_us": {
+        "continuation": 0,
+        "coordinator_other": 0,
+        "core_process": 128184837,
+        "dispatch_to_receipt": 3447797263,
+        "observation": 3275104359,
+        "other": 24649512,
+        "protocol_candidate": 5818113,
+        "serialization": 0,
+        "trace_hash": 13734361,
+        "trace_persistence": 0
+      },
+      "timing_percentages": {
+        "continuation": 0.0,
+        "coordinator_other": 0.0,
+        "core_process": 3.718206,
+        "dispatch_to_receipt": 100.0,
+        "observation": 94.999644,
+        "other": 0.714999,
+        "protocol_candidate": 0.168764,
+        "serialization": 0.0,
+        "trace_hash": 0.398387,
+        "trace_persistence": 0.0
+      },
+      "wall_clock_seconds": 433.1483627,
+      "workers": 8
+    },
+    {
+      "engine_steps_per_second": 363.72124533829174,
+      "errors": {
+        "automatic": 0,
+        "coordinator_failed_games": 0,
+        "coordinator_handshake": 0,
+        "coordinator_malformed_protocol": 0,
+        "coordinator_retries": 0,
+        "coordinator_worker_crashes": 0,
+        "coordinator_worker_restarts": 0,
+        "core_errors": 0,
+        "retries": 0,
+        "truncated": 0,
+        "unsupported": 0,
+        "worker_errors": 0
+      },
+      "games": 64,
+      "games_per_second": 0.2400404192960183,
+      "interactive_decisions_per_second": 148.2212082837398,
+      "memory": {
+        "memory_per_active_environment_bytes": 17441536,
+        "peak_percent_of_physical_memory": 0.814101,
+        "peak_total_working_set_bytes": 279064576,
+        "peak_worker_working_set_bytes": 18231296,
+        "physical_memory_bytes": 34278862848,
+        "process_count": 17
+      },
+      "operation_counters": {
+        "candidate_max": 1344,
+        "candidate_sets": 39519,
+        "candidate_total": 187025,
+        "entities_projected": 2100038,
+        "observations": 39583,
+        "ocg_duel_process": 96976,
+        "ocg_duel_query": 0,
+        "ocg_duel_query_count": 0,
+        "ocg_duel_query_field": 79166,
+        "ocg_duel_query_location": 474996,
+        "script_loads": 4928,
+        "script_reader_requests": 4800,
+        "semantic_hashes": 64,
+        "trace_bytes_serialized": 0
+      },
+      "parallel_efficiency": 0.5390363954080793,
+      "result_timeout_seconds": 120.0,
+      "simulation_elapsed_us": {
+        "max": 69919230,
+        "mean": 65273640.8125,
+        "min": 61668354,
+        "p50": 65302555,
+        "p95": 68506236,
+        "p99": 69919230,
+        "sample_count": 64
+      },
+      "speedup": 8.62458232652927,
+      "stderr_bytes": 0,
+      "timing_buckets_us": {
+        "continuation": 0,
+        "coordinator_other": 0,
+        "core_process": 152156891,
+        "dispatch_to_receipt": 4178027456,
+        "observation": 3971485562,
+        "other": 30374615,
+        "protocol_candidate": 6971401,
+        "serialization": 0,
+        "trace_hash": 16524543,
+        "trace_persistence": 0
+      },
+      "timing_percentages": {
+        "continuation": 0.0,
+        "coordinator_other": 0.0,
+        "core_process": 3.642284,
+        "dispatch_to_receipt": 100.0,
+        "observation": 95.068179,
+        "other": 0.727098,
+        "protocol_candidate": 0.166879,
+        "serialization": 0.0,
+        "trace_hash": 0.395559,
+        "trace_persistence": 0.0
+      },
+      "wall_clock_seconds": 266.6217639,
+      "workers": 16
+    },
+    {
+      "engine_steps_per_second": 355.4894406063713,
+      "errors": {
+        "automatic": 0,
+        "coordinator_failed_games": 0,
+        "coordinator_handshake": 0,
+        "coordinator_malformed_protocol": 0,
+        "coordinator_retries": 0,
+        "coordinator_worker_crashes": 0,
+        "coordinator_worker_restarts": 0,
+        "core_errors": 0,
+        "retries": 0,
+        "truncated": 0,
+        "unsupported": 0,
+        "worker_errors": 0
+      },
+      "games": 64,
+      "games_per_second": 0.23460778129442095,
+      "interactive_decisions_per_second": 144.8666392027222,
+      "memory": {
+        "memory_per_active_environment_bytes": 15694336,
+        "peak_percent_of_physical_memory": 1.465097,
+        "peak_total_working_set_bytes": 502218752,
+        "peak_worker_working_set_bytes": 17555456,
+        "physical_memory_bytes": 34278862848,
+        "process_count": 33
+      },
+      "operation_counters": {
+        "candidate_max": 1344,
+        "candidate_sets": 39519,
+        "candidate_total": 187025,
+        "entities_projected": 2100038,
+        "observations": 39583,
+        "ocg_duel_process": 96976,
+        "ocg_duel_query": 0,
+        "ocg_duel_query_count": 0,
+        "ocg_duel_query_field": 79166,
+        "ocg_duel_query_location": 474996,
+        "script_loads": 4928,
+        "script_reader_requests": 4800,
+        "semantic_hashes": 64,
+        "trace_bytes_serialized": 0
+      },
+      "parallel_efficiency": 0.26341841331246457,
+      "result_timeout_seconds": 300.0,
+      "simulation_elapsed_us": {
+        "max": 236910562,
+        "mean": 116939068.375,
+        "min": 62838100,
+        "p50": 105635458,
+        "p95": 204366384,
+        "p99": 236910562,
+        "sample_count": 64
+      },
+      "speedup": 8.429389225998866,
+      "stderr_bytes": 0,
+      "timing_buckets_us": {
+        "continuation": 0,
+        "coordinator_other": 0,
+        "core_process": 316440183,
+        "dispatch_to_receipt": 7485516183,
+        "observation": 7021464281,
+        "other": 102903346,
+        "protocol_candidate": 14830223,
+        "serialization": 0,
+        "trace_hash": 28462343,
+        "trace_persistence": 0
+      },
+      "timing_percentages": {
+        "continuation": 0.0,
+        "coordinator_other": 0.0,
+        "core_process": 4.228166,
+        "dispatch_to_receipt": 100.0,
+        "observation": 93.818414,
+        "other": 1.374959,
+        "protocol_candidate": 0.198156,
+        "serialization": 0.0,
+        "trace_hash": 0.380304,
+        "trace_persistence": 0.0
+      },
+      "wall_clock_seconds": 272.7957259,
+      "workers": 32
+    },
+    {
+      "engine_steps_per_second": 355.58921010009965,
+      "errors": {
+        "automatic": 0,
+        "coordinator_failed_games": 0,
+        "coordinator_handshake": 0,
+        "coordinator_malformed_protocol": 0,
+        "coordinator_retries": 0,
+        "coordinator_worker_crashes": 0,
+        "coordinator_worker_restarts": 0,
+        "core_errors": 0,
+        "retries": 0,
+        "truncated": 0,
+        "unsupported": 0,
+        "worker_errors": 0
+      },
+      "games": 64,
+      "games_per_second": 0.23467362488044852,
+      "interactive_decisions_per_second": 144.9072965882882,
+      "memory": {
+        "memory_per_active_environment_bytes": 14318592,
+        "peak_percent_of_physical_memory": 2.673338,
+        "peak_total_working_set_bytes": 916389888,
+        "peak_worker_working_set_bytes": 17801216,
+        "physical_memory_bytes": 34278862848,
+        "process_count": 65
+      },
+      "operation_counters": {
+        "candidate_max": 1344,
+        "candidate_sets": 39519,
+        "candidate_total": 187025,
+        "entities_projected": 2100038,
+        "observations": 39583,
+        "ocg_duel_process": 96976,
+        "ocg_duel_query": 0,
+        "ocg_duel_query_count": 0,
+        "ocg_duel_query_field": 79166,
+        "ocg_duel_query_location": 474996,
+        "script_loads": 4928,
+        "script_reader_requests": 4800,
+        "semantic_hashes": 64,
+        "trace_bytes_serialized": 0
+      },
+      "parallel_efficiency": 0.13174617135719507,
+      "result_timeout_seconds": 600.0,
+      "simulation_elapsed_us": {
+        "max": 272598239,
+        "mean": 187804613.734375,
+        "min": 63028628,
+        "p50": 205705649,
+        "p95": 268876855,
+        "p99": 272598239,
+        "sample_count": 64
+      },
+      "speedup": 8.431754966860485,
+      "stderr_bytes": 0,
+      "timing_buckets_us": {
+        "continuation": 0,
+        "coordinator_other": 0,
+        "core_process": 579145531,
+        "dispatch_to_receipt": 12023005262,
+        "observation": 11124945548,
+        "other": 243051144,
+        "protocol_candidate": 27147041,
+        "serialization": 0,
+        "trace_hash": 45206015,
+        "trace_persistence": 0
+      },
+      "timing_percentages": {
+        "continuation": 0.0,
+        "coordinator_other": 0.0,
+        "core_process": 4.818385,
+        "dispatch_to_receipt": 100.0,
+        "observation": 92.55751,
+        "other": 2.022141,
+        "protocol_candidate": 0.225858,
+        "serialization": 0.0,
+        "trace_hash": 0.376106,
+        "trace_persistence": 0.0
+      },
+      "wall_clock_seconds": 272.7191862,
+      "workers": 64
+    }
+  ],
+  "schema_version": "ocgforge.m4.baseline.v1",
+  "semantic_gate": {
+    "baseline_workers": 1,
+    "compared_fields": [
+      "job_id",
+      "terminal",
+      "winner",
+      "win_reason",
+      "engine_steps",
+      "interactive_decisions",
+      "semantic_action_count",
+      "gameplay_hash",
+      "errors"
+    ],
+    "comparisons": [
+      {
+        "mismatches": [],
+        "workers": 1
+      },
+      {
+        "mismatches": [],
+        "workers": 2
+      },
+      {
+        "mismatches": [],
+        "workers": 4
+      },
+      {
+        "mismatches": [],
+        "workers": 8
+      },
+      {
+        "mismatches": [],
+        "workers": 16
+      },
+      {
+        "mismatches": [],
+        "workers": 32
+      },
+      {
+        "mismatches": [],
+        "workers": 64
+      }
+    ],
+    "status": "PASS"
+  },
+  "source_reports": {
+    "1": "EXTERNAL_SOURCE_NOT_COMMITTED",
+    "16": "EXTERNAL_SOURCE_NOT_COMMITTED",
+    "2": "EXTERNAL_SOURCE_NOT_COMMITTED",
+    "32": "EXTERNAL_SOURCE_NOT_COMMITTED",
+    "4": "EXTERNAL_SOURCE_NOT_COMMITTED",
+    "64": "EXTERNAL_SOURCE_NOT_COMMITTED",
+    "8": "EXTERNAL_SOURCE_NOT_COMMITTED"
+  },
+  "status": "M4 BASELINE ACCEPTANCE PENDING",
+  "status_reason": "acceptance evidence lacks a repository-backed run identity"
+}

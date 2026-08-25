@@ -1,8 +1,8 @@
 # OCGForge Current Project State
 
-**Snapshot date:** 2026-08-20
+**Snapshot date:** 2026-08-25
 **Repository baseline inspected:** `main` at `7bcb907f09996ddb65471b62b8d6e045ff02eb6e`
-**Latest merged project checkpoint observed:** PR #1 — M3 fixed-deck conformance + M3.5 API hardening
+**Latest project checkpoint described here:** PR #3 — M4 parallel-simulation foundation; baseline acceptance pending
 
 This document is a summary. Detailed acceptance evidence remains in the milestone files.
 
@@ -26,7 +26,7 @@ The project must **not** generalize that claim to arbitrary Yu-Gi-Oh! decks.
 | M2.1 | investigated then resolved by M3.5 | individual Xyz-material public-query limitation identified; later fixed through repository patchset |
 | M3 | **FINAL PASS recorded** | locked fixed-matchup conformance and mechanics closure |
 | M3.5 | **FINAL PASS recorded** | narrow public API hardening for Xyz material query + starting-player control |
-| M4 | not implemented in inspected baseline | performance/throughput work was explicitly out of PR #1 scope |
+| M4 | **foundation implemented; baseline acceptance pending** | persistent-worker parallel-simulation foundation and benchmark/audit handoff; no optimization completion claim |
 
 ## M3/M3.5 recorded acceptance
 
@@ -141,11 +141,14 @@ A fixed tensor/action vocabulary should be a downstream versioned adapter.
 
 The repository describes itself as a game-AI research environment but contains no learning algorithm or training stack at the inspected baseline.
 
-### 7. M4 throughput work is not present
+### 7. M4 baseline acceptance is pending
 
-PR #1 explicitly excluded performance/throughput work.
+PR #3 adds the parallel-simulation foundation and baseline report generator.
+The committed baseline remains acceptance pending because the clean checkout
+does not contain the matrix and acceptance artifacts required to verify a PASS.
 
-No performance target should be inferred from M3 correctness evidence.
+No optimization-completion, general ML-readiness, or M5 claim should be
+inferred from this foundation checkpoint.
 
 ### 8. Windows is the canonical CI path
 

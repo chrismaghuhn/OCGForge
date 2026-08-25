@@ -149,8 +149,19 @@ else()
     target_compile_options(ygo_m0 PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
+add_library(ygo_m4 STATIC
+    src/simulation/canonical_simulation.cpp
+)
+target_include_directories(ygo_m4 PUBLIC "${CMAKE_SOURCE_DIR}/include")
+target_link_libraries(ygo_m4 PUBLIC ygo_m0)
+if(MSVC)
+    target_compile_options(ygo_m4 PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(ygo_m4 PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
 add_executable(ygo_core_probe tools/ygo_core_probe/main.cpp)
-target_link_libraries(ygo_core_probe PRIVATE ygo_m0)
+target_link_libraries(ygo_core_probe PRIVATE ygo_m4)
 target_compile_definitions(ygo_core_probe PRIVATE
     YGO_M0_PLAYER_A="${CMAKE_SOURCE_DIR}/fixtures/decks/player_a.deck"
     YGO_M0_PLAYER_B="${CMAKE_SOURCE_DIR}/fixtures/decks/player_b.deck"
@@ -159,6 +170,22 @@ target_compile_definitions(ygo_core_probe PRIVATE
     YGO_M3_DECK_B="${CMAKE_SOURCE_DIR}/fixtures/decks/salamangreat_ml_v1.ydk"
     YGO_M3_CARDSCRIPTS="${M0_CARDSCRIPTS_DIR}"
 )
+
+add_executable(ygo_m4_worker
+    tools/ygo_m4_worker/json_protocol.cpp
+    tools/ygo_m4_worker/main.cpp
+)
+target_link_libraries(ygo_m4_worker PRIVATE ygo_m4)
+target_compile_definitions(ygo_m4_worker PRIVATE
+    YGO_M3_DECK_A="${CMAKE_SOURCE_DIR}/fixtures/decks/swordsoul_tenyi_ml_v1.ydk"
+    YGO_M3_DECK_B="${CMAKE_SOURCE_DIR}/fixtures/decks/salamangreat_ml_v1.ydk"
+    YGO_M3_CARDSCRIPTS="${M0_CARDSCRIPTS_DIR}"
+)
+if(MSVC)
+    target_compile_options(ygo_m4_worker PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(ygo_m4_worker PRIVATE -Wall -Wextra -Wpedantic)
+endif()
 
 add_executable(ygo_observation_probe tools/ygo_observation_probe/main.cpp)
 target_link_libraries(ygo_observation_probe PRIVATE ygo_m0)
@@ -170,6 +197,10 @@ target_compile_definitions(ygo_observation_probe PRIVATE
 )
 
 enable_testing()
+add_executable(m4_simulation_contract_test tests/m4/simulation_contract_test.cpp)
+target_include_directories(m4_simulation_contract_test PRIVATE "${CMAKE_SOURCE_DIR}/include")
+add_test(NAME m4_simulation_contract_test COMMAND m4_simulation_contract_test)
+
 add_executable(protocol_test tests/protocol/protocol_test.cpp)
 target_link_libraries(protocol_test PRIVATE ygo_m0)
 add_test(NAME protocol_test COMMAND protocol_test)
@@ -326,6 +357,15 @@ target_compile_definitions(core_lifecycle_test PRIVATE
     YGO_M0_CARDSCRIPTS="${M0_CARDSCRIPTS_DIR}"
 )
 add_test(NAME core_lifecycle_test COMMAND core_lifecycle_test)
+
+add_executable(core_metrics_test tests/core/core_metrics_test.cpp)
+target_link_libraries(core_metrics_test PRIVATE ygo_m0)
+target_compile_definitions(core_metrics_test PRIVATE
+    YGO_M0_PLAYER_A="${CMAKE_SOURCE_DIR}/fixtures/decks/player_a.deck"
+    YGO_M0_PLAYER_B="${CMAKE_SOURCE_DIR}/fixtures/decks/player_b.deck"
+    YGO_M0_CARDSCRIPTS="${M0_CARDSCRIPTS_DIR}"
+)
+add_test(NAME core_metrics_test COMMAND core_metrics_test)
 
 add_executable(m3_rules_mode_test tests/m3/runtime/rules_mode_test.cpp)
 target_link_libraries(m3_rules_mode_test PRIVATE ygo_m0)
@@ -511,4 +551,36 @@ add_test(NAME unsupported_diagnostic_test
 
 add_test(NAME decision_coverage_test
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tests/protocol/decision_coverage_test.py"
+)
+
+add_test(NAME m4_worker_protocol_test
+    COMMAND "${Python3_EXECUTABLE}" -m unittest tests/m4/test_worker_protocol.py -v
+)
+set_tests_properties(m4_worker_protocol_test PROPERTIES
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+)
+
+add_test(NAME m4_failure_isolation_test
+    COMMAND "${Python3_EXECUTABLE}" -m unittest tests/m4/test_failure_isolation.py -v
+)
+set_tests_properties(m4_failure_isolation_test PROPERTIES
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+)
+
+add_test(NAME m4_worker_integration_test
+    COMMAND "${Python3_EXECUTABLE}" -m unittest tests/m4/test_worker_integration.py -v
+)
+set_tests_properties(m4_worker_integration_test PROPERTIES
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    ENVIRONMENT "YGO_M4_WORKER=$<TARGET_FILE:ygo_m4_worker>"
+    LABELS "M4_ACCEPTANCE_SCALE"
+)
+
+add_test(NAME m4_worker_integration_fast_test
+    COMMAND "${Python3_EXECUTABLE}" -m unittest tests/m4/test_worker_integration_fast.py -v
+)
+set_tests_properties(m4_worker_integration_fast_test PROPERTIES
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    ENVIRONMENT "YGO_M4_WORKER=$<TARGET_FILE:ygo_m4_worker>"
+    LABELS "M4_HOSTED_FAST"
 )

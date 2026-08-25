@@ -110,13 +110,27 @@ Outcome:
 
 Status: **M3.5 FINAL PASS recorded**.
 
+### M4 — Parallel-simulation foundation and baseline checkpoint
+
+Outcome:
+
+- persistent native workers and deterministic job/result protocol;
+- one-worker and multi-worker benchmark report generation;
+- semantic, privacy, failure-isolation, and benchmark-integrity contracts;
+- coordinator timing documented as end-to-end dispatch/result latency;
+- no observation or engine optimization included in this checkpoint.
+
+Status: **M4 BASELINE ACCEPTANCE PENDING**. The clean checkout does not include
+the matrix and acceptance artifacts required to independently verify a baseline
+PASS, so M4 remains a foundation/baseline checkpoint only.
+
 ## Next known milestone
 
-### M4 — Performance and throughput baseline
+### M4 baseline acceptance and audit closure
 
-PR #1 explicitly identified M4 performance/throughput work as not included.
-
-M4 should begin with measurement, not optimization.
+Complete the clean-checkout evidence contract for the existing M4 baseline
+before considering any separate performance experiment. This does not claim
+optimization completion, general ML readiness, or M5 readiness.
 
 Recommended M4 questions:
 

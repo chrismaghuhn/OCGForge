@@ -51,9 +51,18 @@ jobs:
         shell: pwsh
         run: cmake --build --preset dev-windows --parallel
 
-      - name: Run CTest conformance
+      - name: Run CTest hosted-fast conformance (acceptance-scale excluded)
         shell: pwsh
-        run: ctest --preset dev-windows --output-on-failure
+        run: |
+          New-Item -ItemType Directory -Force artifacts\m4-worker-failures | Out-Null
+          $env:YGO_M4_FAILURE_ARTIFACT_DIR = "artifacts\m4-worker-failures"
+          ctest --preset dev-windows --output-on-failure --label-exclude M4_ACCEPTANCE_SCALE
+
+      - name: Run M4 benchmark-integrity acceptance tests
+        shell: pwsh
+        run: |
+          python -m pip install --disable-pip-version-check jsonschema
+          python -B -m unittest tests.m4.test_benchmark_integrity tests.m4.test_job_generation tests.m4.test_process_metrics tests.m4.test_worker_protocol -v
 
       - name: Run controlled duel smoke test
         shell: pwsh
@@ -90,7 +99,7 @@ jobs:
           name: m1-diagnostics
           if-no-files-found: ignore
           path: |
-            artifacts/*.jsonl
+            artifacts/**
             build/dev-windows/CMakeFiles/CMakeOutput.log
             build/dev-windows/CMakeFiles/CMakeError.log
             build/dev-windows/Testing/Temporary/LastTest.log

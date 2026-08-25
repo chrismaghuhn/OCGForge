@@ -61,6 +61,12 @@ Repository-recorded M3/M3.5 acceptance evidence reports:
 - 8/8 repository Python tests;
 - independent-process determinism, semantic-action replay, and CRLF replay gates recorded as passing.
 
+PR #3 adds the M4 parallel-simulation foundation and its benchmark/audit
+handoff. The committed M4 baseline is currently **ACCEPTANCE PENDING** because
+the clean-checkout evidence required to verify a baseline PASS is not bundled
+with this checkpoint. This is a foundation/baseline status only; it is not an
+optimization-completion, general ML-readiness, or M5 claim.
+
 These values are acceptance evidence committed to the repository. They are **not a claim that this documentation-only package re-ran the test suite**.
 
 See [Current Project State](docs/CURRENT_PROJECT_STATE.md) for the exact scope boundary.
