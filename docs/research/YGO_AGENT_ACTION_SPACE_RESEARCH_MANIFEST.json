@@ -1,0 +1,39 @@
+{
+  "schema": "ocgforge.research.ygo_agent_action_space.v1",
+  "research_date": "2026-08-25",
+  "status": "COMPLETED_RESEARCH_SNAPSHOT",
+  "primary_verdict": "F_MIXED_BY_DECISION_FAMILY",
+  "task_path": "docs/research/YGO_AGENT_ACTION_SPACE_RESEARCH_TASK.md",
+  "report_path": "docs/research/YGO_AGENT_ACTION_SPACE_RESEARCH_REPORT_2026-08-25.md",
+  "result_path": "docs/research/YGO_AGENT_ACTION_SPACE_RESEARCH_RESULT.md",
+  "report_git_blob_sha": "7b5a1d5f8ef9e4a10a1c5dcb2d8f6bbd91c9c5f7",
+  "inspected_repositories": {
+    "ocgforge": {
+      "repository": "https://github.com/chrismaghuhn/OCGForge",
+      "main_at_inspection": "588f02b4ef879fee999c921c114937a6a1e48557",
+      "m4_pr_head_at_inspection": "f9f10177ee48e244a491fb94ef63752ddf5ddfed",
+      "note": "Historical inspection identity. PR #3 was merged later on 2026-08-25; current status must be read live."
+    },
+    "ygo_agent": {
+      "repository": "https://github.com/sbl1996/ygo-agent",
+      "commit": "dbf5142d49aab2e6beb4150788d4fffec39ae3e5"
+    }
+  },
+  "proven_findings": [
+    "candidate_relative_policy_architecture",
+    "fixed_model_facing_max_options_width",
+    "prefix_resize_on_overflow_in_ygopro_ygopro0_edopro",
+    "mixed_lossless_decomposition_and_semantic_reduction_by_family",
+    "index_only_action_identity_is_not_a_semantic_replay_contract"
+  ],
+  "ocgforge_constraints": [
+    "no_semantic_candidate_truncation",
+    "complete_candidate_domain_preserved_through_model_adapter",
+    "complete_domain_plus_semantic_key_in_trajectory",
+    "continuation_local_domains_must_not_truncate",
+    "tensorization_failure_must_fail_closed"
+  ],
+  "m4_follow_up": "Produce a deterministic replayable maximum-candidate-domain witness with job/seed/decision identity, candidate count, ordered semantic-key digest, observation hash, and chosen semantic key.",
+  "model_adapter_follow_up": "Use candidate-relative scoring with ragged/bucketed physical batching and exact one-row/one-logit coverage for every legal candidate; test 24/25/129/reconstructed-maximum boundaries when the adapter exists.",
+  "authority_note": "This manifest records research evidence and recommendations. It is not a gameplay, trajectory, or model contract."
+}
