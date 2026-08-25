@@ -6,7 +6,7 @@
   "task_path": "docs/research/YGO_AGENT_ACTION_SPACE_RESEARCH_TASK.md",
   "report_path": "docs/research/YGO_AGENT_ACTION_SPACE_RESEARCH_REPORT_2026-08-25.md",
   "result_path": "docs/research/YGO_AGENT_ACTION_SPACE_RESEARCH_RESULT.md",
-  "report_git_blob_sha": "7b5a1d5f8ef9e4a10a1c5dcb2d8f6bbd91c9c5f7",
+  "report_git_blob_sha": "87fbde0aac3a198656eaa91d72e24fdeadd87d4e",
   "inspected_repositories": {
     "ocgforge": {
       "repository": "https://github.com/chrismaghuhn/OCGForge",
