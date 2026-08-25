@@ -196,6 +196,14 @@ target_compile_definitions(ygo_observation_probe PRIVATE
     YGO_M2_SETUP="${CMAKE_SOURCE_DIR}/fixtures/m2_setup.lua"
 )
 
+add_executable(sha256_benchmark tools/ygo_sha256_benchmark/main.cpp)
+target_link_libraries(sha256_benchmark PRIVATE ygo_m0)
+if(MSVC)
+    target_compile_options(sha256_benchmark PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(sha256_benchmark PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
 enable_testing()
 add_executable(m4_simulation_contract_test tests/m4/simulation_contract_test.cpp)
 target_include_directories(m4_simulation_contract_test PRIVATE "${CMAKE_SOURCE_DIR}/include")
@@ -228,6 +236,10 @@ add_test(NAME decision_fail_closed_test COMMAND decision_fail_closed_test)
 add_executable(trace_semantics_test tests/trace/trace_semantics_test.cpp)
 target_link_libraries(trace_semantics_test PRIVATE ygo_m0)
 add_test(NAME trace_semantics_test COMMAND trace_semantics_test)
+
+add_executable(sha256_known_answer_test tests/trace/sha256_known_answer_test.cpp)
+target_link_libraries(sha256_known_answer_test PRIVATE ygo_m0)
+add_test(NAME sha256_known_answer_test COMMAND sha256_known_answer_test)
 
 add_test(NAME m35_probe_trace_starting_player_test
          COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tests/m3_5/probe_trace_starting_player_test.py"
