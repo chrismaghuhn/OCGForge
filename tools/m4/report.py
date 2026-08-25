@@ -83,6 +83,9 @@ FINAL_ACCEPTANCE_GATES = (
     "candidate_observation",
     "final_build_and_ctest",
 )
+# The finalized M4 branch includes the two direct-writer equivalence fixtures
+# in addition to the 92-test foundation suite.
+FINAL_CTEST_EXPECTED_TOTAL = 94
 SEMANTIC_RESULT_FIELDS = (
     "job_id",
     "terminal",
@@ -1109,7 +1112,7 @@ def _validate_acceptance_evidence(
             ctest = verification_document.get("ctest") if isinstance(verification_document, Mapping) else None
             gate_valid = (
                 isinstance(ctest, Mapping)
-                and ctest.get("passed") == ctest.get("total") == 90
+                and ctest.get("passed") == ctest.get("total") == FINAL_CTEST_EXPECTED_TOTAL
                 and verification.get("ctest_passed") == ctest.get("passed")
                 and verification.get("ctest_total") == ctest.get("total")
             )
