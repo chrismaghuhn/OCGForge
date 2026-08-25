@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import subprocess
 import tempfile
+import time
 import unittest
 
 from tools.m4.benchmark import PersistentWorkerPool
@@ -60,6 +61,143 @@ def semantic_projection(result: dict[str, object]) -> tuple[object, ...]:
             "errors",
         )
     )
+
+
+def _stderr_tail(path: Path | None, *, limit: int = 4096) -> str:
+    if path is None:
+        return ""
+    try:
+        return path.read_text(encoding="utf-8", errors="replace")[-limit:]
+    except OSError as error:
+        return f"<stderr unavailable: {error}>"
+
+
+def write_pool_failure_diagnostics(
+    pool: PersistentWorkerPool,
+    *,
+    test_name: str,
+    phase: str,
+    worker_count: int,
+    jobs: list[dict[str, object]],
+    started_ns: int,
+    error: Exception,
+) -> None:
+    """Persist bounded lifecycle diagnostics when CI exposes an artifact dir."""
+
+    artifact_dir = os.environ.get("YGO_M4_FAILURE_ARTIFACT_DIR")
+    if not artifact_dir:
+        return
+    try:
+        root = Path(artifact_dir)
+        root.mkdir(parents=True, exist_ok=True)
+        workers = []
+        for state in pool._states:
+            process = state.process
+            in_flight = state.in_flight
+            dispatched_ns = getattr(in_flight, "dispatched_ns", None)
+            in_flight_job = getattr(in_flight, "job", None)
+            stderr_path = state.stderr_path
+            stderr_bytes = 0
+            if stderr_path is not None:
+                try:
+                    stderr_bytes = stderr_path.stat().st_size
+                except OSError:
+                    pass
+            workers.append(
+                {
+                    "worker_index": state.index,
+                    "pid": state.pid,
+                    "returncode": process.poll() if process is not None else None,
+                    "alive": state.alive,
+                    "ready": state.ready is not None,
+                    "retired": state.retired,
+                    "reaped": state.reaped,
+                    "in_flight_job_id": (
+                        str(in_flight_job["job_id"])
+                        if isinstance(in_flight_job, dict) and "job_id" in in_flight_job
+                        else None
+                    ),
+                    "in_flight_elapsed_seconds": (
+                        round((time.perf_counter_ns() - dispatched_ns) / 1_000_000_000, 3)
+                        if dispatched_ns is not None
+                        else None
+                    ),
+                    "stderr_bytes": stderr_bytes,
+                    "stderr_tail": _stderr_tail(stderr_path),
+                }
+            )
+        metadata_keys = (
+            "games_completed",
+            "failed_games",
+            "worker_crashes",
+            "worker_errors",
+            "malformed_protocol",
+            "handshake_errors",
+            "retries",
+        )
+        payload = {
+            "schema": "ocgforge.m4.integration-diagnostic.v1",
+            "test": test_name,
+            "phase": phase,
+            "worker_count": worker_count,
+            "job_ids": [str(job["job_id"]) for job in jobs],
+            "exception_type": type(error).__name__,
+            "exception": str(error),
+            "timeout_category": (
+                "worker_result_timeout"
+                if "timed out waiting for a worker result" in str(error)
+                else "integration_failure"
+            ),
+            "elapsed_seconds": round((time.perf_counter_ns() - started_ns) / 1_000_000_000, 3),
+            "result_timeout_seconds": pool.result_timeout_seconds,
+            "metadata": {
+                key: pool.last_run_metadata.get(key)
+                for key in metadata_keys
+                if key in pool.last_run_metadata
+            },
+            "workers": workers,
+        }
+        safe_name = "".join(
+            character if character.isalnum() or character in {"-", "_"} else "_"
+            for character in f"{test_name}-{phase}-w{worker_count}"
+        )
+        (root / f"{safe_name}.json").write_text(
+            json.dumps(payload, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+    except (OSError, TypeError, ValueError):
+        # Diagnostics must never replace the original integration failure.
+        return
+
+
+def run_pool_with_diagnostics(
+    jobs: list[dict[str, object]],
+    *,
+    worker_count: int,
+    output_dir: Path,
+    test_name: str,
+    phase: str,
+) -> list[dict[str, object]]:
+    pool = PersistentWorkerPool(
+        NATIVE_WORKER,
+        worker_count=worker_count,
+        output_dir=output_dir,
+    )
+    started_ns = time.perf_counter_ns()
+    with pool:
+        try:
+            return pool.run(jobs, require_primary_integrity=True)
+        except Exception as error:
+            write_pool_failure_diagnostics(
+                pool,
+                test_name=test_name,
+                phase=phase,
+                worker_count=worker_count,
+                jobs=jobs,
+                started_ns=started_ns,
+                error=error,
+            )
+            raise
 
 
 def run_native(jobs: list[dict[str, object]]) -> tuple[dict[str, object], list[dict[str, object]]]:
@@ -149,12 +287,13 @@ class NativeWorkerIntegrationTests(unittest.TestCase):
             with self.subTest(worker_count=worker_count), tempfile.TemporaryDirectory(
                 prefix=f"ocgforge-m4-integration-w{worker_count}-"
             ) as directory:
-                with PersistentWorkerPool(
-                    NATIVE_WORKER,
+                results = run_pool_with_diagnostics(
+                    baseline_jobs,
                     worker_count=worker_count,
                     output_dir=Path(directory),
-                ) as pool:
-                    results = pool.run(baseline_jobs, require_primary_integrity=True)
+                    test_name="worker-counts",
+                    phase="throughput",
+                )
                 projection = [semantic_projection(result) for result in results]
                 if baseline_projection is None:
                     baseline_projection = projection
@@ -166,12 +305,13 @@ class NativeWorkerIntegrationTests(unittest.TestCase):
                 trace_jobs = make_jobs(8, mode="conformance", persist_trace=True)
                 for job in trace_jobs:
                     job["trace_output"] = str(Path(directory) / f"{job['job_id']}.jsonl")
-                with PersistentWorkerPool(
-                    NATIVE_WORKER,
+                results = run_pool_with_diagnostics(
+                    trace_jobs,
                     worker_count=worker_count,
                     output_dir=Path(directory),
-                ) as pool:
-                    results = pool.run(trace_jobs, require_primary_integrity=True)
+                    test_name="worker-counts",
+                    phase="conformance",
+                )
                 self.assertTrue(
                     all(isinstance(result["trace_hash"], str) and result["trace_hash"] for result in results)
                 )

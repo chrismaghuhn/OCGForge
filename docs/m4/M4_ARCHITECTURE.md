@@ -41,6 +41,28 @@ never held in an unread pipe. The report records the path and final byte count
 so diagnostics remain available without coupling stderr volume to worker
 progress.
 
+## Hosted CI tier versus acceptance characterization
+
+Hosted Windows CI runs the bounded `m4_worker_integration_fast_test` together
+with the protocol, failure-isolation, and benchmark-integrity tests. The fast
+test covers persistent startup and handshake, one- versus two-worker semantic
+equivalence, throughput-versus-conformance semantic equivalence, complete
+primary-result validation, zero error counters, and trace-hash equivalence on
+a small deterministic corpus. It is a hosted integrity proof, not evidence
+for the full scaling matrix.
+
+The larger `m4_worker_integration_test` remains registered with the
+`M4_ACCEPTANCE_SCALE` label and is still the local/dedicated acceptance and
+characterization path. Hosted CI excludes that label because the full
+1/2/4/8-worker throughput and trace workload is not a reliable Debug-runner
+budget. Excluding it from hosted CI does not remove or weaken the larger test.
+
+When a pool timeout occurs and `YGO_M4_FAILURE_ARTIFACT_DIR` is set, the
+integration test writes a bounded diagnostic JSON containing the test phase,
+job IDs, timeout category, elapsed time, worker lifecycle state, return codes,
+and stderr tails. These values are failure diagnostics only and are not
+semantic or gameplay evidence.
+
 ## Canonical identity and determinism
 
 The ready envelope is checked against the pinned protocol, rules bundle,

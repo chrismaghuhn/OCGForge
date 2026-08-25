@@ -31,6 +31,7 @@ from tools.m4.worker_protocol_contract import (
     CANONICAL_PATCHSET_SHA256,
     CANONICAL_RULES_BUNDLE_ID,
 )
+from tests.m4.test_worker_integration import write_pool_failure_diagnostics
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -778,6 +779,50 @@ class FailureIsolationTests(unittest.TestCase):
                 self.assertIn("timed out waiting for a worker result", pool._unusable_reason or "")
             finally:
                 pool.close()
+
+    def test_timeout_diagnostics_are_bounded_and_durable_when_requested(self) -> None:
+        workload = jobs(1)
+        with tempfile.TemporaryDirectory(prefix="ocgforge-m4-timeout-diagnostics-") as directory:
+            artifact_dir = Path(directory) / "artifacts"
+            pool = PersistentWorkerPool(
+                fake_command("hang-first-job"),
+                worker_count=1,
+                output_dir=Path(directory) / "workers",
+                result_timeout_seconds=0.05,
+            )
+            with mock.patch.dict(
+                os.environ,
+                {"YGO_M4_FAILURE_ARTIFACT_DIR": str(artifact_dir)},
+            ):
+                with pool:
+                    started_ns = time.perf_counter_ns()
+                    with self.assertRaisesRegex(
+                        WorkerRuntimeError, "timed out waiting for a worker result"
+                    ) as raised:
+                        try:
+                            pool.run(workload)
+                        except WorkerRuntimeError as error:
+                            write_pool_failure_diagnostics(
+                                pool,
+                                test_name="failure-isolation",
+                                phase="timeout",
+                                worker_count=1,
+                                jobs=workload,
+                                started_ns=started_ns,
+                                error=error,
+                            )
+                            raise
+            reports = list(artifact_dir.glob("*.json"))
+            self.assertEqual(len(reports), 1)
+            report = json.loads(reports[0].read_text(encoding="utf-8"))
+            self.assertEqual(report["schema"], "ocgforge.m4.integration-diagnostic.v1")
+            self.assertEqual(report["exception_type"], "WorkerRuntimeError")
+            self.assertEqual(report["timeout_category"], "worker_result_timeout")
+            self.assertEqual(report["result_timeout_seconds"], 0.05)
+            self.assertEqual(report["job_ids"], [workload[0]["job_id"]])
+            self.assertEqual(len(report["workers"]), 1)
+            self.assertIn("stderr_tail", report["workers"][0])
+            self.assertIn("timed out waiting", str(raised.exception))
 
     def test_invalid_utf8_is_explicit_malformed_protocol_failure(self) -> None:
         with tempfile.TemporaryDirectory(prefix="ocgforge-m4-task5-utf8-") as directory:

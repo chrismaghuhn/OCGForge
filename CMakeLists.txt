@@ -573,4 +573,14 @@ add_test(NAME m4_worker_integration_test
 set_tests_properties(m4_worker_integration_test PROPERTIES
     WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
     ENVIRONMENT "YGO_M4_WORKER=$<TARGET_FILE:ygo_m4_worker>"
+    LABELS "M4_ACCEPTANCE_SCALE"
+)
+
+add_test(NAME m4_worker_integration_fast_test
+    COMMAND "${Python3_EXECUTABLE}" -m unittest tests/m4/test_worker_integration_fast.py -v
+)
+set_tests_properties(m4_worker_integration_fast_test PROPERTIES
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    ENVIRONMENT "YGO_M4_WORKER=$<TARGET_FILE:ygo_m4_worker>"
+    LABELS "M4_HOSTED_FAST"
 )
