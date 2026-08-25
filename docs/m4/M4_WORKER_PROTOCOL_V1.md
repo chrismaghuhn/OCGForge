@@ -89,8 +89,9 @@ failed result for that job ID; the worker never substitutes another identity.
 
 Every fully parsed request with a non-empty job ID receives exactly one
 `result` line, including failed requests and failed simulations. The worker
-sets `coordinator_elapsed_us` to JSON `null`; the coordinator owns that timing
-domain.
+sets `coordinator_elapsed_us` to JSON `null`; the coordinator owns the
+end-to-end dispatch-to-validated-result-receipt timing domain. That interval
+includes worker-compute wait and is not isolated IPC CPU time.
 
 The result envelope contains, in deterministic order:
 

@@ -1,343 +1,5 @@
 {
-  "acceptance_evidence": {
-    "gates": {
-      "candidate_observation": {
-        "artifacts": [
-          {
-            "path": "artifacts/m3/canonical_mr5/full_games_m4_final/full_fixed_deck_results.json",
-            "sha256": "e7ac5faac3fcebee6fc339ef031b4c9cba0f5dd08ecd18a68b2fc6fdfb87ee4c"
-          },
-          {
-            "path": "docs/m4/m4_final_verification.json",
-            "sha256": "50fe20d88e245691fc936b65d0f26fb682231c33b13169e6c9bf5bbe0040a4eb"
-          }
-        ],
-        "evidence": "Canonical M3 observation completed 16/16 with no candidate truncation or automatic decisions.",
-        "fresh": true,
-        "run_identity": "4a199bdaa73d6fe9bfd64d2c4ed7ca66abe83a61ce6015cdfda5858fe0402d8c",
-        "status": "PASS",
-        "verification": {
-          "canonical_result": {
-            "path": "artifacts/m3/canonical_mr5/full_games_m4_final/full_fixed_deck_results.json"
-          },
-          "commands": [
-            {
-              "exit_code": 0,
-              "name": "canonical_m3",
-              "passed": 16,
-              "total": 16
-            }
-          ]
-        }
-      },
-      "existing_regressions": {
-        "artifacts": [
-          {
-            "path": "artifacts/m3/canonical_mr5/full_games_m4_final/full_fixed_deck_results.json",
-            "sha256": "e7ac5faac3fcebee6fc339ef031b4c9cba0f5dd08ecd18a68b2fc6fdfb87ee4c"
-          },
-          {
-            "path": "docs/m4/m4_final_verification.json",
-            "sha256": "50fe20d88e245691fc936b65d0f26fb682231c33b13169e6c9bf5bbe0040a4eb"
-          }
-        ],
-        "evidence": "Existing Python, M3, M4, and canonical game suites pass at their required counts.",
-        "fresh": true,
-        "run_identity": "4a199bdaa73d6fe9bfd64d2c4ed7ca66abe83a61ce6015cdfda5858fe0402d8c",
-        "status": "PASS",
-        "verification": {
-          "commands": [
-            {
-              "exit_code": 0,
-              "name": "python_tests",
-              "passed": 8,
-              "total": 8
-            },
-            {
-              "exit_code": 0,
-              "name": "m3_tests",
-              "passed": 17,
-              "total": 17
-            },
-            {
-              "exit_code": 0,
-              "name": "m4_tests",
-              "passed": 96,
-              "total": 96
-            },
-            {
-              "exit_code": 0,
-              "name": "canonical_m3",
-              "passed": 16,
-              "total": 16
-            }
-          ]
-        }
-      },
-      "failure_isolation": {
-        "artifacts": [
-          {
-            "path": "artifacts/m4/matrix/throughput-w32-timeout-failure.log",
-            "sha256": "cfe70710fe1d076b2c2a9b7ba5ae490c4bdfd3abdcdb06984be6a08921f8aa27"
-          },
-          {
-            "path": "docs/m4/m4_final_verification.json",
-            "sha256": "50fe20d88e245691fc936b65d0f26fb682231c33b13169e6c9bf5bbe0040a4eb"
-          }
-        ],
-        "evidence": "The 120-second w32 timeout is preserved as explicit negative evidence and successful longer-guard reruns remain separate.",
-        "fresh": true,
-        "run_identity": "4a199bdaa73d6fe9bfd64d2c4ed7ca66abe83a61ce6015cdfda5858fe0402d8c",
-        "status": "PASS",
-        "verification": {
-          "commands": [
-            {
-              "exit_code": 0,
-              "name": "m4_failure_isolation",
-              "passed": 96,
-              "total": 96
-            }
-          ],
-          "timeout_log_path": "artifacts/m4/matrix/throughput-w32-timeout-failure.log"
-        }
-      },
-      "final_build_and_ctest": {
-        "artifacts": [
-          {
-            "path": "docs/m4/m4_final_verification.json",
-            "sha256": "50fe20d88e245691fc936b65d0f26fb682231c33b13169e6c9bf5bbe0040a4eb"
-          },
-          {
-            "path": "docs/m4/m4_benchmark_schema.json",
-            "sha256": "a59cdab3cd48f3909725d9f114265a987256d7a146f919186252d60ea689ca49"
-          }
-        ],
-        "evidence": "Final CMake configure/build and CTest completed successfully.",
-        "fresh": true,
-        "run_identity": "4a199bdaa73d6fe9bfd64d2c4ed7ca66abe83a61ce6015cdfda5858fe0402d8c",
-        "status": "PASS",
-        "verification": {
-          "commands": [
-            {
-              "exit_code": 0,
-              "name": "cmake_configure",
-              "passed": 1,
-              "total": 1
-            },
-            {
-              "exit_code": 0,
-              "name": "cmake_build",
-              "passed": 1,
-              "total": 1
-            },
-            {
-              "exit_code": 0,
-              "name": "ctest",
-              "passed": 90,
-              "total": 90
-            }
-          ],
-          "ctest_passed": 90,
-          "ctest_total": 90
-        }
-      },
-      "handshake_identity": {
-        "artifacts": [
-          {
-            "path": "artifacts/m4/matrix/throughput-w1.json",
-            "sha256": "e08a2163c86461bad83dfd727c4b38cf554a218d88738acda7fdc64b74d0d2a4"
-          },
-          {
-            "path": "artifacts/m4/matrix/throughput-w32.json",
-            "sha256": "139b4b84c6383956a368ab9edae9add5bb0bc04e7ad762fd8b5d8a7580f5c345"
-          },
-          {
-            "path": "docs/m4/m4_final_verification.json",
-            "sha256": "50fe20d88e245691fc936b65d0f26fb682231c33b13169e6c9bf5bbe0040a4eb"
-          }
-        ],
-        "evidence": "Native integration and matrix identity checks pass with zero handshake or identity mismatches.",
-        "fresh": true,
-        "run_identity": "4a199bdaa73d6fe9bfd64d2c4ed7ca66abe83a61ce6015cdfda5858fe0402d8c",
-        "status": "PASS",
-        "verification": {
-          "commands": [
-            {
-              "exit_code": 0,
-              "name": "ctest",
-              "passed": 90,
-              "total": 90
-            }
-          ],
-          "handshake_errors": 0,
-          "identity_mismatches": 0
-        }
-      },
-      "integrity": {
-        "artifacts": [
-          {
-            "path": "docs/m4/m4_benchmark_schema.json",
-            "sha256": "a59cdab3cd48f3909725d9f114265a987256d7a146f919186252d60ea689ca49"
-          },
-          {
-            "path": "docs/m4/m4_final_verification.json",
-            "sha256": "50fe20d88e245691fc936b65d0f26fb682231c33b13169e6c9bf5bbe0040a4eb"
-          }
-        ],
-        "evidence": "All declared-schema reports and matrix rows validate with zero invalid rows.",
-        "fresh": true,
-        "run_identity": "4a199bdaa73d6fe9bfd64d2c4ed7ca66abe83a61ce6015cdfda5858fe0402d8c",
-        "status": "PASS",
-        "verification": {
-          "commands": [
-            {
-              "exit_code": 0,
-              "name": "report_schema_validation",
-              "passed": 10,
-              "total": 10
-            }
-          ],
-          "invalid_rows": 0,
-          "schema_errors": 0
-        }
-      },
-      "mode_equivalence": {
-        "artifacts": [
-          {
-            "path": "artifacts/m4/experiments/conformance.json",
-            "sha256": "3a379ef6ff30393c263de856dc161abccca1e7c0acc48aede7a5a33bc4dfb7ce"
-          },
-          {
-            "path": "artifacts/m4/experiments/throughput-no-persistence.json",
-            "sha256": "dc0c472419dd6eb3551d85e7a2c5e827edde55b4e48ddc6170d0480dc0ba33a7"
-          },
-          {
-            "path": "artifacts/m4/experiments/throughput-off-diagnostic.json",
-            "sha256": "76ed38c807f35ae78f06b147e897c556ed17c01319c60b539b3a1cf1491fe0f1"
-          },
-          {
-            "path": "docs/m4/m4_final_verification.json",
-            "sha256": "50fe20d88e245691fc936b65d0f26fb682231c33b13169e6c9bf5bbe0040a4eb"
-          }
-        ],
-        "evidence": "Conformance, throughput without persistence, and off-diagnostic runs agree semantically.",
-        "fresh": true,
-        "run_identity": "4a199bdaa73d6fe9bfd64d2c4ed7ca66abe83a61ce6015cdfda5858fe0402d8c",
-        "status": "PASS",
-        "verification": {
-          "commands": [
-            {
-              "exit_code": 0,
-              "name": "mode_equivalence_validation",
-              "passed": 3,
-              "total": 3
-            }
-          ],
-          "semantic_match": true
-        }
-      },
-      "parallel_determinism": {
-        "artifacts": [
-          {
-            "path": "artifacts/m4/matrix/throughput-w1.json",
-            "sha256": "e08a2163c86461bad83dfd727c4b38cf554a218d88738acda7fdc64b74d0d2a4"
-          },
-          {
-            "path": "artifacts/m4/matrix/throughput-w2.json",
-            "sha256": "300f1da4d06f0dea3e433648697128cea391ce8463d12783b2d68437273879d5"
-          },
-          {
-            "path": "artifacts/m4/matrix/throughput-w4.json",
-            "sha256": "722731eaabda9a8379cb902b62377865c7db09792208d9cff5c75098bcc59747"
-          },
-          {
-            "path": "artifacts/m4/matrix/throughput-w8.json",
-            "sha256": "267fa9a13d121371339dbe20debc27fd37d2fad5701e8b32fa1b50d4b7a33cbd"
-          },
-          {
-            "path": "artifacts/m4/matrix/throughput-w16.json",
-            "sha256": "588ccce006132e5d264a85bf7c34ebfe43a7519f7295cf29d82bbe90e09aa6e7"
-          },
-          {
-            "path": "artifacts/m4/matrix/throughput-w32.json",
-            "sha256": "139b4b84c6383956a368ab9edae9add5bb0bc04e7ad762fd8b5d8a7580f5c345"
-          },
-          {
-            "path": "artifacts/m4/matrix/throughput-w64.json",
-            "sha256": "7470d80c982764dc25bec84d2ba9a4edd4526501e56b5cf7d7174b784cd12f91"
-          },
-          {
-            "path": "docs/m4/m4_final_verification.json",
-            "sha256": "50fe20d88e245691fc936b65d0f26fb682231c33b13169e6c9bf5bbe0040a4eb"
-          }
-        ],
-        "evidence": "Semantic fingerprints match for every validated worker row.",
-        "fresh": true,
-        "run_identity": "4a199bdaa73d6fe9bfd64d2c4ed7ca66abe83a61ce6015cdfda5858fe0402d8c",
-        "status": "PASS",
-        "verification": {
-          "commands": [
-            {
-              "exit_code": 0,
-              "name": "m4_tests",
-              "passed": 96,
-              "total": 96
-            }
-          ],
-          "mismatches": [],
-          "workers": [
-            1,
-            2,
-            4,
-            8,
-            16,
-            32,
-            64
-          ]
-        }
-      },
-      "privacy": {
-        "artifacts": [
-          {
-            "path": "artifacts/m4/matrix/throughput-w1.json",
-            "sha256": "e08a2163c86461bad83dfd727c4b38cf554a218d88738acda7fdc64b74d0d2a4"
-          },
-          {
-            "path": "artifacts/m4/matrix/throughput-w32.json",
-            "sha256": "139b4b84c6383956a368ab9edae9add5bb0bc04e7ad762fd8b5d8a7580f5c345"
-          },
-          {
-            "path": "artifacts/m4/matrix/throughput-w64.json",
-            "sha256": "7470d80c982764dc25bec84d2ba9a4edd4526501e56b5cf7d7174b784cd12f91"
-          },
-          {
-            "path": "docs/m4/m4_final_verification.json",
-            "sha256": "50fe20d88e245691fc936b65d0f26fb682231c33b13169e6c9bf5bbe0040a4eb"
-          }
-        ],
-        "evidence": "Successful throughput worker stderr is empty and throughput traces are not persisted.",
-        "fresh": true,
-        "run_identity": "4a199bdaa73d6fe9bfd64d2c4ed7ca66abe83a61ce6015cdfda5858fe0402d8c",
-        "status": "PASS",
-        "verification": {
-          "commands": [
-            {
-              "exit_code": 0,
-              "name": "privacy_boundary_validation",
-              "passed": 96,
-              "total": 96
-            }
-          ],
-          "stderr_bytes": 0,
-          "trace_persistence": false
-        }
-      }
-    },
-    "manifest_path": "docs/m4/m4_acceptance_manifest.json",
-    "manifest_sha256": "5949aee649c1abbc8a3f3533e0806609c161ba51c4aa2ace16b2460c075057a2",
-    "run_identity": "4a199bdaa73d6fe9bfd64d2c4ed7ca66abe83a61ce6015cdfda5858fe0402d8c",
-    "schema_version": "ocgforge.m4.acceptance.v1"
-  },
+  "acceptance_evidence": null,
   "build_identity": {
     "build_type": "Debug",
     "compiler_identity": "Clang-19.1.7",
@@ -419,8 +81,8 @@
         "candidate": "observation-path audit"
       },
       {
-        "basis": "measured coordinator_ipc timing bucket",
-        "candidate": "coordinator/IPC audit"
+        "basis": "measured dispatch_to_receipt timing bucket",
+        "candidate": "dispatch/result latency audit"
       },
       {
         "basis": "measured script_loads counter",
@@ -490,9 +152,9 @@
         "stderr_bytes": 0,
         "timing_buckets_us": {
           "continuation": 0,
-          "coordinator_ipc": 2295923877,
           "coordinator_other": 0,
           "core_process": 94448884,
+          "dispatch_to_receipt": 2295923877,
           "observation": 2170381294,
           "other": 17508628,
           "protocol_candidate": 4346660,
@@ -502,9 +164,9 @@
         },
         "timing_percentages": {
           "continuation": 0.0,
-          "coordinator_ipc": 100.0,
           "coordinator_other": 0.0,
           "core_process": 4.114108,
+          "dispatch_to_receipt": 100.0,
           "observation": 94.539848,
           "other": 0.76266,
           "protocol_candidate": 0.189337,
@@ -573,9 +235,9 @@
         "stderr_bytes": 0,
         "timing_buckets_us": {
           "continuation": 0,
-          "coordinator_ipc": 4178027456,
           "coordinator_other": 0,
           "core_process": 152156891,
+          "dispatch_to_receipt": 4178027456,
           "observation": 3971485562,
           "other": 30374615,
           "protocol_candidate": 6971401,
@@ -585,9 +247,9 @@
         },
         "timing_percentages": {
           "continuation": 0.0,
-          "coordinator_ipc": 100.0,
           "coordinator_other": 0.0,
           "core_process": 3.642284,
+          "dispatch_to_receipt": 100.0,
           "observation": 95.068179,
           "other": 0.727098,
           "protocol_candidate": 0.166879,
@@ -656,9 +318,9 @@
         "stderr_bytes": 0,
         "timing_buckets_us": {
           "continuation": 0,
-          "coordinator_ipc": 3224171162,
           "coordinator_other": 0,
           "core_process": 120719518,
+          "dispatch_to_receipt": 3224171162,
           "observation": 3061720317,
           "other": 22927975,
           "protocol_candidate": 5589432,
@@ -668,9 +330,9 @@
         },
         "timing_percentages": {
           "continuation": 0.0,
-          "coordinator_ipc": 100.0,
           "coordinator_other": 0.0,
           "core_process": 3.74448,
+          "dispatch_to_receipt": 100.0,
           "observation": 94.968487,
           "other": 0.71118,
           "protocol_candidate": 0.173373,
@@ -739,9 +401,9 @@
         "stderr_bytes": 0,
         "timing_buckets_us": {
           "continuation": 0,
-          "coordinator_ipc": 7485516183,
           "coordinator_other": 0,
           "core_process": 316440183,
+          "dispatch_to_receipt": 7485516183,
           "observation": 7021464281,
           "other": 102903346,
           "protocol_candidate": 14830223,
@@ -751,9 +413,9 @@
         },
         "timing_percentages": {
           "continuation": 0.0,
-          "coordinator_ipc": 100.0,
           "coordinator_other": 0.0,
           "core_process": 4.228166,
+          "dispatch_to_receipt": 100.0,
           "observation": 93.818414,
           "other": 1.374959,
           "protocol_candidate": 0.198156,
@@ -822,9 +484,9 @@
         "stderr_bytes": 0,
         "timing_buckets_us": {
           "continuation": 0,
-          "coordinator_ipc": 3479266414,
           "coordinator_other": 0,
           "core_process": 130598269,
+          "dispatch_to_receipt": 3479266414,
           "observation": 3303453564,
           "other": 24766413,
           "protocol_candidate": 6042691,
@@ -834,9 +496,9 @@
         },
         "timing_percentages": {
           "continuation": 0.0,
-          "coordinator_ipc": 100.0,
           "coordinator_other": 0.0,
           "core_process": 3.753943,
+          "dispatch_to_receipt": 100.0,
           "observation": 94.95513,
           "other": 0.711891,
           "protocol_candidate": 0.173692,
@@ -905,9 +567,9 @@
         "stderr_bytes": 0,
         "timing_buckets_us": {
           "continuation": 0,
-          "coordinator_ipc": 12023005262,
           "coordinator_other": 0,
           "core_process": 579145531,
+          "dispatch_to_receipt": 12023005262,
           "observation": 11124945548,
           "other": 243051144,
           "protocol_candidate": 27147041,
@@ -917,9 +579,9 @@
         },
         "timing_percentages": {
           "continuation": 0.0,
-          "coordinator_ipc": 100.0,
           "coordinator_other": 0.0,
           "core_process": 4.818385,
+          "dispatch_to_receipt": 100.0,
           "observation": 92.55751,
           "other": 2.022141,
           "protocol_candidate": 0.225858,
@@ -988,9 +650,9 @@
         "stderr_bytes": 0,
         "timing_buckets_us": {
           "continuation": 0,
-          "coordinator_ipc": 3447797263,
           "coordinator_other": 0,
           "core_process": 128184837,
+          "dispatch_to_receipt": 3447797263,
           "observation": 3275104359,
           "other": 24649512,
           "protocol_candidate": 5818113,
@@ -1000,9 +662,9 @@
         },
         "timing_percentages": {
           "continuation": 0.0,
-          "coordinator_ipc": 100.0,
           "coordinator_other": 0.0,
           "core_process": 3.718206,
+          "dispatch_to_receipt": 100.0,
           "observation": 94.999644,
           "other": 0.714999,
           "protocol_candidate": 0.168764,
@@ -1015,12 +677,12 @@
       }
     },
     "timing_domains": {
-      "coordinator_elapsed_us": "dispatch through result receipt",
+      "coordinator_elapsed_us": "end-to-end dispatch write/flush through validated result receipt; includes worker-compute wait and is not isolated IPC CPU",
       "games_per_second": "steady-state coordinator wall clock",
       "simulation_elapsed_us": "worker-local fresh CoreHost through result assembly"
     }
   },
-  "evidence_identity": "4a199bdaa73d6fe9bfd64d2c4ed7ca66abe83a61ce6015cdfda5858fe0402d8c",
+  "evidence_identity": "UNVERIFIED",
   "hardware": {
     "machine": "AMD64",
     "physical_memory_bytes": 34278862848,
@@ -1118,9 +780,9 @@
       "stderr_bytes": 0,
       "timing_buckets_us": {
         "continuation": 0,
-        "coordinator_ipc": 2295923877,
         "coordinator_other": 0,
         "core_process": 94448884,
+        "dispatch_to_receipt": 2295923877,
         "observation": 2170381294,
         "other": 17508628,
         "protocol_candidate": 4346660,
@@ -1130,9 +792,9 @@
       },
       "timing_percentages": {
         "continuation": 0.0,
-        "coordinator_ipc": 100.0,
         "coordinator_other": 0.0,
         "core_process": 4.114108,
+        "dispatch_to_receipt": 100.0,
         "observation": 94.539848,
         "other": 0.76266,
         "protocol_candidate": 0.189337,
@@ -1201,9 +863,9 @@
       "stderr_bytes": 0,
       "timing_buckets_us": {
         "continuation": 0,
-        "coordinator_ipc": 3224171162,
         "coordinator_other": 0,
         "core_process": 120719518,
+        "dispatch_to_receipt": 3224171162,
         "observation": 3061720317,
         "other": 22927975,
         "protocol_candidate": 5589432,
@@ -1213,9 +875,9 @@
       },
       "timing_percentages": {
         "continuation": 0.0,
-        "coordinator_ipc": 100.0,
         "coordinator_other": 0.0,
         "core_process": 3.74448,
+        "dispatch_to_receipt": 100.0,
         "observation": 94.968487,
         "other": 0.71118,
         "protocol_candidate": 0.173373,
@@ -1284,9 +946,9 @@
       "stderr_bytes": 0,
       "timing_buckets_us": {
         "continuation": 0,
-        "coordinator_ipc": 3479266414,
         "coordinator_other": 0,
         "core_process": 130598269,
+        "dispatch_to_receipt": 3479266414,
         "observation": 3303453564,
         "other": 24766413,
         "protocol_candidate": 6042691,
@@ -1296,9 +958,9 @@
       },
       "timing_percentages": {
         "continuation": 0.0,
-        "coordinator_ipc": 100.0,
         "coordinator_other": 0.0,
         "core_process": 3.753943,
+        "dispatch_to_receipt": 100.0,
         "observation": 94.95513,
         "other": 0.711891,
         "protocol_candidate": 0.173692,
@@ -1367,9 +1029,9 @@
       "stderr_bytes": 0,
       "timing_buckets_us": {
         "continuation": 0,
-        "coordinator_ipc": 3447797263,
         "coordinator_other": 0,
         "core_process": 128184837,
+        "dispatch_to_receipt": 3447797263,
         "observation": 3275104359,
         "other": 24649512,
         "protocol_candidate": 5818113,
@@ -1379,9 +1041,9 @@
       },
       "timing_percentages": {
         "continuation": 0.0,
-        "coordinator_ipc": 100.0,
         "coordinator_other": 0.0,
         "core_process": 3.718206,
+        "dispatch_to_receipt": 100.0,
         "observation": 94.999644,
         "other": 0.714999,
         "protocol_candidate": 0.168764,
@@ -1450,9 +1112,9 @@
       "stderr_bytes": 0,
       "timing_buckets_us": {
         "continuation": 0,
-        "coordinator_ipc": 4178027456,
         "coordinator_other": 0,
         "core_process": 152156891,
+        "dispatch_to_receipt": 4178027456,
         "observation": 3971485562,
         "other": 30374615,
         "protocol_candidate": 6971401,
@@ -1462,9 +1124,9 @@
       },
       "timing_percentages": {
         "continuation": 0.0,
-        "coordinator_ipc": 100.0,
         "coordinator_other": 0.0,
         "core_process": 3.642284,
+        "dispatch_to_receipt": 100.0,
         "observation": 95.068179,
         "other": 0.727098,
         "protocol_candidate": 0.166879,
@@ -1533,9 +1195,9 @@
       "stderr_bytes": 0,
       "timing_buckets_us": {
         "continuation": 0,
-        "coordinator_ipc": 7485516183,
         "coordinator_other": 0,
         "core_process": 316440183,
+        "dispatch_to_receipt": 7485516183,
         "observation": 7021464281,
         "other": 102903346,
         "protocol_candidate": 14830223,
@@ -1545,9 +1207,9 @@
       },
       "timing_percentages": {
         "continuation": 0.0,
-        "coordinator_ipc": 100.0,
         "coordinator_other": 0.0,
         "core_process": 4.228166,
+        "dispatch_to_receipt": 100.0,
         "observation": 93.818414,
         "other": 1.374959,
         "protocol_candidate": 0.198156,
@@ -1616,9 +1278,9 @@
       "stderr_bytes": 0,
       "timing_buckets_us": {
         "continuation": 0,
-        "coordinator_ipc": 12023005262,
         "coordinator_other": 0,
         "core_process": 579145531,
+        "dispatch_to_receipt": 12023005262,
         "observation": 11124945548,
         "other": 243051144,
         "protocol_candidate": 27147041,
@@ -1628,9 +1290,9 @@
       },
       "timing_percentages": {
         "continuation": 0.0,
-        "coordinator_ipc": 100.0,
         "coordinator_other": 0.0,
         "core_process": 4.818385,
+        "dispatch_to_receipt": 100.0,
         "observation": 92.55751,
         "other": 2.022141,
         "protocol_candidate": 0.225858,
@@ -1689,14 +1351,14 @@
     "status": "PASS"
   },
   "source_reports": {
-    "1": "artifacts\\m4\\matrix\\throughput-w1.json",
-    "16": "artifacts\\m4\\matrix\\throughput-w16.json",
-    "2": "artifacts\\m4\\matrix\\throughput-w2.json",
-    "32": "artifacts\\m4\\matrix\\throughput-w32.json",
-    "4": "artifacts\\m4\\matrix\\throughput-w4.json",
-    "64": "artifacts\\m4\\matrix\\throughput-w64.json",
-    "8": "artifacts\\m4\\matrix\\throughput-w8.json"
+    "1": "EXTERNAL_SOURCE_NOT_COMMITTED",
+    "16": "EXTERNAL_SOURCE_NOT_COMMITTED",
+    "2": "EXTERNAL_SOURCE_NOT_COMMITTED",
+    "32": "EXTERNAL_SOURCE_NOT_COMMITTED",
+    "4": "EXTERNAL_SOURCE_NOT_COMMITTED",
+    "64": "EXTERNAL_SOURCE_NOT_COMMITTED",
+    "8": "EXTERNAL_SOURCE_NOT_COMMITTED"
   },
-  "status": "M4 BASELINE PASS — PERFORMANCE AUDIT READY",
-  "status_reason": "all independently verified acceptance gates passed"
+  "status": "M4 BASELINE ACCEPTANCE PENDING",
+  "status_reason": "acceptance evidence lacks a repository-backed run identity"
 }

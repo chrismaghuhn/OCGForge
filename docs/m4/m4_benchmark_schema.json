@@ -221,7 +221,7 @@
         "serialization",
         "other",
         "trace_persistence",
-        "coordinator_ipc",
+        "dispatch_to_receipt",
         "coordinator_other"
       ],
       "properties": {
@@ -233,7 +233,7 @@
         "serialization": { "$ref": "#/$defs/nonnegative_integer" },
         "other": { "$ref": "#/$defs/nonnegative_integer" },
         "trace_persistence": { "$ref": "#/$defs/nonnegative_integer" },
-        "coordinator_ipc": { "$ref": "#/$defs/nonnegative_integer" },
+        "dispatch_to_receipt": { "$ref": "#/$defs/nonnegative_integer" },
         "coordinator_other": { "$ref": "#/$defs/nonnegative_integer" }
       }
     },

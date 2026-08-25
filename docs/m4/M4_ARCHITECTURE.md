@@ -63,8 +63,9 @@ construction through result assembly/destruction as defined by the native
 contract. Native timing buckets are summed only from the worker result.
 
 `coordinator_elapsed_us` is coordinator-side: it spans dispatch write/flush to
-validated result receipt. It is reported separately as coordinator IPC time;
-it is never subtracted from wall time to manufacture a native bucket.
+validated result receipt. It is reported as end-to-end dispatch/result
+latency, includes waiting for worker computation, and is not isolated IPC CPU
+time. It is never subtracted from wall time to manufacture a native bucket.
 
 Steady-state wall time starts after all warmup results are complete and ends
 after the final steady-state result is published. Cold process/ready time is a

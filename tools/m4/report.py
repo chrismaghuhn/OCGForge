@@ -115,6 +115,12 @@ def _repository_relative_path(path: Path) -> str | None:
         return None
 
 
+def _source_report_label(path: Path | None) -> str:
+    if path is None:
+        return "IN_MEMORY"
+    return _repository_relative_path(path) or "EXTERNAL_SOURCE_NOT_COMMITTED"
+
+
 def _resolve_repository_file(value: Any) -> Path | None:
     if not isinstance(value, str) or not value.strip():
         return None
@@ -393,7 +399,7 @@ def aggregate_results(
     coordinator_errors = _sum_nested(results, "coordinator_errors", COORDINATOR_ERROR_KEYS)
     timing = _sum_nested(results, "timing_us", TIMING_KEYS)
     counters = _sum_nested(results, "counters", COUNTER_KEYS)
-    coordinator_ipc = _sum_field(results, "coordinator_elapsed_us")
+    dispatch_to_receipt = _sum_field(results, "coordinator_elapsed_us")
     simulation_values = _sum_field(results, "simulation_elapsed_us")
     simulation_samples = [int(result["simulation_elapsed_us"]) for result in results]
     coordinator_samples = [int(result["coordinator_elapsed_us"]) for result in results]
@@ -416,7 +422,7 @@ def aggregate_results(
         efficiency = 1.0
 
     timing_buckets = dict(timing)
-    timing_buckets["coordinator_ipc"] = coordinator_ipc
+    timing_buckets["dispatch_to_receipt"] = dispatch_to_receipt
     timing_buckets["coordinator_other"] = 0
     return {
         "games_requested": games_requested,
@@ -454,7 +460,7 @@ def _load_baseline_report(
     value: Mapping[str, Any] | str | Path,
 ) -> tuple[dict[str, Any], Path | None]:
     if isinstance(value, Mapping):
-        return dict(value), None
+        return _normalize_legacy_timing_labels(value), None
     path = Path(value)
     try:
         loaded = json.loads(path.read_text(encoding="utf-8"))
@@ -462,7 +468,44 @@ def _load_baseline_report(
         raise BenchmarkIntegrityError(f"could not read benchmark report {path}: {error}") from error
     if not isinstance(loaded, Mapping):
         raise BenchmarkIntegrityError(f"benchmark report {path} is not an object")
-    return dict(loaded), path
+    return _normalize_legacy_timing_labels(loaded), path
+
+
+def _normalize_legacy_timing_labels(report: Mapping[str, Any]) -> dict[str, Any]:
+    """Normalize pre-review aggregate labels before schema validation.
+
+    M4 matrix rows produced before the review fix used the derived label
+    ``coordinator_ipc``. Those rows are accepted only as historical input;
+    newly generated reports and baseline evidence use the precise end-to-end
+    ``dispatch_to_receipt`` domain.
+    """
+
+    steady_state = report.get("steady_state")
+    if not isinstance(steady_state, Mapping):
+        return dict(report)
+    timing = steady_state.get("timing_buckets_us")
+    percentages = steady_state.get("timing_percentages")
+    if not isinstance(timing, Mapping):
+        return dict(report)
+    if "coordinator_ipc" not in timing and (
+        not isinstance(percentages, Mapping) or "coordinator_ipc" not in percentages
+    ):
+        return dict(report)
+    if "dispatch_to_receipt" in timing or (
+        isinstance(percentages, Mapping) and "dispatch_to_receipt" in percentages
+    ):
+        raise BenchmarkIntegrityError("report contains both legacy and current coordinator timing labels")
+    normalized = dict(report)
+    normalized_steady = dict(steady_state)
+    normalized_timing = dict(timing)
+    normalized_percentages = dict(percentages) if isinstance(percentages, Mapping) else None
+    normalized_timing["dispatch_to_receipt"] = normalized_timing.pop("coordinator_ipc", 0)
+    normalized_steady["timing_buckets_us"] = normalized_timing
+    if normalized_percentages is not None:
+        normalized_percentages["dispatch_to_receipt"] = normalized_percentages.pop("coordinator_ipc", 0)
+        normalized_steady["timing_percentages"] = normalized_percentages
+    normalized["steady_state"] = normalized_steady
+    return normalized
 
 
 def _validate_declared_benchmark_schema(report: Mapping[str, Any]) -> None:
@@ -665,7 +708,7 @@ def _timing_percentages(timing: Mapping[str, Any]) -> dict[str, float | str]:
         native = {key: NOT_MEASURED for key in keys}
     else:
         native = {key: round(float(timing.get(key, 0)) * 100.0 / total, 6) for key in keys}
-    coordinator_keys = ("coordinator_ipc", "coordinator_other")
+    coordinator_keys = ("dispatch_to_receipt", "coordinator_other")
     coordinator_total = sum(int(timing.get(key, 0)) for key in coordinator_keys)
     if coordinator_total <= 0:
         coordinator = {key: NOT_MEASURED for key in coordinator_keys}
@@ -684,8 +727,13 @@ def _audit_candidates(
     candidates: list[dict[str, Any]] = []
     if int(timing.get("observation", 0)) > 0:
         candidates.append({"candidate": "observation-path audit", "basis": "measured observation timing bucket"})
-    if int(timing.get("coordinator_ipc", 0)) > 0:
-        candidates.append({"candidate": "coordinator/IPC audit", "basis": "measured coordinator_ipc timing bucket"})
+    if int(timing.get("dispatch_to_receipt", 0)) > 0:
+        candidates.append(
+            {
+                "candidate": "dispatch/result latency audit",
+                "basis": "measured dispatch_to_receipt timing bucket",
+            }
+        )
     if int(counters.get("script_loads", 0)) > 0:
         candidates.append({"candidate": "script-load audit", "basis": "measured script_loads counter"})
     if int(counters.get("candidate_total", 0)) > 0:
@@ -1210,7 +1258,10 @@ def build_baseline(
             "rows_by_worker": evidence_by_worker,
             "timing_domains": {
                 "simulation_elapsed_us": "worker-local fresh CoreHost through result assembly",
-                "coordinator_elapsed_us": "dispatch through result receipt",
+                "coordinator_elapsed_us": (
+                    "end-to-end dispatch write/flush through validated result receipt; "
+                    "includes worker-compute wait and is not isolated IPC CPU"
+                ),
                 "games_per_second": "steady-state coordinator wall clock",
             },
             "performance_audit_candidates": _audit_candidates(
@@ -1219,7 +1270,7 @@ def build_baseline(
             ),
         },
         "source_reports": {
-            str(workers): str(loaded[workers][1]) if loaded[workers][1] is not None else "IN_MEMORY"
+            str(workers): _source_report_label(loaded[workers][1])
             for workers in sorted(loaded)
         },
     }
@@ -1323,7 +1374,7 @@ def write_baseline(path: str | Path, baseline: Mapping[str, Any]) -> None:
 def write_baseline_markdown(path: str | Path, baseline: Mapping[str, Any]) -> None:
     destination = Path(path)
     destination.parent.mkdir(parents=True, exist_ok=True)
-    destination.write_text(render_baseline_markdown(baseline) + "\n", encoding="utf-8")
+    destination.write_text(render_baseline_markdown(baseline).rstrip("\n") + "\n", encoding="utf-8")
 
 
 def build_report(

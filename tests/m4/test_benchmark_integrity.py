@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -124,6 +125,78 @@ def valid_metadata() -> dict[str, object]:
     }
 
 
+def valid_matrix_report(stderr_path: str, *, workers: int = 1) -> dict[str, object]:
+    results = [valid_result(f"m4-{index:06d}") for index in range(4, 68)]
+    for result in results:
+        result["coordinator"]["stderr_path"] = stderr_path  # type: ignore[index]
+    metadata = valid_metadata()
+    metadata["memory"] = {
+        "process_count": workers,
+        "peak_total_working_set_bytes": 1024,
+        "peak_worker_working_set_bytes": 1024,
+        "memory_per_active_environment_bytes": 1024,
+    }
+    return build_report(
+        canonical_environment={
+            "format_id": "TCG_ADVANCED_2026_05_18",
+            "duel_mode_name": "DUEL_MODE_MR5",
+            "duel_flags": 190464,
+            "rules_bundle_id": "a" * 64,
+            "core_patchset_sha256": "b" * 64,
+            "deck_hashes": ["c" * 64, "d" * 64],
+        },
+        hardware={
+            "platform": "test",
+            "system": "test",
+            "machine": "test",
+            "processor": "test",
+            "python_version": "test",
+            "physical_memory_bytes": 1024,
+        },
+        build={
+            "compiler_identity": "test",
+            "build_type": "Test",
+            "worker_identity": "ocgforge.m4.native_worker.v1",
+            "protocol_schema": "ocgforge.m4.worker.v1",
+            "protocol_version": "ocgforge.m4.worker.v1",
+            "worker_executable": "worker.exe",
+            "worker_count": workers,
+            "result_timeout_seconds": 120.0,
+            "platform": "test",
+        },
+        warmup_policy={
+            "warmup_games": 4,
+            "warmup_indices": {"start": 0, "stop": 4, "count": 4},
+            "steady_state_indices": {"start": 4, "stop": 68, "count": 64},
+            "master_seed": 20260815,
+            "same_master_seed_for_warmup_and_steady": True,
+            "starting_player_mode": "balanced",
+            "seat_mode": "balanced",
+            "steady_timer_start": "after_warmup_completion",
+            "steady_timer_stop": "after_final_result_publication",
+        },
+        mode="throughput",
+        instrumentation=True,
+        trace_persistence=False,
+        games_requested=64,
+        workers_requested=workers,
+        cold_start={
+            "wall_clock_seconds": 0.1,
+            "ready_workers": workers,
+            "worker_count": workers,
+            "process_ready_time_domain": "test",
+        },
+        steady_state=aggregate_results(
+            results,
+            metadata,
+            wall_clock_seconds=1.0,
+            games_requested=64,
+            workers_requested=workers,
+        ),
+        jobs=results,
+    )
+
+
 class BenchmarkIntegrityTests(unittest.TestCase):
     def test_baseline_refuses_missing_required_matrix_row(self) -> None:
         with self.assertRaisesRegex(BenchmarkIntegrityError, "missing required matrix row"):
@@ -133,61 +206,110 @@ class BenchmarkIntegrityTests(unittest.TestCase):
         with self.assertRaisesRegex(BenchmarkIntegrityError, "invalid matrix row"):
             build_baseline({1: {}}, required_workers=(1,))
 
+    def test_committed_baseline_does_not_claim_pass_without_durable_evidence(self) -> None:
+        baseline_path = ROOT / "docs" / "m4" / "m4_baseline.json"
+        manifest_path = ROOT / "docs" / "m4" / "m4_acceptance_manifest.json"
+        baseline = json.loads(baseline_path.read_text(encoding="utf-8"))
+        status = baseline.get("status")
+        if status == "M4 BASELINE ACCEPTANCE PENDING":
+            self.assertIsNone(baseline.get("acceptance_evidence"))
+            self.assertFalse(manifest_path.exists())
+            return
+
+        self.assertTrue(
+            isinstance(status, str) and status.startswith("M4 BASELINE PASS"),
+            f"unexpected committed M4 baseline status: {status!r}",
+        )
+        evidence = baseline.get("acceptance_evidence")
+        self.assertIsInstance(evidence, dict)
+        assert isinstance(evidence, dict)
+        self.assertTrue(manifest_path.is_file())
+        manifest_bytes = manifest_path.read_bytes()
+        manifest = json.loads(manifest_bytes.decode("utf-8"))
+        self.assertEqual(manifest.get("manifest_sha256"), evidence.get("manifest_sha256"))
+        unsigned_manifest = dict(manifest)
+        unsigned_manifest["manifest_sha256"] = ""
+        self.assertEqual(
+            hashlib.sha256(
+                json.dumps(unsigned_manifest, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
+            ).hexdigest(),
+            evidence.get("manifest_sha256"),
+        )
+        gates = evidence.get("gates")
+        self.assertIsInstance(gates, dict)
+        assert isinstance(gates, dict)
+        for gate_name, gate in gates.items():
+            with self.subTest(gate=gate_name):
+                self.assertIsInstance(gate, dict)
+                assert isinstance(gate, dict)
+                artifacts = gate.get("artifacts")
+                self.assertIsInstance(artifacts, list)
+                assert isinstance(artifacts, list)
+                for artifact in artifacts:
+                    self.assertIsInstance(artifact, dict)
+                    assert isinstance(artifact, dict)
+                    artifact_path = ROOT / str(artifact.get("path", ""))
+                    self.assertTrue(artifact_path.is_file())
+                    self.assertEqual(
+                        hashlib.sha256(artifact_path.read_bytes()).hexdigest(),
+                        artifact.get("sha256"),
+                    )
+
     def test_baseline_requires_schema_valid_rows_and_fresh_acceptance_evidence(self) -> None:
-        row_path = ROOT / "artifacts" / "m4" / "matrix" / "throughput-w1.json"
-        if not row_path.exists():
-            self.skipTest("measured matrix artifact is unavailable")
-        baseline = build_baseline(
-            {1: row_path},
-            required_workers=(1,),
-            optional_workers=(),
-        )
-        self.assertEqual(baseline["status"], "M4 BASELINE ACCEPTANCE PENDING")
-        self.assertRegex(baseline["evidence_identity"], r"^[0-9a-f]{64}$")
-        self.assertIn("coordinator_ipc", baseline["scaling"][0]["timing_percentages"])
-        evidence = {
-            gate: {"status": "PASS", "fresh": True, "evidence": "test evidence"}
-            for gate in (
-                "parallel_determinism",
-                "mode_equivalence",
-                "failure_isolation",
-                "handshake_identity",
-                "integrity",
-                "existing_regressions",
-                "privacy",
-                "candidate_observation",
-                "final_build_and_ctest",
+        with tempfile.TemporaryDirectory(prefix="ocgforge-m4-baseline-fixture-") as directory:
+            stderr_path = Path(directory) / "worker.stderr.log"
+            stderr_path.touch()
+            report = valid_matrix_report(str(stderr_path))
+            baseline = build_baseline({1: report}, required_workers=(1,), optional_workers=())
+            self.assertEqual(baseline["status"], "M4 BASELINE ACCEPTANCE PENDING")
+            self.assertEqual(baseline["evidence_identity"], "UNVERIFIED")
+            self.assertIn("dispatch_to_receipt", baseline["scaling"][0]["timing_percentages"])
+            evidence = {
+                gate: {"status": "PASS", "fresh": True, "evidence": "test evidence"}
+                for gate in (
+                    "parallel_determinism",
+                    "mode_equivalence",
+                    "failure_isolation",
+                    "handshake_identity",
+                    "integrity",
+                    "existing_regressions",
+                    "privacy",
+                    "candidate_observation",
+                    "final_build_and_ctest",
+                )
+            }
+            accepted = build_baseline(
+                {1: report},
+                required_workers=(1,),
+                optional_workers=(),
+                acceptance_evidence=evidence,
             )
-        }
-        accepted = build_baseline(
-            {1: row_path},
-            required_workers=(1,),
-            optional_workers=(),
-            acceptance_evidence=evidence,
-        )
-        self.assertEqual(accepted["status"], "M4 BASELINE ACCEPTANCE PENDING")
-        self.assertIn("acceptance evidence", accepted["status_reason"])
+            self.assertEqual(accepted["status"], "M4 BASELINE ACCEPTANCE PENDING")
+            self.assertIn("acceptance evidence", accepted["status_reason"])
 
     def test_baseline_rejects_row_that_declared_schema_rejects(self) -> None:
-        row_path = ROOT / "artifacts" / "m4" / "matrix" / "throughput-w1.json"
-        if not row_path.exists():
-            self.skipTest("measured matrix artifact is unavailable")
-        invalid = json.loads(row_path.read_text(encoding="utf-8"))
-        invalid["jobs"][0].pop("schema")
-        with self.assertRaisesRegex(BenchmarkIntegrityError, "invalid matrix row"):
-            build_baseline({1: invalid}, required_workers=(1,), optional_workers=())
+        with tempfile.TemporaryDirectory(prefix="ocgforge-m4-baseline-fixture-") as directory:
+            stderr_path = Path(directory) / "worker.stderr.log"
+            stderr_path.touch()
+            invalid = valid_matrix_report(str(stderr_path))
+            invalid["jobs"][0].pop("schema")  # type: ignore[index]
+            with self.assertRaisesRegex(BenchmarkIntegrityError, "invalid matrix row"):
+                build_baseline({1: invalid}, required_workers=(1,), optional_workers=())
 
     def test_hashed_acceptance_manifest_rejects_in_memory_proof_mutation(self) -> None:
         manifest_path = ROOT / "docs" / "m4" / "m4_acceptance_manifest.json"
         if not manifest_path.exists():
-            self.skipTest("final acceptance manifest is unavailable")
+            baseline = json.loads((ROOT / "docs" / "m4" / "m4_baseline.json").read_text(encoding="utf-8"))
+            self.assertEqual(baseline["status"], "M4 BASELINE ACCEPTANCE PENDING")
+            self.assertIsNone(baseline.get("acceptance_evidence"))
+            return
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         rows = {
             workers: ROOT / "artifacts" / "m4" / "matrix" / f"throughput-w{workers}.json"
             for workers in (1, 2, 4, 8, 16, 32, 64)
         }
         if not all(path.exists() for path in rows.values()):
-            self.skipTest("measured matrix artifacts are unavailable")
+            self.fail("committed acceptance manifest requires all hashed matrix artifacts")
         skipped = {
             128: "NOT_RUN - measured 64-worker throughput did not improve over 32 workers; no measured usefulness for another oversubscribed row"
         }
@@ -230,6 +352,8 @@ class BenchmarkIntegrityTests(unittest.TestCase):
         )
         self.assertIn("simulation_elapsed_us", schema["$defs"]["steady_state"]["required"])
         self.assertIn("operation_counters", schema["$defs"]["steady_state"]["required"])
+        self.assertIn("dispatch_to_receipt", schema["$defs"]["timing_buckets"]["required"])
+        self.assertNotIn("coordinator_ipc", schema["$defs"]["timing_buckets"]["required"])
 
     def test_generated_report_is_accepted_by_the_declared_json_schema(self) -> None:
         schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
@@ -423,7 +547,7 @@ class BenchmarkIntegrityTests(unittest.TestCase):
         self.assertEqual(aggregate["simulation_elapsed_us"]["p50"], 10)
         self.assertEqual(aggregate["coordinator_elapsed_us"]["p50"], 20)
         self.assertEqual(aggregate["timing_buckets_us"]["core_process"], 2)
-        self.assertEqual(aggregate["timing_buckets_us"]["coordinator_ipc"], 40)
+        self.assertEqual(aggregate["timing_buckets_us"]["dispatch_to_receipt"], 40)
         self.assertEqual(aggregate["operation_counters"]["ocg_duel_process"], 4)
         self.assertNotIn("wall_clock_subtraction", aggregate["timing_buckets_us"])
 

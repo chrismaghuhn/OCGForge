@@ -55,6 +55,12 @@ jobs:
         shell: pwsh
         run: ctest --preset dev-windows --output-on-failure
 
+      - name: Run M4 benchmark-integrity acceptance tests
+        shell: pwsh
+        run: |
+          python -m pip install --disable-pip-version-check jsonschema
+          python -B -m unittest tests.m4.test_benchmark_integrity tests.m4.test_job_generation tests.m4.test_process_metrics tests.m4.test_worker_protocol -v
+
       - name: Run controlled duel smoke test
         shell: pwsh
         run: |

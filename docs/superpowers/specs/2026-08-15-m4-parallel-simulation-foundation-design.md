@@ -343,7 +343,7 @@ JSONL serialization, and flush. It never substitutes this value for the
 primary per-game latency percentiles. Total steady-state `wall_clock_seconds`
 starts after warmup and ends after the last steady-state result is published;
 games per second is `games_completed / wall_clock_seconds`, so it includes all
-steady-state coordinator and IPC cost.
+steady-state coordinator dispatch/result latency and worker-compute cost.
 
 The baseline matrix is 1, 2, 4, 8, 16, and 32 workers. Counts of 64 and 128
 are attempted only when observed resource usage remains safe and the lower

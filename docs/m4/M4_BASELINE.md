@@ -1,8 +1,8 @@
 # OCGForge M4 Baseline
 
-**M4 BASELINE PASS — PERFORMANCE AUDIT READY**
+**M4 BASELINE ACCEPTANCE PENDING**
 
-all independently verified acceptance gates passed
+acceptance evidence lacks a repository-backed run identity
 
 ## Scaling
 
@@ -54,7 +54,7 @@ all independently verified acceptance gates passed
 | serialization | 0.000000 |
 | other | 0.762660 |
 | trace_persistence | 0.000000 |
-| coordinator_ipc | 100.000000 |
+| dispatch_to_receipt | 100.000000 |
 | coordinator_other | 0.000000 |
 
 ## Operation counters — one-worker reference
@@ -79,7 +79,7 @@ all independently verified acceptance gates passed
 ## PERFORMANCE AUDIT CANDIDATES
 
 - observation-path audit: measured observation timing bucket
-- coordinator/IPC audit: measured coordinator_ipc timing bucket
+- dispatch/result latency audit: measured dispatch_to_receipt timing bucket
 - script-load audit: measured script_loads counter
 - candidate-set audit: measured candidate_total counter
 

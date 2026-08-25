@@ -446,7 +446,7 @@ Use:
     speedup = games_per_second / worker_1_games_per_second
     parallel_efficiency = speedup / workers
 
-Calculate percentiles from sorted worker simulation_elapsed_us only. Use index min(n - 1, ceil(q * n) - 1) for q 0.50, 0.95, and 0.99. Aggregate coordinator percentiles separately. Sum native timing/counter buckets across jobs and report coordinator IPC/other separately. Do not infer native buckets from unrelated wall-clock subtraction.
+Calculate percentiles from sorted worker simulation_elapsed_us only. Use index min(n - 1, ceil(q * n) - 1) for q 0.50, 0.95, and 0.99. Aggregate coordinator percentiles separately. Sum native timing/counter buckets across jobs and report end-to-end dispatch/result latency and coordinator other separately. Do not infer native buckets from unrelated wall-clock subtraction.
 
 - [ ] Step 4: Implement integrity validation tests.
 
@@ -583,7 +583,7 @@ Include workers, games, wall time, games/s, engine steps/s, decisions/s, speedup
 
 - [ ] Step 3: Write timing and counter evidence.
 
-Include measured percentages for core_process, protocol_candidate, continuation, observation, trace_hash, serialization, native other, and coordinator/IPC other. Include OCG_DuelProcess, OCG_DuelQuery, OCG_DuelQueryLocation, OCG_DuelQueryField, observations/entities, candidate sets/total/max, semantic hashes, trace bytes, scripts, errors, memory, and handshake data. List PERFORMANCE AUDIT CANDIDATES only when a measured bucket/counter supports them; do not implement any candidate.
+Include measured percentages for core_process, protocol_candidate, continuation, observation, trace_hash, serialization, native other, and end-to-end dispatch/result latency/other. Include OCG_DuelProcess, OCG_DuelQuery, OCG_DuelQueryLocation, OCG_DuelQueryField, observations/entities, candidate sets/total/max, semantic hashes, trace bytes, scripts, errors, memory, and handshake data. List PERFORMANCE AUDIT CANDIDATES only when a measured bucket/counter supports them; do not implement any candidate.
 
 - [ ] Step 4: Write one final status.
 
