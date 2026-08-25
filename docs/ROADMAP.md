@@ -120,19 +120,22 @@ Outcome:
 - coordinator timing documented as end-to-end dispatch/result latency;
 - no observation or engine optimization included in this checkpoint.
 
-Status: **M4 BASELINE ACCEPTANCE PENDING**. The clean checkout does not include
-the matrix and acceptance artifacts required to independently verify a baseline
-PASS, so M4 remains a foundation/baseline checkpoint only.
+Status: **M4 FINAL PASS**. Fresh Release evidence is committed and independently
+verifiable from a clean checkout. Semantic equivalence is validated through 64
+workers; 16 workers is the recommended production concurrency for the measured
+host. M4 remains narrowly the parallel-simulation foundation and baseline
+closure, not a general ML-readiness or M5 claim.
 
-## Next known milestone
+## Post-M4 work remains separate
 
-### M4 baseline acceptance and audit closure
+The following are candidate directions only and are not started by M4 finalization.
 
-Complete the clean-checkout evidence contract for the existing M4 baseline
-before considering any separate performance experiment. This does not claim
-optimization completion, general ML readiness, or M5 readiness.
+Historical M4 performance characterization is recorded under `docs/m4`.
+M4.3.5 is explicitly **REJECTED — NO MATERIAL BENEFIT** and its reserve-backed
+implementation is not part of the finalized production path.
 
-Recommended M4 questions:
+Future work must continue to preserve the existing contracts. Questions that
+remain outside this milestone include:
 
 - What is reset/start cost?
 - What is engine-process cost per semantic decision?
@@ -155,7 +158,7 @@ Recommended M4 acceptance properties:
 - before/after semantic equivalence tests;
 - performance targets stated only after a baseline exists.
 
-M4 should not yet imply vectorized ML readiness.
+M4 does not imply vectorized ML readiness.
 
 ## Post-M4 candidate workstreams
 

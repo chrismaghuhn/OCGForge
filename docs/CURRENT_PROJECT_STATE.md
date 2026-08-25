@@ -141,14 +141,16 @@ A fixed tensor/action vocabulary should be a downstream versioned adapter.
 
 The repository describes itself as a game-AI research environment but contains no learning algorithm or training stack at the inspected baseline.
 
-### 7. M4 baseline acceptance is pending
+### 7. M4 parallel-simulation foundation is finalized
 
-PR #3 adds the parallel-simulation foundation and baseline report generator.
-The committed baseline remains acceptance pending because the clean checkout
-does not contain the matrix and acceptance artifacts required to verify a PASS.
+M4 FINAL PASS is backed by repository-committed Release matrix, integrity,
+equivalence, lifecycle, full-game, and soak evidence. Semantic equivalence is
+validated through 64 workers; 16 workers is the recommended production
+concurrency for the measured host.
 
-No optimization-completion, general ML-readiness, or M5 claim should be
-inferred from this foundation checkpoint.
+This closes the parallel-simulation foundation only. It does not claim general
+ML readiness or begin M5. M4.3.5 remains explicitly rejected; its negative
+experiment evidence is retained without its production implementation.
 
 ### 8. Windows is the canonical CI path
 

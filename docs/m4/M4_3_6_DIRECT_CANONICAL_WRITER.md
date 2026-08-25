@@ -110,7 +110,10 @@ The direct writer removes the ostream primitive-rendering bottleneck in this A/B
 
 ## Acceptance
 
-**M4.3.6 ACCEPTED**. The M4.3.5 benchmark was not rerun. The direct writer remains an internal opt-in build experiment; the default build remains on the restored control serializer until a separate integration decision.
+**M4.3.6 ACCEPTED**. The M4.3.5 benchmark was not rerun. The historical
+experiment was opt-in; after the separate M4 finalization equivalence gates,
+the direct writer is enabled as the default internal production path. The
+public serialization API and canonical byte contract remain unchanged.
 
 ## Scope boundary
 

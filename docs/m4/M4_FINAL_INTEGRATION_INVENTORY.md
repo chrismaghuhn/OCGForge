@@ -50,3 +50,10 @@ Authoritative integration base:
 - generate repository-backed M4 FINAL evidence only if every required gate is
   fresh and complete.
 
+## Finalization outcome
+
+The planned opt-in M4.3.6 path passed the post-PR3 byte, hash, semantic,
+privacy, and deterministic worker gates and is enabled by default through the
+private `YGO_M4_DIRECT_CANONICAL_WRITER` build definition. M4.3.5 remains
+**REJECTED — NO MATERIAL BENEFIT**: its negative report and harness evidence
+are retained, but no reserve-backed production implementation was integrated.
