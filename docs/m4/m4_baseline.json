@@ -1,7 +1,2042 @@
 {
-  "acceptance_evidence": null,
+  "acceptance_evidence": {
+    "gates": {
+      "candidate_observation": {
+        "artifacts": [
+          {
+            "path": "artifacts/m4/final/canonical_full_game/full_fixed_deck_results.json",
+            "sha256": "ef2f18b5f3327f89db3a9791210aa3112bcddf2ee8103dd0d96c0cb328c552b2"
+          },
+          {
+            "path": "artifacts/m4/final/canonical_full_game/seed-1-mirror-start-0.jsonl",
+            "sha256": "33df37dd0a7adf3491696dfc5db3b86c7c3bebbb781e5207de432f10e0fb924e"
+          },
+          {
+            "path": "artifacts/m4/final/canonical_full_game/seed-1-mirror-start-1.jsonl",
+            "sha256": "f11d6fc478ebafc7672b8399ae6d72cfa1ffc9a73a9abfc221723ae77a5fd20a"
+          },
+          {
+            "path": "artifacts/m4/final/canonical_full_game/seed-1-normal-start-0.jsonl",
+            "sha256": "6df2aa30d250e19246b34b09fe6aecc1f4a9996549c7cbaf5fdca3cf3c296b14"
+          },
+          {
+            "path": "artifacts/m4/final/canonical_full_game/seed-1-normal-start-1.jsonl",
+            "sha256": "912b55d965ca65bd219b9597535a38d0be2acf0348ec98dea55f8303fa1e5ad9"
+          },
+          {
+            "path": "artifacts/m4/final/canonical_full_game/seed-2-mirror-start-0.jsonl",
+            "sha256": "1a7ebbcd8d00eea9ee79549441d455947ed255f05240d0cdc35391e361ce3118"
+          },
+          {
+            "path": "artifacts/m4/final/canonical_full_game/seed-2-mirror-start-1.jsonl",
+            "sha256": "9e95cd81d9cc9d19129e7d8b9c160a940feaa57eedfb0ae84938e38bfefdb078"
+          },
+          {
+            "path": "artifacts/m4/final/canonical_full_game/seed-2-normal-start-0.jsonl",
+            "sha256": "8f9a0b266bf6169a1f1908111ffb4f3d9c162b33fe26aecb4218c44e190d46a5"
+          },
+          {
+            "path": "artifacts/m4/final/canonical_full_game/seed-2-normal-start-1.jsonl",
+            "sha256": "ccf8bc1e19bfc7da2d4a4ed6004aa32069e3e72d680abc10849957fa438a7754"
+          },
+          {
+            "path": "artifacts/m4/final/canonical_full_game/seed-3-mirror-start-0.jsonl",
+            "sha256": "642d9b0783e0194237d99e1c68a7bdd668dae54b04be00a935ed408b4422a759"
+          },
+          {
+            "path": "artifacts/m4/final/canonical_full_game/seed-3-mirror-start-1.jsonl",
+            "sha256": "e1d1f18bc3466f8499893d3716d6f31d240ec97a03c828f0edbd946ad6f881d5"
+          },
+          {
+            "path": "artifacts/m4/final/canonical_full_game/seed-3-normal-start-0.jsonl",
+            "sha256": "77562ec8da6866f018b503f1ef53ee22bb4b5b1bb5866a23297977a37a417429"
+          },
+          {
+            "path": "artifacts/m4/final/canonical_full_game/seed-3-normal-start-1.jsonl",
+            "sha256": "f12751fed5145ac5ec65f4fcd897f2519d6d193d7a64f1cfa1dc76cb273822a5"
+          },
+          {
+            "path": "artifacts/m4/final/canonical_full_game/seed-4-mirror-start-0.jsonl",
+            "sha256": "dc234ec17f85940dea1da9ce3024e7dbbb2669d2c585f179af2e9c2a1f608865"
+          },
+          {
+            "path": "artifacts/m4/final/canonical_full_game/seed-4-mirror-start-1.jsonl",
+            "sha256": "79d14222bdda2df015706f551db4cc6c2d088500e6b5fa649bef6f36c701c18d"
+          },
+          {
+            "path": "artifacts/m4/final/canonical_full_game/seed-4-normal-start-0.jsonl",
+            "sha256": "ada7a29ca98b1c8f92872962612b5fab394b3af3ab30788a809a8d47757a1063"
+          },
+          {
+            "path": "artifacts/m4/final/canonical_full_game/seed-4-normal-start-1.jsonl",
+            "sha256": "2a7779ef262b855f68f2d1ecdec27e003f6765de47ccdedd931625595b81837f"
+          },
+          {
+            "path": "docs/m4/m4_final_verification.json",
+            "sha256": "3b1149ba3cbe95bcc61f0a4ec1467b1f48843dc571a4c6db41e764b0c9aca7a3"
+          }
+        ],
+        "evidence": "Canonical fixed-deck corpus completed all required games with complete candidate domains and zero truncation/automatic/core errors.",
+        "fresh": true,
+        "run_identity": "ce106bdf55d2f7fb3f0a13e041bc9d945064524e8ac6aafcae85673116e89eb7",
+        "status": "PASS",
+        "verification": {
+          "canonical_result": {
+            "path": "artifacts/m4/final/canonical_full_game/full_fixed_deck_results.json"
+          },
+          "commands": [
+            {
+              "command": "full_fixed_deck_test.py --probe ygo_core_probe.exe --games 16 --max-steps 2200",
+              "exit_code": 0,
+              "name": "canonical_full_game",
+              "passed": 16,
+              "total": 16
+            }
+          ]
+        }
+      },
+      "existing_regressions": {
+        "artifacts": [
+          {
+            "path": "artifacts/m4-finalization/verification/ctest-release.log",
+            "sha256": "a21cc30c87dff14298638057adead042d0cdf3f94688a6cbc8fdb8a29f61089d"
+          },
+          {
+            "path": "artifacts/m4-finalization/verification/m3-python.log",
+            "sha256": "3b4d1a104d72990bcdaaa8d0a3e4ff7699f1e2a9d7e160bb522944d2b0f3d77c"
+          },
+          {
+            "path": "artifacts/m4-finalization/verification/repository-python.log",
+            "sha256": "2306742a11664959f643d972fd98fe1ac43919c8418e151bd0a47f6d48193493"
+          },
+          {
+            "path": "artifacts/m4/final/lifecycle_stress.json",
+            "sha256": "f3723d80034df9054b37912c91651f99238120deb2f2b02ef638e627e93a3c77"
+          },
+          {
+            "path": "artifacts/m4/final/m4-python-final.log",
+            "sha256": "cf081b0dc33b2d34b2bae175f42a6018a4dcb0cce49e19c17f217856df1b41d1"
+          },
+          {
+            "path": "docs/m4/m4_final_verification.json",
+            "sha256": "3b1149ba3cbe95bcc61f0a4ec1467b1f48843dc571a4c6db41e764b0c9aca7a3"
+          }
+        ],
+        "evidence": "Native CTest and repository/M3/M4 Python suites passed from the Release build.",
+        "fresh": true,
+        "run_identity": "ce106bdf55d2f7fb3f0a13e041bc9d945064524e8ac6aafcae85673116e89eb7",
+        "status": "PASS",
+        "verification": {
+          "commands": [
+            {
+              "command": "ctest --test-dir build/release-windows-zig --output-on-failure",
+              "exit_code": 0,
+              "name": "ctest_release",
+              "passed": 94,
+              "total": 94
+            },
+            {
+              "command": "python -B -m unittest discover -s tests/python -v",
+              "exit_code": 0,
+              "name": "repository_python",
+              "passed": 8,
+              "total": 8
+            },
+            {
+              "command": "python -B -m unittest discover -s tests/m3 -v",
+              "exit_code": 0,
+              "name": "m3_python",
+              "passed": 17,
+              "total": 17
+            },
+            {
+              "command": "YGO_M4_WORKER=build/release-windows-zig/ygo_m4_worker.exe python -B -m unittest discover -s tests/m4 -v",
+              "exit_code": 0,
+              "name": "m4_python",
+              "passed": 127,
+              "total": 127
+            }
+          ],
+          "ctest": "94/94",
+          "python": {
+            "m3": 17,
+            "m4": 127,
+            "repository": 8
+          }
+        }
+      },
+      "failure_isolation": {
+        "artifacts": [
+          {
+            "path": "artifacts/m4/final/failure_isolation_timeout.log",
+            "sha256": "1e2319203fe6f82dfc937f8adacadeb930a05316d495e1b1dff782a3c049fbc3"
+          },
+          {
+            "path": "docs/m4/m4_final_verification.json",
+            "sha256": "3b1149ba3cbe95bcc61f0a4ec1467b1f48843dc571a4c6db41e764b0c9aca7a3"
+          }
+        ],
+        "evidence": "Fail-closed worker timeout produces no result report and no retry.",
+        "fresh": true,
+        "run_identity": "ce106bdf55d2f7fb3f0a13e041bc9d945064524e8ac6aafcae85673116e89eb7",
+        "status": "PASS",
+        "verification": {
+          "commands": [
+            {
+              "command": "record_failure_isolation_evidence.py",
+              "exit_code": 0,
+              "name": "failure_isolation_timeout",
+              "passed": 1,
+              "total": 1
+            }
+          ],
+          "timeout_log_path": "artifacts/m4/final/failure_isolation_timeout.log"
+        }
+      },
+      "final_build_and_ctest": {
+        "artifacts": [
+          {
+            "path": "docs/m4/m4_final_verification.json",
+            "sha256": "3b1149ba3cbe95bcc61f0a4ec1467b1f48843dc571a4c6db41e764b0c9aca7a3"
+          }
+        ],
+        "evidence": "Final Release build and complete native CTest passed.",
+        "fresh": true,
+        "run_identity": "ce106bdf55d2f7fb3f0a13e041bc9d945064524e8ac6aafcae85673116e89eb7",
+        "status": "PASS",
+        "verification": {
+          "commands": [
+            {
+              "command": "ctest --test-dir build/release-windows-zig --output-on-failure",
+              "exit_code": 0,
+              "name": "ctest_release",
+              "passed": 94,
+              "total": 94
+            }
+          ],
+          "ctest_passed": 94,
+          "ctest_total": 94
+        }
+      },
+      "handshake_identity": {
+        "artifacts": [
+          {
+            "path": "artifacts/m4/matrix/throughput-w1.json",
+            "sha256": "3661b22964305a84ec282c042ee5bad6aae60d50b5de40d3e10db77f3da56dab"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w1.workers/worker-000.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w16.json",
+            "sha256": "fc91195f2fb3e8590f9ccbae0d4f7b75a7d7060aa3fbf202ff92cf5559b85f01"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w16.workers/worker-000.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w16.workers/worker-001.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w16.workers/worker-002.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w16.workers/worker-003.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w16.workers/worker-004.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w16.workers/worker-005.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w16.workers/worker-006.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w16.workers/worker-007.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w16.workers/worker-008.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w16.workers/worker-009.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w16.workers/worker-010.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w16.workers/worker-011.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w16.workers/worker-012.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w16.workers/worker-013.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w16.workers/worker-014.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w16.workers/worker-015.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w2.json",
+            "sha256": "cf113a4c74f29656a898e852da7cd9ceb4929abb52e268f605ede18b131cb041"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w2.workers/worker-000.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w2.workers/worker-001.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.json",
+            "sha256": "0f492e55363db6d9d1f3aa6d7c82e28e57d6659c0bc50d3a11769df65d68a196"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-000.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-001.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-002.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-003.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-004.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-005.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-006.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-007.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-008.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-009.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-010.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-011.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-012.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-013.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-014.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-015.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-016.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-017.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-018.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-019.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-020.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-021.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-022.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-023.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-024.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-025.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-026.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-027.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-028.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-029.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-030.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-031.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w4.json",
+            "sha256": "af58ff8b8e5103c5be72c45104c7ba13d1595df32e9b9f8cd147270ab2553cad"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w4.workers/worker-000.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w4.workers/worker-001.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w4.workers/worker-002.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w4.workers/worker-003.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.json",
+            "sha256": "25536f382fd0b571ff8cbb76bc6b8d4347e549a9dfe3bdc56bad2655c9fc4bbd"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-000.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-001.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-002.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-003.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-004.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-005.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-006.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-007.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-008.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-009.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-010.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-011.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-012.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-013.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-014.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-015.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-016.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-017.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-018.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-019.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-020.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-021.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-022.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-023.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-024.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-025.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-026.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-027.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-028.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-029.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-030.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-031.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-032.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-033.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-034.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-035.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-036.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-037.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-038.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-039.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-040.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-041.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-042.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-043.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-044.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-045.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-046.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-047.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-048.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-049.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-050.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-051.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-052.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-053.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-054.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-055.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-056.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-057.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-058.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-059.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-060.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-061.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-062.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-063.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w8.json",
+            "sha256": "ea7387b5c90b0961cc5e34b0088c87fab7aa0dd8f9f0a60d65089e0763f06550"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w8.workers/worker-000.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w8.workers/worker-001.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w8.workers/worker-002.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w8.workers/worker-003.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w8.workers/worker-004.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w8.workers/worker-005.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w8.workers/worker-006.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w8.workers/worker-007.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "docs/m4/m4_final_verification.json",
+            "sha256": "3b1149ba3cbe95bcc61f0a4ec1467b1f48843dc571a4c6db41e764b0c9aca7a3"
+          }
+        ],
+        "evidence": "Every matrix row completed the native worker handshake with the canonical worker identity.",
+        "fresh": true,
+        "run_identity": "ce106bdf55d2f7fb3f0a13e041bc9d945064524e8ac6aafcae85673116e89eb7",
+        "status": "PASS",
+        "verification": {
+          "commands": [
+            {
+              "command": "build_baseline(Release rows, workers=1,2,4,8,16,32,64)",
+              "exit_code": 0,
+              "name": "release_matrix_integrity",
+              "passed": 7,
+              "total": 7
+            }
+          ],
+          "workers": [
+            1,
+            2,
+            4,
+            8,
+            16,
+            32,
+            64
+          ]
+        }
+      },
+      "integrity": {
+        "artifacts": [
+          {
+            "path": "artifacts/m4/matrix/throughput-w1.json",
+            "sha256": "3661b22964305a84ec282c042ee5bad6aae60d50b5de40d3e10db77f3da56dab"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w1.workers/worker-000.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w16.json",
+            "sha256": "fc91195f2fb3e8590f9ccbae0d4f7b75a7d7060aa3fbf202ff92cf5559b85f01"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w16.workers/worker-000.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w16.workers/worker-001.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w16.workers/worker-002.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w16.workers/worker-003.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w16.workers/worker-004.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w16.workers/worker-005.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w16.workers/worker-006.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w16.workers/worker-007.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w16.workers/worker-008.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w16.workers/worker-009.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w16.workers/worker-010.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w16.workers/worker-011.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w16.workers/worker-012.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w16.workers/worker-013.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w16.workers/worker-014.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w16.workers/worker-015.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w2.json",
+            "sha256": "cf113a4c74f29656a898e852da7cd9ceb4929abb52e268f605ede18b131cb041"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w2.workers/worker-000.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w2.workers/worker-001.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.json",
+            "sha256": "0f492e55363db6d9d1f3aa6d7c82e28e57d6659c0bc50d3a11769df65d68a196"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-000.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-001.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-002.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-003.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-004.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-005.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-006.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-007.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-008.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-009.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-010.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-011.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-012.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-013.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-014.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-015.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-016.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-017.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-018.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-019.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-020.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-021.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-022.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-023.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-024.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-025.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-026.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-027.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-028.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-029.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-030.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-031.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w4.json",
+            "sha256": "af58ff8b8e5103c5be72c45104c7ba13d1595df32e9b9f8cd147270ab2553cad"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w4.workers/worker-000.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w4.workers/worker-001.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w4.workers/worker-002.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w4.workers/worker-003.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.json",
+            "sha256": "25536f382fd0b571ff8cbb76bc6b8d4347e549a9dfe3bdc56bad2655c9fc4bbd"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-000.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-001.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-002.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-003.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-004.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-005.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-006.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-007.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-008.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-009.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-010.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-011.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-012.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-013.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-014.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-015.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-016.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-017.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-018.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-019.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-020.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-021.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-022.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-023.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-024.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-025.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-026.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-027.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-028.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-029.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-030.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-031.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-032.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-033.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-034.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-035.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-036.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-037.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-038.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-039.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-040.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-041.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-042.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-043.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-044.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-045.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-046.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-047.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-048.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-049.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-050.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-051.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-052.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-053.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-054.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-055.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-056.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-057.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-058.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-059.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-060.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-061.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-062.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-063.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w8.json",
+            "sha256": "ea7387b5c90b0961cc5e34b0088c87fab7aa0dd8f9f0a60d65089e0763f06550"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w8.workers/worker-000.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w8.workers/worker-001.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w8.workers/worker-002.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w8.workers/worker-003.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w8.workers/worker-004.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w8.workers/worker-005.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w8.workers/worker-006.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w8.workers/worker-007.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "docs/m4/m4_final_verification.json",
+            "sha256": "3b1149ba3cbe95bcc61f0a4ec1467b1f48843dc571a4c6db41e764b0c9aca7a3"
+          }
+        ],
+        "evidence": "All matrix rows have complete terminal games and zero semantic/protocol/error counters.",
+        "fresh": true,
+        "run_identity": "ce106bdf55d2f7fb3f0a13e041bc9d945064524e8ac6aafcae85673116e89eb7",
+        "status": "PASS",
+        "verification": {
+          "commands": [
+            {
+              "command": "build_baseline(Release rows, workers=1,2,4,8,16,32,64)",
+              "exit_code": 0,
+              "name": "release_matrix_integrity",
+              "passed": 7,
+              "total": 7
+            }
+          ],
+          "errors_zero": true,
+          "workers": [
+            1,
+            2,
+            4,
+            8,
+            16,
+            32,
+            64
+          ]
+        }
+      },
+      "mode_equivalence": {
+        "artifacts": [
+          {
+            "path": "artifacts/m4/experiments/conformance.json",
+            "sha256": "7f8ff10ed673a3e46b373453546c2b792e14476eb87e830c8a3b6abdde8cb256"
+          },
+          {
+            "path": "artifacts/m4/experiments/throughput-no-persistence.json",
+            "sha256": "f9f3232d71f62f9f9902753db7b506b5b99121c164047555419d4a9429438fa9"
+          },
+          {
+            "path": "artifacts/m4/experiments/throughput-off-diagnostic.json",
+            "sha256": "38f4da607972e1332bbd94a1fdcb1b675d5e8901311c8d1b39337c9b9987e16d"
+          },
+          {
+            "path": "docs/m4/m4_final_verification.json",
+            "sha256": "3b1149ba3cbe95bcc61f0a4ec1467b1f48843dc571a4c6db41e764b0c9aca7a3"
+          }
+        ],
+        "evidence": "Fresh Release conformance, throughput, and observation-off diagnostic reports have identical semantic fingerprints.",
+        "fresh": true,
+        "run_identity": "ce106bdf55d2f7fb3f0a13e041bc9d945064524e8ac6aafcae85673116e89eb7",
+        "status": "PASS",
+        "verification": {
+          "commands": [
+            {
+              "command": "compare Release conformance/throughput/off-diagnostic reports",
+              "exit_code": 0,
+              "name": "mode_equivalence",
+              "passed": 3,
+              "total": 3
+            }
+          ],
+          "semantic_match": true
+        }
+      },
+      "parallel_determinism": {
+        "artifacts": [
+          {
+            "path": "artifacts/m4/matrix/throughput-w1.json",
+            "sha256": "3661b22964305a84ec282c042ee5bad6aae60d50b5de40d3e10db77f3da56dab"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w16.json",
+            "sha256": "fc91195f2fb3e8590f9ccbae0d4f7b75a7d7060aa3fbf202ff92cf5559b85f01"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w2.json",
+            "sha256": "cf113a4c74f29656a898e852da7cd9ceb4929abb52e268f605ede18b131cb041"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.json",
+            "sha256": "0f492e55363db6d9d1f3aa6d7c82e28e57d6659c0bc50d3a11769df65d68a196"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w4.json",
+            "sha256": "af58ff8b8e5103c5be72c45104c7ba13d1595df32e9b9f8cd147270ab2553cad"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.json",
+            "sha256": "25536f382fd0b571ff8cbb76bc6b8d4347e549a9dfe3bdc56bad2655c9fc4bbd"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w8.json",
+            "sha256": "ea7387b5c90b0961cc5e34b0088c87fab7aa0dd8f9f0a60d65089e0763f06550"
+          },
+          {
+            "path": "docs/m4/m4_final_verification.json",
+            "sha256": "3b1149ba3cbe95bcc61f0a4ec1467b1f48843dc571a4c6db41e764b0c9aca7a3"
+          }
+        ],
+        "evidence": "Fresh Release matrix, all measured rows semantically match the one-worker reference.",
+        "fresh": true,
+        "run_identity": "ce106bdf55d2f7fb3f0a13e041bc9d945064524e8ac6aafcae85673116e89eb7",
+        "status": "PASS",
+        "verification": {
+          "commands": [
+            {
+              "command": "build_baseline(Release rows, workers=1,2,4,8,16,32,64)",
+              "exit_code": 0,
+              "name": "release_matrix_integrity",
+              "passed": 7,
+              "total": 7
+            }
+          ],
+          "mismatches": [],
+          "workers": [
+            1,
+            2,
+            4,
+            8,
+            16,
+            32,
+            64
+          ]
+        }
+      },
+      "privacy": {
+        "artifacts": [
+          {
+            "path": "artifacts/m4/matrix/throughput-w1.json",
+            "sha256": "3661b22964305a84ec282c042ee5bad6aae60d50b5de40d3e10db77f3da56dab"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w1.workers/worker-000.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w16.json",
+            "sha256": "fc91195f2fb3e8590f9ccbae0d4f7b75a7d7060aa3fbf202ff92cf5559b85f01"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w16.workers/worker-000.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w16.workers/worker-001.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w16.workers/worker-002.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w16.workers/worker-003.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w16.workers/worker-004.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w16.workers/worker-005.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w16.workers/worker-006.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w16.workers/worker-007.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w16.workers/worker-008.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w16.workers/worker-009.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w16.workers/worker-010.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w16.workers/worker-011.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w16.workers/worker-012.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w16.workers/worker-013.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w16.workers/worker-014.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w16.workers/worker-015.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w2.json",
+            "sha256": "cf113a4c74f29656a898e852da7cd9ceb4929abb52e268f605ede18b131cb041"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w2.workers/worker-000.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w2.workers/worker-001.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.json",
+            "sha256": "0f492e55363db6d9d1f3aa6d7c82e28e57d6659c0bc50d3a11769df65d68a196"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-000.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-001.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-002.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-003.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-004.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-005.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-006.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-007.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-008.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-009.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-010.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-011.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-012.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-013.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-014.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-015.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-016.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-017.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-018.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-019.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-020.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-021.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-022.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-023.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-024.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-025.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-026.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-027.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-028.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-029.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-030.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w32.workers/worker-031.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w4.json",
+            "sha256": "af58ff8b8e5103c5be72c45104c7ba13d1595df32e9b9f8cd147270ab2553cad"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w4.workers/worker-000.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w4.workers/worker-001.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w4.workers/worker-002.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w4.workers/worker-003.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.json",
+            "sha256": "25536f382fd0b571ff8cbb76bc6b8d4347e549a9dfe3bdc56bad2655c9fc4bbd"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-000.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-001.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-002.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-003.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-004.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-005.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-006.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-007.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-008.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-009.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-010.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-011.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-012.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-013.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-014.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-015.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-016.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-017.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-018.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-019.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-020.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-021.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-022.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-023.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-024.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-025.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-026.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-027.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-028.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-029.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-030.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-031.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-032.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-033.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-034.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-035.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-036.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-037.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-038.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-039.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-040.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-041.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-042.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-043.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-044.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-045.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-046.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-047.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-048.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-049.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-050.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-051.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-052.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-053.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-054.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-055.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-056.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-057.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-058.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-059.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-060.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-061.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-062.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w64.workers/worker-063.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w8.json",
+            "sha256": "ea7387b5c90b0961cc5e34b0088c87fab7aa0dd8f9f0a60d65089e0763f06550"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w8.workers/worker-000.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w8.workers/worker-001.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w8.workers/worker-002.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w8.workers/worker-003.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w8.workers/worker-004.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w8.workers/worker-005.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w8.workers/worker-006.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "artifacts/m4/matrix/throughput-w8.workers/worker-007.stderr.log",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "path": "docs/m4/m4_final_verification.json",
+            "sha256": "3b1149ba3cbe95bcc61f0a4ec1467b1f48843dc571a4c6db41e764b0c9aca7a3"
+          }
+        ],
+        "evidence": "Matrix stderr is empty and throughput trace persistence is disabled; focused privacy/paired-world tests pass in CTest.",
+        "fresh": true,
+        "run_identity": "ce106bdf55d2f7fb3f0a13e041bc9d945064524e8ac6aafcae85673116e89eb7",
+        "status": "PASS",
+        "verification": {
+          "commands": [
+            {
+              "command": "build_baseline(Release rows, workers=1,2,4,8,16,32,64)",
+              "exit_code": 0,
+              "name": "release_matrix_integrity",
+              "passed": 7,
+              "total": 7
+            },
+            {
+              "command": "ctest --test-dir build/release-windows-zig --output-on-failure",
+              "exit_code": 0,
+              "name": "ctest_release",
+              "passed": 94,
+              "total": 94
+            }
+          ],
+          "stderr_bytes": 0,
+          "trace_persistence": false,
+          "workers": [
+            1,
+            2,
+            4,
+            8,
+            16,
+            32,
+            64
+          ]
+        }
+      }
+    },
+    "manifest_path": "docs/m4/m4_acceptance_manifest.json",
+    "manifest_sha256": "da3a5b394a459ee9dde23a6be730afddf55c454ebc72f6a4878517b1ea98d986",
+    "run_identity": "ce106bdf55d2f7fb3f0a13e041bc9d945064524e8ac6aafcae85673116e89eb7",
+    "schema_version": "ocgforge.m4.acceptance.v1"
+  },
   "build_identity": {
-    "build_type": "Debug",
+    "build_type": "Release",
     "compiler_identity": "Clang-19.1.7",
     "platform": "Windows-11-10.0.26200-SP0",
     "protocol_schema": "ocgforge.m4.worker.v1",
@@ -95,7 +2130,7 @@
     ],
     "rows_by_worker": {
       "1": {
-        "engine_steps_per_second": 42.17262141721146,
+        "engine_steps_per_second": 1464.9251095482662,
         "errors": {
           "automatic": 0,
           "coordinator_failed_games": 0,
@@ -111,13 +2146,13 @@
           "worker_errors": 0
         },
         "games": 64,
-        "games_per_second": 0.027832121047491477,
-        "interactive_decisions_per_second": 17.18589986993462,
+        "games_per_second": 0.9667877310993341,
+        "interactive_decisions_per_second": 596.9763178955404,
         "memory": {
-          "memory_per_active_environment_bytes": 19742720,
-          "peak_percent_of_physical_memory": 0.057594,
-          "peak_total_working_set_bytes": 19742720,
-          "peak_worker_working_set_bytes": 19742720,
+          "memory_per_active_environment_bytes": 14340096,
+          "peak_percent_of_physical_memory": 0.041834,
+          "peak_total_working_set_bytes": 14340096,
+          "peak_worker_working_set_bytes": 14340096,
           "physical_memory_bytes": 34278862848,
           "process_count": 2
         },
@@ -138,14 +2173,14 @@
           "trace_bytes_serialized": 0
         },
         "parallel_efficiency": 1.0,
-        "result_timeout_seconds": 120.0,
+        "result_timeout_seconds": 300.0,
         "simulation_elapsed_us": {
-          "max": 46252056,
-          "mean": 35870808.484375,
-          "min": 34415568,
-          "p50": 35302045,
-          "p95": 42816128,
-          "p99": 46252056,
+          "max": 1062960,
+          "mean": 974927.328125,
+          "min": 915563,
+          "p50": 969901,
+          "p95": 1046190,
+          "p99": 1062960,
           "sample_count": 64
         },
         "speedup": 1.0,
@@ -153,32 +2188,32 @@
         "timing_buckets_us": {
           "continuation": 0,
           "coordinator_other": 0,
-          "core_process": 94448884,
-          "dispatch_to_receipt": 2295923877,
-          "observation": 2170381294,
-          "other": 17508628,
-          "protocol_candidate": 4346660,
+          "core_process": 6465576,
+          "dispatch_to_receipt": 62554568,
+          "observation": 52175793,
+          "other": 2273693,
+          "protocol_candidate": 892882,
           "serialization": 0,
-          "trace_hash": 9046277,
+          "trace_hash": 587405,
           "trace_persistence": 0
         },
         "timing_percentages": {
           "continuation": 0.0,
           "coordinator_other": 0.0,
-          "core_process": 4.114108,
+          "core_process": 10.362272,
           "dispatch_to_receipt": 100.0,
-          "observation": 94.539848,
-          "other": 0.76266,
-          "protocol_candidate": 0.189337,
+          "observation": 83.621286,
+          "other": 3.64401,
+          "protocol_candidate": 1.431007,
           "serialization": 0.0,
-          "trace_hash": 0.394048,
+          "trace_hash": 0.941424,
           "trace_persistence": 0.0
         },
-        "wall_clock_seconds": 2299.5013528,
+        "wall_clock_seconds": 66.1986059,
         "workers": 1
       },
       "16": {
-        "engine_steps_per_second": 363.72124533829174,
+        "engine_steps_per_second": 11112.50019910049,
         "errors": {
           "automatic": 0,
           "coordinator_failed_games": 0,
@@ -194,13 +2229,13 @@
           "worker_errors": 0
         },
         "games": 64,
-        "games_per_second": 0.2400404192960183,
-        "interactive_decisions_per_second": 148.2212082837398,
+        "games_per_second": 7.333773436132975,
+        "interactive_decisions_per_second": 4528.490506602172,
         "memory": {
-          "memory_per_active_environment_bytes": 17441536,
-          "peak_percent_of_physical_memory": 0.814101,
-          "peak_total_working_set_bytes": 279064576,
-          "peak_worker_working_set_bytes": 18231296,
+          "memory_per_active_environment_bytes": 12425728,
+          "peak_percent_of_physical_memory": 0.579983,
+          "peak_total_working_set_bytes": 198811648,
+          "peak_worker_working_set_bytes": 13410304,
           "physical_memory_bytes": 34278862848,
           "process_count": 17
         },
@@ -220,48 +2255,48 @@
           "semantic_hashes": 64,
           "trace_bytes_serialized": 0
         },
-        "parallel_efficiency": 0.5390363954080793,
-        "result_timeout_seconds": 120.0,
+        "parallel_efficiency": 0.4741070092367731,
+        "result_timeout_seconds": 300.0,
         "simulation_elapsed_us": {
-          "max": 69919230,
-          "mean": 65273640.8125,
-          "min": 61668354,
-          "p50": 65302555,
-          "p95": 68506236,
-          "p99": 69919230,
+          "max": 2679427,
+          "mean": 1907009.140625,
+          "min": 1658149,
+          "p50": 1856302,
+          "p95": 2560437,
+          "p99": 2679427,
           "sample_count": 64
         },
-        "speedup": 8.62458232652927,
+        "speedup": 7.58571214778837,
         "stderr_bytes": 0,
         "timing_buckets_us": {
           "continuation": 0,
           "coordinator_other": 0,
-          "core_process": 152156891,
-          "dispatch_to_receipt": 4178027456,
-          "observation": 3971485562,
-          "other": 30374615,
-          "protocol_candidate": 6971401,
+          "core_process": 12703684,
+          "dispatch_to_receipt": 126949206,
+          "observation": 101976029,
+          "other": 4444981,
+          "protocol_candidate": 1806985,
           "serialization": 0,
-          "trace_hash": 16524543,
+          "trace_hash": 1116906,
           "trace_persistence": 0
         },
         "timing_percentages": {
           "continuation": 0.0,
           "coordinator_other": 0.0,
-          "core_process": 3.642284,
+          "core_process": 10.408711,
           "dispatch_to_receipt": 100.0,
-          "observation": 95.068179,
-          "other": 0.727098,
-          "protocol_candidate": 0.166879,
+          "observation": 83.553635,
+          "other": 3.641977,
+          "protocol_candidate": 1.480546,
           "serialization": 0.0,
-          "trace_hash": 0.395559,
+          "trace_hash": 0.915132,
           "trace_persistence": 0.0
         },
-        "wall_clock_seconds": 266.6217639,
+        "wall_clock_seconds": 8.726749,
         "workers": 16
       },
       "2": {
-        "engine_steps_per_second": 60.0821841332618,
+        "engine_steps_per_second": 2077.0235447290497,
         "errors": {
           "automatic": 0,
           "coordinator_failed_games": 0,
@@ -277,13 +2312,13 @@
           "worker_errors": 0
         },
         "games": 64,
-        "games_per_second": 0.039651664169781754,
-        "interactive_decisions_per_second": 24.48428306758758,
+        "games_per_second": 1.3707464410025076,
+        "interactive_decisions_per_second": 846.4145094059079,
         "memory": {
-          "memory_per_active_environment_bytes": 18792448,
-          "peak_percent_of_physical_memory": 0.109645,
-          "peak_total_working_set_bytes": 37584896,
-          "peak_worker_working_set_bytes": 18882560,
+          "memory_per_active_environment_bytes": 13717504,
+          "peak_percent_of_physical_memory": 0.080035,
+          "peak_total_working_set_bytes": 27435008,
+          "peak_worker_working_set_bytes": 14082048,
           "physical_memory_bytes": 34278862848,
           "process_count": 3
         },
@@ -303,48 +2338,48 @@
           "semantic_hashes": 64,
           "trace_bytes_serialized": 0
         },
-        "parallel_efficiency": 0.7123363703061283,
-        "result_timeout_seconds": 120.0,
+        "parallel_efficiency": 0.7089179955996298,
+        "result_timeout_seconds": 300.0,
         "simulation_elapsed_us": {
-          "max": 54816396,
-          "mean": 50373951.71875,
-          "min": 48096008,
-          "p50": 50268280,
-          "p95": 52156549,
-          "p99": 54816396,
+          "max": 1887688,
+          "mean": 1393155.15625,
+          "min": 1004178,
+          "p50": 1333419,
+          "p95": 1776964,
+          "p99": 1887688,
           "sample_count": 64
         },
-        "speedup": 1.4246727406122566,
+        "speedup": 1.4178359911992595,
         "stderr_bytes": 0,
         "timing_buckets_us": {
           "continuation": 0,
           "coordinator_other": 0,
-          "core_process": 120719518,
-          "dispatch_to_receipt": 3224171162,
-          "observation": 3061720317,
-          "other": 22927975,
-          "protocol_candidate": 5589432,
+          "core_process": 9660737,
+          "dispatch_to_receipt": 89503506,
+          "observation": 74330831,
+          "other": 2977261,
+          "protocol_candidate": 1330646,
           "serialization": 0,
-          "trace_hash": 12975668,
+          "trace_hash": 862455,
           "trace_persistence": 0
         },
         "timing_percentages": {
           "continuation": 0.0,
           "coordinator_other": 0.0,
-          "core_process": 3.74448,
+          "core_process": 10.835047,
           "dispatch_to_receipt": 100.0,
-          "observation": 94.968487,
-          "other": 0.71118,
-          "protocol_candidate": 0.173373,
+          "observation": 83.366108,
+          "other": 3.339162,
+          "protocol_candidate": 1.492393,
           "serialization": 0.0,
-          "trace_hash": 0.402479,
+          "trace_hash": 0.967291,
           "trace_persistence": 0.0
         },
-        "wall_clock_seconds": 1614.055837,
+        "wall_clock_seconds": 46.6898896,
         "workers": 2
       },
       "32": {
-        "engine_steps_per_second": 355.4894406063713,
+        "engine_steps_per_second": 10460.399643658659,
         "errors": {
           "automatic": 0,
           "coordinator_failed_games": 0,
@@ -360,13 +2395,13 @@
           "worker_errors": 0
         },
         "games": 64,
-        "games_per_second": 0.23460778129442095,
-        "interactive_decisions_per_second": 144.8666392027222,
+        "games_per_second": 6.903415042836931,
+        "interactive_decisions_per_second": 4262.75092309176,
         "memory": {
-          "memory_per_active_environment_bytes": 15694336,
-          "peak_percent_of_physical_memory": 1.465097,
-          "peak_total_working_set_bytes": 502218752,
-          "peak_worker_working_set_bytes": 17555456,
+          "memory_per_active_environment_bytes": 11469056,
+          "peak_percent_of_physical_memory": 1.070659,
+          "peak_total_working_set_bytes": 367009792,
+          "peak_worker_working_set_bytes": 13352960,
           "physical_memory_bytes": 34278862848,
           "process_count": 33
         },
@@ -386,48 +2421,48 @@
           "semantic_hashes": 64,
           "trace_bytes_serialized": 0
         },
-        "parallel_efficiency": 0.26341841331246457,
+        "parallel_efficiency": 0.22314279872309262,
         "result_timeout_seconds": 300.0,
         "simulation_elapsed_us": {
-          "max": 236910562,
-          "mean": 116939068.375,
-          "min": 62838100,
-          "p50": 105635458,
-          "p95": 204366384,
-          "p99": 236910562,
+          "max": 7673885,
+          "mean": 3571790.671875,
+          "min": 1784786,
+          "p50": 3219980,
+          "p95": 6924872,
+          "p99": 7673885,
           "sample_count": 64
         },
-        "speedup": 8.429389225998866,
+        "speedup": 7.140569559138964,
         "stderr_bytes": 0,
         "timing_buckets_us": {
           "continuation": 0,
           "coordinator_other": 0,
-          "core_process": 316440183,
-          "dispatch_to_receipt": 7485516183,
-          "observation": 7021464281,
-          "other": 102903346,
-          "protocol_candidate": 14830223,
+          "core_process": 26254478,
+          "dispatch_to_receipt": 252345335,
+          "observation": 184233958,
+          "other": 12066311,
+          "protocol_candidate": 4233433,
           "serialization": 0,
-          "trace_hash": 28462343,
+          "trace_hash": 1806423,
           "trace_persistence": 0
         },
         "timing_percentages": {
           "continuation": 0.0,
           "coordinator_other": 0.0,
-          "core_process": 4.228166,
+          "core_process": 11.48517,
           "dispatch_to_receipt": 100.0,
-          "observation": 93.818414,
-          "other": 1.374959,
-          "protocol_candidate": 0.198156,
+          "observation": 80.594185,
+          "other": 5.278476,
+          "protocol_candidate": 1.851939,
           "serialization": 0.0,
-          "trace_hash": 0.380304,
+          "trace_hash": 0.79023,
           "trace_persistence": 0.0
         },
-        "wall_clock_seconds": 272.7957259,
+        "wall_clock_seconds": 9.2707739,
         "workers": 32
       },
       "4": {
-        "engine_steps_per_second": 111.02051175185603,
+        "engine_steps_per_second": 3518.963151238469,
         "errors": {
           "automatic": 0,
           "coordinator_failed_games": 0,
@@ -443,13 +2478,13 @@
           "worker_errors": 0
         },
         "games": 64,
-        "games_per_second": 0.0732687752858314,
-        "interactive_decisions_per_second": 45.24232391438705,
+        "games_per_second": 2.3223647261101923,
+        "interactive_decisions_per_second": 1434.0239314241983,
         "memory": {
-          "memory_per_active_environment_bytes": 17925120,
-          "peak_percent_of_physical_memory": 0.209168,
-          "peak_total_working_set_bytes": 71700480,
-          "peak_worker_working_set_bytes": 18427904,
+          "memory_per_active_environment_bytes": 13302784,
+          "peak_percent_of_physical_memory": 0.15523,
+          "peak_total_working_set_bytes": 53211136,
+          "peak_worker_working_set_bytes": 13922304,
           "physical_memory_bytes": 34278862848,
           "process_count": 5
         },
@@ -469,48 +2504,48 @@
           "semantic_hashes": 64,
           "trace_bytes_serialized": 0
         },
-        "parallel_efficiency": 0.6581314370615956,
-        "result_timeout_seconds": 120.0,
+        "parallel_efficiency": 0.6005363564837112,
+        "result_timeout_seconds": 300.0,
         "simulation_elapsed_us": {
-          "max": 61238466,
-          "mean": 54358792.375,
-          "min": 50758803,
-          "p50": 54321911,
-          "p95": 59179521,
-          "p99": 61238466,
+          "max": 2235572,
+          "mean": 1635080.453125,
+          "min": 1355842,
+          "p50": 1593761,
+          "p95": 2166025,
+          "p99": 2235572,
           "sample_count": 64
         },
-        "speedup": 2.6325257482463824,
+        "speedup": 2.4021454259348447,
         "stderr_bytes": 0,
         "timing_buckets_us": {
           "continuation": 0,
           "coordinator_other": 0,
-          "core_process": 130598269,
-          "dispatch_to_receipt": 3479266414,
-          "observation": 3303453564,
-          "other": 24766413,
-          "protocol_candidate": 6042691,
+          "core_process": 11479960,
+          "dispatch_to_receipt": 105379743,
+          "observation": 86958038,
+          "other": 3602283,
+          "protocol_candidate": 1568489,
           "serialization": 0,
-          "trace_hash": 14101775,
+          "trace_hash": 1036379,
           "trace_persistence": 0
         },
         "timing_percentages": {
           "continuation": 0.0,
           "coordinator_other": 0.0,
-          "core_process": 3.753943,
+          "core_process": 10.97037,
           "dispatch_to_receipt": 100.0,
-          "observation": 94.95513,
-          "other": 0.711891,
-          "protocol_candidate": 0.173692,
+          "observation": 83.098012,
+          "other": 3.442379,
+          "protocol_candidate": 1.498865,
           "serialization": 0.0,
-          "trace_hash": 0.405344,
+          "trace_hash": 0.990375,
           "trace_persistence": 0.0
         },
-        "wall_clock_seconds": 873.4962438,
+        "wall_clock_seconds": 27.5581175,
         "workers": 4
       },
       "64": {
-        "engine_steps_per_second": 355.58921010009965,
+        "engine_steps_per_second": 8430.782964108404,
         "errors": {
           "automatic": 0,
           "coordinator_failed_games": 0,
@@ -526,13 +2561,13 @@
           "worker_errors": 0
         },
         "games": 64,
-        "games_per_second": 0.23467362488044852,
-        "interactive_decisions_per_second": 144.9072965882882,
+        "games_per_second": 5.563955099230097,
+        "interactive_decisions_per_second": 3435.655336976159,
         "memory": {
-          "memory_per_active_environment_bytes": 14318592,
-          "peak_percent_of_physical_memory": 2.673338,
-          "peak_total_working_set_bytes": 916389888,
-          "peak_worker_working_set_bytes": 17801216,
+          "memory_per_active_environment_bytes": 10763456,
+          "peak_percent_of_physical_memory": 2.00958,
+          "peak_total_working_set_bytes": 688861184,
+          "peak_worker_working_set_bytes": 12857344,
           "physical_memory_bytes": 34278862848,
           "process_count": 65
         },
@@ -552,48 +2587,48 @@
           "semantic_hashes": 64,
           "trace_bytes_serialized": 0
         },
-        "parallel_efficiency": 0.13174617135719507,
-        "result_timeout_seconds": 600.0,
+        "parallel_efficiency": 0.08992335714336636,
+        "result_timeout_seconds": 300.0,
         "simulation_elapsed_us": {
-          "max": 272598239,
-          "mean": 187804613.734375,
-          "min": 63028628,
-          "p50": 205705649,
-          "p95": 268876855,
-          "p99": 272598239,
+          "max": 11118732,
+          "mean": 8108166.609375,
+          "min": 2574224,
+          "p50": 8287704,
+          "p95": 10972472,
+          "p99": 11118732,
           "sample_count": 64
         },
-        "speedup": 8.431754966860485,
+        "speedup": 5.755094857175447,
         "stderr_bytes": 0,
         "timing_buckets_us": {
           "continuation": 0,
           "coordinator_other": 0,
-          "core_process": 579145531,
-          "dispatch_to_receipt": 12023005262,
-          "observation": 11124945548,
-          "other": 243051144,
-          "protocol_candidate": 27147041,
+          "core_process": 75397582,
+          "dispatch_to_receipt": 551975878,
+          "observation": 395521235,
+          "other": 35050810,
+          "protocol_candidate": 11187931,
           "serialization": 0,
-          "trace_hash": 45206015,
+          "trace_hash": 1765105,
           "trace_persistence": 0
         },
         "timing_percentages": {
           "continuation": 0.0,
           "coordinator_other": 0.0,
-          "core_process": 4.818385,
+          "core_process": 14.529638,
           "dispatch_to_receipt": 100.0,
-          "observation": 92.55751,
-          "other": 2.022141,
-          "protocol_candidate": 0.225858,
+          "observation": 76.219688,
+          "other": 6.754534,
+          "protocol_candidate": 2.155992,
           "serialization": 0.0,
-          "trace_hash": 0.376106,
+          "trace_hash": 0.340148,
           "trace_persistence": 0.0
         },
-        "wall_clock_seconds": 272.7191862,
+        "wall_clock_seconds": 11.502609,
         "workers": 64
       },
       "8": {
-        "engine_steps_per_second": 223.88633630173942,
+        "engine_steps_per_second": 7781.153423120967,
         "errors": {
           "automatic": 0,
           "coordinator_failed_games": 0,
@@ -609,13 +2644,13 @@
           "worker_errors": 0
         },
         "games": 64,
-        "games_per_second": 0.14775537785958714,
-        "interactive_decisions_per_second": 91.236637150516,
+        "games_per_second": 5.135227469474322,
+        "interactive_decisions_per_second": 3170.9227244711833,
         "memory": {
-          "memory_per_active_environment_bytes": 17655808,
-          "peak_percent_of_physical_memory": 0.412051,
-          "peak_total_working_set_bytes": 141246464,
-          "peak_worker_working_set_bytes": 18350080,
+          "memory_per_active_environment_bytes": 12928000,
+          "peak_percent_of_physical_memory": 0.301714,
+          "peak_total_working_set_bytes": 103424000,
+          "peak_worker_working_set_bytes": 13930496,
           "physical_memory_bytes": 34278862848,
           "process_count": 9
         },
@@ -635,44 +2670,44 @@
           "semantic_hashes": 64,
           "trace_bytes_serialized": 0
         },
-        "parallel_efficiency": 0.6636009595148356,
-        "result_timeout_seconds": 120.0,
+        "parallel_efficiency": 0.6639548817550488,
+        "result_timeout_seconds": 300.0,
         "simulation_elapsed_us": {
-          "max": 55570216,
-          "mean": 53867049.71875,
-          "min": 52637486,
-          "p50": 53867432,
-          "p95": 54943598,
-          "p99": 55570216,
+          "max": 1507590,
+          "mean": 1431505.875,
+          "min": 1292021,
+          "p50": 1430797,
+          "p95": 1483667,
+          "p99": 1507590,
           "sample_count": 64
         },
-        "speedup": 5.308807676118684,
+        "speedup": 5.31163905404039,
         "stderr_bytes": 0,
         "timing_buckets_us": {
           "continuation": 0,
           "coordinator_other": 0,
-          "core_process": 128184837,
-          "dispatch_to_receipt": 3447797263,
-          "observation": 3275104359,
-          "other": 24649512,
-          "protocol_candidate": 5818113,
+          "core_process": 9207028,
+          "dispatch_to_receipt": 93577658,
+          "observation": 76964558,
+          "other": 3271863,
+          "protocol_candidate": 1298994,
           "serialization": 0,
-          "trace_hash": 13734361,
+          "trace_hash": 873933,
           "trace_persistence": 0
         },
         "timing_percentages": {
           "continuation": 0.0,
           "coordinator_other": 0.0,
-          "core_process": 3.718206,
+          "core_process": 10.049544,
           "dispatch_to_receipt": 100.0,
-          "observation": 94.999644,
-          "other": 0.714999,
-          "protocol_candidate": 0.168764,
+          "observation": 84.007425,
+          "other": 3.571264,
+          "protocol_candidate": 1.417862,
           "serialization": 0.0,
-          "trace_hash": 0.398387,
+          "trace_hash": 0.953905,
           "trace_persistence": 0.0
         },
-        "wall_clock_seconds": 433.1483627,
+        "wall_clock_seconds": 12.4629338,
         "workers": 8
       }
     },
@@ -682,7 +2717,7 @@
       "simulation_elapsed_us": "worker-local fresh CoreHost through result assembly"
     }
   },
-  "evidence_identity": "UNVERIFIED",
+  "evidence_identity": "ce106bdf55d2f7fb3f0a13e041bc9d945064524e8ac6aafcae85673116e89eb7",
   "hardware": {
     "machine": "AMD64",
     "physical_memory_bytes": 34278862848,
@@ -708,7 +2743,7 @@
       "workers": 64
     },
     {
-      "reason": "NOT_RUN - measured 64-worker throughput did not improve over 32 workers; no measured usefulness for another oversubscribed row",
+      "reason": "NOT_RUN - no final measurement; 64 workers is the maximum semantically validated concurrency for this M4 final corpus",
       "status": "NOT_RUN",
       "workers": 128
     }
@@ -723,7 +2758,7 @@
   ],
   "scaling": [
     {
-      "engine_steps_per_second": 42.17262141721146,
+      "engine_steps_per_second": 1464.9251095482662,
       "errors": {
         "automatic": 0,
         "coordinator_failed_games": 0,
@@ -739,13 +2774,13 @@
         "worker_errors": 0
       },
       "games": 64,
-      "games_per_second": 0.027832121047491477,
-      "interactive_decisions_per_second": 17.18589986993462,
+      "games_per_second": 0.9667877310993341,
+      "interactive_decisions_per_second": 596.9763178955404,
       "memory": {
-        "memory_per_active_environment_bytes": 19742720,
-        "peak_percent_of_physical_memory": 0.057594,
-        "peak_total_working_set_bytes": 19742720,
-        "peak_worker_working_set_bytes": 19742720,
+        "memory_per_active_environment_bytes": 14340096,
+        "peak_percent_of_physical_memory": 0.041834,
+        "peak_total_working_set_bytes": 14340096,
+        "peak_worker_working_set_bytes": 14340096,
         "physical_memory_bytes": 34278862848,
         "process_count": 2
       },
@@ -766,14 +2801,14 @@
         "trace_bytes_serialized": 0
       },
       "parallel_efficiency": 1.0,
-      "result_timeout_seconds": 120.0,
+      "result_timeout_seconds": 300.0,
       "simulation_elapsed_us": {
-        "max": 46252056,
-        "mean": 35870808.484375,
-        "min": 34415568,
-        "p50": 35302045,
-        "p95": 42816128,
-        "p99": 46252056,
+        "max": 1062960,
+        "mean": 974927.328125,
+        "min": 915563,
+        "p50": 969901,
+        "p95": 1046190,
+        "p99": 1062960,
         "sample_count": 64
       },
       "speedup": 1.0,
@@ -781,32 +2816,32 @@
       "timing_buckets_us": {
         "continuation": 0,
         "coordinator_other": 0,
-        "core_process": 94448884,
-        "dispatch_to_receipt": 2295923877,
-        "observation": 2170381294,
-        "other": 17508628,
-        "protocol_candidate": 4346660,
+        "core_process": 6465576,
+        "dispatch_to_receipt": 62554568,
+        "observation": 52175793,
+        "other": 2273693,
+        "protocol_candidate": 892882,
         "serialization": 0,
-        "trace_hash": 9046277,
+        "trace_hash": 587405,
         "trace_persistence": 0
       },
       "timing_percentages": {
         "continuation": 0.0,
         "coordinator_other": 0.0,
-        "core_process": 4.114108,
+        "core_process": 10.362272,
         "dispatch_to_receipt": 100.0,
-        "observation": 94.539848,
-        "other": 0.76266,
-        "protocol_candidate": 0.189337,
+        "observation": 83.621286,
+        "other": 3.64401,
+        "protocol_candidate": 1.431007,
         "serialization": 0.0,
-        "trace_hash": 0.394048,
+        "trace_hash": 0.941424,
         "trace_persistence": 0.0
       },
-      "wall_clock_seconds": 2299.5013528,
+      "wall_clock_seconds": 66.1986059,
       "workers": 1
     },
     {
-      "engine_steps_per_second": 60.0821841332618,
+      "engine_steps_per_second": 2077.0235447290497,
       "errors": {
         "automatic": 0,
         "coordinator_failed_games": 0,
@@ -822,13 +2857,13 @@
         "worker_errors": 0
       },
       "games": 64,
-      "games_per_second": 0.039651664169781754,
-      "interactive_decisions_per_second": 24.48428306758758,
+      "games_per_second": 1.3707464410025076,
+      "interactive_decisions_per_second": 846.4145094059079,
       "memory": {
-        "memory_per_active_environment_bytes": 18792448,
-        "peak_percent_of_physical_memory": 0.109645,
-        "peak_total_working_set_bytes": 37584896,
-        "peak_worker_working_set_bytes": 18882560,
+        "memory_per_active_environment_bytes": 13717504,
+        "peak_percent_of_physical_memory": 0.080035,
+        "peak_total_working_set_bytes": 27435008,
+        "peak_worker_working_set_bytes": 14082048,
         "physical_memory_bytes": 34278862848,
         "process_count": 3
       },
@@ -848,48 +2883,48 @@
         "semantic_hashes": 64,
         "trace_bytes_serialized": 0
       },
-      "parallel_efficiency": 0.7123363703061283,
-      "result_timeout_seconds": 120.0,
+      "parallel_efficiency": 0.7089179955996298,
+      "result_timeout_seconds": 300.0,
       "simulation_elapsed_us": {
-        "max": 54816396,
-        "mean": 50373951.71875,
-        "min": 48096008,
-        "p50": 50268280,
-        "p95": 52156549,
-        "p99": 54816396,
+        "max": 1887688,
+        "mean": 1393155.15625,
+        "min": 1004178,
+        "p50": 1333419,
+        "p95": 1776964,
+        "p99": 1887688,
         "sample_count": 64
       },
-      "speedup": 1.4246727406122566,
+      "speedup": 1.4178359911992595,
       "stderr_bytes": 0,
       "timing_buckets_us": {
         "continuation": 0,
         "coordinator_other": 0,
-        "core_process": 120719518,
-        "dispatch_to_receipt": 3224171162,
-        "observation": 3061720317,
-        "other": 22927975,
-        "protocol_candidate": 5589432,
+        "core_process": 9660737,
+        "dispatch_to_receipt": 89503506,
+        "observation": 74330831,
+        "other": 2977261,
+        "protocol_candidate": 1330646,
         "serialization": 0,
-        "trace_hash": 12975668,
+        "trace_hash": 862455,
         "trace_persistence": 0
       },
       "timing_percentages": {
         "continuation": 0.0,
         "coordinator_other": 0.0,
-        "core_process": 3.74448,
+        "core_process": 10.835047,
         "dispatch_to_receipt": 100.0,
-        "observation": 94.968487,
-        "other": 0.71118,
-        "protocol_candidate": 0.173373,
+        "observation": 83.366108,
+        "other": 3.339162,
+        "protocol_candidate": 1.492393,
         "serialization": 0.0,
-        "trace_hash": 0.402479,
+        "trace_hash": 0.967291,
         "trace_persistence": 0.0
       },
-      "wall_clock_seconds": 1614.055837,
+      "wall_clock_seconds": 46.6898896,
       "workers": 2
     },
     {
-      "engine_steps_per_second": 111.02051175185603,
+      "engine_steps_per_second": 3518.963151238469,
       "errors": {
         "automatic": 0,
         "coordinator_failed_games": 0,
@@ -905,13 +2940,13 @@
         "worker_errors": 0
       },
       "games": 64,
-      "games_per_second": 0.0732687752858314,
-      "interactive_decisions_per_second": 45.24232391438705,
+      "games_per_second": 2.3223647261101923,
+      "interactive_decisions_per_second": 1434.0239314241983,
       "memory": {
-        "memory_per_active_environment_bytes": 17925120,
-        "peak_percent_of_physical_memory": 0.209168,
-        "peak_total_working_set_bytes": 71700480,
-        "peak_worker_working_set_bytes": 18427904,
+        "memory_per_active_environment_bytes": 13302784,
+        "peak_percent_of_physical_memory": 0.15523,
+        "peak_total_working_set_bytes": 53211136,
+        "peak_worker_working_set_bytes": 13922304,
         "physical_memory_bytes": 34278862848,
         "process_count": 5
       },
@@ -931,48 +2966,48 @@
         "semantic_hashes": 64,
         "trace_bytes_serialized": 0
       },
-      "parallel_efficiency": 0.6581314370615956,
-      "result_timeout_seconds": 120.0,
+      "parallel_efficiency": 0.6005363564837112,
+      "result_timeout_seconds": 300.0,
       "simulation_elapsed_us": {
-        "max": 61238466,
-        "mean": 54358792.375,
-        "min": 50758803,
-        "p50": 54321911,
-        "p95": 59179521,
-        "p99": 61238466,
+        "max": 2235572,
+        "mean": 1635080.453125,
+        "min": 1355842,
+        "p50": 1593761,
+        "p95": 2166025,
+        "p99": 2235572,
         "sample_count": 64
       },
-      "speedup": 2.6325257482463824,
+      "speedup": 2.4021454259348447,
       "stderr_bytes": 0,
       "timing_buckets_us": {
         "continuation": 0,
         "coordinator_other": 0,
-        "core_process": 130598269,
-        "dispatch_to_receipt": 3479266414,
-        "observation": 3303453564,
-        "other": 24766413,
-        "protocol_candidate": 6042691,
+        "core_process": 11479960,
+        "dispatch_to_receipt": 105379743,
+        "observation": 86958038,
+        "other": 3602283,
+        "protocol_candidate": 1568489,
         "serialization": 0,
-        "trace_hash": 14101775,
+        "trace_hash": 1036379,
         "trace_persistence": 0
       },
       "timing_percentages": {
         "continuation": 0.0,
         "coordinator_other": 0.0,
-        "core_process": 3.753943,
+        "core_process": 10.97037,
         "dispatch_to_receipt": 100.0,
-        "observation": 94.95513,
-        "other": 0.711891,
-        "protocol_candidate": 0.173692,
+        "observation": 83.098012,
+        "other": 3.442379,
+        "protocol_candidate": 1.498865,
         "serialization": 0.0,
-        "trace_hash": 0.405344,
+        "trace_hash": 0.990375,
         "trace_persistence": 0.0
       },
-      "wall_clock_seconds": 873.4962438,
+      "wall_clock_seconds": 27.5581175,
       "workers": 4
     },
     {
-      "engine_steps_per_second": 223.88633630173942,
+      "engine_steps_per_second": 7781.153423120967,
       "errors": {
         "automatic": 0,
         "coordinator_failed_games": 0,
@@ -988,13 +3023,13 @@
         "worker_errors": 0
       },
       "games": 64,
-      "games_per_second": 0.14775537785958714,
-      "interactive_decisions_per_second": 91.236637150516,
+      "games_per_second": 5.135227469474322,
+      "interactive_decisions_per_second": 3170.9227244711833,
       "memory": {
-        "memory_per_active_environment_bytes": 17655808,
-        "peak_percent_of_physical_memory": 0.412051,
-        "peak_total_working_set_bytes": 141246464,
-        "peak_worker_working_set_bytes": 18350080,
+        "memory_per_active_environment_bytes": 12928000,
+        "peak_percent_of_physical_memory": 0.301714,
+        "peak_total_working_set_bytes": 103424000,
+        "peak_worker_working_set_bytes": 13930496,
         "physical_memory_bytes": 34278862848,
         "process_count": 9
       },
@@ -1014,48 +3049,48 @@
         "semantic_hashes": 64,
         "trace_bytes_serialized": 0
       },
-      "parallel_efficiency": 0.6636009595148356,
-      "result_timeout_seconds": 120.0,
+      "parallel_efficiency": 0.6639548817550488,
+      "result_timeout_seconds": 300.0,
       "simulation_elapsed_us": {
-        "max": 55570216,
-        "mean": 53867049.71875,
-        "min": 52637486,
-        "p50": 53867432,
-        "p95": 54943598,
-        "p99": 55570216,
+        "max": 1507590,
+        "mean": 1431505.875,
+        "min": 1292021,
+        "p50": 1430797,
+        "p95": 1483667,
+        "p99": 1507590,
         "sample_count": 64
       },
-      "speedup": 5.308807676118684,
+      "speedup": 5.31163905404039,
       "stderr_bytes": 0,
       "timing_buckets_us": {
         "continuation": 0,
         "coordinator_other": 0,
-        "core_process": 128184837,
-        "dispatch_to_receipt": 3447797263,
-        "observation": 3275104359,
-        "other": 24649512,
-        "protocol_candidate": 5818113,
+        "core_process": 9207028,
+        "dispatch_to_receipt": 93577658,
+        "observation": 76964558,
+        "other": 3271863,
+        "protocol_candidate": 1298994,
         "serialization": 0,
-        "trace_hash": 13734361,
+        "trace_hash": 873933,
         "trace_persistence": 0
       },
       "timing_percentages": {
         "continuation": 0.0,
         "coordinator_other": 0.0,
-        "core_process": 3.718206,
+        "core_process": 10.049544,
         "dispatch_to_receipt": 100.0,
-        "observation": 94.999644,
-        "other": 0.714999,
-        "protocol_candidate": 0.168764,
+        "observation": 84.007425,
+        "other": 3.571264,
+        "protocol_candidate": 1.417862,
         "serialization": 0.0,
-        "trace_hash": 0.398387,
+        "trace_hash": 0.953905,
         "trace_persistence": 0.0
       },
-      "wall_clock_seconds": 433.1483627,
+      "wall_clock_seconds": 12.4629338,
       "workers": 8
     },
     {
-      "engine_steps_per_second": 363.72124533829174,
+      "engine_steps_per_second": 11112.50019910049,
       "errors": {
         "automatic": 0,
         "coordinator_failed_games": 0,
@@ -1071,13 +3106,13 @@
         "worker_errors": 0
       },
       "games": 64,
-      "games_per_second": 0.2400404192960183,
-      "interactive_decisions_per_second": 148.2212082837398,
+      "games_per_second": 7.333773436132975,
+      "interactive_decisions_per_second": 4528.490506602172,
       "memory": {
-        "memory_per_active_environment_bytes": 17441536,
-        "peak_percent_of_physical_memory": 0.814101,
-        "peak_total_working_set_bytes": 279064576,
-        "peak_worker_working_set_bytes": 18231296,
+        "memory_per_active_environment_bytes": 12425728,
+        "peak_percent_of_physical_memory": 0.579983,
+        "peak_total_working_set_bytes": 198811648,
+        "peak_worker_working_set_bytes": 13410304,
         "physical_memory_bytes": 34278862848,
         "process_count": 17
       },
@@ -1097,48 +3132,48 @@
         "semantic_hashes": 64,
         "trace_bytes_serialized": 0
       },
-      "parallel_efficiency": 0.5390363954080793,
-      "result_timeout_seconds": 120.0,
+      "parallel_efficiency": 0.4741070092367731,
+      "result_timeout_seconds": 300.0,
       "simulation_elapsed_us": {
-        "max": 69919230,
-        "mean": 65273640.8125,
-        "min": 61668354,
-        "p50": 65302555,
-        "p95": 68506236,
-        "p99": 69919230,
+        "max": 2679427,
+        "mean": 1907009.140625,
+        "min": 1658149,
+        "p50": 1856302,
+        "p95": 2560437,
+        "p99": 2679427,
         "sample_count": 64
       },
-      "speedup": 8.62458232652927,
+      "speedup": 7.58571214778837,
       "stderr_bytes": 0,
       "timing_buckets_us": {
         "continuation": 0,
         "coordinator_other": 0,
-        "core_process": 152156891,
-        "dispatch_to_receipt": 4178027456,
-        "observation": 3971485562,
-        "other": 30374615,
-        "protocol_candidate": 6971401,
+        "core_process": 12703684,
+        "dispatch_to_receipt": 126949206,
+        "observation": 101976029,
+        "other": 4444981,
+        "protocol_candidate": 1806985,
         "serialization": 0,
-        "trace_hash": 16524543,
+        "trace_hash": 1116906,
         "trace_persistence": 0
       },
       "timing_percentages": {
         "continuation": 0.0,
         "coordinator_other": 0.0,
-        "core_process": 3.642284,
+        "core_process": 10.408711,
         "dispatch_to_receipt": 100.0,
-        "observation": 95.068179,
-        "other": 0.727098,
-        "protocol_candidate": 0.166879,
+        "observation": 83.553635,
+        "other": 3.641977,
+        "protocol_candidate": 1.480546,
         "serialization": 0.0,
-        "trace_hash": 0.395559,
+        "trace_hash": 0.915132,
         "trace_persistence": 0.0
       },
-      "wall_clock_seconds": 266.6217639,
+      "wall_clock_seconds": 8.726749,
       "workers": 16
     },
     {
-      "engine_steps_per_second": 355.4894406063713,
+      "engine_steps_per_second": 10460.399643658659,
       "errors": {
         "automatic": 0,
         "coordinator_failed_games": 0,
@@ -1154,13 +3189,13 @@
         "worker_errors": 0
       },
       "games": 64,
-      "games_per_second": 0.23460778129442095,
-      "interactive_decisions_per_second": 144.8666392027222,
+      "games_per_second": 6.903415042836931,
+      "interactive_decisions_per_second": 4262.75092309176,
       "memory": {
-        "memory_per_active_environment_bytes": 15694336,
-        "peak_percent_of_physical_memory": 1.465097,
-        "peak_total_working_set_bytes": 502218752,
-        "peak_worker_working_set_bytes": 17555456,
+        "memory_per_active_environment_bytes": 11469056,
+        "peak_percent_of_physical_memory": 1.070659,
+        "peak_total_working_set_bytes": 367009792,
+        "peak_worker_working_set_bytes": 13352960,
         "physical_memory_bytes": 34278862848,
         "process_count": 33
       },
@@ -1180,48 +3215,48 @@
         "semantic_hashes": 64,
         "trace_bytes_serialized": 0
       },
-      "parallel_efficiency": 0.26341841331246457,
+      "parallel_efficiency": 0.22314279872309262,
       "result_timeout_seconds": 300.0,
       "simulation_elapsed_us": {
-        "max": 236910562,
-        "mean": 116939068.375,
-        "min": 62838100,
-        "p50": 105635458,
-        "p95": 204366384,
-        "p99": 236910562,
+        "max": 7673885,
+        "mean": 3571790.671875,
+        "min": 1784786,
+        "p50": 3219980,
+        "p95": 6924872,
+        "p99": 7673885,
         "sample_count": 64
       },
-      "speedup": 8.429389225998866,
+      "speedup": 7.140569559138964,
       "stderr_bytes": 0,
       "timing_buckets_us": {
         "continuation": 0,
         "coordinator_other": 0,
-        "core_process": 316440183,
-        "dispatch_to_receipt": 7485516183,
-        "observation": 7021464281,
-        "other": 102903346,
-        "protocol_candidate": 14830223,
+        "core_process": 26254478,
+        "dispatch_to_receipt": 252345335,
+        "observation": 184233958,
+        "other": 12066311,
+        "protocol_candidate": 4233433,
         "serialization": 0,
-        "trace_hash": 28462343,
+        "trace_hash": 1806423,
         "trace_persistence": 0
       },
       "timing_percentages": {
         "continuation": 0.0,
         "coordinator_other": 0.0,
-        "core_process": 4.228166,
+        "core_process": 11.48517,
         "dispatch_to_receipt": 100.0,
-        "observation": 93.818414,
-        "other": 1.374959,
-        "protocol_candidate": 0.198156,
+        "observation": 80.594185,
+        "other": 5.278476,
+        "protocol_candidate": 1.851939,
         "serialization": 0.0,
-        "trace_hash": 0.380304,
+        "trace_hash": 0.79023,
         "trace_persistence": 0.0
       },
-      "wall_clock_seconds": 272.7957259,
+      "wall_clock_seconds": 9.2707739,
       "workers": 32
     },
     {
-      "engine_steps_per_second": 355.58921010009965,
+      "engine_steps_per_second": 8430.782964108404,
       "errors": {
         "automatic": 0,
         "coordinator_failed_games": 0,
@@ -1237,13 +3272,13 @@
         "worker_errors": 0
       },
       "games": 64,
-      "games_per_second": 0.23467362488044852,
-      "interactive_decisions_per_second": 144.9072965882882,
+      "games_per_second": 5.563955099230097,
+      "interactive_decisions_per_second": 3435.655336976159,
       "memory": {
-        "memory_per_active_environment_bytes": 14318592,
-        "peak_percent_of_physical_memory": 2.673338,
-        "peak_total_working_set_bytes": 916389888,
-        "peak_worker_working_set_bytes": 17801216,
+        "memory_per_active_environment_bytes": 10763456,
+        "peak_percent_of_physical_memory": 2.00958,
+        "peak_total_working_set_bytes": 688861184,
+        "peak_worker_working_set_bytes": 12857344,
         "physical_memory_bytes": 34278862848,
         "process_count": 65
       },
@@ -1263,44 +3298,44 @@
         "semantic_hashes": 64,
         "trace_bytes_serialized": 0
       },
-      "parallel_efficiency": 0.13174617135719507,
-      "result_timeout_seconds": 600.0,
+      "parallel_efficiency": 0.08992335714336636,
+      "result_timeout_seconds": 300.0,
       "simulation_elapsed_us": {
-        "max": 272598239,
-        "mean": 187804613.734375,
-        "min": 63028628,
-        "p50": 205705649,
-        "p95": 268876855,
-        "p99": 272598239,
+        "max": 11118732,
+        "mean": 8108166.609375,
+        "min": 2574224,
+        "p50": 8287704,
+        "p95": 10972472,
+        "p99": 11118732,
         "sample_count": 64
       },
-      "speedup": 8.431754966860485,
+      "speedup": 5.755094857175447,
       "stderr_bytes": 0,
       "timing_buckets_us": {
         "continuation": 0,
         "coordinator_other": 0,
-        "core_process": 579145531,
-        "dispatch_to_receipt": 12023005262,
-        "observation": 11124945548,
-        "other": 243051144,
-        "protocol_candidate": 27147041,
+        "core_process": 75397582,
+        "dispatch_to_receipt": 551975878,
+        "observation": 395521235,
+        "other": 35050810,
+        "protocol_candidate": 11187931,
         "serialization": 0,
-        "trace_hash": 45206015,
+        "trace_hash": 1765105,
         "trace_persistence": 0
       },
       "timing_percentages": {
         "continuation": 0.0,
         "coordinator_other": 0.0,
-        "core_process": 4.818385,
+        "core_process": 14.529638,
         "dispatch_to_receipt": 100.0,
-        "observation": 92.55751,
-        "other": 2.022141,
-        "protocol_candidate": 0.225858,
+        "observation": 76.219688,
+        "other": 6.754534,
+        "protocol_candidate": 2.155992,
         "serialization": 0.0,
-        "trace_hash": 0.376106,
+        "trace_hash": 0.340148,
         "trace_persistence": 0.0
       },
-      "wall_clock_seconds": 272.7191862,
+      "wall_clock_seconds": 11.502609,
       "workers": 64
     }
   ],
@@ -1351,14 +3386,14 @@
     "status": "PASS"
   },
   "source_reports": {
-    "1": "EXTERNAL_SOURCE_NOT_COMMITTED",
-    "16": "EXTERNAL_SOURCE_NOT_COMMITTED",
-    "2": "EXTERNAL_SOURCE_NOT_COMMITTED",
-    "32": "EXTERNAL_SOURCE_NOT_COMMITTED",
-    "4": "EXTERNAL_SOURCE_NOT_COMMITTED",
-    "64": "EXTERNAL_SOURCE_NOT_COMMITTED",
-    "8": "EXTERNAL_SOURCE_NOT_COMMITTED"
+    "1": "artifacts/m4/matrix/throughput-w1.json",
+    "16": "artifacts/m4/matrix/throughput-w16.json",
+    "2": "artifacts/m4/matrix/throughput-w2.json",
+    "32": "artifacts/m4/matrix/throughput-w32.json",
+    "4": "artifacts/m4/matrix/throughput-w4.json",
+    "64": "artifacts/m4/matrix/throughput-w64.json",
+    "8": "artifacts/m4/matrix/throughput-w8.json"
   },
-  "status": "M4 BASELINE ACCEPTANCE PENDING",
-  "status_reason": "acceptance evidence lacks a repository-backed run identity"
+  "status": "M4 BASELINE PASS — PERFORMANCE AUDIT READY",
+  "status_reason": "all independently verified acceptance gates passed"
 }

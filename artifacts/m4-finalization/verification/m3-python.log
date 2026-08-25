@@ -1,0 +1,22 @@
+test_audit_reports_are_machine_verifiable_and_deterministic (test_card_compatibility.CardCompatibilityTests.test_audit_reports_are_machine_verifiable_and_deterministic) ... ok
+test_audit_retains_all_slots_and_unique_codes (test_card_compatibility.CardCompatibilityTests.test_audit_retains_all_slots_and_unique_codes) ... ok
+test_cli_audit_writes_the_locked_reports (test_card_compatibility.CardCompatibilityTests.test_cli_audit_writes_the_locked_reports) ... ok
+test_duplicate_name_resolution_uses_script_backed_primary (test_card_compatibility.CardCompatibilityTests.test_duplicate_name_resolution_uses_script_backed_primary) ... ok
+test_effect_cards_have_pinned_script_resolution (test_card_compatibility.CardCompatibilityTests.test_effect_cards_have_pinned_script_resolution) ... ok
+test_every_locked_slot_resolves_to_the_declared_card_name (test_card_compatibility.CardCompatibilityTests.test_every_locked_slot_resolves_to_the_declared_card_name) ... ok
+test_locked_tcg_duel_mode_audit_is_explicit (test_card_compatibility.CardCompatibilityTests.test_locked_tcg_duel_mode_audit_is_explicit) ... ok
+test_mechanics_and_api_inventories_are_complete_and_fail_closed (test_card_compatibility.CardCompatibilityTests.test_mechanics_and_api_inventories_are_complete_and_fail_closed) ... ok
+test_mechanics_closure_reconsiders_every_baseline_pending_row (test_card_compatibility.CardCompatibilityTests.test_mechanics_closure_reconsiders_every_baseline_pending_row) ... ok
+test_status_vocabulary_is_machine_checkable (test_card_compatibility.CardCompatibilityTests.test_status_vocabulary_is_machine_checkable) ... ok
+test_locked_deck_files_have_exact_shape (test_deck_manifest.DeckManifestTests.test_locked_deck_files_have_exact_shape) ... ok
+test_parse_ydk_preserves_sections_and_hashes_exact_source_bytes (test_deck_manifest.DeckManifestTests.test_parse_ydk_preserves_sections_and_hashes_exact_source_bytes) ... ok
+test_parse_ydk_rejects_missing_extra_cards (test_deck_manifest.DeckManifestTests.test_parse_ydk_rejects_missing_extra_cards) ... ok
+test_parse_ydk_rejects_nonempty_side_deck (test_deck_manifest.DeckManifestTests.test_parse_ydk_rejects_nonempty_side_deck) ... ok
+test_acceptance_cmake_has_no_divergent_mr5_environment_override (test_rules_mode.RulesModeTest.test_acceptance_cmake_has_no_divergent_mr5_environment_override) ... ok
+test_locked_environment_identity_includes_canonical_mode (test_rules_mode.RulesModeTest.test_locked_environment_identity_includes_canonical_mode) ... ok
+test_locked_format_resolves_to_canonical_mr5 (test_rules_mode.RulesModeTest.test_locked_format_resolves_to_canonical_mr5) ... ok
+
+----------------------------------------------------------------------
+Ran 17 tests in 0.314s
+
+OK

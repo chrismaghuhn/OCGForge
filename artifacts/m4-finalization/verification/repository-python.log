@@ -1,0 +1,13 @@
+test_canonical_determinism_covers_both_start_players (test_m35_determinism_matrix.M35DeterminismMatrixTests.test_canonical_determinism_covers_both_start_players) ... ok
+test_changed_patch_bytes_are_rejected (test_ocgcore_patchset.OcgcorePatchsetTests.test_changed_patch_bytes_are_rejected) ... ok
+test_extra_patch_file_is_rejected (test_ocgcore_patchset.OcgcorePatchsetTests.test_extra_patch_file_is_rejected) ... ok
+test_patchset_hash_is_deterministic_and_ordered (test_ocgcore_patchset.OcgcorePatchsetTests.test_patchset_hash_is_deterministic_and_ordered) ... ok
+test_patchset_manifest_records_exact_file_hashes (test_ocgcore_patchset.OcgcorePatchsetTests.test_patchset_manifest_records_exact_file_hashes) ... ok
+test_bundle_id_is_sha256_of_canonical_inputs_without_bundle_id (test_rules_bundle.RulesBundleTests.test_bundle_id_is_sha256_of_canonical_inputs_without_bundle_id) ... ok
+test_checkout_hash_is_order_independent (test_rules_bundle.RulesBundleTests.test_checkout_hash_is_order_independent) ... ok
+test_lock_rejects_floating_refs (test_rules_bundle.RulesBundleTests.test_lock_rejects_floating_refs) ... ok
+
+----------------------------------------------------------------------
+Ran 8 tests in 0.015s
+
+OK

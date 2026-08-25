@@ -274,6 +274,7 @@ def main() -> int:
 
     verification_dir = ROOT / "artifacts" / "m4-finalization" / "verification"
     ctest_path = verification_dir / "ctest-release.log"
+    stable_m4_path = ROOT / "artifacts" / "m4" / "final" / "m4-python-final.log"
     ctest_total, ctest_passed = parse_ctest(ctest_path)
     repo_count = parse_test_count(verification_dir / "repository-python.log", 8)
     m3_count = parse_test_count(verification_dir / "m3-python.log", 17)
@@ -406,7 +407,7 @@ def main() -> int:
             "status": "PASS", "fresh": True,
             "evidence": "Native CTest and repository/M3/M4 Python suites passed from the Release build.",
             "verification": {"ctest": f"{ctest_passed}/{ctest_total}", "python": {"repository": repo_count, "m3": m3_count, "m4": m4_count}, "commands": [commands[3], commands[4], commands[5], commands[6]]},
-            "artifacts": artifacts([ctest_path, verification_dir / "repository-python.log", verification_dir / "m3-python.log", verification_dir / "m4-python.log", lifecycle_path, verification_path]),
+            "artifacts": artifacts([ctest_path, verification_dir / "repository-python.log", verification_dir / "m3-python.log", stable_m4_path, lifecycle_path, verification_path]),
         },
         "privacy": {
             "status": "PASS", "fresh": True,
@@ -485,7 +486,7 @@ def main() -> int:
         "",
         "**M4 FINAL PASS**",
         "",
-        f"Source commit: `{source_commit}`  ",
+        f"Source commit: `{source_commit}`",
         f"Baseline evidence identity: `{run_identity}`",
         "",
         "M4 closes the parallel-simulation foundation with fresh Release evidence. It does not claim ML readiness and does not start M5.",

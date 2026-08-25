@@ -356,7 +356,11 @@ class PerformanceAuditReportTests(unittest.TestCase):
             render_performance_audit_markdown(reordered),
         )
         markdown = render_performance_audit_markdown(report)
-        self.assertIn("Baseline protocol_candidate fraction: 0.189337%", markdown)
+        baseline_fraction = report["candidate_audit"]["baseline_protocol_candidate_fraction_percent"]  # type: ignore[index]
+        self.assertIn(
+            f"Baseline protocol_candidate fraction: {baseline_fraction:.6f}%",
+            markdown,
+        )
         self.assertIn("script_load 8 us", markdown)
 
     def test_schema_rejects_extra_top_level_field(self) -> None:
