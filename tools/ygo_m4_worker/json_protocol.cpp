@@ -885,6 +885,152 @@ std::string serialize_serialization_lifecycle(
     output << "]}";
     return output.str();
 }
+
+#ifdef YGO_M4_SERIALIZATION_SHAPE_AUDIT
+std::string serialize_serialization_shape(
+    const std::string& job_id,
+    const ygo::observation::PerformanceAuditSnapshot& audit) {
+    using ShapePhase = ygo::observation::PerformanceAuditSerializationShapePhase;
+    using ShapeSection = ygo::observation::PerformanceAuditSerializationShapeSection;
+    using ShapeCopy = ygo::observation::PerformanceAuditSerializationShapeCopyKind;
+    using ShapeSort = ygo::observation::PerformanceAuditSerializationShapeSortKind;
+    const auto& shape = audit.serialization_shape;
+    constexpr std::array<std::string_view, static_cast<std::size_t>(ShapePhase::Count)> phase_names = {
+        "preparation_copy", "sorting", "rendering", "escaping", "final_extraction"};
+    constexpr std::array<std::string_view, static_cast<std::size_t>(ShapeSection::Count)> section_names = {
+        "schema_basic_header", "globals", "zones", "entities", "relationships",
+        "chain", "visible_events", "decision_context", "match_context"};
+    constexpr std::array<std::string_view, static_cast<std::size_t>(ShapeCopy::Count)> copy_names = {
+        "top_level_zones", "top_level_entities", "top_level_relationships",
+        "top_level_visible_events", "chain_targets", "event_targets",
+        "decision_references", "link_markers", "counters", "own_deck", "opponent_deck"};
+    constexpr std::array<std::string_view, static_cast<std::size_t>(ShapeSort::Count)> sort_names = {
+        "zones", "entities", "relationships", "visible_events", "chain_targets",
+        "event_targets", "decision_references", "link_markers", "counters", "decks"};
+
+    std::ostringstream output;
+    output << '{';
+    append_json_string(output, "schema", "ocgforge.m4.serialization_shape.v1", false);
+    append_json_string(output, "type", "serialization_shape");
+    append_json_string(output, "job_id", job_id);
+    output << ",\"serialize_without_hash\":{";
+    append_json_unsigned(output, "calls", shape.serialize_without_hash_calls, false);
+    append_json_unsigned(output, "bytes", shape.serialize_without_hash_bytes);
+    append_json_unsigned(output, "total_us", shape.serialize_without_hash_total_us);
+    append_json_unsigned(output, "residual_underflow_count", shape.residual_underflow_count);
+    output << '}';
+
+    output << ",\"phase_timing_us\":{";
+    for (std::size_t index = 0; index < phase_names.size(); ++index) {
+        append_audit_timing_bucket(output, phase_names[index], shape.phase_timing[index], index != 0);
+    }
+    output << '}';
+
+    output << ",\"copy_stats\":{";
+    for (std::size_t index = 0; index < copy_names.size(); ++index) {
+        if (index != 0) {
+            output << ',';
+        }
+        const auto& stats = shape.copy_stats[index];
+        output << json_escape(copy_names[index]) << ":{";
+        append_json_unsigned(output, "calls", stats.calls, false);
+        append_json_unsigned(output, "elements", stats.elements);
+        append_json_unsigned(output, "approximate_bytes", stats.approximate_bytes);
+        append_json_unsigned(output, "total_us", stats.total_us);
+        output << '}';
+    }
+    output << '}';
+
+    output << ",\"sort_stats\":{";
+    for (std::size_t index = 0; index < sort_names.size(); ++index) {
+        if (index != 0) {
+            output << ',';
+        }
+        const auto& stats = shape.sort_stats[index];
+        output << json_escape(sort_names[index]) << ":{";
+        append_json_unsigned(output, "calls", stats.calls, false);
+        append_json_unsigned(output, "elements", stats.elements);
+        append_json_unsigned(output, "total_us", stats.total_us);
+        output << '}';
+    }
+    output << '}';
+
+    output << ",\"formatting\":{";
+    append_json_unsigned(output, "json_escape_calls", shape.json_escape_calls, false);
+    append_json_unsigned(output, "json_escape_input_bytes", shape.json_escape_input_bytes);
+    append_json_unsigned(output, "json_escape_output_bytes", shape.json_escape_output_bytes);
+    append_json_unsigned(output, "numeric_values", shape.numeric_values);
+    append_json_unsigned(output, "boolean_values", shape.boolean_values);
+    append_json_unsigned(output, "null_values", shape.null_values);
+    output << '}';
+
+    output << ",\"visible_events\":{";
+    append_json_unsigned(output, "serialized_instances", shape.visible_event_instances, false);
+    append_json_unsigned(output, "unique_events_seen", shape.unique_visible_event_count);
+    append_json_bool(output, "records_complete", shape.records_complete);
+    append_json_bool(output, "unique_event_tracking_complete",
+                     shape.unique_visible_event_tracking_complete);
+    output << '}';
+    append_json_bool(output, "lifecycle_context_complete", shape.lifecycle_context_complete);
+
+    output << ",\"records\":[";
+    for (std::size_t index = 0; index < shape.records.size(); ++index) {
+        if (index != 0) {
+            output << ',';
+        }
+        const auto& record = shape.records[index];
+        output << '{';
+        append_json_unsigned(output, "lifecycle_id", record.lifecycle_id, false);
+        append_json_unsigned(output, "perspective_player", record.perspective_player);
+        append_json_unsigned(output, "decision_index", record.decision_index);
+        append_json_unsigned(output, "engine_step_index", record.engine_step_index);
+        append_json_unsigned(output, "canonical_bytes", record.canonical_bytes);
+        append_json_unsigned(output, "total_us", record.total_us);
+        append_json_unsigned(output, "preparation_copy_us", record.preparation_copy_us);
+        append_json_unsigned(output, "sorting_us", record.sorting_us);
+        append_json_unsigned(output, "rendering_us", record.rendering_us);
+        append_json_bool(output, "rendering_residual_clamped", record.rendering_residual_clamped);
+        append_json_unsigned(output, "escaping_us", record.escaping_us);
+        append_json_unsigned(output, "final_extraction_us", record.final_extraction_us);
+        output << ",\"section_bytes\":{";
+        for (std::size_t section = 0; section < section_names.size(); ++section) {
+            append_json_unsigned(output, section_names[section], record.section_bytes[section],
+                                 section != 0);
+        }
+        output << '}';
+        append_json_unsigned(output, "entity_instances", record.entity_instances);
+        append_json_unsigned(output, "entity_bytes", record.entity_bytes);
+        append_json_unsigned(output, "printed_property_objects", record.printed_property_objects);
+        append_json_unsigned(output, "printed_property_bytes", record.printed_property_bytes);
+        append_json_unsigned(output, "current_property_objects", record.current_property_objects);
+        append_json_unsigned(output, "current_property_bytes", record.current_property_bytes);
+        append_json_unsigned(output, "counter_instances", record.counter_instances);
+        append_json_unsigned(output, "counter_bytes", record.counter_bytes);
+        append_json_unsigned(output, "link_marker_instances", record.link_marker_instances);
+        append_json_unsigned(output, "link_marker_bytes", record.link_marker_bytes);
+        append_json_unsigned(output, "visible_event_instances", record.visible_event_instances);
+        append_json_unsigned(output, "visible_event_bytes", record.visible_event_bytes);
+        append_json_unsigned(output, "chain_length", record.chain_length);
+        append_json_unsigned(output, "own_deck_bytes", record.own_deck_bytes);
+        append_json_unsigned(output, "opponent_deck_bytes", record.opponent_deck_bytes);
+        append_json_unsigned(output, "other_match_context_bytes", record.other_match_context_bytes);
+        append_json_unsigned(output, "copy_calls", record.copy_calls);
+        append_json_unsigned(output, "copy_elements", record.copy_elements);
+        append_json_unsigned(output, "copy_approximate_bytes", record.copy_approximate_bytes);
+        append_json_unsigned(output, "sort_calls", record.sort_calls);
+        append_json_unsigned(output, "sort_elements", record.sort_elements);
+        append_json_unsigned(output, "json_escape_calls", record.json_escape_calls);
+        append_json_unsigned(output, "json_escape_input_bytes", record.json_escape_input_bytes);
+        append_json_unsigned(output, "json_escape_output_bytes", record.json_escape_output_bytes);
+        append_json_unsigned(output, "numeric_values", record.numeric_values);
+        append_json_unsigned(output, "boolean_values", record.boolean_values);
+        append_json_unsigned(output, "null_values", record.null_values);
+        output << '}';
+    }
+    output << "]}";
+    return output.str();
+}
+#endif
 #endif
 
 std::string serialize_protocol_error(const ProtocolParseResult& parse_result) {

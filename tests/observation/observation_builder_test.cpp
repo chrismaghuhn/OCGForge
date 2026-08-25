@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <chrono>
 #include <cstdint>
 #include <exception>
 #include <iostream>
@@ -32,6 +33,73 @@ void require(bool condition, const char* message) {
         throw std::runtime_error(message);
     }
 }
+
+#ifdef YGO_M4_SERIALIZATION_SHAPE_AUDIT
+void check_shape_collection_equivalence(const ygo::observation::PlayerObservation& observation,
+                                        const char* fixture_name) {
+    const auto plain_without_hash = ygo::observation::canonical_serialize_without_hash(observation);
+    const auto plain_hash = ygo::observation::observation_hash(observation);
+    const auto plain_canonical = ygo::observation::canonical_serialize(observation);
+    require(plain_hash == ygo::trace::sha256_string(plain_without_hash),
+            "unshaped fixture hash did not match canonical bytes");
+
+    ygo::observation::PerformanceAuditCollector audit;
+    std::string shaped_without_hash;
+    std::string shaped_hash;
+    std::string shaped_canonical;
+    {
+        auto scope = audit.observation_scope();
+        shaped_without_hash = ygo::observation::canonical_serialize_without_hash(observation, &audit);
+    }
+    {
+        auto scope = audit.observation_scope();
+        shaped_hash = ygo::observation::observation_hash(observation, &audit);
+    }
+    {
+        auto scope = audit.observation_scope();
+        shaped_canonical = ygo::observation::canonical_serialize(observation, &audit);
+    }
+    require(plain_without_hash == shaped_without_hash,
+            "shape instrumentation changed canonical-without-hash fixture bytes");
+    require(plain_hash == shaped_hash,
+            "shape instrumentation changed fixture observation hash");
+    require(plain_canonical == shaped_canonical,
+            "shape instrumentation changed final canonical fixture bytes");
+    require(shaped_hash == ygo::trace::sha256_string(shaped_without_hash),
+            "shaped fixture hash did not match canonical bytes");
+    const auto snapshot = audit.snapshot();
+    require(snapshot.serialization_shape.lifecycle_context_complete,
+            "focused shape fixture lacked an observation lifecycle context");
+    require(snapshot.serialization_shape.records_complete,
+            "focused shape fixture records were incomplete");
+
+    constexpr std::size_t kTimingRepetitions = 8;
+    std::size_t plain_size_sum = 0;
+    const auto plain_start = std::chrono::steady_clock::now();
+    for (std::size_t index = 0; index < kTimingRepetitions; ++index) {
+        plain_size_sum += ygo::observation::canonical_serialize_without_hash(observation).size();
+    }
+    const auto plain_elapsed = std::chrono::duration_cast<std::chrono::microseconds>(
+        std::chrono::steady_clock::now() - plain_start).count();
+
+    std::size_t shaped_size_sum = 0;
+    ygo::observation::PerformanceAuditCollector timing_audit;
+    const auto shaped_start = std::chrono::steady_clock::now();
+    for (std::size_t index = 0; index < kTimingRepetitions; ++index) {
+        auto scope = timing_audit.observation_scope();
+        shaped_size_sum +=
+            ygo::observation::canonical_serialize_without_hash(observation, &timing_audit).size();
+    }
+    const auto shaped_elapsed = std::chrono::duration_cast<std::chrono::microseconds>(
+        std::chrono::steady_clock::now() - shaped_start).count();
+    require(plain_size_sum == shaped_size_sum,
+            "focused shape timing fixture produced different byte totals");
+    std::cout << "m4_3_4_shape_fixture=" << fixture_name
+              << " plain_us=" << plain_elapsed
+              << " shaped_us=" << shaped_elapsed
+              << " repetitions=" << kTimingRepetitions << '\n';
+}
+#endif
 
 ygo::observation::ObservationBuildConfig make_observation_config() {
     ygo::observation::ObservationBuildConfig config;
@@ -386,6 +454,31 @@ int run() {
         require(paired_a.observation_hash == paired_b.observation_hash,
                 "paired hidden worlds changed final observation hash after context attachment");
     }
+
+#ifdef YGO_M4_SERIALIZATION_SHAPE_AUDIT
+    // M4.3.4 focused instrumentation gate. The shaped overload is compared
+    // with the same serializer with collection disabled; only timing and
+    // diagnostics are allowed to differ.
+    check_shape_collection_equivalence(first, "ordinary_visible");
+    check_shape_collection_equivalence(mirrored, "ordinary_visible_perspective_1");
+    check_shape_collection_equivalence(hidden_hand_observation_a, "hidden_information_perspective_0");
+    const auto hidden_hand_perspective_1 =
+        ygo::observation::build_player_observation(*hidden_hand_a, 1, config);
+    check_shape_collection_equivalence(hidden_hand_perspective_1, "hidden_information_perspective_1");
+
+    auto paired_shape = ygo::observation::build_player_observation(*hidden_deck_a, 0, config);
+    ygo::observation::attach_decision_context(paired_shape, perspective_request);
+    check_shape_collection_equivalence(paired_shape, "paired_world_privacy");
+
+    auto terminal_shape = first;
+    terminal_shape.globals.terminal = true;
+    terminal_shape.globals.winner = std::uint8_t{0};
+    terminal_shape.globals.win_reason = std::uint8_t{0};
+    terminal_shape.decision_context = {};
+    terminal_shape.observation_hash.clear();
+    check_shape_collection_equivalence(terminal_shape, "terminal");
+    std::cout << "m4_3_4_shape_equivalence=ok\n";
+#endif
 
     const auto own_set = make_world(146746, LOCATION_MZONE, POS_FACEDOWN_DEFENSE, 0);
     const auto own_set_observation = ygo::observation::build_player_observation(*own_set, 0, config);

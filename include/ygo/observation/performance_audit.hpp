@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <set>
 #include <string_view>
 #include <vector>
 
@@ -94,6 +95,145 @@ struct PerformanceAuditSerializationLifecycle {
     std::uint64_t same_mutation_epoch_duplicate_calls = 0;
 };
 
+#ifdef YGO_M4_SERIALIZATION_SHAPE_AUDIT
+enum class PerformanceAuditSerializationShapePhase : std::uint8_t {
+    PreparationCopy,
+    Sorting,
+    Rendering,
+    Escaping,
+    FinalExtraction,
+    Count,
+};
+
+enum class PerformanceAuditSerializationShapeSection : std::uint8_t {
+    SchemaBasicHeader,
+    Globals,
+    Zones,
+    Entities,
+    Relationships,
+    Chain,
+    VisibleEvents,
+    DecisionContext,
+    MatchContext,
+    Count,
+};
+
+enum class PerformanceAuditSerializationShapeCopyKind : std::uint8_t {
+    TopLevelZones,
+    TopLevelEntities,
+    TopLevelRelationships,
+    TopLevelVisibleEvents,
+    ChainTargets,
+    EventTargets,
+    DecisionReferences,
+    LinkMarkers,
+    Counters,
+    OwnDeck,
+    OpponentDeck,
+    Count,
+};
+
+enum class PerformanceAuditSerializationShapeSortKind : std::uint8_t {
+    Zones,
+    Entities,
+    Relationships,
+    VisibleEvents,
+    ChainTargets,
+    EventTargets,
+    DecisionReferences,
+    LinkMarkers,
+    Counters,
+    Decks,
+    Count,
+};
+
+struct PerformanceAuditSerializationShapeCopyStats {
+    std::uint64_t calls = 0;
+    std::uint64_t elements = 0;
+    std::uint64_t approximate_bytes = 0;
+    std::uint64_t total_us = 0;
+};
+
+struct PerformanceAuditSerializationShapeSortStats {
+    std::uint64_t calls = 0;
+    std::uint64_t elements = 0;
+    std::uint64_t total_us = 0;
+};
+
+struct PerformanceAuditSerializationShapeRecord {
+    std::uint64_t lifecycle_id = 0;
+    std::uint64_t perspective_player = 0;
+    std::uint64_t decision_index = 0;
+    std::uint64_t engine_step_index = 0;
+    std::uint64_t canonical_bytes = 0;
+    std::uint64_t total_us = 0;
+    std::uint64_t preparation_copy_us = 0;
+    std::uint64_t sorting_us = 0;
+    std::uint64_t rendering_us = 0;
+    bool rendering_residual_clamped = false;
+    std::uint64_t escaping_us = 0;
+    std::uint64_t final_extraction_us = 0;
+    std::array<std::uint64_t,
+               static_cast<std::size_t>(PerformanceAuditSerializationShapeSection::Count)>
+        section_bytes{};
+    std::uint64_t entity_instances = 0;
+    std::uint64_t entity_bytes = 0;
+    std::uint64_t printed_property_objects = 0;
+    std::uint64_t printed_property_bytes = 0;
+    std::uint64_t current_property_objects = 0;
+    std::uint64_t current_property_bytes = 0;
+    std::uint64_t counter_instances = 0;
+    std::uint64_t counter_bytes = 0;
+    std::uint64_t link_marker_instances = 0;
+    std::uint64_t link_marker_bytes = 0;
+    std::uint64_t visible_event_instances = 0;
+    std::uint64_t visible_event_bytes = 0;
+    std::uint64_t chain_length = 0;
+    std::uint64_t own_deck_bytes = 0;
+    std::uint64_t opponent_deck_bytes = 0;
+    std::uint64_t other_match_context_bytes = 0;
+    std::uint64_t copy_calls = 0;
+    std::uint64_t copy_elements = 0;
+    std::uint64_t copy_approximate_bytes = 0;
+    std::uint64_t sort_calls = 0;
+    std::uint64_t sort_elements = 0;
+    std::uint64_t json_escape_calls = 0;
+    std::uint64_t json_escape_input_bytes = 0;
+    std::uint64_t json_escape_output_bytes = 0;
+    std::uint64_t numeric_values = 0;
+    std::uint64_t boolean_values = 0;
+    std::uint64_t null_values = 0;
+};
+
+struct PerformanceAuditSerializationShapeSnapshot {
+    std::uint64_t serialize_without_hash_calls = 0;
+    std::uint64_t serialize_without_hash_bytes = 0;
+    std::uint64_t serialize_without_hash_total_us = 0;
+    std::array<PerformanceAuditTiming,
+               static_cast<std::size_t>(PerformanceAuditSerializationShapePhase::Count)>
+        phase_timing{};
+    std::array<PerformanceAuditSerializationShapeCopyStats,
+               static_cast<std::size_t>(PerformanceAuditSerializationShapeCopyKind::Count)>
+        copy_stats{};
+    std::array<PerformanceAuditSerializationShapeSortStats,
+               static_cast<std::size_t>(PerformanceAuditSerializationShapeSortKind::Count)>
+        sort_stats{};
+    std::uint64_t json_escape_calls = 0;
+    std::uint64_t json_escape_input_bytes = 0;
+    std::uint64_t json_escape_output_bytes = 0;
+    std::uint64_t numeric_values = 0;
+    std::uint64_t boolean_values = 0;
+    std::uint64_t null_values = 0;
+    std::uint64_t visible_event_instances = 0;
+    std::uint64_t unique_visible_event_count = 0;
+    bool records_complete = true;
+    bool unique_visible_event_tracking_complete = true;
+    bool lifecycle_context_complete = true;
+    std::uint64_t residual_underflow_count = 0;
+    std::vector<PerformanceAuditSerializationShapeRecord> records;
+};
+#endif
+
 struct PerformanceAuditSnapshot {
     std::uint64_t observation_total_us = 0;
     std::array<PerformanceAuditTiming, static_cast<std::size_t>(PerformanceAuditBucket::Count)>
@@ -107,6 +247,9 @@ struct PerformanceAuditSnapshot {
     PerformanceAuditDetailCounters detail_counters;
     std::array<PerformanceAuditZoneCounters, 11> entities_by_zone{};
     std::vector<PerformanceAuditSerializationLifecycle> serialization_lifecycles;
+#ifdef YGO_M4_SERIALIZATION_SHAPE_AUDIT
+    PerformanceAuditSerializationShapeSnapshot serialization_shape;
+#endif
 };
 
 class PerformanceAuditCollector final {
@@ -470,6 +613,120 @@ public:
         lifecycle.canonical_serialize_bytes += static_cast<std::uint64_t>(bytes);
     }
 
+#ifdef YGO_M4_SERIALIZATION_SHAPE_AUDIT
+    std::uint64_t active_lifecycle_id() const noexcept {
+        if (active_lifecycle_index_ == kNoLifecycle ||
+            active_lifecycle_index_ >= snapshot_.serialization_lifecycles.size()) {
+            return 0;
+        }
+        return snapshot_.serialization_lifecycles[active_lifecycle_index_].lifecycle_id;
+    }
+
+    void mark_serialization_shape_lifecycle_context_missing() noexcept {
+        snapshot_.serialization_shape.lifecycle_context_complete = false;
+    }
+
+    void record_serialization_shape_copy(const std::uint8_t kind,
+                                         const std::uint64_t elements,
+                                         const std::uint64_t approximate_bytes,
+                                         const std::uint64_t elapsed_us) noexcept {
+        const auto index = static_cast<std::size_t>(kind);
+        if (index >= snapshot_.serialization_shape.copy_stats.size()) {
+            return;
+        }
+        auto& stats = snapshot_.serialization_shape.copy_stats[index];
+        ++stats.calls;
+        stats.elements += elements;
+        stats.approximate_bytes += approximate_bytes;
+        stats.total_us += elapsed_us;
+    }
+
+    void record_serialization_shape_sort(const std::uint8_t kind,
+                                         const std::uint64_t elements,
+                                         const std::uint64_t elapsed_us) noexcept {
+        const auto index = static_cast<std::size_t>(kind);
+        if (index >= snapshot_.serialization_shape.sort_stats.size()) {
+            return;
+        }
+        auto& stats = snapshot_.serialization_shape.sort_stats[index];
+        ++stats.calls;
+        stats.elements += elements;
+        stats.total_us += elapsed_us;
+    }
+
+    void record_serialization_shape_escape(const std::uint64_t input_bytes,
+                                           const std::uint64_t output_bytes,
+                                           const std::uint64_t elapsed_us) noexcept {
+        auto& shape = snapshot_.serialization_shape;
+        ++shape.json_escape_calls;
+        shape.json_escape_input_bytes += input_bytes;
+        shape.json_escape_output_bytes += output_bytes;
+        auto& timing = shape.phase_timing[
+            static_cast<std::size_t>(PerformanceAuditSerializationShapePhase::Escaping)];
+        timing.total_us += elapsed_us;
+        ++timing.calls;
+    }
+
+    void record_serialization_shape_primitive(const std::uint8_t kind) noexcept {
+        auto& shape = snapshot_.serialization_shape;
+        if (kind == 0) {
+            ++shape.numeric_values;
+        } else if (kind == 1) {
+            ++shape.boolean_values;
+        } else {
+            ++shape.null_values;
+        }
+    }
+
+    void record_serialization_shape_visible_event(const std::uint8_t perspective_player,
+                                                  const std::uint64_t event_index,
+                                                  const std::uint64_t engine_step_index,
+                                                  const std::uint8_t kind) noexcept {
+        auto& shape = snapshot_.serialization_shape;
+        ++shape.visible_event_instances;
+        try {
+            if (unique_visible_events_.insert({perspective_player, event_index, engine_step_index, kind}).second) {
+                ++shape.unique_visible_event_count;
+            }
+        } catch (...) {
+            // Shape telemetry is diagnostic. A failed uniqueness allocation
+            // must not change simulation semantics or the canonical bytes.
+            shape.unique_visible_event_tracking_complete = false;
+        }
+    }
+
+    void record_serialization_shape_record(
+        const PerformanceAuditSerializationShapeRecord& record) noexcept {
+        auto& shape = snapshot_.serialization_shape;
+        ++shape.serialize_without_hash_calls;
+        shape.serialize_without_hash_bytes += record.canonical_bytes;
+        shape.serialize_without_hash_total_us += record.total_us;
+        const auto add_phase = [&shape](
+                                   const PerformanceAuditSerializationShapePhase phase,
+                                   const std::uint64_t elapsed_us) noexcept {
+            auto& timing = shape.phase_timing[static_cast<std::size_t>(phase)];
+            timing.total_us += elapsed_us;
+            ++timing.calls;
+        };
+        add_phase(PerformanceAuditSerializationShapePhase::PreparationCopy,
+                  record.preparation_copy_us);
+        add_phase(PerformanceAuditSerializationShapePhase::Sorting, record.sorting_us);
+        add_phase(PerformanceAuditSerializationShapePhase::Rendering, record.rendering_us);
+        add_phase(PerformanceAuditSerializationShapePhase::FinalExtraction,
+                  record.final_extraction_us);
+        if (record.rendering_residual_clamped) {
+            ++shape.residual_underflow_count;
+        }
+        try {
+            shape.records.push_back(record);
+        } catch (...) {
+            // Keep aggregate telemetry available if the optional per-record
+            // diagnostic vector cannot grow further.
+            shape.records_complete = false;
+        }
+    }
+#endif
+
     void set_script_metrics(const std::uint64_t script_loads,
                             const std::uint64_t script_reader_requests) noexcept {
         snapshot_.counters.script_loads = script_loads;
@@ -525,6 +782,9 @@ private:
             active_lifecycle_index_ = kNoLifecycle;
             active_mutation_epoch_ = 0;
             active_epoch_serialization_calls_ = 0;
+#ifdef YGO_M4_SERIALIZATION_SHAPE_AUDIT
+            snapshot_.serialization_shape.lifecycle_context_complete = false;
+#endif
         }
     }
 
@@ -573,6 +833,29 @@ private:
     std::size_t active_lifecycle_index_ = kNoLifecycle;
     std::uint64_t active_mutation_epoch_ = 0;
     std::uint64_t active_epoch_serialization_calls_ = 0;
+#ifdef YGO_M4_SERIALIZATION_SHAPE_AUDIT
+    struct VisibleEventIdentity final {
+        std::uint8_t perspective_player = 0;
+        std::uint64_t event_index = 0;
+        std::uint64_t engine_step_index = 0;
+        std::uint8_t kind = 0;
+
+        bool operator<(const VisibleEventIdentity& other) const noexcept {
+            if (perspective_player != other.perspective_player) {
+                return perspective_player < other.perspective_player;
+            }
+            if (event_index != other.event_index) {
+                return event_index < other.event_index;
+            }
+            if (engine_step_index != other.engine_step_index) {
+                return engine_step_index < other.engine_step_index;
+            }
+            return kind < other.kind;
+        }
+    };
+
+    std::set<VisibleEventIdentity> unique_visible_events_;
+#endif
 };
 
 }  // namespace ygo::observation
