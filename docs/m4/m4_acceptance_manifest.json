@@ -4,7 +4,7 @@
       "artifacts": [
         {
           "path": "artifacts/m4/final/canonical_full_game/full_fixed_deck_results.json",
-          "sha256": "ef2f18b5f3327f89db3a9791210aa3112bcddf2ee8103dd0d96c0cb328c552b2"
+          "sha256": "a8dba86873d922126bd5bb159782602bb73fea47ffda8a9fccba877bed5c1ab0"
         },
         {
           "path": "artifacts/m4/final/canonical_full_game/seed-1-mirror-start-0.jsonl",
@@ -72,7 +72,7 @@
         },
         {
           "path": "docs/m4/m4_final_verification.json",
-          "sha256": "3b1149ba3cbe95bcc61f0a4ec1467b1f48843dc571a4c6db41e764b0c9aca7a3"
+          "sha256": "0c80bed2e0b0bb1c469bc678ec52a1f6fc3edb50d09e70228bd0d17f0f9ec55a"
         }
       ],
       "evidence": "Canonical fixed-deck corpus completed all required games with complete candidate domains and zero truncation/automatic/core errors.",
@@ -97,27 +97,27 @@
       "artifacts": [
         {
           "path": "artifacts/m4-finalization/verification/ctest-release.log",
-          "sha256": "a21cc30c87dff14298638057adead042d0cdf3f94688a6cbc8fdb8a29f61089d"
+          "sha256": "c1743115e58b730918b28efcd96f9ca5da2a36033b0dc1afdb84258d09ffe6b1"
         },
         {
           "path": "artifacts/m4-finalization/verification/m3-python.log",
-          "sha256": "3b4d1a104d72990bcdaaa8d0a3e4ff7699f1e2a9d7e160bb522944d2b0f3d77c"
+          "sha256": "0a880ad49c4ae9a0eff62c9ebd2c69de1e7ad273c3ae22c5e539605e65cc41b0"
         },
         {
           "path": "artifacts/m4-finalization/verification/repository-python.log",
-          "sha256": "2306742a11664959f643d972fd98fe1ac43919c8418e151bd0a47f6d48193493"
+          "sha256": "8b1b73bea0e56d07bfeb2d8219676d2bbaa051bcca23826d39fdefb345b1d78f"
         },
         {
           "path": "artifacts/m4/final/lifecycle_stress.json",
-          "sha256": "f3723d80034df9054b37912c91651f99238120deb2f2b02ef638e627e93a3c77"
+          "sha256": "dc201fd368b0ed002d7756b1f1ff2b3304845a959a35d60d5198002fddf259cd"
         },
         {
           "path": "artifacts/m4/final/m4-python-final.log",
-          "sha256": "cf081b0dc33b2d34b2bae175f42a6018a4dcb0cce49e19c17f217856df1b41d1"
+          "sha256": "fb33abe94db04081c47b689033a96f691db346ab836453910455abff2ce91551"
         },
         {
           "path": "docs/m4/m4_final_verification.json",
-          "sha256": "3b1149ba3cbe95bcc61f0a4ec1467b1f48843dc571a4c6db41e764b0c9aca7a3"
+          "sha256": "0c80bed2e0b0bb1c469bc678ec52a1f6fc3edb50d09e70228bd0d17f0f9ec55a"
         }
       ],
       "evidence": "Native CTest and repository/M3/M4 Python suites passed from the Release build.",
@@ -170,7 +170,7 @@
         },
         {
           "path": "docs/m4/m4_final_verification.json",
-          "sha256": "3b1149ba3cbe95bcc61f0a4ec1467b1f48843dc571a4c6db41e764b0c9aca7a3"
+          "sha256": "0c80bed2e0b0bb1c469bc678ec52a1f6fc3edb50d09e70228bd0d17f0f9ec55a"
         }
       ],
       "evidence": "Fail-closed worker timeout produces no result report and no retry.",
@@ -193,7 +193,7 @@
       "artifacts": [
         {
           "path": "docs/m4/m4_final_verification.json",
-          "sha256": "3b1149ba3cbe95bcc61f0a4ec1467b1f48843dc571a4c6db41e764b0c9aca7a3"
+          "sha256": "0c80bed2e0b0bb1c469bc678ec52a1f6fc3edb50d09e70228bd0d17f0f9ec55a"
         }
       ],
       "evidence": "Final Release build and complete native CTest passed.",
@@ -217,7 +217,7 @@
       "artifacts": [
         {
           "path": "artifacts/m4/matrix/throughput-w1.json",
-          "sha256": "3661b22964305a84ec282c042ee5bad6aae60d50b5de40d3e10db77f3da56dab"
+          "sha256": "fc9ef61082ac439fa2ff5ef3c8b3e1f72fcb4d977895bd5330a8839ccbb904b2"
         },
         {
           "path": "artifacts/m4/matrix/throughput-w1.workers/worker-000.stderr.log",
@@ -225,7 +225,7 @@
         },
         {
           "path": "artifacts/m4/matrix/throughput-w16.json",
-          "sha256": "fc91195f2fb3e8590f9ccbae0d4f7b75a7d7060aa3fbf202ff92cf5559b85f01"
+          "sha256": "259b3c3ae0b9be689ca8041b2e322ba0345502b209e441d43f35bf9c6eecc472"
         },
         {
           "path": "artifacts/m4/matrix/throughput-w16.workers/worker-000.stderr.log",
@@ -293,7 +293,7 @@
         },
         {
           "path": "artifacts/m4/matrix/throughput-w2.json",
-          "sha256": "cf113a4c74f29656a898e852da7cd9ceb4929abb52e268f605ede18b131cb041"
+          "sha256": "e2f12871a7ddc58cf33281e812188ce92b81bfac13cbb3e834c1fcb3ac8f75e1"
         },
         {
           "path": "artifacts/m4/matrix/throughput-w2.workers/worker-000.stderr.log",
@@ -305,7 +305,7 @@
         },
         {
           "path": "artifacts/m4/matrix/throughput-w32.json",
-          "sha256": "0f492e55363db6d9d1f3aa6d7c82e28e57d6659c0bc50d3a11769df65d68a196"
+          "sha256": "9ba97c40c80a0cf4b8c71baaceb02d4a9c7f3c45c12a63320958d5dd0b776928"
         },
         {
           "path": "artifacts/m4/matrix/throughput-w32.workers/worker-000.stderr.log",
@@ -437,7 +437,7 @@
         },
         {
           "path": "artifacts/m4/matrix/throughput-w4.json",
-          "sha256": "af58ff8b8e5103c5be72c45104c7ba13d1595df32e9b9f8cd147270ab2553cad"
+          "sha256": "1e9a26dc15fb18cbb52000e2d7f22d41b9e5e5babc2635c5a92882f1973cf853"
         },
         {
           "path": "artifacts/m4/matrix/throughput-w4.workers/worker-000.stderr.log",
@@ -457,7 +457,7 @@
         },
         {
           "path": "artifacts/m4/matrix/throughput-w64.json",
-          "sha256": "25536f382fd0b571ff8cbb76bc6b8d4347e549a9dfe3bdc56bad2655c9fc4bbd"
+          "sha256": "9ae909201905f1547c79968d4ff5be98db587451dd70dc1793f61b9d83e55dfb"
         },
         {
           "path": "artifacts/m4/matrix/throughput-w64.workers/worker-000.stderr.log",
@@ -717,7 +717,7 @@
         },
         {
           "path": "artifacts/m4/matrix/throughput-w8.json",
-          "sha256": "ea7387b5c90b0961cc5e34b0088c87fab7aa0dd8f9f0a60d65089e0763f06550"
+          "sha256": "0a795dee23250794fdfb9ca2ef7bbde518890fe54377470be03ce766c48d5fcc"
         },
         {
           "path": "artifacts/m4/matrix/throughput-w8.workers/worker-000.stderr.log",
@@ -753,7 +753,7 @@
         },
         {
           "path": "docs/m4/m4_final_verification.json",
-          "sha256": "3b1149ba3cbe95bcc61f0a4ec1467b1f48843dc571a4c6db41e764b0c9aca7a3"
+          "sha256": "0c80bed2e0b0bb1c469bc678ec52a1f6fc3edb50d09e70228bd0d17f0f9ec55a"
         }
       ],
       "evidence": "Every matrix row completed the native worker handshake with the canonical worker identity.",
@@ -784,7 +784,7 @@
       "artifacts": [
         {
           "path": "artifacts/m4/matrix/throughput-w1.json",
-          "sha256": "3661b22964305a84ec282c042ee5bad6aae60d50b5de40d3e10db77f3da56dab"
+          "sha256": "fc9ef61082ac439fa2ff5ef3c8b3e1f72fcb4d977895bd5330a8839ccbb904b2"
         },
         {
           "path": "artifacts/m4/matrix/throughput-w1.workers/worker-000.stderr.log",
@@ -792,7 +792,7 @@
         },
         {
           "path": "artifacts/m4/matrix/throughput-w16.json",
-          "sha256": "fc91195f2fb3e8590f9ccbae0d4f7b75a7d7060aa3fbf202ff92cf5559b85f01"
+          "sha256": "259b3c3ae0b9be689ca8041b2e322ba0345502b209e441d43f35bf9c6eecc472"
         },
         {
           "path": "artifacts/m4/matrix/throughput-w16.workers/worker-000.stderr.log",
@@ -860,7 +860,7 @@
         },
         {
           "path": "artifacts/m4/matrix/throughput-w2.json",
-          "sha256": "cf113a4c74f29656a898e852da7cd9ceb4929abb52e268f605ede18b131cb041"
+          "sha256": "e2f12871a7ddc58cf33281e812188ce92b81bfac13cbb3e834c1fcb3ac8f75e1"
         },
         {
           "path": "artifacts/m4/matrix/throughput-w2.workers/worker-000.stderr.log",
@@ -872,7 +872,7 @@
         },
         {
           "path": "artifacts/m4/matrix/throughput-w32.json",
-          "sha256": "0f492e55363db6d9d1f3aa6d7c82e28e57d6659c0bc50d3a11769df65d68a196"
+          "sha256": "9ba97c40c80a0cf4b8c71baaceb02d4a9c7f3c45c12a63320958d5dd0b776928"
         },
         {
           "path": "artifacts/m4/matrix/throughput-w32.workers/worker-000.stderr.log",
@@ -1004,7 +1004,7 @@
         },
         {
           "path": "artifacts/m4/matrix/throughput-w4.json",
-          "sha256": "af58ff8b8e5103c5be72c45104c7ba13d1595df32e9b9f8cd147270ab2553cad"
+          "sha256": "1e9a26dc15fb18cbb52000e2d7f22d41b9e5e5babc2635c5a92882f1973cf853"
         },
         {
           "path": "artifacts/m4/matrix/throughput-w4.workers/worker-000.stderr.log",
@@ -1024,7 +1024,7 @@
         },
         {
           "path": "artifacts/m4/matrix/throughput-w64.json",
-          "sha256": "25536f382fd0b571ff8cbb76bc6b8d4347e549a9dfe3bdc56bad2655c9fc4bbd"
+          "sha256": "9ae909201905f1547c79968d4ff5be98db587451dd70dc1793f61b9d83e55dfb"
         },
         {
           "path": "artifacts/m4/matrix/throughput-w64.workers/worker-000.stderr.log",
@@ -1284,7 +1284,7 @@
         },
         {
           "path": "artifacts/m4/matrix/throughput-w8.json",
-          "sha256": "ea7387b5c90b0961cc5e34b0088c87fab7aa0dd8f9f0a60d65089e0763f06550"
+          "sha256": "0a795dee23250794fdfb9ca2ef7bbde518890fe54377470be03ce766c48d5fcc"
         },
         {
           "path": "artifacts/m4/matrix/throughput-w8.workers/worker-000.stderr.log",
@@ -1320,7 +1320,7 @@
         },
         {
           "path": "docs/m4/m4_final_verification.json",
-          "sha256": "3b1149ba3cbe95bcc61f0a4ec1467b1f48843dc571a4c6db41e764b0c9aca7a3"
+          "sha256": "0c80bed2e0b0bb1c469bc678ec52a1f6fc3edb50d09e70228bd0d17f0f9ec55a"
         }
       ],
       "evidence": "All matrix rows have complete terminal games and zero semantic/protocol/error counters.",
@@ -1352,19 +1352,19 @@
       "artifacts": [
         {
           "path": "artifacts/m4/experiments/conformance.json",
-          "sha256": "7f8ff10ed673a3e46b373453546c2b792e14476eb87e830c8a3b6abdde8cb256"
+          "sha256": "a684057b0615515624fa2381509560e8794560e4bcfd9663d3192eafe5eaa5b1"
         },
         {
           "path": "artifacts/m4/experiments/throughput-no-persistence.json",
-          "sha256": "f9f3232d71f62f9f9902753db7b506b5b99121c164047555419d4a9429438fa9"
+          "sha256": "5468e49e658fbd4386524e24c9f3496c4a66a961aab74ffc3fcf6f5c447bace2"
         },
         {
           "path": "artifacts/m4/experiments/throughput-off-diagnostic.json",
-          "sha256": "38f4da607972e1332bbd94a1fdcb1b675d5e8901311c8d1b39337c9b9987e16d"
+          "sha256": "4c6e322ecf8952c767aa102284b400debb79e45a645074bcb7b4871181a96029"
         },
         {
           "path": "docs/m4/m4_final_verification.json",
-          "sha256": "3b1149ba3cbe95bcc61f0a4ec1467b1f48843dc571a4c6db41e764b0c9aca7a3"
+          "sha256": "0c80bed2e0b0bb1c469bc678ec52a1f6fc3edb50d09e70228bd0d17f0f9ec55a"
         }
       ],
       "evidence": "Fresh Release conformance, throughput, and observation-off diagnostic reports have identical semantic fingerprints.",
@@ -1387,35 +1387,35 @@
       "artifacts": [
         {
           "path": "artifacts/m4/matrix/throughput-w1.json",
-          "sha256": "3661b22964305a84ec282c042ee5bad6aae60d50b5de40d3e10db77f3da56dab"
+          "sha256": "fc9ef61082ac439fa2ff5ef3c8b3e1f72fcb4d977895bd5330a8839ccbb904b2"
         },
         {
           "path": "artifacts/m4/matrix/throughput-w16.json",
-          "sha256": "fc91195f2fb3e8590f9ccbae0d4f7b75a7d7060aa3fbf202ff92cf5559b85f01"
+          "sha256": "259b3c3ae0b9be689ca8041b2e322ba0345502b209e441d43f35bf9c6eecc472"
         },
         {
           "path": "artifacts/m4/matrix/throughput-w2.json",
-          "sha256": "cf113a4c74f29656a898e852da7cd9ceb4929abb52e268f605ede18b131cb041"
+          "sha256": "e2f12871a7ddc58cf33281e812188ce92b81bfac13cbb3e834c1fcb3ac8f75e1"
         },
         {
           "path": "artifacts/m4/matrix/throughput-w32.json",
-          "sha256": "0f492e55363db6d9d1f3aa6d7c82e28e57d6659c0bc50d3a11769df65d68a196"
+          "sha256": "9ba97c40c80a0cf4b8c71baaceb02d4a9c7f3c45c12a63320958d5dd0b776928"
         },
         {
           "path": "artifacts/m4/matrix/throughput-w4.json",
-          "sha256": "af58ff8b8e5103c5be72c45104c7ba13d1595df32e9b9f8cd147270ab2553cad"
+          "sha256": "1e9a26dc15fb18cbb52000e2d7f22d41b9e5e5babc2635c5a92882f1973cf853"
         },
         {
           "path": "artifacts/m4/matrix/throughput-w64.json",
-          "sha256": "25536f382fd0b571ff8cbb76bc6b8d4347e549a9dfe3bdc56bad2655c9fc4bbd"
+          "sha256": "9ae909201905f1547c79968d4ff5be98db587451dd70dc1793f61b9d83e55dfb"
         },
         {
           "path": "artifacts/m4/matrix/throughput-w8.json",
-          "sha256": "ea7387b5c90b0961cc5e34b0088c87fab7aa0dd8f9f0a60d65089e0763f06550"
+          "sha256": "0a795dee23250794fdfb9ca2ef7bbde518890fe54377470be03ce766c48d5fcc"
         },
         {
           "path": "docs/m4/m4_final_verification.json",
-          "sha256": "3b1149ba3cbe95bcc61f0a4ec1467b1f48843dc571a4c6db41e764b0c9aca7a3"
+          "sha256": "0c80bed2e0b0bb1c469bc678ec52a1f6fc3edb50d09e70228bd0d17f0f9ec55a"
         }
       ],
       "evidence": "Fresh Release matrix, all measured rows semantically match the one-worker reference.",
@@ -1447,7 +1447,7 @@
       "artifacts": [
         {
           "path": "artifacts/m4/matrix/throughput-w1.json",
-          "sha256": "3661b22964305a84ec282c042ee5bad6aae60d50b5de40d3e10db77f3da56dab"
+          "sha256": "fc9ef61082ac439fa2ff5ef3c8b3e1f72fcb4d977895bd5330a8839ccbb904b2"
         },
         {
           "path": "artifacts/m4/matrix/throughput-w1.workers/worker-000.stderr.log",
@@ -1455,7 +1455,7 @@
         },
         {
           "path": "artifacts/m4/matrix/throughput-w16.json",
-          "sha256": "fc91195f2fb3e8590f9ccbae0d4f7b75a7d7060aa3fbf202ff92cf5559b85f01"
+          "sha256": "259b3c3ae0b9be689ca8041b2e322ba0345502b209e441d43f35bf9c6eecc472"
         },
         {
           "path": "artifacts/m4/matrix/throughput-w16.workers/worker-000.stderr.log",
@@ -1523,7 +1523,7 @@
         },
         {
           "path": "artifacts/m4/matrix/throughput-w2.json",
-          "sha256": "cf113a4c74f29656a898e852da7cd9ceb4929abb52e268f605ede18b131cb041"
+          "sha256": "e2f12871a7ddc58cf33281e812188ce92b81bfac13cbb3e834c1fcb3ac8f75e1"
         },
         {
           "path": "artifacts/m4/matrix/throughput-w2.workers/worker-000.stderr.log",
@@ -1535,7 +1535,7 @@
         },
         {
           "path": "artifacts/m4/matrix/throughput-w32.json",
-          "sha256": "0f492e55363db6d9d1f3aa6d7c82e28e57d6659c0bc50d3a11769df65d68a196"
+          "sha256": "9ba97c40c80a0cf4b8c71baaceb02d4a9c7f3c45c12a63320958d5dd0b776928"
         },
         {
           "path": "artifacts/m4/matrix/throughput-w32.workers/worker-000.stderr.log",
@@ -1667,7 +1667,7 @@
         },
         {
           "path": "artifacts/m4/matrix/throughput-w4.json",
-          "sha256": "af58ff8b8e5103c5be72c45104c7ba13d1595df32e9b9f8cd147270ab2553cad"
+          "sha256": "1e9a26dc15fb18cbb52000e2d7f22d41b9e5e5babc2635c5a92882f1973cf853"
         },
         {
           "path": "artifacts/m4/matrix/throughput-w4.workers/worker-000.stderr.log",
@@ -1687,7 +1687,7 @@
         },
         {
           "path": "artifacts/m4/matrix/throughput-w64.json",
-          "sha256": "25536f382fd0b571ff8cbb76bc6b8d4347e549a9dfe3bdc56bad2655c9fc4bbd"
+          "sha256": "9ae909201905f1547c79968d4ff5be98db587451dd70dc1793f61b9d83e55dfb"
         },
         {
           "path": "artifacts/m4/matrix/throughput-w64.workers/worker-000.stderr.log",
@@ -1947,7 +1947,7 @@
         },
         {
           "path": "artifacts/m4/matrix/throughput-w8.json",
-          "sha256": "ea7387b5c90b0961cc5e34b0088c87fab7aa0dd8f9f0a60d65089e0763f06550"
+          "sha256": "0a795dee23250794fdfb9ca2ef7bbde518890fe54377470be03ce766c48d5fcc"
         },
         {
           "path": "artifacts/m4/matrix/throughput-w8.workers/worker-000.stderr.log",
@@ -1983,7 +1983,7 @@
         },
         {
           "path": "docs/m4/m4_final_verification.json",
-          "sha256": "3b1149ba3cbe95bcc61f0a4ec1467b1f48843dc571a4c6db41e764b0c9aca7a3"
+          "sha256": "0c80bed2e0b0bb1c469bc678ec52a1f6fc3edb50d09e70228bd0d17f0f9ec55a"
         }
       ],
       "evidence": "Matrix stderr is empty and throughput trace persistence is disabled; focused privacy/paired-world tests pass in CTest.",
@@ -2021,7 +2021,7 @@
     }
   },
   "manifest_path": "docs/m4/m4_acceptance_manifest.json",
-  "manifest_sha256": "da3a5b394a459ee9dde23a6be730afddf55c454ebc72f6a4878517b1ea98d986",
-  "run_identity": "ce106bdf55d2f7fb3f0a13e041bc9d945064524e8ac6aafcae85673116e89eb7",
+  "manifest_sha256": "52f56946a4a7088457a23a7a363875a7e53b2e4285bb8fd7f344740206bbdd57",
+  "run_identity": "88a355cf2c345105c496d19288dec9e92019cfcb8b26f3bedeb3e8cdc168cfa4",
   "schema_version": "ocgforge.m4.acceptance.v1"
 }

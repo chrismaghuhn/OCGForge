@@ -13,6 +13,7 @@ import unittest
 from jsonschema import Draft202012Validator
 
 from tools.m4.benchmark import PersistentWorkerPool
+from tools.m4.evidence_packaging import evidence_sha256 as packaged_evidence_sha256
 from tools.m4.report import (
     REPORT_SCHEMA_VERSION,
     BenchmarkIntegrityError,
@@ -251,7 +252,7 @@ class BenchmarkIntegrityTests(unittest.TestCase):
                     artifact_path = ROOT / str(artifact.get("path", ""))
                     self.assertTrue(artifact_path.is_file())
                     self.assertEqual(
-                        hashlib.sha256(artifact_path.read_bytes()).hexdigest(),
+                        packaged_evidence_sha256(artifact_path),
                         artifact.get("sha256"),
                     )
 

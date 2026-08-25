@@ -24,6 +24,7 @@ from tools.m4.report import (
     write_baseline,
     write_baseline_markdown,
 )
+from tools.m4.evidence_packaging import evidence_sha256, write_text_lf
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -55,11 +56,9 @@ def rel(path: str | Path) -> str:
 
 
 def sha256(path: str | Path) -> str:
-    digest = hashlib.sha256()
-    with repo_path(path).open("rb") as stream:
-        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
+    """Return the canonical repository-byte hash for an evidence artifact."""
+
+    return evidence_sha256(repo_path(path))
 
 
 def artifact(path: str | Path) -> dict[str, str]:
@@ -87,7 +86,8 @@ def command_record(name: str, passed: int, total: int, command: str) -> dict[str
 def parse_test_count(path: Path, expected: int) -> int:
     text = path.read_text(encoding="utf-8")
     matches = re.findall(r"Ran\s+(\d+)\s+tests?", text)
-    if not matches or int(matches[-1]) != expected or "OK" not in text:
+    summary_lines = [line.strip() for line in text.splitlines() if line.strip()]
+    if not matches or int(matches[-1]) != expected or not summary_lines or summary_lines[-1] != "OK":
         raise ValueError(f"regression log is not a clean {expected}-test pass: {path}")
     return int(matches[-1])
 
@@ -103,11 +103,26 @@ def parse_ctest(path: Path) -> tuple[int, int]:
     return total, total - failed
 
 
-def git_head() -> str:
+def validate_source_commit(source_commit: str) -> str:
+    """Resolve and validate the semantic source checkpoint for packaging."""
+
     completed = subprocess.run(
-        ["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True, check=True
+        ["git", "rev-parse", "--verify", f"{source_commit}^{{commit}}"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
     )
-    return completed.stdout.strip()
+    resolved = completed.stdout.strip()
+    ancestor = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", resolved, "HEAD"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+    )
+    if ancestor.returncode != 0:
+        raise ValueError(f"source commit is not an ancestor of packaging HEAD: {resolved}")
+    return resolved
 
 
 def matrix_paths() -> dict[int, Path]:
@@ -235,6 +250,7 @@ def raw_repetitions() -> list[dict[str, Any]]:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--write", action="store_true", help="write final generated documents")
+    parser.add_argument("--source-commit", required=True, help="semantic source checkpoint to preserve in evidence")
     args = parser.parse_args()
     if not args.write:
         parser.error("generation is an explicit write operation; pass --write")
@@ -278,7 +294,7 @@ def main() -> int:
     ctest_total, ctest_passed = parse_ctest(ctest_path)
     repo_count = parse_test_count(verification_dir / "repository-python.log", 8)
     m3_count = parse_test_count(verification_dir / "m3-python.log", 17)
-    m4_count = parse_test_count(verification_dir / "m4-python.log", 127)
+    m4_count = parse_test_count(stable_m4_path, 127)
 
     commands = [
         command_record("release_matrix_integrity", 7, 7, "build_baseline(Release rows, workers=1,2,4,8,16,32,64)"),
@@ -293,7 +309,7 @@ def main() -> int:
         command_record("soak", soak["games"], soak["games"], "run_m4_benchmark.py --games 128 --workers 16 --warmup-games 4 --mode throughput --observation-mode full"),
     ]
 
-    source_commit = git_head()
+    source_commit = validate_source_commit(args.source_commit)
     matrix_baseline = build_baseline(rows, skipped_rows=SKIPPED_ROWS)
     scaling = matrix_baseline["scaling"]
     reference_report = load_json(rows[1])
@@ -369,7 +385,7 @@ def main() -> int:
         },
     }
     verification_path = ROOT / "docs" / "m4" / "m4_final_verification.json"
-    verification_path.write_text(json.dumps(verification, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    write_text_lf(verification_path, json.dumps(verification, indent=2, sort_keys=True) + "\n")
 
     common_matrix = list(rows.values()) + stderr_paths
     manifest_gates: dict[str, Any] = {
@@ -439,7 +455,7 @@ def main() -> int:
         json.dumps(manifest, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
     ).hexdigest()
     manifest_path = ROOT / "docs" / "m4" / "m4_acceptance_manifest.json"
-    manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    write_text_lf(manifest_path, json.dumps(manifest, indent=2, sort_keys=True) + "\n")
 
     accepted = build_baseline(rows, skipped_rows=SKIPPED_ROWS, acceptance_evidence=manifest)
     if not accepted["status"].startswith("M4 BASELINE PASS"):
@@ -479,7 +495,7 @@ def main() -> int:
         "scope": verification["scope"],
     }
     final_path = ROOT / "docs" / "m4" / "m4_final.json"
-    final_path.write_text(json.dumps(final, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    write_text_lf(final_path, json.dumps(final, indent=2, sort_keys=True) + "\n")
 
     markdown = [
         "# OCGForge M4 Final",
@@ -531,7 +547,7 @@ def main() -> int:
         f"Detailed machine-verifiable evidence: [`m4_final_verification.json`](m4_final_verification.json), [`m4_acceptance_manifest.json`](m4_acceptance_manifest.json), [`m4_baseline.json`](m4_baseline.json), [`m4_final.json`](m4_final.json).",
         "",
     ])
-    (ROOT / "docs" / "m4" / "M4_FINAL.md").write_text("\n".join(markdown), encoding="utf-8")
+    write_text_lf(ROOT / "docs" / "m4" / "M4_FINAL.md", "\n".join(markdown))
     print(json.dumps({"status": final["status"], "source_commit": source_commit, "run_identity": run_identity}, indent=2))
     return 0
 

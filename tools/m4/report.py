@@ -17,6 +17,8 @@ from pathlib import Path
 import platform
 from typing import Any, Iterable, Mapping, Sequence
 
+from tools.m4.evidence_packaging import evidence_sha256, write_text_lf
+
 
 REPORT_SCHEMA_VERSION = "ocgforge.m4.throughput_benchmark.v1"
 NOT_MEASURED = "NOT_MEASURED"
@@ -104,11 +106,7 @@ class BenchmarkIntegrityError(ValueError):
 
 
 def _sha256_file(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as stream:
-        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
+    return evidence_sha256(path)
 
 
 def _repository_relative_path(path: Path) -> str | None:
@@ -1367,17 +1365,15 @@ def render_baseline_markdown(baseline: Mapping[str, Any]) -> str:
 
 def write_baseline(path: str | Path, baseline: Mapping[str, Any]) -> None:
     destination = Path(path)
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    destination.write_text(
+    write_text_lf(
+        destination,
         json.dumps(baseline, indent=2, sort_keys=True, ensure_ascii=False, allow_nan=False) + "\n",
-        encoding="utf-8",
     )
 
 
 def write_baseline_markdown(path: str | Path, baseline: Mapping[str, Any]) -> None:
     destination = Path(path)
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    destination.write_text(render_baseline_markdown(baseline).rstrip("\n") + "\n", encoding="utf-8")
+    write_text_lf(destination, render_baseline_markdown(baseline).rstrip("\n") + "\n")
 
 
 def build_report(

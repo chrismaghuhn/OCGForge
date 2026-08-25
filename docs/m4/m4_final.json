@@ -6,7 +6,7 @@
     "M4.3.6 Direct Canonical Writer, now default internal path after equivalence proof"
   ],
   "base_commit": "bafe75b97e03d796b318d6f7757cc555873f1fb9",
-  "baseline_evidence_identity": "ce106bdf55d2f7fb3f0a13e041bc9d945064524e8ac6aafcae85673116e89eb7",
+  "baseline_evidence_identity": "88a355cf2c345105c496d19288dec9e92019cfcb8b26f3bedeb3e8cdc168cfa4",
   "baseline_status": "M4 BASELINE PASS \u2014 PERFORMANCE AUDIT READY",
   "characterization_and_negative_evidence": [
     "M4.3.3 Release build characterization",
