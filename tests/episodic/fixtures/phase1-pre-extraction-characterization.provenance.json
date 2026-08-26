@@ -7,10 +7,10 @@
     "require_baseline": true
   },
   "collector_source_path": "tools/episodic/capture_phase1_characterization.py",
-  "collector_source_sha256": "7142f0551d97293e790b093df1b8ce21dd885bd5d815a5305f25a256d4bb16b6",
+  "collector_source_sha256": "6ec4941b5f158fe3ba8a17a2fd3330438afc3474f97c3f9369311c0e807fa26b",
   "collector_version": "capture_phase1_characterization.v1",
   "fixture_path": "tests/episodic/fixtures/phase1-pre-extraction-characterization.json",
-  "fixture_sha256": "1b52c467b7bf2645ca8934e9f97a79ceafc93571cd79e241516a913e479bee37",
+  "fixture_sha256": "6672117619cdc7db9be7b3105bba0b312de8fca1a86508e9dfe4203d17e543a4",
   "raw_artifact_manifest": {
     "artifact_count": 20,
     "artifacts": [

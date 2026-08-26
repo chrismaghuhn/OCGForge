@@ -35,6 +35,18 @@ def semantic_projection(value: dict) -> dict:
     return projected
 
 
+def normalized_raw_manifest(value: dict) -> dict:
+    projected = json.loads(json.dumps(value))
+    projected["capture_worktree"] = "<immutable-worktree-a>"
+    for artifact in projected.get("artifacts", []):
+        artifact["path"] = artifact["path"].replace("\\", "/")
+    for probe in projected.get("negative_probes", []):
+        for name in ("output_path", "stderr_path"):
+            if name in probe:
+                probe[name] = probe[name].replace("\\", "/")
+    return projected
+
+
 class Phase1EquivalenceTest(unittest.TestCase):
     def test_collector_is_a_pure_artifact_transform(self) -> None:
         tree = ast.parse(COLLECTOR.read_text(encoding="utf-8"))
@@ -69,6 +81,13 @@ class Phase1EquivalenceTest(unittest.TestCase):
         self.assertEqual(provenance["fixture_sha256"], sha256_file(FIXTURE))
         self.assertEqual(provenance["collector_source_sha256"], sha256_file(COLLECTOR))
         self.assertEqual(provenance["raw_artifact_manifest"]["source_base_commit"], EXPECTED_BASE)
+        raw_root_value = os.environ.get("OCGFORGE_PHASE1_RAW_ROOT")
+        if not raw_root_value:
+            self.fail("OCGFORGE_PHASE1_RAW_ROOT must point at immutable Worktree-A raw artifacts")
+        raw_manifest_path = Path(raw_root_value) / "raw-artifact-manifest.json"
+        self.assertTrue(raw_manifest_path.is_file(), f"missing raw artifact manifest: {raw_manifest_path}")
+        raw_manifest = json.loads(raw_manifest_path.read_text(encoding="utf-8"))
+        self.assertEqual(provenance["raw_artifact_manifest"], normalized_raw_manifest(raw_manifest))
 
     def test_collector_output_matches_the_checked_fixture(self) -> None:
         raw_root_value = os.environ.get("OCGFORGE_PHASE1_RAW_ROOT")
