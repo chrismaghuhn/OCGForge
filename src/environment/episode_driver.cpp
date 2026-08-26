@@ -239,8 +239,35 @@ struct EpisodeDriver::Impl final {
     std::uint32_t next_process_index = 0;
     std::uint32_t trace_decision_index = 0;
 
+    void refresh_derived_metrics() noexcept {
+        driver_metrics.turns = 0;
+        driver_metrics.battle_command_count = 0;
+        driver_metrics.visible_life_points_event_count = 0;
+        driver_metrics.visible_destroyed_event_count = 0;
+        driver_metrics.visible_win_event_count = 0;
+        if (observation_sessions[0] != nullptr) {
+            for (const auto& event : observation_sessions[0]->visible_events()) {
+                if (event.kind == observation::VisibleEventKind::TurnStarted) {
+                    ++driver_metrics.turns;
+                } else if (event.kind == observation::VisibleEventKind::LifePointsChanged) {
+                    ++driver_metrics.visible_life_points_event_count;
+                } else if (event.kind == observation::VisibleEventKind::CardDestroyed) {
+                    ++driver_metrics.visible_destroyed_event_count;
+                } else if (event.kind == observation::VisibleEventKind::Win) {
+                    ++driver_metrics.visible_win_event_count;
+                }
+            }
+        }
+        for (const auto& step : trace_state.steps) {
+            if (step.decision_request_kind == "battle_command") {
+                ++driver_metrics.battle_command_count;
+            }
+        }
+    }
+
     void refresh_host_metrics() noexcept {
         if (host == nullptr) {
+            refresh_derived_metrics();
             return;
         }
         driver_metrics.process_call_count = host->process_call_count();
@@ -253,6 +280,12 @@ struct EpisodeDriver::Impl final {
         driver_metrics.operations.ocg_duel_query_count = core_metrics.duel_query_count_calls;
         driver_metrics.operations.script_reader_requests = core_metrics.script_reader_requests;
         driver_metrics.operations.script_loads = core_metrics.script_loads;
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+        if (config.performance_audit != nullptr) {
+            config.performance_audit->set_script_metrics(core_metrics.script_loads, core_metrics.script_reader_requests);
+        }
+#endif
+        refresh_derived_metrics();
     }
 
     DriverFailure failure_value() const {
@@ -284,7 +317,8 @@ struct EpisodeDriver::Impl final {
 
     void emit_protocol_diagnostic(const protocol::ProtocolError& error) const {
         if (host != nullptr) {
-            emit_unsupported_diagnostic(error, next_process_index, current_raw_message, *host,
+            const auto step_index = next_process_index == 0 ? 0 : next_process_index - 1;
+            emit_unsupported_diagnostic(error, step_index, current_raw_message, *host,
                                         config.player_zero_deck, config.player_one_deck, trace_state);
         }
     }
@@ -425,7 +459,15 @@ struct EpisodeDriver::Impl final {
 
         while (next_process_index < config.engine_process_budget) {
             const auto process_start = Clock::now();
-            const auto process_result = host->process();
+            core::ProcessResult process_result;
+            try {
+                process_result = host->process();
+            } catch (const core::CoreError& error) {
+                ++driver_metrics.errors.core_errors;
+                return close_with_failure("core_error", error.what());
+            } catch (const std::exception& error) {
+                return close_with_failure(failure_code.empty() ? "simulation_error" : failure_code, error.what());
+            }
             const auto engine_step = next_process_index++;
             current_raw_message = process_result.message;
             add_timing(driver_metrics.timing.core_process_us, process_start, Clock::now(), config.instrumentation);
@@ -535,16 +577,17 @@ struct EpisodeDriver::Impl final {
                 return advance_until_boundary();
             }
 
+            const auto response = selected.exact_response_bytes;
             const auto trace_suffix_start = Clock::now();
             step.engine_advanced = true;
-            step.selected_response_sha256 = trace::sha256_bytes(selected.exact_response_bytes);
+            step.selected_response_sha256 = trace::sha256_bytes(response);
             step.final_engine_response_hash = step.selected_response_sha256;
             trace_state.steps.push_back(std::move(step));
             add_timing(driver_metrics.timing.trace_hash_us, trace_suffix_start, Clock::now(), config.instrumentation);
             current_request.reset();
             current_observation.reset();
             lifecycle = Lifecycle::Advancing;
-            host->submit_response(selected.exact_response_bytes);
+            host->submit_response(response);
             refresh_host_metrics();
             return advance_until_boundary();
         } catch (const protocol::ProtocolError& error) {

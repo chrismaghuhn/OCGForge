@@ -221,6 +221,9 @@ add_executable(episode_driver_seam_test tests/episodic/episode_driver_seam_test.
 target_link_libraries(episode_driver_seam_test PRIVATE ygo_m4)
 add_test(NAME episode_driver_seam_test COMMAND episode_driver_seam_test)
 
+add_test(NAME episode_driver_ownership_guard
+         COMMAND "\${Python3_EXECUTABLE}" "\${CMAKE_SOURCE_DIR}/tests/episodic/episode_driver_ownership_guard.py")
+
 add_executable(protocol_test tests/protocol/protocol_test.cpp)
 target_link_libraries(protocol_test PRIVATE ygo_m0)
 add_test(NAME protocol_test COMMAND protocol_test)
