@@ -70,7 +70,8 @@ new durable runtime target is justified by this milestone. A test-only
 ygo_episodic_probe executable may link ygo_m4 later; it is not an actor
 transport or a production service.
 
-The design is implementation-blocked at this checkpoint for two reasons:
+The design has two identity prerequisites that block the implementation
+campaign, plus one major final-acceptance evidence correction:
 
 1. The accepted EnvironmentConfig names decision-contract,
    action-identity, and seed-derivation identifiers, but the live accepted
@@ -79,12 +80,19 @@ The design is implementation-blocked at this checkpoint for two reasons:
 2. The live accepted M4 candidate_max value of 1344 is an aggregate sum of
    64 per-job maxima, not one legal candidate-domain size. G28 requires one
    replayable witness whose candidate count equals the accepted maximum.
-   The current traceable witness is 21. The metric and G28 evidence contract
-   must be reconciled before implementation acceptance.
+   The current traceable witness is 21. This is a major final-acceptance
+   evidence correction, not by itself an implementation-start blocker.
+3. The accepted required_script_closure_identity has no ratified meaning in
+   the live sources. The current required_script_codes value is a
+   deterministic required-card seed set, not a complete runtime script
+   closure or script allowlist. Phase 2 must preserve ScriptStore semantics
+   until a prerequisite decision defines the identity.
 
-These blockers do not require changing the accepted contracts in this
-specification PR. They require an explicit prerequisite decision before the
-implementation PR starts.
+These findings do not require changing the accepted contracts in this
+specification PR. B1, and the identity portion of B3, require an explicit
+prerequisite decision before the implementation PR starts. B2 must be closed
+before Episodic V1 FINAL PASS, but does not alone prevent implementation once
+the true identity blockers are resolved.
 
 ## 2. Live repository audit
 
@@ -191,18 +199,19 @@ cross-build semantic ID.
 | ID | Classification | Finding | Required resolution |
 | --- | --- | --- | --- |
 | B1 | BLOCKER | EnvironmentConfig requires decision-contract, action-identity, and seed-derivation IDs, but no concrete accepted constants exist in the live contract/code. | Ratify exact constants in the owning normative contract or an explicit accepted identity ADR before production implementation. Do not invent them in Phase 2. |
-| B2 | BLOCKER | G28 refers to an accepted aggregate maximum of 1344, but 1344 is the sum of 64 per-job candidate_max values. It cannot be a single request domain or witness. | Correct the metric/evidence vocabulary and generate a deterministic per-domain maximum witness, or obtain an explicit accepted G28 clarification. |
+| B2 | MAJOR | G28/M4 evidence calls the aggregate sum of 64 per-job maxima (1344) a candidate maximum. It cannot be a single request domain or witness. | Preserve historical M4 evidence unchanged; define candidate_domain_max separately, discover a deterministic tie-broken witness, and replay it before Episodic V1 FINAL PASS. |
+| B3 | MAJOR, conditional identity blocker | The accepted contract requires required_script_closure_identity, but current required_script_codes is only a deterministic required-card seed set. Runtime ScriptStore resolution also loads global and otherwise requested scripts under its existing semantics. | Ratify what the closure identity binds. Until then, preserve ScriptStore resolution exactly and do not introduce a runtime script allowlist or claim the card-code vector is the closure. |
 | M1 | MAJOR | Internal ActionCandidate locator fields and semantic keys are not automatically policy-safe. | Implement the fail-closed public projection audit and prove it over the certified corpus before publishing a public frame. |
 | M2 | MAJOR | Current Driver does not return accepted-action response metadata as a value. | Add the minimal internal DriverApplyResult described in this document; do not derive metadata from response bytes or old trace fields. |
 | M3 | MAJOR | Current Driver process budget is uint32 and has no public semantic-action budget or typed public interruption. | Add an internal run-control seam while preserving canonical-simulation mapping and trace semantics. |
 | M4 | MAJOR | Current terminal observation materialization is not yet an owned two-perspective public closure value. | Materialize safe terminal observations before Driver teardown and cache only value data. |
-| M5 | MAJOR | Required script closure is not a first-class semantic value in the current runtime config. | Derive and verify an exact code/script closure from the locked bundle before environment identity construction. |
 | m1 | MINOR | Existing diagnostic error strings can contain paths or other restricted details. | Public failures expose only typed codes and an opaque restricted diagnostic reference. |
 | m2 | MINOR | Existing M4 evidence calls an aggregate counter candidate_max. | Preserve historical evidence, but label any new per-domain fields unambiguously. |
 | N1 | NOTE | The local facade is serial-call only and does not claim thread safety. | Document the requirement; no lock-order semantics are added in V1. |
 | N2 | NOTE | M4 worker process isolation remains useful for acceptance probes, but Phase 2 does not add a worker protocol or RPC. | Reuse the existing process harness only as a test boundary. |
 
-Because B1 and B2 remain open, the implementation status is:
+Because B1 and the identity portion of B3 remain open, the implementation
+status is:
 
     PHASE 2 IMPLEMENTATION SHOULD NOT BEGIN
 
@@ -346,32 +355,58 @@ The factory must verify:
 5. the ocgcore/patchset identity is the compiled canonical target identity;
 6. required script resolution uses only the locked official/unofficial
    lookup rules;
-7. the required script closure is exactly the one represented in the
-   environment identity.
+7. once B3 is ratified, the required script closure identity is exactly the
+   one represented in the environment identity; until then, verify only the
+   existing ScriptStore/CoreHost resolution contract and preserve it.
 
 A path string, absolute/relative spelling, host drive, symlink, compiler,
 build type, PID, worker slot, timestamp, or machine identity never enters
 environment_semantic_id.
 
-### 5.4 Required-script closure
+### 5.4 Required-card seed set versus runtime script closure
 
-The current M3/M4 setup derives required script codes by concatenating the
+The current M3/M4 setup derives required_script_codes by concatenating the
 ordered main/extra passcodes of both locked decks, sorting numerically, and
-removing duplicates. Phase 2 should retain that deterministic derivation and
-make it an explicit certified value:
+removing duplicates:
 
-    required_script_closure_codes =
+    required_script_codes =
         sorted_unique(deck_0.main + deck_0.extra
                       + deck_1.main + deck_1.extra)
 
-The closure field is encoded as a vector of u32 passcodes in the environment
-identity. It is not a filesystem path and it does not depend on directory
-iteration. The locked CardScripts checkout identity already binds the
-contents; the closure vector binds the certified subset.
+This is the current deterministic required-card seed set. It is not claimed
+to be the complete runtime script closure.
 
-If the engine requests a script outside the certified resolution policy, or
-if preflight cannot prove the requested code/path/content relation, the
-environment fails closed. It does not silently broaden the closure.
+Current ScriptStore/CoreHost semantics remain unchanged:
+
+- a requested script is resolved through the existing root, official, and
+  unofficial lookup rules;
+- an existing requested script may load even when its card code is not in
+  required_script_codes;
+- required_script_codes is used primarily to make a missing expected
+  card-script request fail closed;
+- CoreHost also loads global scripts such as constant.lua, utility.lua, and
+  proc_normal.lua;
+- Phase 2 must not turn required_script_codes into a runtime script
+  allowlist;
+- Phase 2 must not reject a requested script merely because its card code is
+  absent from the deck-derived set.
+
+The accepted required_script_closure_identity remains unresolved. Its exact
+meaning, field sequence, and relationship to the pinned CardScripts tree,
+ScriptStore resolution contract, global scripts, and required-card seed set
+must be ratified by the prerequisite identity decision. Until then:
+
+- preserve the current ScriptStore resolution semantics exactly;
+- do not encode the deck-derived vector as the closure identity;
+- do not claim transitive closure or preflight a new closure;
+- do not add a script allowlist;
+- treat the missing closure definition as B3 and as a conditional blocker
+  for environment-identity implementation.
+
+Once ratified, the closure identity may bind a versioned combination of the
+resolved CardScripts tree, resolution contract, required globals, and
+required-card seed set, but that choice belongs to the prerequisite decision
+and must not be invented in the Phase-2 implementation PR.
 
 ## 6. Public schema IDs
 
@@ -396,10 +431,12 @@ concrete accepted constant in the live sources:
 | decision_contract_id | Decision protocol v1 is named, but no exact public ID constant is declared in decision-protocol-v1.md or code. | Ratify one exact value before implementation. |
 | action_identity_schema_id | Semantic-key rules exist, but no separate accepted action identity ID is declared. | Ratify one exact value or explicitly bind it to a named existing contract. |
 | seed_derivation_id | The four-word derivation is implemented, but no accepted schema/domain ID is declared. | Ratify one exact value and bind it to the shared helper. |
+| required_script_closure_identity | The accepted field is named, but the live sources define neither its closure meaning nor its canonical bytes. | Ratify the exact bound inputs and byte layout. Do not substitute required_script_codes or add an allowlist. |
 
 The implementation must reject an unknown or incompatible value for each
 field once the constants are ratified. Until then, these are not permitted
-to be filled with a guessed string. This is finding B1.
+to be filled with a guessed string or guessed closure payload. The first
+three missing constants are finding B1; the closure definition is finding B3.
 
 ## 7. Canonical primitive encoding and identity byte layouts
 
@@ -453,7 +490,7 @@ following exact sequence:
 | 22 | duel mode | string | canonical simulation config | yes | Core mode semantics |
 | 23 | duel flags | u64 | canonical simulation config | yes | Core option bits |
 | 24 | locked decks | vector of {deck ID string, deck hash string} | ordered canonical deck definitions | yes | Deck identity and order |
-| 25 | required script closure | vector of u32 | sorted unique locked-deck passcodes | yes | Certified script scope |
+| 25 | required script closure identity | ratified value, exact type/layout unresolved | prerequisite identity decision; not required_script_codes | yes, blocked | Binds the accepted runtime closure meaning without changing ScriptStore semantics |
 
 No path, compiler, build, worker, process, pointer, timestamp, counter, or
 RunControl field occurs in this sequence.
@@ -525,9 +562,9 @@ round-trips through the production codec:
 | negative count | same keys with an altered count | digest must differ; malformed count cannot be published |
 
 The environment, episode, and semantic-decision vectors cannot be finalized
-until B1 constants are ratified. The candidate-domain vector is independently
-specifiable now. No generated acceptance artifact may be hand-edited to make a
-vector pass.
+until B1 constants and the B3 required-script-closure definition are
+ratified. The candidate-domain vector is independently specifiable now. No
+generated acceptance artifact may be hand-edited to make a vector pass.
 
 ## 8. EpisodeSpec, seed mapping, and identity invariants
 
@@ -1444,7 +1481,9 @@ create certified environment:
     load canonical semantic lock values
     resolve runtime resource locations
     verify resource bytes/commits/patches/decks/database/scripts
-    derive required_script_closure_codes deterministically
+    derive the current required_script_codes seed set deterministically
+    resolve the ratified required_script_closure_identity without changing
+        ScriptStore/CoreHost loading semantics
     compute environment_semantic_id
     initialize counters to zero and lifecycle EMPTY
     retain no CoreHost and no current frame
@@ -1894,7 +1933,8 @@ counters. Therefore 1344 is not a legal domain maximum and cannot be a G28
 witness. Treating it as one would require a fabricated 1344-candidate
 request, which is forbidden.
 
-G28 remains BLOCKED. The implementation prerequisite is:
+G28 is a MAJOR final-acceptance gate, not an independent implementation
+start blocker. The prerequisite closure procedure is:
 
 1. define separate evidence fields:
    candidate_domain_max = maximum candidate count over individual published
@@ -1977,7 +2017,7 @@ test-only additions; they are not present in this docs-only change.
 | G25 | admin interrupt | episodic_interrupt_test | actionable atomic and continuation boundaries | no action/response/process; token invalid; prefix retained; reset required | G25 interrupt evidence | Driver control seam yes |
 | G26 | failure mapping | episodic_fault_injection_test | unsupported, malformed, duplicate, privacy, core, response fixtures | exact typed EpisodeFailure, explicit mutation stage, no fallback outcome/candidate, immediate teardown | G26 failure matrix/diagnostics refs | test hooks plus production mapping |
 | G27 | reset after failure | episodic_reset_after_failure_test | inject failure, then run valid A/B/A resets | new Driver/resources work and match fresh references; failed state cannot poison reset | G27 resource/semantic comparison | yes |
-| G28 | domain maximum | episodic_witness_discovery.py | deterministic trace-persisted workload after B2 metric reconciliation | witness candidate count equals true candidate_domain_max with deterministic tie-break and independent replay | G28 signed/bound witness plus corrected metric | acceptance/evidence prerequisite; no cap |
+| G28 | domain maximum | episodic_witness_discovery.py | deterministic trace-persisted workload after B2 metric clarification | witness candidate count equals true candidate_domain_max with deterministic tie-break and independent replay | G28 signed/bound witness plus corrected metric | final-acceptance prerequisite; no cap |
 | G29 | external reward harness | reward_independence_test.py | same terminal run with policies A and B | all environment values/hashes/actions/outcome equal; only reward and policy ID differ | G29 reward-independence artifact | no reward production code |
 | G30 | version rejection | episodic_version_test and identity golden-vector test | mutate every public contract/schema ID and each golden payload | unknown/incompatible values reject before mutation; known vectors exact | G30 version/rejection artifact | yes; B1 constants prerequisite |
 | G31 | regression | existing ctest, repository Python, M3, M4 suites | current clean Release checkout plus Phase-1 equivalence | all M0-M4 gates pass; no reblessing or skipped coverage | fresh verification manifest | no new behavior beyond regression guard |
@@ -1989,7 +2029,10 @@ Dependencies:
       -> G01/G02/G03/G09/G19/G20/G30
 
     B2 corrected candidate maximum
-      -> G28
+      -> G28 final acceptance
+
+    B3 ratified closure meaning
+      -> environment identity implementation, G01, G19, G30, G32
 
     public projection + Driver metadata
       -> G06-G18, G20, G22-G27
@@ -2011,8 +2054,9 @@ identity, token freshness, zero-mutation rejection, and Driver accepted-action
 metadata are tightly coupled. The commits may remain reviewable:
 
 1. test: lock identity codec/golden/public-projection fixtures;
-2. prerequisite: ratify missing public identity constants and correct G28
-   metric vocabulary in their owning review, if not already complete;
+2. prerequisite: ratify missing public identity constants, define the
+   required-script closure identity without changing ScriptStore semantics,
+   and clarify the G28 metric vocabulary in the owning review;
 3. feat: add canonical identity codecs and certified resource validation;
 4. feat: add value-owned EnvironmentDecisionRequest and
    EnvironmentActionCandidate projections;
@@ -2028,8 +2072,13 @@ metadata are tightly coupled. The commits may remain reviewable:
 13. test: close G01-G30 including the reconciled G28 witness;
 14. test/evidence: fresh G31-G32 clean-checkout acceptance.
 
-If B1 or B2 is unresolved, commits after step 1 must not begin. Do not split
-competing lifecycle authorities across parallel implementation branches.
+Step 2 is a separate normative prerequisite PR. Its accepted decisions must
+be merged before the Phase-2 implementation campaign starts: B1 and the
+identity portion of B3 are true implementation blockers, and the G28 metric
+vocabulary is fixed there. The deterministic G28 witness discovery/replay may
+continue during the implementation campaign, but B2/G28 must close before
+FINAL PASS. Do not split competing lifecycle authorities across parallel
+implementation branches.
 
 ## 36. Performance policy
 
@@ -2173,9 +2222,10 @@ Before the implementation PR is opened, reviewers must answer yes to all:
     comparing every repeated A against fresh references.
 35. Run the same value-only probe scripts in one and sixteen independent
     processes; compare semantic output, never worker provenance.
-36. G28 is currently blocked because 1344 is aggregate. Correct the metric,
-    discover the true per-domain maximum, and bind a deterministic replayable
-    witness with the specified tie-break.
+36. G28 is a MAJOR final-acceptance gate, not a standalone implementation
+    blocker. Because 1344 is aggregate, correct the metric, discover the true
+    per-domain maximum, and bind a deterministic replayable witness with the
+    specified tie-break before Episodic V1 FINAL PASS.
 37. Apply two external reward policies to the same terminal environment
     result and require all environment values to match; reward stays outside.
 38. New production behavior is required for public DTO projection, lifecycle,
@@ -2184,8 +2234,10 @@ Before the implementation PR is opened, reviewers must answer yes to all:
 39. Harness-only work covers independent probes, worker-count comparison,
     reward independence, G28 discovery, and clean evidence; existing M0-M4
     tests remain regression gates.
-40. Use one implementation PR with the staged commits in section 35, after B1
-    and B2 are resolved; do not merge automatically.
+40. Use one implementation PR with the staged commits in section 35 after the
+    normative prerequisite PR (B1 constants, B3 closure definition, and G28
+    metric vocabulary) is accepted and merged. Close the deterministic B2/G28
+    witness before FINAL PASS; do not merge automatically.
 
 ## 39. Scope and contract non-modification statement
 
@@ -2200,9 +2252,10 @@ This specification does not modify:
 - M4 worker protocol;
 - canonical simulation result semantics.
 
-The missing identity constants and G28 vocabulary conflict are reported,
-not silently repaired. Any resolution belongs in an explicitly reviewed
-owning contract/evidence change before production implementation.
+The missing identity constants, required-script-closure definition, and G28
+metric vocabulary are reported, not silently repaired. Any resolution belongs
+in an explicitly reviewed owning contract/evidence change before the affected
+production behavior or final acceptance claim.
 
 No trajectory schema, writer, shard, actor/learner transport, teacher,
 WindBot, model, tensor, framework adapter, reward implementation, arbitrary
@@ -2212,6 +2265,8 @@ performance work is included.
 ## 40. Implementation readiness
 
 The facade design is complete enough to review, but production implementation
-is not authorized by this specification while B1 and B2 remain unresolved.
+is not authorized by this specification while B1 or the identity portion of
+B3 remains unresolved. B2/G28 remains a required MAJOR closure before
+Episodic V1 FINAL PASS, but is not by itself an implementation-start blocker.
 
     PHASE 2 IMPLEMENTATION SHOULD NOT BEGIN
