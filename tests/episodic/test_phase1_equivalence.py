@@ -101,6 +101,36 @@ class Phase1EquivalenceTest(unittest.TestCase):
         raw_manifest = json.loads(raw_manifest_path.read_text(encoding="utf-8"))
         self.assertEqual(provenance["raw_artifact_manifest"], normalized_raw_manifest(raw_manifest))
 
+    def test_acceptance_identity_rejections_fail_closed(self) -> None:
+        raw_root_value = os.environ.get("OCGFORGE_PHASE1_POST_RAW_ROOT")
+        if not raw_root_value:
+            self.fail("OCGFORGE_PHASE1_POST_RAW_ROOT must point at post-refactor raw artifacts")
+        from tests.episodic.phase1_acceptance import _assert_build_binding, _assert_manifest_binding
+
+        raw_root = Path(raw_root_value)
+        manifest_path = raw_root / "raw-artifact-manifest.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        with self.assertRaises(AssertionError):
+            _assert_manifest_binding(raw_root, ROOT, "0" * 40, label="negative-head")
+
+        for field, value in (
+            ("probe_sha256", "0" * 64),
+            ("cmake_cache_sha256", "0" * 64),
+        ):
+            candidate = json.loads(json.dumps(manifest))
+            candidate["build"][field] = value
+            with self.assertRaises(AssertionError):
+                _assert_build_binding(ROOT, candidate, label=f"negative-{field}")
+
+        for field, value in (
+            ("probe_path", "../outside.exe"),
+            ("build_identity", "Release"),
+        ):
+            candidate = json.loads(json.dumps(manifest))
+            candidate["build"][field] = value
+            with self.assertRaises(AssertionError):
+                _assert_build_binding(ROOT, candidate, label=f"negative-{field}")
+
     def test_collector_output_matches_the_checked_fixture(self) -> None:
         raw_root_value = os.environ.get("OCGFORGE_PHASE1_RAW_ROOT")
         if not raw_root_value:
