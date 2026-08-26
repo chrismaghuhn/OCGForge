@@ -23,6 +23,8 @@ struct EpisodeDriverConfig final {
     core::FixtureDeck player_one_deck;
     std::uint64_t seed = 0;
     std::uint64_t duel_flags = 0;
+    std::uint32_t starting_draw_count = 5;
+    std::uint32_t draw_count_per_turn = 1;
     std::uint8_t starting_player = 0;
     std::uint32_t engine_process_budget = 0;
     bool build_full_observation = true;

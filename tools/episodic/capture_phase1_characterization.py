@@ -57,8 +57,9 @@ def _normalize_path(value: str) -> str:
 
 def _manifest_artifact_path(raw_root: Path, manifest_path: str) -> Path:
     normalized = _normalize_path(manifest_path)
-    if normalized.startswith(ARTIFACT_PREFIX):
-        return raw_root.joinpath(*normalized[len(ARTIFACT_PREFIX) :].split("/"))
+    parts = normalized.split("/")
+    if len(parts) >= 5 and parts[:3] == ["artifacts", "episodic", "phase1"]:
+        return raw_root.joinpath(*parts[4:])
     return raw_root.joinpath(*normalized.split("/"))
 
 

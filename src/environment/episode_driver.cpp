@@ -190,6 +190,8 @@ struct EpisodeDriver::Impl final {
         core::CoreHostConfig host_config;
         host_config.rules = config.rules;
         host_config.duel_flags = config.duel_flags;
+        host_config.starting_draw_count = config.starting_draw_count;
+        host_config.draw_count_per_turn = config.draw_count_per_turn;
         host_config.starting_player = config.starting_player;
         host_config.seed = seed_bundle(config.seed);
         host_config.required_script_codes = config.required_script_codes;

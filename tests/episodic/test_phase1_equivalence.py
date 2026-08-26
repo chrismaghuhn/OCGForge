@@ -24,6 +24,17 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+def semantic_projection(value: dict) -> dict:
+    projected = json.loads(json.dumps(value))
+    projected.pop("build", None)
+    projected.pop("source_base_commit", None)
+    projected["collector"].pop("source_sha256", None)
+    for job in projected["jobs"]:
+        for record in job["records"]:
+            record.pop("source_base_commit", None)
+    return projected
+
+
 class Phase1EquivalenceTest(unittest.TestCase):
     def test_collector_is_a_pure_artifact_transform(self) -> None:
         tree = ast.parse(COLLECTOR.read_text(encoding="utf-8"))
@@ -93,6 +104,39 @@ class Phase1EquivalenceTest(unittest.TestCase):
         self.assertFalse(forced["terminal"])
         self.assertEqual(forced["failure_code"], "forced_unsupported")
         self.assertEqual(forced["output_present"], False)
+
+    def test_post_refactor_collector_matches_locked_semantics(self) -> None:
+        raw_root_value = os.environ.get("OCGFORGE_PHASE1_POST_RAW_ROOT")
+        if not raw_root_value:
+            self.skipTest("OCGFORGE_PHASE1_POST_RAW_ROOT is not configured")
+        from tools.episodic.capture_phase1_characterization import collect_characterization
+
+        expected = json.loads(FIXTURE.read_text(encoding="utf-8"))
+        with tempfile.TemporaryDirectory(prefix="ocgforge-phase1-post-collector-") as directory:
+            actual = collect_characterization(
+                Path(raw_root_value),
+                Path(directory) / "post-refactor.json",
+                require_baseline=False,
+            )
+        self.assertEqual(semantic_projection(actual), semantic_projection(expected))
+
+    def test_post_refactor_trace_bytes_match_locked_corpus(self) -> None:
+        baseline_root_value = os.environ.get("OCGFORGE_PHASE1_RAW_ROOT")
+        post_root_value = os.environ.get("OCGFORGE_PHASE1_POST_RAW_ROOT")
+        if not baseline_root_value or not post_root_value:
+            self.skipTest("both Phase-1 raw-artifact roots are required")
+        baseline_root = Path(baseline_root_value)
+        post_root = Path(post_root_value)
+        trace_paths = sorted((baseline_root / "full-games").glob("*.jsonl"))
+        trace_paths += [baseline_root / "shared" / "full.jsonl", baseline_root / "shared" / "nonterminal.jsonl"]
+        self.assertEqual(len(trace_paths), 18)
+        for baseline_path in trace_paths:
+            relative_path = baseline_path.relative_to(baseline_root)
+            self.assertEqual(
+                baseline_path.read_bytes(),
+                (post_root / relative_path).read_bytes(),
+                str(relative_path),
+            )
 
 
 if __name__ == "__main__":
