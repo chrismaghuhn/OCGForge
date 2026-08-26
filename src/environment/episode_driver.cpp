@@ -521,29 +521,39 @@ struct EpisodeDriver::Impl final {
         if (lifecycle != Lifecycle::AwaitingDecision || !current_request.has_value() || host == nullptr) {
             throw std::logic_error("EpisodeDriver apply called without an awaiting decision");
         }
-        const auto& selected = protocol::select_candidate(*current_request, semantic_key);
-        const auto trace_prefix_start = Clock::now();
-#ifdef YGO_M4_PERFORMANCE_AUDIT
-        auto step = trace::make_decision_step(
-            static_cast<std::uint32_t>(next_process_index - 1), current_raw_message, *current_request,
-            public_state_hash(*host, current_request->player, config.performance_audit));
-#else
-        auto step = trace::make_decision_step(
-            static_cast<std::uint32_t>(next_process_index - 1), current_raw_message, *current_request,
-            public_state_hash(*host, current_request->player));
-#endif
-        if (current_observation.has_value()) {
-            trace::attach_observation_metadata(step, *current_observation);
+        const protocol::ActionCandidate* selected = nullptr;
+        try {
+            selected = &protocol::select_candidate(*current_request, semantic_key);
+        } catch (const protocol::ProtocolError& error) {
+            if (error.code() == protocol::ProtocolErrorCode::InvalidSemanticKey) {
+                throw;
+            }
+            emit_protocol_diagnostic(error);
+            return protocol_failure(error);
         }
-        step.decision_index = trace_decision_index++;
-        step.selected_semantic_key = selected.semantic_key;
-        add_timing(driver_metrics.timing.trace_hash_us, trace_prefix_start, Clock::now(), config.instrumentation);
-        ++driver_metrics.semantic_action_count;
 
         try {
+            const auto trace_prefix_start = Clock::now();
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+            auto step = trace::make_decision_step(
+                static_cast<std::uint32_t>(next_process_index - 1), current_raw_message, *current_request,
+                public_state_hash(*host, current_request->player, config.performance_audit));
+#else
+            auto step = trace::make_decision_step(
+                static_cast<std::uint32_t>(next_process_index - 1), current_raw_message, *current_request,
+                public_state_hash(*host, current_request->player));
+#endif
+            if (current_observation.has_value()) {
+                trace::attach_observation_metadata(step, *current_observation);
+            }
+            step.decision_index = trace_decision_index++;
+            step.selected_semantic_key = selected->semantic_key;
+            add_timing(driver_metrics.timing.trace_hash_us, trace_prefix_start, Clock::now(), config.instrumentation);
+            ++driver_metrics.semantic_action_count;
+
             if (current_request->continuation.has_value()) {
                 const auto response_start = Clock::now();
-                const auto transition = protocol::apply_continuation_action(*current_request, selected.semantic_key);
+                const auto transition = protocol::apply_continuation_action(*current_request, selected->semantic_key);
                 const auto response_end = Clock::now();
                 const auto response_time = elapsed_us(response_start, response_end);
                 driver_metrics.response_build_time_us_total += response_time;
@@ -579,7 +589,7 @@ struct EpisodeDriver::Impl final {
                 return advance_until_boundary();
             }
 
-            const auto response = selected.exact_response_bytes;
+            const auto response = selected->exact_response_bytes;
             const auto trace_suffix_start = Clock::now();
             step.engine_advanced = true;
             step.selected_response_sha256 = trace::sha256_bytes(response);
