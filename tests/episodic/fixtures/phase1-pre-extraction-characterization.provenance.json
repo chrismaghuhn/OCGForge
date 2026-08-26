@@ -1,0 +1,176 @@
+{
+  "characterization_schema_version": "ocgforge.episodic.phase1.characterization.v1",
+  "collector_arguments": {
+    "fixture": "tests/episodic/fixtures/phase1-pre-extraction-characterization.json",
+    "provenance": "tests/episodic/fixtures/phase1-pre-extraction-characterization.provenance.json",
+    "raw_root": "<immutable-worktree-a>/artifacts/episodic/phase1/pre-refactor",
+    "require_baseline": true
+  },
+  "collector_source_path": "tools/episodic/capture_phase1_characterization.py",
+  "collector_source_sha256": "6ec4941b5f158fe3ba8a17a2fd3330438afc3474f97c3f9369311c0e807fa26b",
+  "collector_version": "capture_phase1_characterization.v1",
+  "fixture_path": "tests/episodic/fixtures/phase1-pre-extraction-characterization.json",
+  "fixture_sha256": "6672117619cdc7db9be7b3105bba0b312de8fca1a86508e9dfe4203d17e543a4",
+  "raw_artifact_manifest": {
+    "artifact_count": 20,
+    "artifacts": [
+      {
+        "path": "artifacts/episodic/phase1/pre-refactor/full-games/full_fixed_deck_results.json",
+        "sha256": "da4c48cdf826dfacd2f0b8d2fa9c25ee10e3edd92cde092849a7dc9aaa743967",
+        "size_bytes": 28630
+      },
+      {
+        "path": "artifacts/episodic/phase1/pre-refactor/full-games/seed-1-mirror-start-0.jsonl",
+        "sha256": "36bb772820cce10706894e60ce63b06ad0a1c363652af0f9eefe755cc776250a",
+        "size_bytes": 697911
+      },
+      {
+        "path": "artifacts/episodic/phase1/pre-refactor/full-games/seed-1-mirror-start-1.jsonl",
+        "sha256": "10fdd14a3afac68730f6cb18d0369c5ee8b195354f695248d51f81523e9cb5ef",
+        "size_bytes": 687866
+      },
+      {
+        "path": "artifacts/episodic/phase1/pre-refactor/full-games/seed-1-normal-start-0.jsonl",
+        "sha256": "d3f5b5d26f4eae04242f07bcf15ea36c0df347d7b405ccf5df228748c4e2fd04",
+        "size_bytes": 687866
+      },
+      {
+        "path": "artifacts/episodic/phase1/pre-refactor/full-games/seed-1-normal-start-1.jsonl",
+        "sha256": "8576d475a46a6a2d126df917d6cead5bd648bb95f87c26254cc90ca324376c82",
+        "size_bytes": 697911
+      },
+      {
+        "path": "artifacts/episodic/phase1/pre-refactor/full-games/seed-2-mirror-start-0.jsonl",
+        "sha256": "17ece0f2d5975bdc3715d66763e78e5dfe7c3baec7db481afc17fc930121a894",
+        "size_bytes": 697704
+      },
+      {
+        "path": "artifacts/episodic/phase1/pre-refactor/full-games/seed-2-mirror-start-1.jsonl",
+        "sha256": "87b3487d138944c2f9c72fb5c3c60f85650c73dd3128e2c003a082a79aef3bc6",
+        "size_bytes": 687659
+      },
+      {
+        "path": "artifacts/episodic/phase1/pre-refactor/full-games/seed-2-normal-start-0.jsonl",
+        "sha256": "bd47980d5ca9f533985ac06050765e9af94110edf6a6aa92a92bd46d8b1d317b",
+        "size_bytes": 687659
+      },
+      {
+        "path": "artifacts/episodic/phase1/pre-refactor/full-games/seed-2-normal-start-1.jsonl",
+        "sha256": "41cd98844b33bbc0a51ee77ab20ad272db2c3b881c6598b19faf775530d505e6",
+        "size_bytes": 697704
+      },
+      {
+        "path": "artifacts/episodic/phase1/pre-refactor/full-games/seed-3-mirror-start-0.jsonl",
+        "sha256": "4aeef87534c2b8953805f2fb34e37772c02c02d45f7eca79c157f6a9d3389fc7",
+        "size_bytes": 697555
+      },
+      {
+        "path": "artifacts/episodic/phase1/pre-refactor/full-games/seed-3-mirror-start-1.jsonl",
+        "sha256": "b9c8c9a01c6b853b221a71de0b0fe487d43cdc0da9cbe76ce1faa5a50bad0d71",
+        "size_bytes": 687510
+      },
+      {
+        "path": "artifacts/episodic/phase1/pre-refactor/full-games/seed-3-normal-start-0.jsonl",
+        "sha256": "c68d69aff473bde79f1ab074a4ed4cf7cb87313d3a089782cbc78b4502f26729",
+        "size_bytes": 687510
+      },
+      {
+        "path": "artifacts/episodic/phase1/pre-refactor/full-games/seed-3-normal-start-1.jsonl",
+        "sha256": "931257473ed8e324c1f92dc8e9b92c7ed38a06264bfe3229e510c34fa97fd7dc",
+        "size_bytes": 697555
+      },
+      {
+        "path": "artifacts/episodic/phase1/pre-refactor/full-games/seed-4-mirror-start-0.jsonl",
+        "sha256": "553c5c26f31c6054d4a80b18a996e3ce5208be28519ffd22c8d77c2a9381b803",
+        "size_bytes": 697502
+      },
+      {
+        "path": "artifacts/episodic/phase1/pre-refactor/full-games/seed-4-mirror-start-1.jsonl",
+        "sha256": "9eb51ab51a72a22540744e94e11e9bf0b6d6d99e3686a374c9edf2e8fd812a62",
+        "size_bytes": 687458
+      },
+      {
+        "path": "artifacts/episodic/phase1/pre-refactor/full-games/seed-4-normal-start-0.jsonl",
+        "sha256": "f12d5de95b373d8f79895103a8f500ea33d805f294ab350be53518940e420feb",
+        "size_bytes": 687458
+      },
+      {
+        "path": "artifacts/episodic/phase1/pre-refactor/full-games/seed-4-normal-start-1.jsonl",
+        "sha256": "cbc4ed16b95913936d18828a3e96a0368b3f111fc0118310953f5f7f286aee7a",
+        "size_bytes": 697502
+      },
+      {
+        "path": "artifacts/episodic/phase1/pre-refactor/shared/forced-unsupported.stderr.txt",
+        "sha256": "8a3896ae05e8325197fcf7ae6af92a3a9d74b99e0df1c12363b1ff8e294a8cf6",
+        "size_bytes": 564
+      },
+      {
+        "path": "artifacts/episodic/phase1/pre-refactor/shared/full.jsonl",
+        "sha256": "bd47980d5ca9f533985ac06050765e9af94110edf6a6aa92a92bd46d8b1d317b",
+        "size_bytes": 687659
+      },
+      {
+        "path": "artifacts/episodic/phase1/pre-refactor/shared/nonterminal.jsonl",
+        "sha256": "b53761a030eb3a22f724fc6a1abbf8c6f54ae9d43fb8e8e542a2baf78c283372",
+        "size_bytes": 2408
+      }
+    ],
+    "build": {
+      "build_directory": "build/windows-zig",
+      "build_identity": "Debug",
+      "build_preset": "dev-windows-zig",
+      "canonical_toolchain": "Clang 19.1.7 via repository-local Zig 0.14.1 fallback",
+      "cmake_cache_sha256": "8f6d4224dedd5f4857305a1e76e8de4d3f1cf004088a3a080c14c34c223385a2",
+      "configure_preset": "dev-windows-zig",
+      "probe_path": "build/windows-zig/ygo_core_probe.exe",
+      "probe_sha256": "8faa4079106048108e131fb181bd566338bd486d6a9d034454541996c589e64f"
+    },
+    "capture_worktree": "<immutable-worktree-a>",
+    "commands": [
+      "cmake --preset dev-windows-zig",
+      "cmake --build --preset dev-windows-zig --parallel",
+      "python -B tests/m3/full_game/full_fixed_deck_test.py --probe build/windows-zig/ygo_core_probe.exe --games 16 --max-steps 2200 --timeout 240 --output artifacts/episodic/phase1/pre-refactor/full-games",
+      ".\\build\\windows-zig\\ygo_core_probe.exe --m3-full-game --seed 2 --starting-player 0 --max-steps 1800 --output artifacts/episodic/phase1/pre-refactor/shared/full.jsonl",
+      ".\\build\\windows-zig\\ygo_core_probe.exe --m3-full-game --seed 2 --starting-player 0 --max-steps 1 --output artifacts/episodic/phase1/pre-refactor/shared/nonterminal.jsonl",
+      ".\\build\\windows-zig\\ygo_core_probe.exe --m3-full-game --seed 2 --starting-player 0 --max-steps 1800 --force-unsupported --output artifacts/episodic/phase1/pre-refactor/shared/forced-unsupported.jsonl"
+    ],
+    "full_games": 16,
+    "negative_probes": [
+      {
+        "command": ".\\build\\windows-zig\\ygo_core_probe.exe --m3-full-game --seed 2 --starting-player 0 --max-steps 1800 --force-unsupported --output artifacts/episodic/phase1/pre-refactor/shared/forced-unsupported.jsonl",
+        "diagnostic_code": "UNSUPPORTED_OR_MALFORMED_DECISION",
+        "error": "MSG_SELECT_OPTION has no selectable options",
+        "exit_code": 3,
+        "failure_code": "forced_unsupported",
+        "job_id": "shared-forced-unsupported",
+        "message_type": 14,
+        "output_path": "artifacts/episodic/phase1/pre-refactor/shared/forced-unsupported.jsonl",
+        "output_present": false,
+        "stderr_path": "artifacts/episodic/phase1/pre-refactor/shared/forced-unsupported.stderr.txt",
+        "stderr_sha256": "8a3896ae05e8325197fcf7ae6af92a3a9d74b99e0df1c12363b1ff8e294a8cf6"
+      }
+    ],
+    "raw_forced_unsupported_output_present": false,
+    "rules": {
+      "babelcdb_commit": "89ad6837b0766a52984d8c715a7d5d4f8447946b",
+      "bundle_id": "3adfe6b4cfe2c2805e50b389fc0eb4e70a3b0b6107436614d328fddc865e585f",
+      "cardscripts_commit": "f337c87018ca723c1aded5143e616bb649555273",
+      "core_patchset_id": "ocgforge.ocgcore.api_hardening.v1",
+      "core_patchset_sha256": "6b5421b3a852085f48fa161a5ba1540f902aa00784a337694b21c9efc34f69bd",
+      "duel_flags": 190464,
+      "duel_mode_name": "DUEL_MODE_MR5",
+      "format_id": "TCG_ADVANCED_2026_05_18",
+      "lock_path": "third_party/rules_bundle.lock.json",
+      "lock_sha256": "0a5b13e198b97dd796c2ef7de1b8344e3a554066cb4df697183f9c1dbe18328e",
+      "locked_deck_hashes": [
+        "8ee4b699de19ff256e388d46f35b8696a60ff6ec59f0324f060a2468876711b7",
+        "6041abe0a59463d0715ae1da9100090ad487de02a02794e8ec0686d4c0513188"
+      ],
+      "ocgcore_commit": "9a0c558c2d686542f7914a6d529fd7aa57746aed"
+    },
+    "schema_version": "ocgforge.episodic.phase1.raw_artifact_manifest.v1",
+    "source_base_commit": "72c29009f107a2ebb172d85de1c70b38d2f007d8"
+  },
+  "schema_version": "ocgforge.episodic.phase1.characterization.provenance.v1",
+  "source_base_commit": "72c29009f107a2ebb172d85de1c70b38d2f007d8"
+}

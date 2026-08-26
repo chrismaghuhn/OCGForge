@@ -157,6 +157,7 @@ else()
 endif()
 
 add_library(ygo_m4 STATIC
+    src/environment/episode_driver.cpp
     src/simulation/canonical_simulation.cpp
 )
 target_include_directories(ygo_m4 PUBLIC "${CMAKE_SOURCE_DIR}/include")
@@ -215,6 +216,48 @@ enable_testing()
 add_executable(m4_simulation_contract_test tests/m4/simulation_contract_test.cpp)
 target_include_directories(m4_simulation_contract_test PRIVATE "${CMAKE_SOURCE_DIR}/include")
 add_test(NAME m4_simulation_contract_test COMMAND m4_simulation_contract_test)
+
+add_executable(episode_driver_seam_test tests/episodic/episode_driver_seam_test.cpp)
+target_link_libraries(episode_driver_seam_test PRIVATE ygo_m4)
+add_test(NAME episode_driver_seam_test COMMAND episode_driver_seam_test)
+
+add_test(NAME episode_driver_ownership_guard
+         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tests/episodic/episode_driver_ownership_guard.py")
+
+add_executable(episode_driver_stale_key_test tests/episodic/episode_driver_stale_key_test.cpp)
+target_link_libraries(episode_driver_stale_key_test PRIVATE ygo_m4)
+target_compile_definitions(episode_driver_stale_key_test PRIVATE
+    YGO_M3_DECK_A="${CMAKE_SOURCE_DIR}/fixtures/decks/swordsoul_tenyi_ml_v1.ydk"
+    YGO_M3_DECK_B="${CMAKE_SOURCE_DIR}/fixtures/decks/salamangreat_ml_v1.ydk"
+    YGO_M3_CARDSCRIPTS="${M0_CARDSCRIPTS_DIR}"
+)
+add_test(NAME episode_driver_stale_key_test COMMAND episode_driver_stale_key_test)
+
+add_executable(episode_driver_tribute_integration_test
+    tests/episodic/episode_driver_tribute_integration_test.cpp
+)
+target_link_libraries(episode_driver_tribute_integration_test PRIVATE ygo_m4)
+target_compile_definitions(episode_driver_tribute_integration_test PRIVATE
+    YGO_M1_PLAYER_A="${CMAKE_SOURCE_DIR}/fixtures/decks/m1_tribute_a.deck"
+    YGO_M1_PLAYER_B="${CMAKE_SOURCE_DIR}/fixtures/decks/m1_tribute_b.deck"
+    YGO_M1_CARDSCRIPTS="${M0_CARDSCRIPTS_DIR}"
+)
+add_test(NAME episode_driver_tribute_integration_test COMMAND episode_driver_tribute_integration_test)
+
+if(DEFINED ENV{OCGFORGE_PHASE1_RAW_ROOT} AND
+   DEFINED ENV{OCGFORGE_PHASE1_POST_RAW_ROOT} AND
+   DEFINED ENV{OCGFORGE_PHASE1_EXPECTED_HEAD} AND
+   DEFINED ENV{OCGFORGE_PHASE1_POST_PROBE_SHA256})
+    add_test(NAME phase1_equivalence_acceptance
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tests/episodic/phase1_acceptance.py"
+                --baseline-raw-root "$ENV{OCGFORGE_PHASE1_RAW_ROOT}"
+                --post-raw-root "$ENV{OCGFORGE_PHASE1_POST_RAW_ROOT}"
+                --expected-head "$ENV{OCGFORGE_PHASE1_EXPECTED_HEAD}"
+                --expected-probe-sha256 "$ENV{OCGFORGE_PHASE1_POST_PROBE_SHA256}")
+    set_tests_properties(phase1_equivalence_acceptance PROPERTIES
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        LABELS "PHASE1_ACCEPTANCE")
+endif()
 
 add_executable(protocol_test tests/protocol/protocol_test.cpp)
 target_link_libraries(protocol_test PRIVATE ygo_m0)
