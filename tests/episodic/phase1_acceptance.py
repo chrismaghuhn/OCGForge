@@ -10,6 +10,9 @@ ROOT = Path(__file__).resolve().parents[2]
 FIXTURE = ROOT / "tests" / "episodic" / "fixtures" / "phase1-pre-extraction-characterization.json"
 BASELINE_COMMIT = "72c29009f107a2ebb172d85de1c70b38d2f007d8"
 
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 
 def _load_json(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
