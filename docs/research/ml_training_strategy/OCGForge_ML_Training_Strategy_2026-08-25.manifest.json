@@ -1,0 +1,73 @@
+{
+  "schema_version": "ocgforge.research_snapshot_manifest.v1",
+  "research_id": "ocgforge.ml_training_strategy.2026-08-25",
+  "research_date": "2026-08-25",
+  "source_filename": "OCGForge_ML_Training_Strategy_2026-08-25.md",
+  "source_bytes": 104550,
+  "source_sha256": "7c998810bfc36d3ae0cd63aeddc999cd5177eaa5c476301a7445513d91908b07",
+  "packaging": {
+    "kind": "raw_consecutive_parts",
+    "directory": "archive",
+    "reconstruction": "concatenate parts in listed order as raw bytes",
+    "reconstruction_must_equal_source_bytes": true,
+    "reconstruction_must_equal_source_sha256": true
+  },
+  "parts": [
+    {
+      "path": "archive/OCGForge_ML_Training_Strategy_2026-08-25.part-01.md",
+      "bytes": 13128,
+      "sha256": "d1675d3e38e6c9e03b26e60493d0a8b2478fa404eafc2a8cc3937ff288ccc61f",
+      "git_blob_sha": "4d8d6bb269d9b4ce63f412be5d0b93cc5d7d2023"
+    },
+    {
+      "path": "archive/OCGForge_ML_Training_Strategy_2026-08-25.part-02.md",
+      "bytes": 13042,
+      "sha256": "9be481d5dd8b555c008f82debc0ecd016e7fe7cd13a0701d200586faea762d8f",
+      "git_blob_sha": "304384034c7f483237e10b74fc5621dc67def85c"
+    },
+    {
+      "path": "archive/OCGForge_ML_Training_Strategy_2026-08-25.part-03.md",
+      "bytes": 13052,
+      "sha256": "a9e6289b02651a65353302053331b0c005e6878f78e0daaae59ab3561dab5a1a",
+      "git_blob_sha": "8e71c0ad11969cb832c1842bd4d4642da1c1577c"
+    },
+    {
+      "path": "archive/OCGForge_ML_Training_Strategy_2026-08-25.part-04.md",
+      "bytes": 13058,
+      "sha256": "69e3cddf1b5a81de137ec67a927cff49fa799073e1171339928d829ab5cacc8d",
+      "git_blob_sha": "de630f1ffc106362f255df75678d6f2ddd87f4aa"
+    },
+    {
+      "path": "archive/OCGForge_ML_Training_Strategy_2026-08-25.part-05.md",
+      "bytes": 13082,
+      "sha256": "d35bbd2fddbf553005b85a2640484c44f19c9a0c15702d873d41e3732a431685",
+      "git_blob_sha": "bfe87e4a1ad08878d4686cd0bde906e296e57c4e"
+    },
+    {
+      "path": "archive/OCGForge_ML_Training_Strategy_2026-08-25.part-06.md",
+      "bytes": 13058,
+      "sha256": "32cc990bf53b4a326f5ff4cc1550c63ec64f53cf6028ba5c3ad758d6ba5496d9",
+      "git_blob_sha": "c079d6789d82a08ccb216ae1f7dd030e0c6e4933"
+    },
+    {
+      "path": "archive/OCGForge_ML_Training_Strategy_2026-08-25.part-07.md",
+      "bytes": 13091,
+      "sha256": "534a4207b5d56e0f2a2fb7ca3c46f53ac8805191752d9532b9f357e0cc1f409c",
+      "git_blob_sha": "964f30983c684bc2651c7df21a80494deb23a40d"
+    },
+    {
+      "path": "archive/OCGForge_ML_Training_Strategy_2026-08-25.part-08.md",
+      "bytes": 13039,
+      "sha256": "6a9e33f96a430089eca722ebfd816310d108ecd6c9424c3e5a941bcd0d43c217",
+      "git_blob_sha": "8b05fba53656346c563b0a2bc5874b77c50ae906"
+    }
+  ],
+  "status": "dated research snapshot; non-normative",
+  "repository_behavior_modified": false,
+  "rules_or_locked_decks_modified": false,
+  "notes": [
+    "Live repository status statements inside the source report are historical as of the research date.",
+    "Current repository status must be inspected live and accepted contracts/evidence retain normative authority.",
+    "The ygo-agent max_options report is intentionally preserved separately and is not duplicated in this snapshot."
+  ]
+}
