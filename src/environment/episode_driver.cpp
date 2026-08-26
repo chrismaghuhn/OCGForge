@@ -533,6 +533,19 @@ struct EpisodeDriver::Impl final {
         }
 
         try {
+            std::optional<protocol::ContinuationTransition> continuation_transition;
+            std::uint64_t continuation_response_time = 0;
+            Clock::time_point continuation_response_start{};
+            Clock::time_point continuation_response_end{};
+            if (current_request->continuation.has_value()) {
+                continuation_response_start = Clock::now();
+                continuation_transition =
+                    protocol::apply_continuation_action(*current_request, selected->semantic_key);
+                continuation_response_end = Clock::now();
+                continuation_response_time =
+                    elapsed_us(continuation_response_start, continuation_response_end);
+            }
+
             const auto trace_prefix_start = Clock::now();
 #ifdef YGO_M4_PERFORMANCE_AUDIT
             auto step = trace::make_decision_step(
@@ -551,15 +564,13 @@ struct EpisodeDriver::Impl final {
             add_timing(driver_metrics.timing.trace_hash_us, trace_prefix_start, Clock::now(), config.instrumentation);
             ++driver_metrics.semantic_action_count;
 
-            if (current_request->continuation.has_value()) {
-                const auto response_start = Clock::now();
-                const auto transition = protocol::apply_continuation_action(*current_request, selected->semantic_key);
-                const auto response_end = Clock::now();
-                const auto response_time = elapsed_us(response_start, response_end);
-                driver_metrics.response_build_time_us_total += response_time;
+            if (continuation_transition.has_value()) {
+                auto& transition = *continuation_transition;
+                driver_metrics.response_build_time_us_total += continuation_response_time;
                 driver_metrics.response_build_time_us_max =
-                    std::max(driver_metrics.response_build_time_us_max, response_time);
-                add_timing(driver_metrics.timing.continuation_us, response_start, response_end, config.instrumentation);
+                    std::max(driver_metrics.response_build_time_us_max, continuation_response_time);
+                add_timing(driver_metrics.timing.continuation_us, continuation_response_start,
+                           continuation_response_end, config.instrumentation);
                 const auto trace_suffix_start = Clock::now();
                 step.engine_advanced = transition.engine_advanced;
                 if (!transition.engine_response.empty()) {

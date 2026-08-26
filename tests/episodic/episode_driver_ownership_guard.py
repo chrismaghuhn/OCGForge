@@ -18,6 +18,8 @@ FORBIDDEN_AUTHORITATIVE_PATTERNS = (
     r"\bmake_decision_step\s*\(",
     r"\bsubmit_response\s*\(",
     r"\bprocess\s*\(",
+    r"\btrace\s*\.\s*steps\s*\.\s*push_back\s*\(",
+    r"\btrace\s*\.\s*manifest\s*=",
 )
 
 

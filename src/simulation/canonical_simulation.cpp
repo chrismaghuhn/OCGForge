@@ -285,6 +285,11 @@ SimulationResult run_canonical_simulation(const SimulationJob& job,
         }
 
         if (!hard_driver_failure || forced_unsupported) {
+            if (!forced_unsupported && !job.replay_actions.empty() &&
+                replay_action_index != job.replay_actions.size()) {
+                throw std::runtime_error("replay action stream contains unused semantic actions: " +
+                                         std::to_string(job.replay_actions.size() - replay_action_index));
+            }
             const auto& metrics = driver.metrics();
             copy_driver_metrics(result, metrics);
             result.terminal = terminal.has_value();
@@ -295,12 +300,6 @@ SimulationResult run_canonical_simulation(const SimulationJob& job,
                 result.failure_code = "nonterminal";
                 result.error_message = "canonical simulation did not reach terminal state before max_steps";
             }
-            if (!forced_unsupported && !job.replay_actions.empty() &&
-                replay_action_index != job.replay_actions.size()) {
-                throw std::runtime_error("replay action stream contains unused semantic actions: " +
-                                         std::to_string(job.replay_actions.size() - replay_action_index));
-            }
-
             const auto trace_start = Clock::now();
             result.gameplay_hash = trace::semantic_gameplay_hash(driver.trace());
             ++result.operations.semantic_hashes;

@@ -4,6 +4,10 @@
 #include <type_traits>
 
 int main() {
+    static_assert(!std::is_copy_constructible_v<ygo::environment::EpisodeDriver>);
+    static_assert(!std::is_copy_assignable_v<ygo::environment::EpisodeDriver>);
+    static_assert(!std::is_move_constructible_v<ygo::environment::EpisodeDriver>);
+    static_assert(!std::is_move_assignable_v<ygo::environment::EpisodeDriver>);
     static_assert(std::is_copy_assignable_v<ygo::environment::DriverDecisionBoundary>);
     static_assert(std::is_copy_assignable_v<ygo::environment::DriverBoundary>);
 

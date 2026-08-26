@@ -141,6 +141,7 @@ int main() {
         auto boundary = driver.advance_until_boundary();
         bool saw_tribute = false;
         bool saw_terminal_tribute_response = false;
+        bool saw_stale_continuation_rejection = false;
         std::uint32_t tribute_intermediate_steps = 0;
         std::uint64_t response_count_before_tribute = 0;
         std::uint64_t process_count_before_tribute = 0;
@@ -179,6 +180,46 @@ int main() {
                     if (!std::holds_alternative<ygo::environment::DriverDecisionBoundary>(boundary)) {
                         throw std::runtime_error("intermediate tribute action did not publish a new boundary");
                     }
+                    if (!saw_stale_continuation_rejection) {
+                        const auto* next_decision =
+                            std::get_if<ygo::environment::DriverDecisionBoundary>(&boundary);
+                        if (next_decision == nullptr || next_decision->request == nullptr) {
+                            throw std::runtime_error("intermediate tribute action lost its next decision boundary");
+                        }
+                        const auto* request_before_stale = next_decision->request;
+                        const auto* observation_before_stale = next_decision->observation;
+                        const auto decision_id_before_stale = request_before_stale->decision_id;
+                        const auto candidate_count_before_stale = request_before_stale->candidates.size();
+                        const auto process_count_before_stale = driver.metrics().process_call_count;
+                        const auto response_count_before_stale = driver.metrics().response_submission_count;
+                        const auto semantic_action_count_before_stale = driver.metrics().semantic_action_count;
+                        const auto candidate_sets_before_stale = driver.metrics().operations.candidate_sets;
+                        const auto trace_steps_before_stale = driver.trace().steps.size();
+                        bool rejected = false;
+                        try {
+                            (void)driver.apply_semantic_key(semantic_key);
+                        } catch (const ygo::protocol::ProtocolError& error) {
+                            rejected = true;
+                            if (error.code() != ygo::protocol::ProtocolErrorCode::InvalidSemanticKey) {
+                                throw;
+                            }
+                        }
+                        if (!rejected) {
+                            throw std::runtime_error("stale continuation semantic key was accepted");
+                        }
+                        if (driver.metrics().process_call_count != process_count_before_stale ||
+                            driver.metrics().response_submission_count != response_count_before_stale ||
+                            driver.metrics().semantic_action_count != semantic_action_count_before_stale ||
+                            driver.metrics().operations.candidate_sets != candidate_sets_before_stale ||
+                            driver.trace().steps.size() != trace_steps_before_stale ||
+                            request_before_stale != next_decision->request ||
+                            observation_before_stale != next_decision->observation ||
+                            request_before_stale->decision_id != decision_id_before_stale ||
+                            request_before_stale->candidates.size() != candidate_count_before_stale) {
+                            throw std::runtime_error("stale continuation rejection mutated the current boundary");
+                        }
+                        saw_stale_continuation_rejection = true;
+                    }
                 } else {
                     if (response_after_apply != response_before_apply + 1 ||
                         process_after_apply <= process_before_apply) {
@@ -190,8 +231,10 @@ int main() {
             }
         }
 
-        if (!saw_tribute || tribute_intermediate_steps == 0 || !saw_terminal_tribute_response) {
-            throw std::runtime_error("driver tribute fixture did not prove intermediate and terminal continuation steps");
+        if (!saw_tribute || tribute_intermediate_steps == 0 || !saw_terminal_tribute_response ||
+            !saw_stale_continuation_rejection) {
+            throw std::runtime_error(
+                "driver tribute fixture did not prove intermediate, stale-key, and terminal continuation steps");
         }
         if (driver.metrics().response_submission_count - response_count_before_tribute != 1) {
             throw std::runtime_error("driver tribute fixture submitted more than one target response");

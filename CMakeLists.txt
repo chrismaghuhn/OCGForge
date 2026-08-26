@@ -244,6 +244,21 @@ target_compile_definitions(episode_driver_tribute_integration_test PRIVATE
 )
 add_test(NAME episode_driver_tribute_integration_test COMMAND episode_driver_tribute_integration_test)
 
+if(DEFINED ENV{OCGFORGE_PHASE1_RAW_ROOT} AND
+   DEFINED ENV{OCGFORGE_PHASE1_POST_RAW_ROOT} AND
+   DEFINED ENV{OCGFORGE_PHASE1_EXPECTED_HEAD} AND
+   DEFINED ENV{OCGFORGE_PHASE1_POST_PROBE_SHA256})
+    add_test(NAME phase1_equivalence_acceptance
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tests/episodic/phase1_acceptance.py"
+                --baseline-raw-root "$ENV{OCGFORGE_PHASE1_RAW_ROOT}"
+                --post-raw-root "$ENV{OCGFORGE_PHASE1_POST_RAW_ROOT}"
+                --expected-head "$ENV{OCGFORGE_PHASE1_EXPECTED_HEAD}"
+                --expected-probe-sha256 "$ENV{OCGFORGE_PHASE1_POST_PROBE_SHA256}")
+    set_tests_properties(phase1_equivalence_acceptance PROPERTIES
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        LABELS "PHASE1_ACCEPTANCE")
+endif()
+
 add_executable(protocol_test tests/protocol/protocol_test.cpp)
 target_link_libraries(protocol_test PRIVATE ygo_m0)
 add_test(NAME protocol_test COMMAND protocol_test)
