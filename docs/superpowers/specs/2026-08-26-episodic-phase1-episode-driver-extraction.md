@@ -206,8 +206,8 @@ SimulationResult leaves run_canonical_simulation.
 | CoreHost | Unique ownership through std::unique_ptr because the existing type is non-movable. Construct after driver input is accepted; load both decks, start the duel, then load the existing optional fixture script in the current order. | Immediately on failure teardown or driver destruction. | Never crosses a boundary. | The only mutable core owner. No reference, pointer, query buffer, or engine address is exposed. |
 | ObservationSession[2] | Values constructed with perspectives 0 and 1 after duel setup. | Driver destruction. | Never crosses a boundary. | Authoritative visible-event accumulators. Neither session is exposed. |
 | Current raw message | Value vector retained while its decision and any adapter-local continuation are active. | Replaced only after a final response allows another process result, or destroyed. | Never crosses a boundary. | Trace/diagnostic input only; never returned to policy/client. |
-| Current DecisionRequest | Optional value. The driver adopts the decoded request and replaces it with the protocol-created continuation request after an intermediate action. | Cleared before an accepted final response or on closure. | Borrowed by DriverDecisionBoundary only until the next mutating call or destruction. | Authoritative candidate vector and continuation state. The driver does not clone or sort candidates. |
-| Current PlayerObservation | Optional value built only in the existing Full observation mode; Deferred finalization is completed once by attach_decision_context. | Replaced when a new request is published or cleared on closure. | Borrowed by DriverDecisionBoundary only until the next mutating call or destruction. | Perspective-safe active observation only. No opponent observation is returned. |
+| Current DecisionRequest | Optional value. The driver adopts the decoded request and replaces it with the protocol-created continuation request after an intermediate action. | Cleared before an accepted final response or on closure. | Address borrowed by DriverDecisionBoundary only until the next mutating call or destruction. | Authoritative candidate vector and continuation state. The driver does not clone or sort candidates. |
+| Current PlayerObservation | Optional value built only in the existing Full observation mode; Deferred finalization is completed once by attach_decision_context. | Replaced when a new request is published or cleared on closure. | Address borrowed by DriverDecisionBoundary only until the next mutating call or destruction. | Perspective-safe active observation only. No opponent observation is returned. |
 | EngineTrace | Value, initialized with the existing v2 manifest. | Driver destruction after canonical simulation has read it. | Read-only reference may be used only while driver lives; it is not a decision boundary. | EpisodeDriver is the sole transition writer. Canonical simulation has read-only access after or during closure. |
 | Driver metrics | Value: existing process-call and response-submission counts plus candidate, observation, continuation, response-time, and semantic-action counters. | Driver destruction after a snapshot is copied to SimulationResult. | Read-only reference may be used only while driver lives; it is not a decision boundary. | Accounting source for moved advancement work. It is not a policy input. |
 | Lifecycle state | Private enum and counters: setup, advancing, awaiting decision, terminal, budget-exhausted, failed; existing trace decision index and current engine process index. | Driver destruction. | Never crosses a boundary. | Prevents skipped decisions and post-terminal mutation. It is not public V1 lifecycle data. |
@@ -215,21 +215,27 @@ SimulationResult leaves run_canonical_simulation.
 
 ### 5.1 Boundary lifetime rule
 
-DriverDecisionBoundary contains non-owning references to the driver's current
-DecisionRequest and, in Full observation mode, PlayerObservation. The rule is
-hard and must be documented in the actual internal header:
+DriverDecisionBoundary contains non-owning pointers to the driver's current
+DecisionRequest and, in Full observation mode, PlayerObservation. The pointer
+representation is a borrowed view, not an ownership or nullability loophole:
+`request != nullptr` is an invariant of every returned
+DriverDecisionBoundary; `observation != nullptr` is an invariant in Full
+observation mode, and `observation == nullptr` is permitted only in the
+existing `ObservationMode::None`. The rule is hard and must be documented in
+the actual internal header:
 
 ~~~text
 DriverBoundary references remain valid only until the next mutating
 EpisodeDriver call or driver destruction.
 ~~~
 
-The evaluator must not retain a boundary or either referenced object across
-apply_semantic_key, advance_until_boundary, or driver destruction. For safety,
-the evaluator treats every call to either mutating method as invalidating all
-previous boundary views, including an error path. An invalid semantic key is
-validated before state mutation and must preserve the driver's actual state,
-but callers still do not retain views across the call boundary.
+The evaluator must not retain a boundary or dereference either borrowed
+pointer across apply_semantic_key, advance_until_boundary, or driver
+destruction. A successful mutating call invalidates all previous boundary
+views. `ProtocolErrorCode::InvalidSemanticKey` is explicitly pre-mutation:
+the driver remains `AWAITING_DECISION` and the current values remain intact,
+but the canonical client handles that exception as the existing job error and
+does not reuse the old boundary as a retry or rejection protocol.
 
 This lifetime rule prevents an internal view from becoming an accidental
 long-lived public API. It also prevents a policy/client from holding a
@@ -260,8 +266,9 @@ struct EpisodeDriverConfig final {
 };
 
 struct DriverDecisionBoundary final {
-    const protocol::DecisionRequest& request;
-    const observation::PlayerObservation* observation;  // null only for existing None mode
+    const protocol::DecisionRequest* request = nullptr;  // invariant: non-null
+    const observation::PlayerObservation* observation = nullptr;
+        // non-null in Full mode; null only for existing ObservationMode::None
 };
 
 struct DriverGameTerminal final {
@@ -309,6 +316,11 @@ private:
 }  // namespace ygo::environment
 ~~~
 
+The pointer members keep `DriverDecisionBoundary`, and therefore
+`DriverBoundary`, normally copy/move assignable for the canonical client loop
+(`boundary = driver.apply_semantic_key(...)`). The returned-boundary invariants
+above, rather than reference-member assignment behavior, enforce validity.
+
 The constructor is needed because current canonical execution constructs a
 fresh duel before it enters the process loop. It owns that setup rather than
 accepting a CoreHost reference. advance_until_boundary is needed for initial
@@ -324,13 +336,13 @@ immobility without receiving a CoreHost reference.
 | Surface element | Why Phase 1 needs it | Consumer | Authority and visibility | Phase-2 disposition |
 | --- | --- | --- | --- | --- |
 | EpisodeDriverConfig | Transfers already resolved job inputs without CoreHost ownership escaping. | Canonical evaluator and test integration. | Internal value-only configuration; contains no public V1 identity or control schema. | Replace or adapt only when a public facade has accepted inputs. |
-| DriverDecisionBoundary.request | Lets the current canonical replay/conformance policy inspect the existing complete semantic domain. | Canonical evaluator only. | Borrowed authoritative protocol value; response-byte implementation detail is not widened into a public API. | Replaced by a versioned public DecisionFrame/view. |
-| DriverDecisionBoundary.observation | Makes the current perspective-safe active observation available when current Full mode already builds one. | Canonical evaluator and future internal facade client. | Borrowed and perspective-safe; null only for the pre-existing None mode. | Replaced by public DecisionFrame observation field. |
+| DriverDecisionBoundary.request | Lets the current canonical replay/conformance policy inspect the existing complete semantic domain. | Canonical evaluator only. | Non-null borrowed authoritative protocol pointer; response-byte implementation detail is not widened into a public API. | Replaced by a versioned public DecisionFrame/view. |
+| DriverDecisionBoundary.observation | Makes the current perspective-safe active observation available when current Full mode already builds one. | Canonical evaluator and future internal facade client. | Borrowed and perspective-safe; non-null in Full mode and null only for the pre-existing None mode. | Replaced by public DecisionFrame observation field. |
 | DriverGameTerminal | Lets canonical result formation obtain the existing engine-defined winner/reason without inspecting CoreHost. | Canonical evaluator. | Internal, authoritative only for a true decoded terminal. | Maps to public EpisodeTerminal later. |
 | DriverProcessBudgetExceeded | Keeps current max_steps closure distinct from a game terminal. | Canonical evaluator. | Internal, non-gameplay control result. | Maps to public Interrupted only after Phase-2 RunControl work. |
 | DriverFailure | Preserves fail-closed execution information while keeping CoreHost private. | Canonical evaluator. | Internal result mapped to current SimulationResult; never a public failure contract. | Replaced by a versioned public EpisodeFailure later. |
 | advance_until_boundary | Owns all automatic processing up to exactly one next decision, terminal, budget closure, or failure. | Canonical evaluator. | Authoritative mutating operation; never callable while a decision is pending. | Future facade uses the same internal operation, not a public method. |
-| apply_semantic_key | Enforces protocol membership validation, continuation application, exact response submission, and post-submit advancement in one authority. | Canonical evaluator. | Authoritative mutating operation; accepts a semantic key, not bytes, index, or CoreHost handle. | Future facade adapts it behind versioned action/freshness validation. |
+| apply_semantic_key | Enforces protocol membership validation, continuation application, exact response submission, and post-submit advancement in one authority. | Canonical evaluator. | Authoritative mutating operation; accepts a semantic key, not bytes, index, or CoreHost handle. An unknown/stale key propagates the existing `ProtocolErrorCode::InvalidSemanticKey` before mutation. | Future facade adapts it behind versioned action/freshness validation. |
 | trace and metrics | Preserve current result hash, serialization, persistence, and counter work without duplicate transition construction. | Canonical evaluator only. | Read-only internal views; driver is the only trace writer. | Future audit/telemetry contracts must be separately versioned. |
 
 DriverBoundary is internal now. The accepted Phase-2 public concepts listed
@@ -349,7 +361,12 @@ errors return the private DriverFailure result after the driver marks itself
 failed and destroys its mutable CoreHost. Canonical simulation copies that
 result into the current SimulationResult mapping. Errors before a driver
 exists, such as CoreHost construction failure, remain on the current canonical
-exception path. No Phase-1 public failure DTO is introduced.
+exception path. The deliberate exception is an unknown or stale semantic key:
+`apply_semantic_key` propagates the existing
+`ProtocolErrorCode::InvalidSemanticKey` before mutation, while the driver
+remains `AWAITING_DECISION`; canonical maps it through the current job-level
+ProtocolError path. No Phase-1 public failure DTO or `StepRejected` is
+introduced.
 
 ## 7. Exact advancement algorithm
 
@@ -417,7 +434,8 @@ advance_until_boundary():
 
     current_request = decoded request by value
     publish_current_request()
-    return DriverDecisionBoundary(current_request, current_observation if Full)
+    return DriverDecisionBoundary(address of current_request,
+                                  address of current_observation if Full, else null)
 
   set state = budget-exhausted
   return DriverProcessBudgetExceeded(CoreHost.process_call_count())
@@ -454,11 +472,22 @@ available, tears down the mutable duel, and leaves no live boundary.
 
 ### 7.3 Apply an atomic candidate
 
+For either atomic or continuation application, `select_candidate` is the
+first operation after the `AWAITING_DECISION` state check. If it reports the
+existing `ProtocolErrorCode::InvalidSemanticKey` for an unknown or stale key,
+the driver propagates that `ProtocolError` immediately. It does not create a
+TraceStep, change counters, replace request/observation state, submit a
+response, call `process`, return `DriverFailure`, or leave
+`AWAITING_DECISION`. The canonical client maps the exception exactly as it
+does today for a job-level ProtocolError; it must not retry, retain/reuse the
+old boundary, or expose a Phase-2-style `StepRejected` result.
+
 ~~~text
 apply_semantic_key(key), when current_request has no continuation:
   require state == awaiting decision
   selected = protocol.select_candidate(current_request, key)
-    // membership and complete-domain validation occur before mutation
+    // InvalidSemanticKey propagates before any mutation.
+    // Membership and complete-domain validation occur before mutation.
   create the existing decision TraceStep from retained raw message,
     current request, and existing internal public-state hash query
   attach current observation metadata when present
@@ -485,6 +514,7 @@ back to the driver. No selected ActionCandidate reference survives the call.
 apply_semantic_key(key), when current_request has a continuation:
   require state == awaiting decision
   selected = protocol.select_candidate(current_request, key)
+    // InvalidSemanticKey propagates before any mutation.
   transition = protocol.apply_continuation_action(current_request, selected.semantic_key)
 
   if transition is intermediate:
@@ -596,26 +626,49 @@ the branch. It may add the smallest existing-style deterministic fixture for
 that precise coverage gap only. The PR must document the branch, why the
 locked corpus missed it, and why the fixture does not expand gameplay support.
 
-### 9.1 Pre-refactor characterization artifact
+### 9.1 Pre-refactor raw-artifact capture and pure normalization
 
-Before moving production code, generate one immutable baseline from a clean
-worktree at exactly 72c29009f107a2ebb172d85de1c70b38d2f007d8. The generator
-uses the existing probe trace/result outputs; it must not modify them, invent
-actions, or use a post-refactor binary.
+P1-G01 is a one-time baseline capture, not a command that may be replayed
+against the implementation. It has two strictly separated stages:
+
+~~~text
+Worktree A — exact 72c29009f107a2ebb172d85de1c70b38d2f007d8
+  build the unchanged pre-refactor binary
+  run the locked corpus using only the existing commands/binaries
+  emit immutable raw trace/result artifacts and a raw-artifact manifest
+
+Worktree B — implementation branch
+  run a versioned pure collector over Worktree-A raw artifacts
+  write the checked-in characterization fixture and detached provenance manifest
+~~~
+
+The Worktree-A capture does not contain, invoke, or depend on the new
+collector. The Worktree-B collector is a pure normalizer: it reads the
+already emitted raw artifacts and their manifest, and it does not build a
+probe, invoke a worker, or run any simulation. It must not modify raw
+artifacts, invent actions, or use a post-refactor binary as a baseline source.
 
 The implementation PR should add the following test-only assets:
 
 ~~~text
 tools/episodic/capture_phase1_characterization.py
 tests/episodic/fixtures/phase1-pre-extraction-characterization.json
+tests/episodic/fixtures/phase1-pre-extraction-characterization.provenance.json
 tests/episodic/test_phase1_equivalence.py
 ~~~
 
-The fixture is generated, source-controlled for exact comparison, and marked
-with its generator version, base commit, probe binary identity, rules/deck
-identities, and command arguments. It is never hand-edited to match a
-refactor. The generated runtime copy belongs under an ignored artifacts path;
-this documentation PR creates neither copy.
+The fixture is generated and source-controlled for exact comparison. Its
+generated detached provenance manifest binds the base source SHA, base
+binary/build identity, rules/deck identities, normalized collector arguments,
+raw-artifact names and SHA-256 values, collector source SHA/version, and the
+fixture SHA-256. A detached manifest is required because embedding a file's
+own digest in that file would be self-referential. Paths in the recorded
+arguments are repository-relative or normalized identifiers, never
+host-specific absolute paths.
+
+The fixture and provenance manifest are never hand-edited to match a refactor.
+The generated runtime raw artifacts belong under an ignored artifacts path;
+this documentation PR creates neither capture nor generated copy.
 
 The sidecar uses a test-only schema identifier such as
 ocgforge.episodic.phase1.characterization.v1. It is not the accepted public
@@ -712,7 +765,7 @@ automatic response.
 | MSG_RETRY | retry counter increments; failure_code retry; current runtime error path fails job | Driver detects the decoded retry at the same process boundary. | No retry and no action selection; driver becomes failed and tears down. | P1-G11. |
 | Unsupported engine message, multiple interactive messages, malformed protocol message | ProtocolError maps to unsupported_decision unless it is incomplete candidates | Driver calls the same decoder and emits the existing bounded diagnostic using retained raw message and trace context. | No response after failure; teardown immediately. | P1-G11 and P1-G06. |
 | Empty, duplicate, incomplete, or response-inconsistent candidate domain | ProtocolErrorCode::IncompleteCandidates maps to candidate_truncated and truncated counter | Driver invokes the same validation before publication and before selected-key mutation. | No candidate repair, filtering, or selection; teardown. | P1-G03/P1-G11. |
-| Unknown or stale semantic key | Current select_candidate/apply continuation rejects it | Driver calls select_candidate before replacing request, appending a trace step, submitting, or processing. | The valid current state remains unchanged; client must nevertheless discard old views across the call boundary. | P1-G06 and direct stale-key test. |
+| Unknown or stale semantic key | Current select_candidate/apply continuation rejects it with `ProtocolErrorCode::InvalidSemanticKey` | Driver propagates the existing `ProtocolError` before replacing request/observation, appending a trace step, changing a counter, submitting, or processing; it does not produce `DriverFailure`. | Driver remains `AWAITING_DECISION`; canonical maps the error through its current job-level ProtocolError path, with no retry, auto-selection, or Phase-2 `StepRejected`. | P1-G06, P1-G11, and direct stale-key-through-driver test. |
 | Candidate/observation inconsistency | Unsupported ProtocolError and fail-closed result | Driver uses the existing observation helper exactly once per published boundary. | No synthesized visible locator or response; teardown. | P1-G04/P1-G11/P1-G12. |
 | Observation/query/finalization failure | Existing core or general failure result, depending on source exception | Driver snapshots the current lower-layer category as private DriverFailure for canonical's existing result mapping. | No policy fallback; no continued process loop. | P1-G04/P1-G11/P1-G12. |
 | Core process or response failure | core_errors increments; failure_code core_error | Driver is the only caller, so it captures context, produces private DriverFailure, and tears down the unique host. Canonical maps the existing result fields. | No reprocess or resubmit. | P1-G07/P1-G11. |
@@ -796,7 +849,7 @@ Historical M3/M4 evidence is context for the corpus, not a fresh PASS claim.
 
 | Gate | Purpose | Exact setup | Exact PASS condition | Failure severity | Evidence artifact |
 | --- | --- | --- | --- | --- | --- |
-| P1-G01 Current behavior characterization | Freeze the actual pre-refactor semantic baseline. | Clean worktree at 72c29009f107a2ebb172d85de1c70b38d2f007d8; build existing ygo_core_probe; run tests/m3/full_game/full_fixed_deck_test.py with 16 games and max steps 2200; run existing shared-simulation probes; run collector. | Generated fixture names the exact base SHA and contains all 16 terminal records plus specified nonterminal/unsupported summaries. | BLOCKER | tests/episodic/fixtures/phase1-pre-extraction-characterization.json and capture log. |
+| P1-G01 Current behavior characterization | Freeze the actual pre-refactor semantic baseline exactly once. | **Worktree A:** clean worktree at 72c29009f107a2ebb172d85de1c70b38d2f007d8; build the unchanged existing ygo_core_probe; run tests/m3/full_game/full_fixed_deck_test.py with 16 games and max steps 2200 plus existing shared-simulation probes; emit immutable raw trace/result artifacts and their manifest. **Worktree B:** on the implementation branch, run the versioned pure collector over those raw artifacts only. | Raw-artifact manifest binds exact base source and binary/build identity; generated fixture and detached provenance manifest bind the raw SHA-256 values, collector source SHA/version and arguments, and contain all 16 terminal records plus specified nonterminal/unsupported summaries. | BLOCKER | immutable Worktree-A raw-artifact manifest/capture log; tests/episodic/fixtures/phase1-pre-extraction-characterization.json and .provenance.json. |
 | P1-G02 Driver ownership compile boundary | Prove one active advancement owner. | Build ygo_m4 and new driver integration target; run a source-ownership guard that checks canonical_simulation no longer calls CoreHost process/submit, decoder, observation builder, continuation apply, or trace append APIs. | Build succeeds and the guard identifies EpisodeDriver as the only runtime owner of those calls. | BLOCKER | CTest log and ownership-guard output. |
 | P1-G03 Candidate-domain equivalence | Detect membership, order, or key drift. | Run post-refactor collector over the locked corpus and compare every ordered record to the fixture. | Same count, ordered semantic-key vector, test-only digest, and selected key at every boundary. | BLOCKER | normalized comparison JSON and diff-free report. |
 | P1-G04 Observation equivalence | Preserve perspective-safe observation construction. | Same collector comparison with Full observation mode; focused observation tests. | Same observation schema/hash for every recorded boundary and terminal record; existing focused tests pass. | BLOCKER | comparison report and CTest log. |
@@ -806,15 +859,15 @@ Historical M3/M4 evidence is context for the corpus, not a fresh PASS claim.
 | P1-G08 Trace equivalence | Preserve existing trace contract. | Full 16-game Conformance run in the same build/configuration and compare JSONL bytes and trace hashes. | Exact v2 JSONL and trace hash equality for each comparable job; no field reinterpretation. | BLOCKER | per-job trace byte/hash comparison. |
 | P1-G09 Terminal equivalence | Preserve game outcomes. | Full 16-game corpus and shared full-game probe. | Same terminal flag, winner, win reason, engine steps, and current M3 summary values. | BLOCKER | comparison report. |
 | P1-G10 Gameplay-hash equivalence | Preserve semantic execution. | Full 16-game corpus, shared probe, replay cases where present. | Same semantic gameplay hash for each same semantic job. | BLOCKER | comparison report. |
-| P1-G11 Failure equivalence | Preserve fail-closed behavior. | Existing max-steps, forced unsupported, malformed/unsupported, retry, stale-key, and invalid-domain probes. | Same result class/failure code/error counter behavior, no fabricated output, and current probe exit behavior. | BLOCKER | focused test logs and negative-case transcript. |
+| P1-G11 Failure equivalence | Preserve fail-closed behavior. | Existing max-steps, forced unsupported, malformed/unsupported, retry, stale-key, and invalid-domain probes. | Same result class/failure code/error counter behavior, no fabricated output, and current probe exit behavior. The stale-key-through-driver check must observe the existing `ProtocolErrorCode::InvalidSemanticKey` with unchanged `AWAITING_DECISION` state, request/observation identity, trace length, counters, process count, and response count. | BLOCKER | focused test logs and negative-case transcript. |
 | P1-G12 Privacy regression | Prevent information disclosure. | Existing privacy, observation, paired-world, and continuation-privacy CTest coverage. | All current privacy tests pass unchanged; P1-G04 shows no hash drift. | BLOCKER | CTest log. |
 | P1-G13 Worker-count/process equivalence | Preserve M4 worker semantics. | Build ygo_m4_worker; run tests/m4 worker integration and protocol suites with the refactored evaluator. | Existing semantic projection is equal across worker-count modes; worker JSON contract is unchanged. | BLOCKER | M4 unittest log and worker outputs. |
 | P1-G14 Fresh-duel isolation | Preserve one private duel/session per job. | Existing lifecycle and worker valid-invalid-valid scenarios plus a repeated canonical-job test. | Each job receives a fresh host/session; no state leaks across jobs and existing worker recovery behavior remains. | BLOCKER | worker integration/lifecycle logs. |
 | P1-G15 Full M0–M4 regression | Check all accepted lower-layer regressions. | Final native CTest and repository, M3, and M4 Python suites on the final implementation build. | Every configured applicable suite exits zero. New test counts may differ from historic evidence. | BLOCKER | final verification logs. |
-| P1-G16 Clean-checkout verification | Prove reproducibility from final source. | New clean worktree at final implementation SHA; configure/build required targets; run P1-G01 through P1-G15 commands. | All required gates reproduce without untracked source or sibling-repository dependency. | BLOCKER | clean-checkout command log and artifact manifest. |
+| P1-G16 Clean-checkout verification | Prove reproducibility from final source without replacing the pre-refactor baseline. | New clean worktree at final implementation SHA; verify immutable P1-G01 provenance/integrity, including fixture/provenance hashes and every archived raw-artifact hash; configure/build required targets; run P1-G02 through P1-G15 and P1-G17. | The P1-G01 baseline is verified but never regenerated; all final-source gates reproduce without untracked source or sibling-repository dependency. Missing immutable baseline evidence fails verification rather than causing a new baseline capture. | BLOCKER | clean-checkout command log, baseline-integrity report, and final artifact manifest. |
 | P1-G17 Driver tribute integration | Close the direct Driver/CoreHost intermediate-step gap without replacing lower-layer tests. | New driver integration test uses the same controlled tribute fixture semantics as m1_engine_fixture_test. | At least one intermediate tribute step leaves DriverMetrics mirrors of process_call_count and response_submission_count unchanged; the terminal action raises the latter by exactly one and next processing occurs only afterward. | BLOCKER | named CTest result and test output. |
 
-The planned baseline command for the primary corpus is:
+The planned Worktree-A baseline command for the primary corpus is:
 
 ~~~text
 python -B tests/m3/full_game/full_fixed_deck_test.py ^
@@ -836,25 +889,30 @@ PR must never merge a selectable second advancement path: before migration the
 driver is only a compile-time shell; the migration commit removes the canonical
 loop in the same commit that makes the driver active.
 
-### Step 0 — Freeze the pre-refactor baseline
+### Step 0 — Freeze the pre-refactor baseline and normalize it without replay
 
 - **Owning layer:** test and characterization tooling.
-- **Files to inspect/change:** existing probe/full-game/shared-simulation
-  tests; add tools/episodic/capture_phase1_characterization.py and generated
-  tests/episodic/fixtures/phase1-pre-extraction-characterization.json.
+- **Files to inspect/change:** **Worktree A** runs the existing probe/full-game/
+  shared-simulation tests unchanged and emits only ignored raw artifacts plus
+  their manifest. **Worktree B** adds
+  tools/episodic/capture_phase1_characterization.py, generated
+  tests/episodic/fixtures/phase1-pre-extraction-characterization.json, and its
+  detached .provenance.json manifest.
 - **Exact responsibility moved:** none.
-- **Existing helper reused:** existing ygo_core_probe outputs,
-  full_fixed_deck_test.py, and trace/result serialization.
-- **New type/function:** a test-only collector and exact normalized comparator
-  schema.
+- **Existing helper reused:** Worktree-A existing ygo_core_probe outputs,
+  full_fixed_deck_test.py, shared-simulation probes, and trace/result
+  serialization.
+- **New type/function:** a Worktree-B pure artifact collector and exact
+  normalized comparator schema. The collector never invokes a simulation.
 - **Invariants touched:** none; the primary vector remains the existing
   ordered trace domain.
-- **Tests added/updated:** collector self-test and fixture-integrity test.
+- **Tests added/updated:** collector self-test, fixture-integrity test, and
+  provenance-integrity test including source/build/artifact/collector hashes.
 - **Acceptance gate:** P1-G01 and the input fixture for P1-G03 through
   P1-G11.
 - **Expected semantic delta:** NONE.
-- **Rollback point:** delete only the new tooling/fixture; no runtime changes
-  exist.
+- **Rollback point:** delete only Worktree-B tooling/fixture; preserve the
+  immutable Worktree-A evidence and make no runtime change.
 
 ### Step 1 — Declare the internal driver seam in the existing ygo_m4 target
 
@@ -908,17 +966,19 @@ loop in the same commit that makes the driver active.
 - **Rollback point:** before canonical adopts the driver, this work remains
   uncalled and must not be merged as a second runtime path.
 
-### Step 3 — Move action application and make canonical simulation the first client
+### Step 3 — ATOMIC AUTHORITY TRANSFER
 
 - **Owning layer:** EpisodeDriver for mechanics; canonical simulation for
   policy/replay/result concerns.
 - **Files to inspect/change:** episode_driver implementation;
   canonical_simulation.cpp; only the ygo_m4 source list already changed in
   Step 1.
-- **Exact responsibility moved:** semantic-key resolution, atomic application,
-  continuation application, intermediate boundary publication, final response
-  submission, trace decision-step append, semantic-action and continuation
-  counters, and driver closure.
+- **Exact responsibility moved, in one commit:** EpisodeDriver becomes active;
+  the canonical client loop replaces the old loop; semantic-key resolution,
+  atomic application, continuation application, intermediate boundary
+  publication, final response submission, trace decision-step append,
+  semantic-action/continuation counters, and driver closure move to the
+  driver; **all** direct canonical advancement calls are removed.
 - **Existing helper reused:** select_candidate,
   DeterministicConformancePolicy::choose, apply_continuation_action,
   sha256_bytes, and existing trace helper functions.
@@ -927,14 +987,21 @@ loop in the same commit that makes the driver active.
   ~~~text
   boundary = driver.advance_until_boundary()
   while boundary is DriverDecisionBoundary:
-    key = replay next key or m3_policy.choose(boundary.request).semantic_key
-    boundary = driver.apply_semantic_key(key)
+    require boundary.request != nullptr
+    key = replay next key or m3_policy.choose(*boundary.request).semantic_key
+    try:
+      boundary = driver.apply_semantic_key(key)
+    catch ProtocolError with code ProtocolErrorCode::InvalidSemanticKey:
+      map through the existing canonical job-level ProtocolError path; do not retry
   map terminal, process-budget, or DriverFailure into the current SimulationResult
   ~~~
 
 - **Invariants touched:** the driver revalidates the chosen key before
   mutation; policy does not get CoreHost; an intermediate continuation neither
-  submits nor processes; driver is sole trace writer.
+  submits nor processes; driver is sole trace writer; the source-ownership
+  guard passes in this commit and confirms that canonical_simulation.cpp has
+  no direct CoreHost lifecycle/process/submit/query, raw decode, observation
+  construction, continuation application, or trace-append authority.
 - **Tests added/updated:** transcript comparator, stale-key test through the
   driver, and source-ownership guard.
 - **Acceptance gate:** P1-G02 through P1-G11.
@@ -942,28 +1009,30 @@ loop in the same commit that makes the driver active.
 - **Rollback point:** revert this one atomic migration commit to restore the
   old canonical loop; do not retain both active paths.
 
-### Step 4 — Delete duplicated canonical advancement mechanics and retain result work
+### Step 4 — Post-transfer cleanup only (no authority changes)
 
 - **Owning layer:** canonical simulation remains a client.
 - **Files to inspect/change:** canonical_simulation.cpp and its includes;
-  source-ownership guard.
-- **Exact responsibility moved:** remove direct CoreHost lifecycle/process/
-  submit/query usage, raw decode, session handling, observation creation,
-  continuation application, trace append, and moved metrics from canonical
-  simulation.
+  comments and result-mapping names; source-ownership guard remains a
+  regression check.
+- **Exact responsibility moved:** none. Step 3 has already removed every
+  direct advancement authority. This step may remove dead includes, normalize
+  names, simplify result mapping, and clarify comments only.
 - **Existing helper reused:** driver trace/metrics read-only access; existing
   semantic_gameplay_hash, canonical trace serialization, m3_summary_json, and
   result persistence.
 - **New type/function:** a narrow driver-to-SimulationResult metrics snapshot
   mapping only.
 - **Invariants touched:** canonical simulation may read but never append to
-  driver trace; worker result fields stay value-only and unchanged.
-- **Tests added/updated:** source guard rejects forbidden lower-layer calls in
-  canonical_simulation.cpp.
-- **Acceptance gate:** final P1-G02 and P1-G08.
+  driver trace; worker result fields stay value-only and unchanged. This step
+  must not remove, relocate, or introduce an advancement call.
+- **Tests added/updated:** retain the already-passing source-ownership guard;
+  no new ownership transition is permitted.
+- **Acceptance gate:** preserve P1-G02 and P1-G08 evidence established by
+  Step 3.
 - **Expected semantic delta:** NONE.
-- **Rollback point:** revert together with Step 3, never manually restore a
-  partial loop.
+- **Rollback point:** revert this cleanup separately if needed; revert Step 3
+  as one unit to restore the old loop, never manually restore a partial loop.
 
 ### Step 5 — Add additive driver integration coverage
 
@@ -998,9 +1067,10 @@ loop in the same commit that makes the driver active.
   M4 Python, full-game, and worker test commands.
 - **New type/function:** none beyond the collector/comparator from Step 0.
 - **Invariants touched:** every semantic equivalence dimension.
-- **Tests added/updated:** execute P1-G01 through P1-G17 from a clean final
-  checkout.
-- **Acceptance gate:** P1-G01 through P1-G17.
+- **Tests added/updated:** verify P1-G01 provenance/integrity, then execute
+  P1-G02 through P1-G15 and P1-G17 from a clean final checkout. P1-G01 is
+  never rerun from the final implementation SHA.
+- **Acceptance gate:** P1-G01 integrity plus P1-G02 through P1-G17 execution.
 - **Expected semantic delta:** NONE.
 - **Rollback point:** reject or revert the implementation PR if any blocker
   gate differs. Do not rebless a baseline in the same change.
@@ -1014,20 +1084,24 @@ rollback ambiguous.
 
 Recommended commit order:
 
-1. test: capture immutable Phase-1 canonical characterization
+1. test: normalize immutable pre-refactor raw artifacts into Phase-1 characterization
 2. build: declare internal EpisodeDriver seam in ygo_m4
-3. refactor: move canonical advancement into EpisodeDriver
+3. refactor: atomically transfer canonical advancement authority to EpisodeDriver
 4. test: add driver equivalence and tribute integration coverage
 5. docs/evidence: record only generated final evidence that an accepted gate
    requires
 
-Commit 3 must both activate the driver and remove the old direct advancement
-loop. Its diff can be large, but its authority transfer is atomic and
-reviewable against the committed baseline. No commit may introduce a runtime
-feature flag that chooses between two advancement implementations.
+Commit 3 must activate the driver, replace the canonical loop, remove every
+old direct advancement call, and make the source-ownership guard pass in the
+same commit. Its diff can be large, but its authority transfer is atomic and
+reviewable against the committed baseline. Commit 4 and later may clean dead
+includes, names, result mapping, or comments, but may not remove or relocate
+additional advancement authority. No commit may introduce a runtime feature
+flag that chooses between two advancement implementations.
 
 The implementation PR remains separate from this docs-only PR. It must not
-merge until all blocker gates have fresh evidence. It must not update
+merge until P1-G01 baseline integrity is verified and all final-source blocker
+gates have fresh evidence. It must not update
 CURRENT_PROJECT_STATE.md to claim a public episodic implementation merely
 because this internal extraction exists.
 
@@ -1051,12 +1125,12 @@ because this internal extraction exists.
 | 14. Who owns semantic gameplay hashing? | Canonical result aggregation calls the existing hash function over the driver-owned completed trace. |
 | 15. How is an intermediate continuation represented? | A new protocol-created DecisionRequest with the same engine step, a new continuation state/domain, a false engine_advanced trace step, and a new driver boundary. |
 | 16. How is a true engine terminal represented? | DriverGameTerminal internally, derived only from decoded MSG_WIN, with the current terminal trace record and winner/reason. |
-| 17. How are fail-closed errors represented? | A private DriverFailure plus failed driver state, mapped to the existing SimulationResult fields; no public V1 failure type in Phase 1. |
+| 17. How are fail-closed errors represented? | A private DriverFailure plus failed driver state, mapped to the existing SimulationResult fields; an unknown/stale key alone preserves the existing pre-mutation `ProtocolErrorCode::InvalidSemanticKey` path. No public V1 failure type or `StepRejected` exists in Phase 1. |
 | 18. How is process budget preserved? | Driver counts the same CoreHost process calls up to current job.max_steps, returns internal budget exhaustion, and canonical maps it to current nonterminal behavior. |
 | 19. Is semantic_action_budget needed now? | No. It is accepted Phase-2 RunControl semantics and must not alter Phase-1 canonical behavior. |
 | 20. Is submission_token needed now? | No. It is Phase-2 public freshness control and has no Phase-1 internal behavior. |
-| 21. What code is deleted after migration? | Direct CoreHost lifecycle/process/submit/query, raw decoding, sessions, observation construction, continuation application, trace append, and moved counters from canonical_simulation.cpp. |
-| 22. How is no semantic drift proven? | Immutable pre-refactor transcript plus exact per-boundary, trace, result, privacy, worker, and clean-checkout gates. |
+| 21. What code is deleted after migration? | In atomic Step 3: direct CoreHost lifecycle/process/submit/query, raw decoding, sessions, observation construction, continuation application, trace append, and moved counters from canonical_simulation.cpp. Later cleanup removes no advancement authority. |
+| 22. How is no semantic drift proven? | Immutable pre-refactor raw artifacts and provenance-normalized transcript, plus exact per-boundary, trace, result, privacy, worker, and clean-checkout gates. |
 | 23. How do M4 workers consume it? | Unchanged: the worker continues to call run_canonical_simulation and serialize the same SimulationResult. |
 | 24. Which current tests are sufficient? | The 16-game matrix, shared probes, continuation protocol/core tests, privacy/observation tests, and M4 worker tests cover their existing layers. |
 | 25. Which new tests are needed? | A generated transcript collector/comparator, ownership guard, stale-key-through-driver check, and additive same-fixture tribute Driver integration test. |
@@ -1071,9 +1145,9 @@ None identified during the live-code inspection and architecture review.
 
 ### MAJOR
 
-1. **DriverBoundary reference lifetime must be explicit.** The implementation
-   must state and test that boundary references remain valid only until the
-   next mutating driver call or driver destruction.
+1. **DriverBoundary borrowed-view lifetime must be explicit.** The
+   implementation must state and test that boundary pointers remain valid only
+   until the next mutating driver call or driver destruction.
 2. **EpisodeDriver must be the sole writer of existing EngineTrace
    transitions.** Canonical simulation may derive results from the trace but
    must not reconstruct or append any parallel transition.
