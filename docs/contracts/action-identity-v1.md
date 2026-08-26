@@ -71,8 +71,9 @@ cont.raw_message_hash.continuation_kind.engine.engine_step
 ```
 
 The line wrapping above is presentation only; the encoded ID contains no
-whitespace. This existing raw-message hash is not raw engine bytes and is
-not copied into the script-closure payload by this prerequisite.
+whitespace. This existing raw-message hash is not raw engine bytes, but it is
+the SHA-256 identity of the complete engine frame. It is not copied into the
+script-closure payload by this prerequisite.
 
 For a given `DecisionRequest`, each key is unique. The protocol-provided
 candidate vector order is authoritative and is not part of key construction;
@@ -88,10 +89,17 @@ token.
 
 ## Privacy and replay boundary
 
-This schema ID is a version tag and contains no gameplay data. The existing
-protocol's raw-message hash remains a protocol-owned request field; this
-contract does not copy raw engine state or hidden card identity into the
-environment closure or candidate-domain identity. The public observation
+Action Identity v1 describes the existing internal semantic-key grammar.
+Continuation semantic keys may derive from `raw_message_hash` through their
+`continuation_id`; therefore a `semantic_key` is not automatically
+policy-safe. The candidate-domain digest hashes the supplied semantic keys
+unchanged and inherits their safety classification. Neither a semantic key
+nor a candidate-domain digest is automatically safe for public publication.
+
+Any public `EpisodicEnvironment` projection MUST independently prove that the
+complete key and domain are perspective-safe for the acting player using the
+current `PlayerObservation`/public-projection audit. If a key or domain cannot
+be proven perspective-safe, publication fails closed. The public observation
 boundary remains `PlayerObservation` v1.
 
 Replay compares the ordered semantic keys and their owning decision/domain
