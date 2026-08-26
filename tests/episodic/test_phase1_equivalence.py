@@ -70,6 +70,18 @@ class Phase1EquivalenceTest(unittest.TestCase):
         self.assertNotIn("OCG_DuelProcess", source)
         self.assertNotIn("ygo_core_probe", source)
 
+    def test_collector_json_writer_is_lf_stable(self) -> None:
+        from tools.episodic.capture_phase1_characterization import _write_json
+
+        with tempfile.TemporaryDirectory(prefix="ocgforge-phase1-json-writer-") as directory:
+            output = Path(directory) / "output.json"
+            _write_json(output, {"value": "ok"})
+            data = output.read_bytes()
+        self.assertNotIn(b"\r", data)
+        self.assertTrue(data.endswith(b"\n"))
+        self.assertFalse(data.endswith(b"\n\n"))
+        self.assertEqual(data, b'{\n  "value": "ok"\n}\n')
+
     def test_checked_fixture_binds_the_immutable_baseline(self) -> None:
         self.assertTrue(FIXTURE.is_file(), f"missing generated fixture: {FIXTURE}")
         self.assertTrue(PROVENANCE.is_file(), f"missing provenance: {PROVENANCE}")

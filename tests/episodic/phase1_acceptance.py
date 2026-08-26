@@ -11,6 +11,9 @@ import sys
 ROOT = Path(__file__).resolve().parents[2]
 FIXTURE = ROOT / "tests" / "episodic" / "fixtures" / "phase1-pre-extraction-characterization.json"
 BASELINE_COMMIT = "72c29009f107a2ebb172d85de1c70b38d2f007d8"
+PROVENANCE_SCHEMA = "ocgforge.episodic.phase1.characterization.provenance.v1"
+CHARACTERIZATION_SCHEMA = "ocgforge.episodic.phase1.characterization.v1"
+COLLECTOR_VERSION = "capture_phase1_characterization.v1"
 
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -198,13 +201,26 @@ def main() -> int:
         label="baseline",
     )
     provenance = _load_json(ROOT / "tests" / "episodic" / "fixtures" / "phase1-pre-extraction-characterization.provenance.json")
-    if provenance.get("fixture_sha256") != _sha256_file(FIXTURE):
-        raise AssertionError("baseline provenance does not bind the checked fixture bytes")
     collector_path = ROOT / "tools" / "episodic" / "capture_phase1_characterization.py"
-    if provenance.get("collector_source_sha256") != _sha256_file(collector_path):
-        raise AssertionError("baseline provenance does not bind the collector source bytes")
-    if provenance.get("raw_artifact_manifest") != _normalized_raw_manifest(baseline_manifest):
-        raise AssertionError("baseline provenance does not bind the complete raw-artifact manifest")
+    expected_provenance = {
+        "schema_version": PROVENANCE_SCHEMA,
+        "characterization_schema_version": CHARACTERIZATION_SCHEMA,
+        "source_base_commit": BASELINE_COMMIT,
+        "fixture_path": "tests/episodic/fixtures/phase1-pre-extraction-characterization.json",
+        "fixture_sha256": _sha256_file(FIXTURE),
+        "collector_source_path": "tools/episodic/capture_phase1_characterization.py",
+        "collector_source_sha256": _sha256_file(collector_path),
+        "collector_version": COLLECTOR_VERSION,
+        "collector_arguments": {
+            "raw_root": "<immutable-worktree-a>/artifacts/episodic/phase1/pre-refactor",
+            "fixture": "tests/episodic/fixtures/phase1-pre-extraction-characterization.json",
+            "provenance": "tests/episodic/fixtures/phase1-pre-extraction-characterization.provenance.json",
+            "require_baseline": True,
+        },
+        "raw_artifact_manifest": _normalized_raw_manifest(baseline_manifest),
+    }
+    if provenance != expected_provenance:
+        raise AssertionError("baseline provenance envelope is not bound to the checked sources and manifest")
 
     post_manifest = _assert_post_binding(args.post_raw_root, args.expected_head, args.expected_probe_sha256)
     post = collect_characterization(args.post_raw_root, require_baseline=False)
