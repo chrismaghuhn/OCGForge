@@ -219,4 +219,15 @@ FixtureDeck load_fixture_deck(const std::filesystem::path& path) {
     return deck;
 }
 
+std::vector<std::uint32_t> canonical_required_script_codes(const FixtureDeck& deck_a,
+                                                            const FixtureDeck& deck_b) {
+    std::vector<std::uint32_t> codes = deck_a.main_deck;
+    codes.insert(codes.end(), deck_a.extra_deck.begin(), deck_a.extra_deck.end());
+    codes.insert(codes.end(), deck_b.main_deck.begin(), deck_b.main_deck.end());
+    codes.insert(codes.end(), deck_b.extra_deck.begin(), deck_b.extra_deck.end());
+    std::sort(codes.begin(), codes.end());
+    codes.erase(std::unique(codes.begin(), codes.end()), codes.end());
+    return codes;
+}
+
 }  // namespace ygo::core

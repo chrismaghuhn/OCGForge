@@ -126,7 +126,19 @@ The following schema/domain IDs are distinct:
 - environment semantic identity: `ocgforge.environment_identity.v1`;
 - episode semantic identity: `ocgforge.episode_identity.v1`;
 - semantic decision identity: `ocgforge.semantic_decision_identity.v1`;
-- candidate domain digest: `ocgforge.candidate_domain.v1`.
+- candidate domain digest: `ocgforge.candidate_domain.v1`;
+- decision contract: `ocgforge.decision_protocol.v1`;
+- action identity schema: `ocgforge.action_identity.v1`;
+- seed derivation: `ocgforge.seed_derivation.v1`;
+- ScriptStore resolution: `ocgforge.script_resolution.v1`;
+- required-script closure schema: `ocgforge.required_script_closure.v1`;
+- required-script closure hash domain: `ocgforge.required_script_closure_identity.v1`.
+
+The Decision Protocol, Action Identity, Seed Derivation, and Script
+Resolution contracts are the normative owners of their corresponding IDs.
+This contract consumes those IDs when constructing the environment semantic
+identity; it does not redefine their meanings. The exact closure inputs and
+canonical bytes are defined by `docs/contracts/script-resolution-v1.md`.
 
 ### 5.1 Canonical identity primitive encoding
 
@@ -158,6 +170,19 @@ Changing the canonical byte layout requires a new identity schema ID.
 - format ID, duel mode, duel flags;
 - ordered locked deck hashes/definitions;
 - required script closure identity.
+
+For V1, the consumed identity fields have these exact values:
+
+```text
+decision_contract_id      = "ocgforge.decision_protocol.v1"
+action_identity_schema_id = "ocgforge.action_identity.v1"
+seed_derivation_id        = "ocgforge.seed_derivation.v1"
+```
+
+`required_script_closure_identity` is the lowercase SHA-256 identity defined
+by `docs/contracts/script-resolution-v1.md`; it binds the pinned/resolved
+CardScripts environment, ScriptStore resolution contract, CoreHost bootstrap
+names, and deck-derived expected-card seed set. It is not a runtime allowlist.
 
 It excludes compiler, build type, filesystem paths, worker/PID, timing, machine, and run control.
 
@@ -269,7 +294,7 @@ EnvironmentConfig {
     duel_mode
     duel_flags
     locked deck definitions and ordered hashes
-    required scripts identity
+    required_script_closure_identity
 }
 ```
 

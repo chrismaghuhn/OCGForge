@@ -42,11 +42,6 @@ void add_timing(std::uint64_t& bucket, const Clock::time_point start, const Cloc
     }
 }
 
-core::SeedBundle seed_bundle(const std::uint64_t seed) {
-    return {{seed, seed ^ 0x9e3779b97f4a7c15ULL, seed + 0x6a09e667f3bcc909ULL,
-             (seed << 1) ^ 0xbb67ae8584caa73bULL}};
-}
-
 std::string json_escape(const std::string& value) {
     std::ostringstream result;
     result << '"';
@@ -193,7 +188,7 @@ struct EpisodeDriver::Impl final {
         host_config.starting_draw_count = config.starting_draw_count;
         host_config.draw_count_per_turn = config.draw_count_per_turn;
         host_config.starting_player = config.starting_player;
-        host_config.seed = seed_bundle(config.seed);
+        host_config.seed = core::derive_seed_bundle(config.seed);
         host_config.required_script_codes = config.required_script_codes;
 #ifdef YGO_M4_PERFORMANCE_AUDIT
         host_config.performance_audit = config.performance_audit;

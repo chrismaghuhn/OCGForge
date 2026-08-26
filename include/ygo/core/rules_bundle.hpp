@@ -30,4 +30,7 @@ struct FixtureDeck {
 
 FixtureDeck load_fixture_deck(const std::filesystem::path& path);
 
+std::vector<std::uint32_t> canonical_required_script_codes(const FixtureDeck& deck_a,
+                                                            const FixtureDeck& deck_b);
+
 }  // namespace ygo::core
