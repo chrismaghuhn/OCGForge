@@ -232,8 +232,9 @@ std::vector<VisibleGameEvent> project_visible_events(const std::vector<std::uint
                 }
             }
             reader.finish("shuffle");
+            const auto shuffle_player = event.player;
             auto& boundary = emit(VisibleEventKind::RandomizationBoundary);
-            boundary.player = event.player;
+            boundary.player = shuffle_player;
             boundary.count = 0;
             break;
         }

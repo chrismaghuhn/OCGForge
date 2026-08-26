@@ -44,6 +44,19 @@ void append_frame(std::vector<std::uint8_t>& stream, const std::vector<std::uint
 }
 
 int run() {
+    std::vector<std::uint8_t> first_shuffle;
+    append_frame(first_shuffle, {MSG_SHUFFLE_DECK, 1});
+    ygo::observation::ObservationSession first_shuffle_session(0);
+    first_shuffle_session.ingest(first_shuffle, 7);
+    const auto& first_shuffle_events = first_shuffle_session.visible_events();
+    require(first_shuffle_events.size() == 2, "shuffle did not emit its event pair");
+    require(first_shuffle_events[0].kind == ygo::observation::VisibleEventKind::Shuffle,
+            "shuffle event was not emitted first");
+    require(first_shuffle_events[1].kind == ygo::observation::VisibleEventKind::RandomizationBoundary,
+            "shuffle boundary was not emitted second");
+    require(first_shuffle_events[0].player == 1 && first_shuffle_events[1].player == 1,
+            "shuffle player was not retained across the boundary emission");
+
     std::vector<std::uint8_t> messages;
     append_frame(messages, {MSG_NEW_TURN, 1});
     std::vector<std::uint8_t> phase{MSG_NEW_PHASE};
