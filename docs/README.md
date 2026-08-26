@@ -26,6 +26,7 @@ This index keeps those layers separate.
 ## Accepted architecture decisions
 
 - [ADR-0001 — Modern OCG adapter](adr/ADR-0001-modern-ocg-adapter.md)
+- [ADR-0002 — Shared semantic EpisodeDriver for episodic environment](adr/ADR-0002-episodic-environment.md) — **Accepted**
 - [ADR index and policy](adr/README.md)
 
 ## Versioned contracts
@@ -35,8 +36,16 @@ This index keeps those layers separate.
 - [Engine trace v2](contracts/engine-trace-v2.md)
 - [Player observation v1](contracts/player-observation-v1.md)
 - [Player view v1](contracts/player-view-v1.md)
+- [Episodic environment v1](contracts/episodic-environment-v1.md) — **Accepted semantics; implementation evidence pending**
 
-A contract is not a milestone completion claim. It defines semantics for the surface that uses that version.
+A contract is not a milestone completion claim. It defines semantics for the surface that uses that version. Accepted contract semantics do not imply that an implementation or acceptance milestone has passed.
+
+## Episodic environment design and acceptance
+
+- [Episodic V1 acceptance plan](episodic/EPISODIC_V1_ACCEPTANCE.md)
+- [2026-08-26 episodic research decision record](research/episodic/EPISODIC_CONTRACT_RESEARCH_DECISION_2026-08-26.md)
+
+These documents define accepted post-M4 architecture and the evidence required to implement it. They do not claim episodic implementation, ML readiness, trajectory support, or a new milestone PASS.
 
 ## Decision-protocol evidence
 
