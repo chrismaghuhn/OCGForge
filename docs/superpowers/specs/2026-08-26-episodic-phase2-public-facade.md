@@ -2025,14 +2025,17 @@ test-only additions; they are not present in this docs-only change.
 
 Dependencies:
 
-    B1 identity constants
-      -> G01/G02/G03/G09/G19/G20/G30
+    B1 + B3 identity prerequisites
+      -> environment identity
+      -> episode identity
+      -> semantic decision identity
+      -> G01/G02/G03/G19/G20/G30/G32
 
-    B2 corrected candidate maximum
+    B2 metric definition and witness
       -> G28 final acceptance
 
-    B3 ratified closure meaning
-      -> environment identity implementation, G01, G19, G30, G32
+    candidate-domain codec / G09
+      -> independently specifiable before B1/B3 and the implementation PR
 
     public projection + Driver metadata
       -> G06-G18, G20, G22-G27
@@ -2047,38 +2050,56 @@ G31 cannot be reported as fresh from historical M4 documents; the commands
 must run successfully in the implementation environment. G32 must be the
 last clean-checkout gate.
 
-## 35. Staged implementation and verification sequence
+## 35. Prerequisite and staged implementation sequence
 
-The implementation PR should use one branch and one main PR because lifecycle,
-identity, token freshness, zero-mutation rejection, and Driver accepted-action
-metadata are tightly coupled. The commits may remain reviewable:
+Phase 2 has two sequential pull requests. The normative prerequisite PR must
+be accepted and merged before any Phase-2 implementation campaign begins.
+
+### 35.1 Normative prerequisite PR — must merge first
+
+This small PR owns the decisions that the implementation cannot safely guess:
+
+1. ratify the exact `decision_contract_id`, `action_identity_schema_id`, and
+   `seed_derivation_id` constants;
+2. define the exact `required_script_closure_identity` meaning and canonical
+   representation without changing ScriptStore/CoreHost runtime resolution;
+3. clarify the G28 metric vocabulary, including
+   `candidate_domain_max` versus the historical aggregate
+   `candidate_max_total`.
+
+The prerequisite PR must merge before environment, episode, or semantic
+decision golden vectors are finalized and before production facade code is
+started. It does not need to discover the final G28 witness; deterministic
+witness discovery and independent replay may run during the implementation
+campaign after the metric definition is accepted. G28 still must close before
+Episodic V1 FINAL PASS.
+
+### 35.2 Phase-2 implementation PR
+
+After the prerequisite PR merges, use one implementation branch and one main
+implementation PR because lifecycle, identity, token freshness, zero-mutation
+rejection, and Driver accepted-action metadata are tightly coupled. The
+implementation commits may remain reviewable:
 
 1. test: lock identity codec/golden/public-projection fixtures;
-2. prerequisite: ratify missing public identity constants, define the
-   required-script closure identity without changing ScriptStore semantics,
-   and clarify the G28 metric vocabulary in the owning review;
-3. feat: add canonical identity codecs and certified resource validation;
-4. feat: add value-owned EnvironmentDecisionRequest and
+2. feat: add canonical identity codecs and certified resource validation;
+3. feat: add value-owned EnvironmentDecisionRequest and
    EnvironmentActionCandidate projections;
-5. feat: add persistent EpisodicEnvironment construction/reset lifecycle;
-6. feat: add token namespace and semantic decision identities;
-7. feat: add fixed rejection precedence and zero-mutation assertions;
-8. refactor: add DriverApplyResult accepted-action metadata;
-9. feat: add Driver run-control and administrative interruption seam;
-10. feat: add accepted step, semantic/process budgets, and typed failures;
-11. feat: materialize safe two-perspective terminal views;
-12. test: close replay, reset isolation, paired-world privacy, and worker
+4. feat: add persistent EpisodicEnvironment construction/reset lifecycle;
+5. feat: add token namespace and semantic decision identities;
+6. feat: add fixed rejection precedence and zero-mutation assertions;
+7. refactor: add DriverApplyResult accepted-action metadata;
+8. feat: add Driver run-control and administrative interruption seam;
+9. feat: add accepted step, semantic/process budgets, and typed failures;
+10. feat: materialize safe two-perspective terminal views;
+11. test: close replay, reset isolation, paired-world privacy, and worker
     determinism;
-13. test: close G01-G30 including the reconciled G28 witness;
-14. test/evidence: fresh G31-G32 clean-checkout acceptance.
+12. test: close G01-G30 including the reconciled G28 witness;
+13. test/evidence: fresh G31-G32 clean-checkout acceptance.
 
-Step 2 is a separate normative prerequisite PR. Its accepted decisions must
-be merged before the Phase-2 implementation campaign starts: B1 and the
-identity portion of B3 are true implementation blockers, and the G28 metric
-vocabulary is fixed there. The deterministic G28 witness discovery/replay may
-continue during the implementation campaign, but B2/G28 must close before
-FINAL PASS. Do not split competing lifecycle authorities across parallel
-implementation branches.
+Do not split competing lifecycle authorities across parallel implementation
+branches. The implementation PR may proceed after the prerequisite decisions
+merge, but no final acceptance claim may omit the deterministic G28 witness.
 
 ## 36. Performance policy
 
