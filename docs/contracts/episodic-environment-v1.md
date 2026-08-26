@@ -1,7 +1,7 @@
 # OCGForge Episodic Environment Contract v1
 
 **Contract ID:** `ocgforge.episodic_environment.v1`  
-**Status:** Proposed — not normative until ADR-0002 is accepted.  
+**Status:** Accepted — normative public semantics under ADR-0002; implementation acceptance still requires all declared gates.  
 **Initial scope:** the already-certified fixed OCGForge rules bundle and locked Swordsoul Tenyi / Salamangreat matchup.  
 **Owning layer:** `environment` / shared `EpisodeDriver` orchestration above CoreHost, protocol, observation, and trace layers.
 
