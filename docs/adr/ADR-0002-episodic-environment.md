@@ -2,9 +2,9 @@
 
 ## Status
 
-Proposed: option B — extract one shared `EpisodeDriver` from the current canonical simulation path and expose a thin versioned episodic reset/step facade over the existing `PlayerObservation + DecisionRequest + complete ActionCandidate[]` boundary.
+Accepted: option B — extract one shared `EpisodeDriver` from the current canonical simulation path and expose a thin versioned episodic reset/step facade over the existing `PlayerObservation + DecisionRequest + complete ActionCandidate[]` boundary.
 
-This ADR is not architectural authority until accepted. Production implementation may target this proposal on a development branch, but merge/acceptance must preserve the contract and gates referenced below.
+This ADR is architectural authority for the episodic reset/step design. Acceptance of this ADR does not claim that the episodic environment is implemented or that any episodic milestone has passed; implementation must satisfy the versioned contract and acceptance gates referenced below.
 
 ## Context
 
@@ -31,7 +31,7 @@ Rejected. A framework API would become the source of reset/status/reward/action-
 
 ### B. Extract one shared semantic `EpisodeDriver` and build thin clients over it
 
-Accepted by this proposal.
+Accepted.
 
 The driver owns the authoritative episode lifecycle and advancement logic. The existing canonical evaluator becomes the first client of the driver. The new episodic environment becomes another client/facade. Policies continue to receive only the existing perspective-safe semantic boundary.
 
@@ -73,7 +73,7 @@ A shared internal `EpisodeDriver` is the only owner of:
 - terminal/interruption/failure closure;
 - semantic trace/audit prefix.
 
-`run_canonical_simulation()` must become a client of this driver before the public episodic API is accepted.
+`run_canonical_simulation()` must become a client of this driver before the public episodic API can claim implementation acceptance.
 
 ### 3. Policy boundary
 
