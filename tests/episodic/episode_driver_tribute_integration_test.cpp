@@ -147,29 +147,36 @@ int main() {
         std::uint64_t process_count_before_tribute = 0;
 
         for (std::uint32_t iteration = 0; iteration < 512; ++iteration) {
-            const auto* decision = std::get_if<ygo::environment::DriverDecisionBoundary>(&boundary);
-            if (decision == nullptr || decision->request == nullptr) {
-                if (std::holds_alternative<ygo::environment::DriverGameTerminal>(boundary)) {
-                    break;
+            bool is_tribute = false;
+            bool is_continuation = false;
+            std::uint64_t process_before_apply = 0;
+            std::uint64_t response_before_apply = 0;
+            std::string semantic_key;
+            {
+                const auto* decision = std::get_if<ygo::environment::DriverDecisionBoundary>(&boundary);
+                if (decision == nullptr || decision->request == nullptr) {
+                    if (std::holds_alternative<ygo::environment::DriverGameTerminal>(boundary)) {
+                        break;
+                    }
+                    if (std::holds_alternative<ygo::environment::DriverProcessBudgetExceeded>(boundary)) {
+                        throw std::runtime_error("tribute driver reached the process budget");
+                    }
+                    throw std::runtime_error("tribute driver returned a failure");
                 }
-                if (std::holds_alternative<ygo::environment::DriverProcessBudgetExceeded>(boundary)) {
-                    throw std::runtime_error("tribute driver reached the process budget");
-                }
-                throw std::runtime_error("tribute driver returned a failure");
-            }
 
-            const auto& request = *decision->request;
-            const bool is_tribute = request.engine_message_type == MSG_SELECT_TRIBUTE;
-            if (is_tribute && !saw_tribute) {
-                saw_tribute = true;
-                response_count_before_tribute = driver.metrics().response_submission_count;
-                process_count_before_tribute = driver.metrics().process_call_count;
+                const auto& request = *decision->request;
+                is_tribute = request.engine_message_type == MSG_SELECT_TRIBUTE;
+                if (is_tribute && !saw_tribute) {
+                    saw_tribute = true;
+                    response_count_before_tribute = driver.metrics().response_submission_count;
+                    process_count_before_tribute = driver.metrics().process_call_count;
+                }
+                is_continuation = request.continuation.has_value();
+                process_before_apply = driver.metrics().process_call_count;
+                response_before_apply = driver.metrics().response_submission_count;
+                semantic_key = is_continuation ? choose_continuation(request).semantic_key
+                                               : choose_atomic(request).semantic_key;
             }
-            const bool is_continuation = request.continuation.has_value();
-            const auto process_before_apply = driver.metrics().process_call_count;
-            const auto response_before_apply = driver.metrics().response_submission_count;
-            const auto semantic_key = is_continuation ? choose_continuation(request).semantic_key
-                                                       : choose_atomic(request).semantic_key;
             boundary = driver.apply_semantic_key(semantic_key);
 
             if (saw_tribute && is_continuation) {
@@ -181,20 +188,22 @@ int main() {
                         throw std::runtime_error("intermediate tribute action did not publish a new boundary");
                     }
                     if (!saw_stale_continuation_rejection) {
-                        const auto* next_decision =
-                            std::get_if<ygo::environment::DriverDecisionBoundary>(&boundary);
-                        if (next_decision == nullptr || next_decision->request == nullptr) {
-                            throw std::runtime_error("intermediate tribute action lost its next decision boundary");
+                        std::string decision_id_before_stale;
+                        std::size_t candidate_count_before_stale = 0;
+                        ygo::environment::DriverMetrics metrics_before_stale;
+                        std::size_t trace_steps_before_stale = 0;
+                        {
+                            const auto* next_decision =
+                                std::get_if<ygo::environment::DriverDecisionBoundary>(&boundary);
+                            if (next_decision == nullptr || next_decision->request == nullptr) {
+                                throw std::runtime_error(
+                                    "intermediate tribute action lost its next decision boundary");
+                            }
+                            decision_id_before_stale = std::string(next_decision->request->decision_id);
+                            candidate_count_before_stale = next_decision->request->candidates.size();
+                            metrics_before_stale = driver.metrics();
+                            trace_steps_before_stale = driver.trace().steps.size();
                         }
-                        const auto* request_before_stale = next_decision->request;
-                        const auto* observation_before_stale = next_decision->observation;
-                        const auto decision_id_before_stale = request_before_stale->decision_id;
-                        const auto candidate_count_before_stale = request_before_stale->candidates.size();
-                        const auto process_count_before_stale = driver.metrics().process_call_count;
-                        const auto response_count_before_stale = driver.metrics().response_submission_count;
-                        const auto semantic_action_count_before_stale = driver.metrics().semantic_action_count;
-                        const auto candidate_sets_before_stale = driver.metrics().operations.candidate_sets;
-                        const auto trace_steps_before_stale = driver.trace().steps.size();
                         bool rejected = false;
                         try {
                             (void)driver.apply_semantic_key(semantic_key);
@@ -207,16 +216,21 @@ int main() {
                         if (!rejected) {
                             throw std::runtime_error("stale continuation semantic key was accepted");
                         }
-                        if (driver.metrics().process_call_count != process_count_before_stale ||
-                            driver.metrics().response_submission_count != response_count_before_stale ||
-                            driver.metrics().semantic_action_count != semantic_action_count_before_stale ||
-                            driver.metrics().operations.candidate_sets != candidate_sets_before_stale ||
-                            driver.trace().steps.size() != trace_steps_before_stale ||
-                            request_before_stale != next_decision->request ||
-                            observation_before_stale != next_decision->observation ||
-                            request_before_stale->decision_id != decision_id_before_stale ||
-                            request_before_stale->candidates.size() != candidate_count_before_stale) {
-                            throw std::runtime_error("stale continuation rejection mutated the current boundary");
+                        const auto& metrics_after_invalid = driver.metrics();
+                        if (metrics_after_invalid.process_call_count != metrics_before_stale.process_call_count ||
+                            metrics_after_invalid.response_submission_count !=
+                                metrics_before_stale.response_submission_count ||
+                            metrics_after_invalid.semantic_action_count != metrics_before_stale.semantic_action_count ||
+                            metrics_after_invalid.operations.candidate_sets !=
+                                metrics_before_stale.operations.candidate_sets ||
+                            metrics_after_invalid.operations.candidate_total !=
+                                metrics_before_stale.operations.candidate_total ||
+                            metrics_after_invalid.operations.candidate_max !=
+                                metrics_before_stale.operations.candidate_max ||
+                            driver.trace().steps.size() != trace_steps_before_stale) {
+                            throw std::runtime_error("stale continuation rejection mutated decision " +
+                                                     decision_id_before_stale + " with " +
+                                                     std::to_string(candidate_count_before_stale) + " candidates");
                         }
                         saw_stale_continuation_rejection = true;
                     }

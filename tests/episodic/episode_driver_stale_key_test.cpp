@@ -44,19 +44,23 @@ ygo::environment::EpisodeDriverConfig make_config() {
 int main() {
     try {
         ygo::environment::EpisodeDriver driver(make_config());
-        const auto boundary = driver.advance_until_boundary();
-        const auto* decision = std::get_if<ygo::environment::DriverDecisionBoundary>(&boundary);
-        if (decision == nullptr || decision->request == nullptr) {
-            throw std::runtime_error("stale-key fixture did not publish an interactive decision");
+        std::string valid_semantic_key;
+        std::string decision_id_before;
+        std::size_t candidate_count_before = 0;
+        {
+            const auto boundary = driver.advance_until_boundary();
+            const auto* decision = std::get_if<ygo::environment::DriverDecisionBoundary>(&boundary);
+            if (decision == nullptr || decision->request == nullptr) {
+                throw std::runtime_error("stale-key fixture did not publish an interactive decision");
+            }
+            if (decision->request->candidates.empty()) {
+                throw std::runtime_error("stale-key fixture published an empty candidate set");
+            }
+            valid_semantic_key = decision->request->candidates.front().semantic_key;
+            decision_id_before = decision->request->decision_id;
+            candidate_count_before = decision->request->candidates.size();
         }
-
-        const auto* request_before = decision->request;
-        const auto* observation_before = decision->observation;
-        const auto decision_id_before = request_before->decision_id;
-        const auto candidate_count_before = request_before->candidates.size();
-        const auto process_count_before = driver.metrics().process_call_count;
-        const auto response_count_before = driver.metrics().response_submission_count;
-        const auto candidate_sets_before = driver.metrics().operations.candidate_sets;
+        const auto metrics_before = driver.metrics();
         const auto trace_steps_before = driver.trace().steps.size();
 
         bool rejected = false;
@@ -71,14 +75,23 @@ int main() {
         if (!rejected) {
             throw std::runtime_error("stale semantic key was accepted");
         }
-        assert(driver.metrics().process_call_count == process_count_before);
-        assert(driver.metrics().response_submission_count == response_count_before);
-        assert(driver.metrics().operations.candidate_sets == candidate_sets_before);
+        const auto& metrics_after_invalid = driver.metrics();
+        assert(metrics_after_invalid.process_call_count == metrics_before.process_call_count);
+        assert(metrics_after_invalid.response_submission_count == metrics_before.response_submission_count);
+        assert(metrics_after_invalid.semantic_action_count == metrics_before.semantic_action_count);
+        assert(metrics_after_invalid.operations.candidate_sets == metrics_before.operations.candidate_sets);
+        assert(metrics_after_invalid.operations.candidate_total == metrics_before.operations.candidate_total);
+        assert(metrics_after_invalid.operations.candidate_max == metrics_before.operations.candidate_max);
         assert(driver.trace().steps.size() == trace_steps_before);
-        assert(request_before == decision->request);
-        assert(observation_before == decision->observation);
-        assert(request_before->decision_id == decision_id_before);
-        assert(request_before->candidates.size() == candidate_count_before);
+
+        const auto valid_boundary = driver.apply_semantic_key(valid_semantic_key);
+        if (std::holds_alternative<ygo::environment::DriverFailure>(valid_boundary) ||
+            std::holds_alternative<ygo::environment::DriverProcessBudgetExceeded>(valid_boundary)) {
+            throw std::runtime_error("copied valid semantic key did not advance decision " + decision_id_before +
+                                     " with " + std::to_string(candidate_count_before) + " candidates");
+        }
+        assert(driver.metrics().semantic_action_count == metrics_before.semantic_action_count + 1);
+        assert(driver.trace().steps.size() == trace_steps_before + 1);
         std::cout << "episode_driver_stale_key=ok\n";
         return 0;
     } catch (const std::exception& error) {
