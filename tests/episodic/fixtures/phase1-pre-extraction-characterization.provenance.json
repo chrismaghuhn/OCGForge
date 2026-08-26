@@ -10,7 +10,7 @@
   "collector_source_sha256": "7142f0551d97293e790b093df1b8ce21dd885bd5d815a5305f25a256d4bb16b6",
   "collector_version": "capture_phase1_characterization.v1",
   "fixture_path": "tests/episodic/fixtures/phase1-pre-extraction-characterization.json",
-  "fixture_sha256": "15bf0fec095db3cfc99eaae8f59992e5e47e6c0c5ba389dc2a4582ecd4d1c9c0",
+  "fixture_sha256": "1b52c467b7bf2645ca8934e9f97a79ceafc93571cd79e241516a913e479bee37",
   "raw_artifact_manifest": {
     "artifact_count": 20,
     "artifacts": [
