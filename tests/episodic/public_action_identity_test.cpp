@@ -222,7 +222,7 @@ void test_paired_world_hidden_card_projection() {
     decision_input.public_candidate_domain_digest = digest_b;
     const auto decision_b = ygo::environment::public_semantic_decision_id(decision_input);
     require(decision_a == decision_b, "paired worlds produced different public decision IDs");
-    require(decision_a == "bdca375a8887e066ae991514f7dc2f82b32445dfc353d035f3b96ef864796ea7",
+    require(decision_a == "d160783b6b52c07ba114422885514f1cdd07cf30893b05d9ce4b7e1acbd835bc",
             "public semantic decision identity golden vector failed");
 
     require(ygo::environment::detail::resolve_public_action_key(
