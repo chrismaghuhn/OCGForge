@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -16,6 +17,13 @@ ROOT = Path(__file__).resolve().parents[2]
 CONTRACT_ID = "ocgforge.episodic_environment.v2"
 ENVIRONMENT_ID_SCHEMA = "ocgforge.environment_identity.v2"
 ANOMALY = "HISTORICAL_UNCLASSIFIED_ANOMALY"
+OUTPUT_ROOT = "artifacts/episodic/v2/"
+G32_RUN_PREFIXES = ("g32-run-a/", "g32-run-b/")
+
+_CTEST_DURATION = re.compile(r"(?P<prefix>\b(?:Passed|Failed)\s+)\d+(?:\.\d+)?\s+sec\b")
+_CTEST_TOTAL_DURATION = re.compile(r"(?P<prefix>\bTotal Test time \(real\) = )\d+(?:\.\d+)?\s+sec\b")
+_CTEST_LABEL_DURATION = re.compile(r"(?P<prefix>\bM4_[A-Z0-9_]+\s*=\s*)\d+(?:\.\d+)?\s+sec\*proc\b")
+_PYTHON_DURATION = re.compile(r"(?P<prefix>\bRan \d+ tests in )\d+(?:\.\d+)?s\b")
 
 
 def git_value(*args: str) -> str:
@@ -25,6 +33,24 @@ def git_value(*args: str) -> str:
 
 def relative_path(path: Path) -> str:
     return path.resolve().relative_to(ROOT.resolve()).as_posix()
+
+
+def canonicalize_evidence_line(line: str) -> str:
+    """Remove host paths and runtime-only timings from reproducible evidence."""
+    canonical = line
+    root = str(ROOT)
+    for root_form in (root, root.replace("\\", "/"), root.replace("\\", "\\\\")):
+        canonical = canonical.replace(root_form, "<REPO>")
+    canonical = re.sub(
+        r"(?P<path><REPO>[^\"\s]*)",
+        lambda match: re.sub(r"\\+", "/", match.group("path")),
+        canonical,
+    )
+    canonical = _CTEST_DURATION.sub(r"\g<prefix><elapsed> sec", canonical)
+    canonical = _CTEST_TOTAL_DURATION.sub(r"\g<prefix><elapsed> sec", canonical)
+    canonical = _CTEST_LABEL_DURATION.sub(r"\g<prefix><elapsed> sec*proc", canonical)
+    canonical = _PYTHON_DURATION.sub(r"\g<prefix><elapsed>s", canonical)
+    return canonical
 
 
 def display_command(command: list[str]) -> list[str]:
@@ -39,7 +65,16 @@ def display_command(command: list[str]) -> list[str]:
                 continue
             except ValueError:
                 pass
-        rendered.append(value)
+        normalized = value.replace("\\", "/")
+        if normalized.startswith(OUTPUT_ROOT):
+            suffix = normalized[len(OUTPUT_ROOT) :]
+            for run_prefix in G32_RUN_PREFIXES:
+                if suffix.startswith(run_prefix):
+                    suffix = suffix[len(run_prefix) :]
+                    break
+            rendered.append("<OUTPUT>/" + suffix)
+            continue
+        rendered.append(canonicalize_evidence_line(normalized))
     return rendered
 
 
@@ -51,8 +86,8 @@ def run_command(
     blocked_returncodes: set[int] | None = None,
 ) -> dict[str, Any]:
     completed = subprocess.run(command, cwd=ROOT, check=False, capture_output=True, text=True, timeout=timeout)
-    stderr_lines = [line for line in completed.stderr.splitlines() if line]
-    stdout_lines = [line for line in completed.stdout.splitlines() if line]
+    stderr_lines = [canonicalize_evidence_line(line) for line in completed.stderr.splitlines() if line]
+    stdout_lines = [canonicalize_evidence_line(line) for line in completed.stdout.splitlines() if line]
     result = "PASS" if completed.returncode == 0 else "FAIL"
     if blocked_returncodes is not None and completed.returncode in blocked_returncodes:
         result = "BLOCKED"
