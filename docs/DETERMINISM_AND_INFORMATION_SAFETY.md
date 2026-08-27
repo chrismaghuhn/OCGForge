@@ -61,7 +61,12 @@ The engine is omniscient.
 
 The agent is not.
 
-`PlayerObservation` is built for an explicit `perspective_player` and is the intended agent-facing state.
+`PlayerObservation` is built for an explicit `perspective_player` and remains
+the perspective-safe observation-layer source. The episodic public boundary
+emits the separately versioned
+`ocgforge.public_environment_observation.v1` projection; it must not publish
+an attached `PlayerObservation v1` directly when that record contains internal
+decision or continuation identity.
 
 Raw omniscient queries are not an acceptable shortcut for a model adapter.
 
@@ -120,6 +125,14 @@ For deterministic hashes:
 - exclude incidental runtime metadata.
 
 A “same JSON object” claim is insufficient if byte-level hashes are persisted.
+
+The policy-facing episodic observation applies this rule through the
+`ocgforge.public_safe_state.v1` codec. That codec owns the safe-state field
+order, length-prefix/null/boolean encoding, fixed enum codes, deterministic
+sorting of unordered containers, and the exclusion of internal process
+metadata such as `engine_step_index` from visible-event records. Its bytes are
+generated from the perspective-safe `PlayerObservation` fields and are not a
+caller-supplied string or the v1 observation serialization.
 
 ## 11. Trace identity vs. gameplay identity
 

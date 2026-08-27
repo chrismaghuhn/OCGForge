@@ -148,9 +148,24 @@ Physical card copies are distinguished using semantic card locators such as code
 
 ## 4. `ygo::observation`
 
-The observation layer transforms public engine queries and perspective-filtered events into `PlayerObservation`.
+The observation layer transforms public engine queries and perspective-filtered
+events into the internal `PlayerObservation` record. The episodic public
+boundary then emits the separate
+`ocgforge.public_environment_observation.v1` projection; `PlayerObservation`
+must not be serialized directly when its attached decision context contains
+internal identity.
 
-It is the intended authoritative player-facing state boundary for:
+The public projection owns the exact nested
+`ocgforge.public_safe_state.v1` serializer. It encodes only the explicitly
+listed safe-state fields (`globals`, `zones`, `entities`, `relationships`,
+`chain`, `visible_events`, and `match_context`) with fixed primitive/optional/
+enum encodings and deterministic container ordering. The projection generates
+those bytes from `PlayerObservation`; a call site cannot substitute the v1
+observation bytes or arbitrary text. `PlayerObservation` v1 field and byte
+semantics remain unchanged, but its direct policy-facing use is superseded by
+this public projection.
+
+`PublicEnvironmentObservation` is the intended state boundary for:
 
 - agents;
 - teachers;
@@ -165,9 +180,9 @@ It contains:
 - relationships;
 - chain state;
 - visible event history;
-- decision context;
+- sanitized public decision context;
 - static match context;
-- canonical observation hash.
+- canonical public observation digest.
 
 The schema intentionally does not impose fixed tensor dimensions or a model vocabulary.
 

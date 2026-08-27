@@ -77,6 +77,21 @@ For cards, semantic identity includes code, controller, location, sequence,
 and overlay sequence/position where applicable. Two physical copies with the
 same passcode therefore remain distinct.
 
+The decoder may also retain typed auxiliary choice metadata for the later
+perspective-safe public projection:
+
+```text
+choice_value   optional exact semantic u64 value
+choice_index   optional exact engine/list response selector
+```
+
+`choice_index` is an engine/list coordinate, never an environment-invented
+candidate-vector index. This metadata does not participate in
+`semantic_key`, candidate membership, candidate ordering, response bytes, or
+EngineTrace identity. It exists so public projection can represent Yes/No,
+effect-list, option-value, and announcement-number choices without parsing or
+publishing the internal semantic key.
+
 ## SelectionContinuation
 
 ```text
