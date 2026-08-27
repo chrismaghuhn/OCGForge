@@ -16,6 +16,13 @@ namespace {
 using namespace ygo::environment;
 using Next = std::variant<DecisionFrame, EpisodeTerminal, EpisodeInterrupted, EpisodeFailure>;
 
+enum class SelectionPolicy : std::uint8_t {
+    Front,
+    Last,
+    Cycle,
+    Hash,
+};
+
 struct Arguments final {
     std::uint64_t seed = 2;
     std::uint64_t max_actions = 512;
@@ -23,7 +30,9 @@ struct Arguments final {
     std::uint64_t semantic_action_budget = 4096;
     std::optional<std::uint8_t> starting_player;
     bool mirror_seats = false;
-    bool choose_last_candidate = false;
+    SelectionPolicy selection_policy = SelectionPolicy::Front;
+    std::uint64_t policy_salt = 0;
+    bool stop_on_continuation = false;
     std::optional<std::uint64_t> interrupt_after;
     std::string replay_path;
     std::string output_path;
@@ -36,6 +45,22 @@ std::uint64_t parse_u64(const std::string& value, const char* name) {
         throw std::runtime_error(std::string("invalid ") + name + ": " + value);
     }
     return static_cast<std::uint64_t>(parsed);
+}
+
+SelectionPolicy parse_selection_policy(const std::string& value) {
+    if (value == "front") {
+        return SelectionPolicy::Front;
+    }
+    if (value == "last") {
+        return SelectionPolicy::Last;
+    }
+    if (value == "cycle") {
+        return SelectionPolicy::Cycle;
+    }
+    if (value == "hash") {
+        return SelectionPolicy::Hash;
+    }
+    throw std::runtime_error("selection-policy must be front, last, cycle, or hash");
 }
 
 Arguments parse_arguments(const int argc, char** argv) {
@@ -58,8 +83,14 @@ Arguments parse_arguments(const int argc, char** argv) {
             result.starting_player = static_cast<std::uint8_t>(value);
         } else if (argument == "--mirror-seats") {
             result.mirror_seats = true;
+        } else if (argument == "--selection-policy" && index + 1 < argc) {
+            result.selection_policy = parse_selection_policy(argv[++index]);
+        } else if (argument == "--policy-salt" && index + 1 < argc) {
+            result.policy_salt = parse_u64(argv[++index], "policy-salt");
+        } else if (argument == "--stop-on-continuation") {
+            result.stop_on_continuation = true;
         } else if (argument == "--choose-last-candidate") {
-            result.choose_last_candidate = true;
+            result.selection_policy = SelectionPolicy::Last;
         } else if (argument == "--interrupt-after" && index + 1 < argc) {
             result.interrupt_after = parse_u64(argv[++index], "interrupt-after");
         } else if (argument == "--replay-public-actions" && index + 1 < argc) {
@@ -71,11 +102,54 @@ Arguments parse_arguments(const int argc, char** argv) {
                 "usage: ygo_episodic_probe [--seed N] [--max-actions N] "
                 "[--engine-process-budget N] [--semantic-action-budget N] "
                 "[--starting-player 0|1] [--mirror-seats] [--interrupt-after N] "
-                "[--choose-last-candidate] "
+                "[--selection-policy front|last|cycle|hash] [--policy-salt N] "
+                "[--stop-on-continuation] [--choose-last-candidate] "
                 "[--replay-public-actions PATH] [--output PATH]");
         }
     }
     return result;
+}
+
+std::uint64_t fnv1a_append(std::uint64_t hash, const std::string& value) {
+    for (const auto character : value) {
+        hash ^= static_cast<unsigned char>(character);
+        hash *= 1099511628211ULL;
+    }
+    return hash;
+}
+
+std::uint64_t fnv1a_append_u64(std::uint64_t hash, const std::uint64_t value) {
+    auto remaining = value;
+    for (unsigned int index = 0; index < 8; ++index) {
+        hash ^= static_cast<unsigned char>(remaining & 0xffU);
+        hash *= 1099511628211ULL;
+        remaining >>= 8;
+    }
+    return hash;
+}
+
+std::size_t select_candidate_index(const DecisionFrame& frame, const std::uint64_t action_count,
+                                   const Arguments& arguments) {
+    const auto candidate_count = frame.request.candidates.size();
+    if (candidate_count == 0) {
+        throw std::runtime_error("public probe encountered an empty candidate domain");
+    }
+    switch (arguments.selection_policy) {
+    case SelectionPolicy::Front:
+        return 0;
+    case SelectionPolicy::Last:
+        return candidate_count - 1;
+    case SelectionPolicy::Cycle:
+        return static_cast<std::size_t>((action_count + arguments.policy_salt) % candidate_count);
+    case SelectionPolicy::Hash: {
+        auto hash = fnv1a_append(1469598103934665603ULL, frame.public_semantic_decision_id);
+        hash = fnv1a_append(hash, frame.public_candidate_domain_digest);
+        hash = fnv1a_append_u64(hash, action_count);
+        hash = fnv1a_append_u64(hash, arguments.policy_salt);
+        return static_cast<std::size_t>(hash % candidate_count);
+    }
+    }
+    throw std::runtime_error("public probe selection policy is not implemented");
 }
 
 std::string json_escape(const std::string& value) {
@@ -299,6 +373,9 @@ std::string run_probe(const Arguments& arguments) {
         if (!first_frame) frames << ',';
         first_frame = false;
         frames << frame_json(*frame);
+        if (arguments.stop_on_continuation && frame->request.continuation.has_value()) {
+            break;
+        }
         if (action_count >= arguments.max_actions) {
             break;
         }
@@ -325,9 +402,8 @@ std::string run_probe(const Arguments& arguments) {
                 throw std::runtime_error("public replay action is not in the regenerated domain");
             }
         } else {
-            public_key = (arguments.choose_last_candidate ? frame->request.candidates.back()
-                                                           : frame->request.candidates.front())
-                              .public_action_key;
+            public_key = frame->request.candidates[select_candidate_index(*frame, action_count, arguments)]
+                             .public_action_key;
         }
         const auto selection = ActionSelection{frame->contract_id, frame->episode_semantic_id,
                                                frame->public_semantic_decision_id,

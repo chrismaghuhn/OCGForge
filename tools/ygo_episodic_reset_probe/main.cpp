@@ -26,6 +26,11 @@ namespace {
 using namespace ygo::environment;
 using Next = std::variant<DecisionFrame, EpisodeTerminal, EpisodeInterrupted, EpisodeFailure>;
 
+enum class SelectionPolicy : std::uint8_t {
+    Front,
+    Cycle,
+};
+
 void require(const bool condition, const std::string& message) {
     if (!condition) {
         throw std::runtime_error(message);
@@ -52,6 +57,8 @@ struct Scenario final {
     EpisodeSpec spec;
     RunControl control;
     std::uint64_t max_actions = 0;
+    SelectionPolicy selection_policy = SelectionPolicy::Front;
+    std::uint64_t policy_salt = 0;
     std::string label;
 };
 
@@ -61,8 +68,20 @@ std::string scenario_key(const Scenario& scenario) {
            << static_cast<unsigned int>(scenario.spec.seat_assignment) << ':'
            << static_cast<unsigned int>(scenario.spec.starting_player) << ':'
            << scenario.control.engine_process_budget << ':'
-           << scenario.control.semantic_action_budget << ':' << scenario.max_actions;
+           << scenario.control.semantic_action_budget << ':' << scenario.max_actions << ':'
+           << static_cast<unsigned int>(scenario.selection_policy) << ':' << scenario.policy_salt;
     return result.str();
+}
+
+std::string select_public_key(const DecisionFrame& frame, const Scenario& scenario,
+                              const std::uint64_t action_count) {
+    require(!frame.request.candidates.empty(), "persistent reset fixture published an empty domain");
+    std::size_t index = 0;
+    if (scenario.selection_policy == SelectionPolicy::Cycle) {
+        index = static_cast<std::size_t>((action_count + scenario.policy_salt) %
+                                          frame.request.candidates.size());
+    }
+    return frame.request.candidates[index].public_action_key;
 }
 
 std::uint64_t process_handle_count() {
@@ -204,7 +223,7 @@ void require_same(const EpisodeFingerprint& expected, const EpisodeFingerprint& 
 }
 
 EpisodeRun run_from_boundary(EpisodicEnvironment& environment, Next next,
-                             const std::uint64_t max_actions) {
+                             const Scenario& scenario) {
     EpisodeRun result{EpisodeFingerprint{}, std::move(next)};
     auto& current = result.next;
     while (const auto* frame = std::get_if<DecisionFrame>(&current)) {
@@ -212,7 +231,7 @@ EpisodeRun run_from_boundary(EpisodicEnvironment& environment, Next next,
             result.fingerprint.episode_semantic_id = frame->episode_semantic_id;
             result.fingerprint.first_selection = ActionSelection{
                 frame->contract_id, frame->episode_semantic_id, frame->public_semantic_decision_id,
-                frame->submission_token, frame->request.candidates.front().public_action_key};
+                frame->submission_token, select_public_key(*frame, scenario, 0)};
         }
         result.fingerprint.frames.push_back(frame_fingerprint(*frame));
         result.fingerprint.saw_continuation =
@@ -220,7 +239,7 @@ EpisodeRun run_from_boundary(EpisodicEnvironment& environment, Next next,
         result.fingerprint.saw_atomic =
             result.fingerprint.saw_atomic || !frame->request.continuation.has_value();
 
-        if (result.fingerprint.actions.size() >= max_actions) {
+        if (result.fingerprint.actions.size() >= scenario.max_actions) {
             const auto interrupted = environment.interrupt(
                 InterruptRequest{std::string(kEpisodicEnvironmentV2ContractId),
                                  InterruptionReason::AdministrativeCancel});
@@ -230,8 +249,7 @@ EpisodeRun run_from_boundary(EpisodicEnvironment& environment, Next next,
             break;
         }
 
-        require(!frame->request.candidates.empty(), "persistent reset fixture published an empty domain");
-        const auto public_key = frame->request.candidates.front().public_action_key;
+        const auto public_key = select_public_key(*frame, scenario, result.fingerprint.actions.size());
         const auto step = environment.step(ActionSelection{
             frame->contract_id, frame->episode_semantic_id, frame->public_semantic_decision_id,
             frame->submission_token, public_key});
@@ -251,8 +269,7 @@ EpisodeRun run_episode(EpisodicEnvironment& environment, const Scenario& scenari
     const auto reset = environment.reset(scenario.spec, scenario.control);
     require(std::holds_alternative<ResetAccepted>(reset),
             scenario.label + ": reset was rejected");
-    return run_from_boundary(environment, std::get<ResetAccepted>(reset).next,
-                             scenario.max_actions);
+    return run_from_boundary(environment, std::get<ResetAccepted>(reset).next, scenario);
 }
 
 EpisodeRun fresh_reference(const Scenario& scenario) {
@@ -355,7 +372,7 @@ void run_interleaving(const std::optional<std::string>& output) {
                 std::get<StepRejected>(stale_live).rejection_code == RejectionCode::StaleSubmissionToken &&
                 std::get<StepRejected>(stale_live).authoritative_state_unchanged,
             "A stale token was accepted or returned after mutation");
-    const auto live_run = run_from_boundary(*environment, live_frame, a.max_actions);
+    const auto live_run = run_from_boundary(*environment, live_frame, a);
     require_same(first_a_reference.fingerprint, live_run.fingerprint, "A(4)");
 
     const auto body = std::string("{\"gate\":\"G04\",\"result\":\"PASS\",\"sequence\":\"A-B-C-A-D-A\",\"a_occurrences_compared\":4,\"fresh_reference_count\":") +
@@ -378,14 +395,15 @@ Scenario soak_scenario(const std::uint64_t index) {
         scenario.spec.starting_player = 0;
         scenario.control = make_control(128, 1, "reset-soak-stale-token");
         scenario.max_actions = 1;
-    } else if (index == 399) {
-        // The canonical seed-2 prefix reaches the continuation-heavy
-        // selection family before the terminal boundary.
+    } else if (index == 199 || index == 399) {
+        // This fixed public policy reaches the tribute continuation family
+        // without constructing candidates or consulting private identities.
         scenario.spec.root_seed = 2;
         scenario.spec.seat_assignment = SeatAssignment::Normal;
         scenario.spec.starting_player = 0;
-        scenario.control = make_control(4096, 4096, "reset-soak-continuation-heavy");
-        scenario.max_actions = 300;
+        scenario.control = make_control(20000, 20000, "reset-soak-continuation-heavy");
+        scenario.max_actions = 740;
+        scenario.selection_policy = SelectionPolicy::Cycle;
     } else if (index == 400) {
         scenario.control = make_control(20000, 20000, "reset-soak-terminal");
         scenario.spec.root_seed = 2;
@@ -454,7 +472,7 @@ int run_soak(const std::uint64_t episode_count, const std::optional<std::string>
             ++stale_token_rejections;
         }
 
-        const auto run = run_from_boundary(*environment, std::move(next), scenario.max_actions);
+        const auto run = run_from_boundary(*environment, std::move(next), scenario);
         if (run.fingerprint.saw_continuation) {
             ++continuation_count;
         }
@@ -510,7 +528,8 @@ int run_soak(const std::uint64_t episode_count, const std::optional<std::string>
                       std::to_string(stale_token_rejections) + ",\"handles_before\":" +
                       std::to_string(handles_before) + ",\"handles_after\":" +
                       std::to_string(handles_after) + ",\"peak_handles\":" +
-                      std::to_string(peak_handles) + "}";
+                      std::to_string(peak_handles) +
+                      ",\"continuation_witness\":{\"root_seed\":2,\"seat_assignment\":\"normal\",\"starting_player\":0,\"selection_policy\":\"cycle\",\"policy_salt\":0,\"max_actions\":740,\"occurrences\":2}}";
     };
     if (continuation_count == 0) {
         write_json(output, evidence_body("BLOCKED"));
