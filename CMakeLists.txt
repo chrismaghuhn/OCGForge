@@ -143,6 +143,15 @@ target_compile_definitions(ygo_m0 PUBLIC
     YGO_M3_RULES_BUNDLE_ID="${M0_RULES_BUNDLE_ID}"
     YGO_M3_CORE_PATCHSET_ID="${M0_RULES_CORE_PATCHSET_ID}"
     YGO_M3_CORE_PATCHSET_SHA256="${M0_RULES_CORE_PATCHSET_SHA256}"
+    YGO_M0_CARDSCRIPTS_ROOT="${M0_CARDSCRIPTS_DIR}"
+    YGO_M0_CORE_API_VERSION="${M0_CORE_API_VERSION}"
+    YGO_M0_CORE_COMMIT="${M0_CORE_COMMIT}"
+    YGO_M0_CORE_RESOLVED_CHECKOUT_SHA256="${M0_CORE_RESOLVED_CHECKOUT_SHA256}"
+    YGO_M0_CARDSCRIPTS_COMMIT="${M0_CARDSCRIPTS_COMMIT}"
+    YGO_M0_CARDSCRIPTS_RESOLVED_CHECKOUT_SHA256="${M0_CARDSCRIPTS_RESOLVED_CHECKOUT_SHA256}"
+    YGO_M0_DATABASE_COMMIT="${M0_DATABASE_COMMIT}"
+    YGO_M0_DATABASE_RESOLVED_CHECKOUT_SHA256="${M0_DATABASE_RESOLVED_CHECKOUT_SHA256}"
+    YGO_M0_DATABASE_ARTIFACT_SHA256="${M0_DATABASE_ARTIFACT_SHA256}"
 )
 option(YGO_M4_DIRECT_CANONICAL_WRITER
        "Use the direct canonical serializer writer"
@@ -158,6 +167,7 @@ endif()
 
 add_library(ygo_m4 STATIC
     src/environment/episode_driver.cpp
+    src/environment/episodic_environment.cpp
     src/environment/identity_contract.cpp
     src/environment/candidate_domain_evidence.cpp
     src/simulation/canonical_simulation.cpp
@@ -249,6 +259,10 @@ add_test(NAME episode_driver_tribute_integration_test COMMAND episode_driver_tri
 add_executable(normative_prerequisites_test tests/episodic/normative_prerequisites_test.cpp)
 target_link_libraries(normative_prerequisites_test PRIVATE ygo_m4)
 add_test(NAME normative_prerequisites_test COMMAND normative_prerequisites_test)
+
+add_executable(episodic_identity_test tests/episodic/episodic_identity_test.cpp)
+target_link_libraries(episodic_identity_test PRIVATE ygo_m4)
+add_test(NAME episodic_identity_test COMMAND episodic_identity_test)
 
 if(DEFINED ENV{OCGFORGE_PHASE1_RAW_ROOT} AND
    DEFINED ENV{OCGFORGE_PHASE1_POST_RAW_ROOT} AND
