@@ -501,7 +501,7 @@ int run_soak(const std::uint64_t episode_count, const std::optional<std::string>
         require_same(reference_it->second, run.fingerprint, scenario.label);
         previous_selection = run.fingerprint.first_selection;
         previous_scenario_key = reference_key;
-        peak_handles = std::max(peak_handles, process_handle_count());
+        peak_handles = (std::max)(peak_handles, process_handle_count());
     }
 
     const auto handles_after = process_handle_count();
