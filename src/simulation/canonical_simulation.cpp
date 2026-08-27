@@ -260,7 +260,8 @@ SimulationResult run_canonical_simulation(const SimulationJob& job,
                 } else {
                     semantic_key = m3_policy.choose(*decision->request).semantic_key;
                 }
-                boundary = driver.apply_semantic_key(semantic_key);
+                auto apply_result = driver.apply_semantic_key(semantic_key);
+                boundary = std::move(apply_result.next);
                 continue;
             }
             if (const auto* reached_terminal = std::get_if<environment::DriverGameTerminal>(&boundary)) {

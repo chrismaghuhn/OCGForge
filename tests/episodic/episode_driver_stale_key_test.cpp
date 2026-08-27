@@ -84,7 +84,8 @@ int main() {
         assert(metrics_after_invalid.operations.candidate_max == metrics_before.operations.candidate_max);
         assert(driver.trace().steps.size() == trace_steps_before);
 
-        const auto valid_boundary = driver.apply_semantic_key(valid_semantic_key);
+        const auto valid_apply = driver.apply_semantic_key(valid_semantic_key);
+        const auto& valid_boundary = valid_apply.next;
         if (std::holds_alternative<ygo::environment::DriverFailure>(valid_boundary) ||
             std::holds_alternative<ygo::environment::DriverProcessBudgetExceeded>(valid_boundary)) {
             throw std::runtime_error("copied valid semantic key did not advance decision " + decision_id_before +

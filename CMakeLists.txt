@@ -144,6 +144,7 @@ target_compile_definitions(ygo_m0 PUBLIC
     YGO_M3_CORE_PATCHSET_ID="${M0_RULES_CORE_PATCHSET_ID}"
     YGO_M3_CORE_PATCHSET_SHA256="${M0_RULES_CORE_PATCHSET_SHA256}"
     YGO_M0_CARDSCRIPTS_ROOT="${M0_CARDSCRIPTS_DIR}"
+    YGO_M0_BABELCDB_ROOT="${M0_BABELCDB_DIR}"
     YGO_M0_CORE_API_VERSION="${M0_CORE_API_VERSION}"
     YGO_M0_CORE_COMMIT="${M0_CORE_COMMIT}"
     YGO_M0_CORE_RESOLVED_CHECKOUT_SHA256="${M0_CORE_RESOLVED_CHECKOUT_SHA256}"
@@ -263,6 +264,17 @@ add_test(NAME normative_prerequisites_test COMMAND normative_prerequisites_test)
 add_executable(episodic_identity_test tests/episodic/episodic_identity_test.cpp)
 target_link_libraries(episodic_identity_test PRIVATE ygo_m4)
 add_test(NAME episodic_identity_test COMMAND episodic_identity_test)
+
+add_executable(episodic_environment_test tests/episodic/episodic_environment_test.cpp)
+target_link_libraries(episodic_environment_test PRIVATE ygo_m4)
+add_test(NAME episodic_environment_test COMMAND episodic_environment_test)
+
+add_executable(episodic_environment_privacy_fail_closed_test
+               tests/episodic/episodic_environment_privacy_fail_closed_test.cpp)
+target_link_libraries(episodic_environment_privacy_fail_closed_test PRIVATE ygo_m4)
+add_test(NAME episodic_environment_privacy_fail_closed_test
+         COMMAND episodic_environment_privacy_fail_closed_test)
+
 
 if(DEFINED ENV{OCGFORGE_PHASE1_RAW_ROOT} AND
    DEFINED ENV{OCGFORGE_PHASE1_POST_RAW_ROOT} AND

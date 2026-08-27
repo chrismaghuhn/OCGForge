@@ -1,8 +1,11 @@
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <filesystem>
+#include <limits>
 #include <memory>
+#include <optional>
 #include <string>
 #include <variant>
 #include <vector>
@@ -26,7 +29,8 @@ struct EpisodeDriverConfig final {
     std::uint32_t starting_draw_count = 5;
     std::uint32_t draw_count_per_turn = 1;
     std::uint8_t starting_player = 0;
-    std::uint32_t engine_process_budget = 0;
+    std::uint64_t engine_process_budget = 0;
+    std::uint64_t semantic_action_budget = std::numeric_limits<std::uint64_t>::max();
     bool build_full_observation = true;
     std::vector<std::uint32_t> required_script_codes;
     std::filesystem::path fixture_setup_script;
@@ -49,10 +53,21 @@ struct DriverDecisionBoundary final {
 struct DriverGameTerminal final {
     std::uint8_t winner = 255;
     std::uint8_t win_reason = 255;
+    std::optional<observation::PlayerObservation> player_zero_observation;
+    std::optional<observation::PlayerObservation> player_one_observation;
 };
 
 struct DriverProcessBudgetExceeded final {
-    std::uint32_t process_calls = 0;
+    std::uint64_t process_calls = 0;
+};
+
+struct DriverSemanticActionBudgetExceeded final {
+    std::uint64_t semantic_actions = 0;
+};
+
+struct DriverAdministrativeInterrupt final {
+    std::uint64_t process_calls = 0;
+    std::uint64_t semantic_actions = 0;
 };
 
 struct DriverErrorCounters final {
@@ -67,6 +82,8 @@ struct DriverFailure final {
     DriverErrorCounters errors;
     std::string failure_code;
     std::string error_message;
+    std::string failure_stage;
+    bool mutation_may_have_occurred = false;
 };
 
 struct DriverTimingMetrics final {
@@ -99,7 +116,7 @@ struct DriverMetrics final {
     std::uint64_t process_call_count = 0;
     std::uint64_t response_submission_count = 0;
     std::uint32_t interactive_decisions = 0;
-    std::uint32_t semantic_action_count = 0;
+    std::uint64_t semantic_action_count = 0;
     std::uint32_t continuation_intermediate_steps = 0;
     std::uint32_t turns = 0;
     std::uint32_t battle_command_count = 0;
@@ -113,7 +130,19 @@ struct DriverMetrics final {
 };
 
 using DriverBoundary = std::variant<DriverDecisionBoundary, DriverGameTerminal,
-                                    DriverProcessBudgetExceeded, DriverFailure>;
+                                    DriverProcessBudgetExceeded, DriverSemanticActionBudgetExceeded,
+                                    DriverAdministrativeInterrupt, DriverFailure>;
+
+struct DriverAcceptedAction final {
+    std::string selected_semantic_key;
+    bool core_response_submitted = false;
+    std::optional<std::string> final_response_sha256;
+};
+
+struct DriverApplyResult final {
+    std::optional<DriverAcceptedAction> accepted;
+    DriverBoundary next;
+};
 
 class EpisodeDriver final {
 public:
@@ -126,7 +155,8 @@ public:
     EpisodeDriver& operator=(EpisodeDriver&&) = delete;
 
     DriverBoundary advance_until_boundary();
-    DriverBoundary apply_semantic_key(const std::string& semantic_key);
+    DriverApplyResult apply_semantic_key(const std::string& semantic_key);
+    DriverBoundary administrative_interrupt();
 
     const trace::EngineTrace& trace() const noexcept;
     const DriverMetrics& metrics() const noexcept;

@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <exception>
 #include <iostream>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <sstream>
@@ -21,6 +22,7 @@
 #include "ygo/observation/decision_integration.hpp"
 #include "ygo/observation/observation_builder.hpp"
 #include "ygo/observation/observation_session.hpp"
+#include "ygo/observation/serialization.hpp"
 #include "ygo/protocol/message_decoder.hpp"
 #include "ygo/protocol/protocol_error.hpp"
 #include "ygo/trace/sha256.hpp"
@@ -178,6 +180,8 @@ struct EpisodeDriver::Impl final {
         AwaitingDecision,
         Terminal,
         BudgetExhausted,
+        SemanticBudgetExhausted,
+        Interrupted,
         Failed,
     };
 
@@ -233,7 +237,7 @@ struct EpisodeDriver::Impl final {
     trace::EngineTrace trace_state;
     DriverMetrics driver_metrics;
     Lifecycle lifecycle = Lifecycle::Advancing;
-    std::uint32_t next_process_index = 0;
+    std::uint64_t next_process_index = 0;
     std::uint32_t trace_decision_index = 0;
 
     void refresh_derived_metrics() noexcept {
@@ -286,20 +290,30 @@ struct EpisodeDriver::Impl final {
     }
 
     DriverFailure failure_value() const {
-        return DriverFailure{driver_metrics.errors, failure_code, failure_message};
+        return DriverFailure{driver_metrics.errors, failure_code, failure_message, failure_stage,
+                             failure_may_have_occurred};
     }
 
     std::string failure_code;
     std::string failure_message;
+    std::string failure_stage;
+    bool failure_may_have_occurred = false;
 
-    DriverBoundary close_with_failure(std::string code, std::string message) {
+    DriverBoundary close_with_failure(std::string code, std::string message,
+                                      const bool mutation_may_have_occurred = false,
+                                      std::string stage = "advance") {
         failure_code = std::move(code);
         failure_message = std::move(message);
+        failure_stage = std::move(stage);
+        failure_may_have_occurred = mutation_may_have_occurred;
         refresh_host_metrics();
         current_request.reset();
         current_observation.reset();
+        current_raw_message.clear();
         lifecycle = Lifecycle::Failed;
         host.reset();
+        observation_sessions[0].reset();
+        observation_sessions[1].reset();
         return failure_value();
     }
 
@@ -308,8 +322,12 @@ struct EpisodeDriver::Impl final {
             ++driver_metrics.errors.truncated;
             return close_with_failure("candidate_truncated", error.what());
         }
+        if (error.code() == protocol::ProtocolErrorCode::MalformedMessage) {
+            ++driver_metrics.errors.unsupported;
+            return close_with_failure("malformed_protocol", error.what());
+        }
         ++driver_metrics.errors.unsupported;
-        return close_with_failure("unsupported_decision", error.what());
+        return close_with_failure("unsupported_protocol", error.what());
     }
 
     void emit_protocol_diagnostic(const protocol::ProtocolError& error) const {
@@ -388,7 +406,43 @@ struct EpisodeDriver::Impl final {
         lifecycle = Lifecycle::AwaitingDecision;
     }
 
-    void append_terminal(const protocol::DecodedMessage& decoded, const std::uint32_t engine_step) {
+    std::optional<observation::PlayerObservation> build_terminal_observation(
+        const std::uint8_t perspective_player, const std::uint32_t engine_step) {
+        if (!config.build_full_observation) {
+            return std::nullopt;
+        }
+        const auto observation_start = Clock::now();
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+        auto observation_scope = observation::PerformanceAuditCollector::ObservationScope(
+            config.performance_audit);
+#endif
+        observation::ObservationBuildConfig observation_config;
+        observation_config.decision_index = trace_decision_index;
+        observation_config.engine_step_index = engine_step;
+        observation_config.visible_events = observation_sessions[perspective_player]->visible_events();
+        observation_config.knowledge.own_decklist_known = true;
+        observation_config.own_deck.known = true;
+        observation_config.own_deck.main_deck = perspective_player == 0
+                                                    ? config.player_zero_deck.main_deck
+                                                    : config.player_one_deck.main_deck;
+#ifdef YGO_M4_PERFORMANCE_AUDIT
+        observation_config.performance_audit = config.performance_audit;
+#endif
+        auto result = observation::build_player_observation(*host, perspective_player, observation_config);
+        if (result.perspective_player != perspective_player ||
+            result.observation_hash != observation::observation_hash(result)) {
+            throw std::runtime_error("terminal observation failed perspective/hash validation");
+        }
+        add_timing(driver_metrics.timing.observation_us, observation_start, Clock::now(), config.instrumentation);
+        driver_metrics.observation_entity_total += result.entities.size();
+        driver_metrics.observation_event_total += result.visible_events.size();
+        ++driver_metrics.operations.observations;
+        driver_metrics.operations.entities_projected += result.entities.size();
+        return result;
+    }
+
+    void append_terminal(const protocol::DecodedMessage& decoded, const std::uint32_t engine_step,
+                         DriverGameTerminal& terminal_result) {
         const auto trace_prefix_start = Clock::now();
         trace::TraceStep terminal;
         terminal.step_index = engine_step;
@@ -403,35 +457,20 @@ struct EpisodeDriver::Impl final {
 #endif
         add_timing(driver_metrics.timing.trace_hash_us, trace_prefix_start, Clock::now(), config.instrumentation);
         auto trace_suffix_start = Clock::now();
-        if (config.build_full_observation) {
-            const auto observation_start = Clock::now();
-#ifdef YGO_M4_PERFORMANCE_AUDIT
-            auto observation_scope = observation::PerformanceAuditCollector::ObservationScope(
-                config.performance_audit);
-#endif
-            observation::ObservationBuildConfig observation_config;
-            observation_config.decision_index = trace_decision_index;
-            observation_config.engine_step_index = engine_step;
-            observation_config.visible_events = observation_sessions[0]->visible_events();
-            observation_config.knowledge.own_decklist_known = true;
-            observation_config.own_deck.known = true;
-            observation_config.own_deck.main_deck = config.player_zero_deck.main_deck;
-#ifdef YGO_M4_PERFORMANCE_AUDIT
-            observation_config.performance_audit = config.performance_audit;
-#endif
-            const auto observation = observation::build_player_observation(*host, 0, observation_config);
-            trace::attach_observation_metadata(terminal, observation);
-            add_timing(driver_metrics.timing.observation_us, observation_start, Clock::now(), config.instrumentation);
-            driver_metrics.observation_entity_total += observation.entities.size();
-            driver_metrics.observation_event_total += observation.visible_events.size();
-            ++driver_metrics.operations.observations;
-            driver_metrics.operations.entities_projected += observation.entities.size();
+        auto player_zero_observation = build_terminal_observation(0, engine_step);
+        auto player_one_observation = build_terminal_observation(1, engine_step);
+        if (player_zero_observation.has_value()) {
+            trace::attach_observation_metadata(terminal, *player_zero_observation);
         }
         trace_suffix_start = Clock::now();
         terminal.engine_advanced = true;
         terminal.terminal = true;
         terminal.winner = decoded.winner;
         terminal.win_reason = decoded.win_reason;
+        terminal_result.winner = decoded.winner;
+        terminal_result.win_reason = decoded.win_reason;
+        terminal_result.player_zero_observation = std::move(player_zero_observation);
+        terminal_result.player_one_observation = std::move(player_one_observation);
         trace_state.steps.push_back(std::move(terminal));
         add_timing(driver_metrics.timing.trace_hash_us, trace_suffix_start, Clock::now(), config.instrumentation);
         lifecycle = Lifecycle::Terminal;
@@ -455,6 +494,11 @@ struct EpisodeDriver::Impl final {
         }
 
         while (next_process_index < config.engine_process_budget) {
+            if (next_process_index > std::numeric_limits<std::uint32_t>::max()) {
+                return close_with_failure("invalid_authoritative_state",
+                                          "engine process index cannot be represented by EngineTrace v2",
+                                          false, "advance");
+            }
             const auto process_start = Clock::now();
             core::ProcessResult process_result;
             try {
@@ -479,9 +523,10 @@ struct EpisodeDriver::Impl final {
                     return close_with_failure("retry", "pinned core emitted MSG_RETRY after a submitted response");
                 }
                 if (decoded.terminal) {
-                    append_terminal(decoded, engine_step);
+                    DriverGameTerminal terminal;
+                    append_terminal(decoded, engine_step, terminal);
                     refresh_host_metrics();
-                    return DriverGameTerminal{decoded.winner, decoded.win_reason};
+                    return terminal;
                 }
                 if (!decoded.interactive) {
                     continue;
@@ -490,6 +535,13 @@ struct EpisodeDriver::Impl final {
                     throw protocol::ProtocolError(
                         protocol::ProtocolErrorCode::UnsupportedDecision,
                         "more than one interactive message in a process result");
+                }
+                if (driver_metrics.semantic_action_count >= config.semantic_action_budget) {
+                    current_request.reset();
+                    current_observation.reset();
+                    lifecycle = Lifecycle::SemanticBudgetExhausted;
+                    refresh_host_metrics();
+                    return DriverSemanticActionBudgetExceeded{driver_metrics.semantic_action_count};
                 }
                 current_request = decoded.decisions.front();
                 ++driver_metrics.interactive_decisions;
@@ -509,10 +561,10 @@ struct EpisodeDriver::Impl final {
         }
         lifecycle = Lifecycle::BudgetExhausted;
         refresh_host_metrics();
-        return DriverProcessBudgetExceeded{static_cast<std::uint32_t>(driver_metrics.process_call_count)};
+        return DriverProcessBudgetExceeded{driver_metrics.process_call_count};
     }
 
-    DriverBoundary apply_semantic_key(const std::string& semantic_key) {
+    DriverApplyResult apply_semantic_key(const std::string& semantic_key) {
         if (lifecycle != Lifecycle::AwaitingDecision || !current_request.has_value() || host == nullptr) {
             throw std::logic_error("EpisodeDriver apply called without an awaiting decision");
         }
@@ -524,10 +576,18 @@ struct EpisodeDriver::Impl final {
                 throw;
             }
             emit_protocol_diagnostic(error);
-            return protocol_failure(error);
+            return DriverApplyResult{std::nullopt, protocol_failure(error)};
         }
 
+        DriverAcceptedAction accepted{selected->semantic_key, false, std::nullopt};
         try {
+            if (trace_decision_index == std::numeric_limits<std::uint32_t>::max()) {
+                return DriverApplyResult{
+                    std::move(accepted),
+                    close_with_failure("invalid_authoritative_state",
+                                       "decision index cannot be represented by EngineTrace v2", false,
+                                       "action")};
+            }
             std::optional<protocol::ContinuationTransition> continuation_transition;
             std::uint64_t continuation_response_time = 0;
             Clock::time_point continuation_response_start{};
@@ -557,6 +617,12 @@ struct EpisodeDriver::Impl final {
             step.decision_index = trace_decision_index++;
             step.selected_semantic_key = selected->semantic_key;
             add_timing(driver_metrics.timing.trace_hash_us, trace_prefix_start, Clock::now(), config.instrumentation);
+            if (driver_metrics.semantic_action_count == std::numeric_limits<std::uint64_t>::max()) {
+                return DriverApplyResult{
+                    std::move(accepted),
+                    close_with_failure("invalid_authoritative_state",
+                                       "semantic action count overflow", false, "action")};
+            }
             ++driver_metrics.semantic_action_count;
 
             if (continuation_transition.has_value()) {
@@ -576,47 +642,104 @@ struct EpisodeDriver::Impl final {
                     trace_state.steps.push_back(std::move(step));
                     add_timing(driver_metrics.timing.trace_hash_us, trace_suffix_start, Clock::now(), config.instrumentation);
                     current_observation.reset();
+                    if (driver_metrics.semantic_action_count >= config.semantic_action_budget) {
+                        current_request.reset();
+                        lifecycle = Lifecycle::SemanticBudgetExhausted;
+                        refresh_host_metrics();
+                        return DriverApplyResult{
+                            std::move(accepted),
+                            DriverSemanticActionBudgetExceeded{driver_metrics.semantic_action_count}};
+                    }
                     current_request = std::move(transition.request);
                     lifecycle = Lifecycle::Advancing;
                     publish_current_request();
                     refresh_host_metrics();
-                    return DriverDecisionBoundary{&*current_request,
-                                                  current_observation.has_value() ? &*current_observation : nullptr};
+                    return DriverApplyResult{
+                        std::move(accepted),
+                        DriverDecisionBoundary{&*current_request,
+                                               current_observation.has_value() ? &*current_observation : nullptr}};
                 }
-                step.final_engine_response_hash = trace::sha256_bytes(transition.engine_response);
-                step.selected_response_sha256 = step.final_engine_response_hash;
+                const auto final_response_hash = trace::sha256_bytes(transition.engine_response);
+                step.final_engine_response_hash = final_response_hash;
+                step.selected_response_sha256 = final_response_hash;
                 trace_state.steps.push_back(std::move(step));
                 add_timing(driver_metrics.timing.trace_hash_us, trace_suffix_start, Clock::now(), config.instrumentation);
                 current_request.reset();
                 current_observation.reset();
                 lifecycle = Lifecycle::Advancing;
-                host->submit_response(transition.engine_response);
+                try {
+                    host->submit_response(transition.engine_response);
+                } catch (const core::CoreError& error) {
+                    ++driver_metrics.errors.core_errors;
+                    return DriverApplyResult{
+                        std::move(accepted),
+                        close_with_failure("response_inconsistency", error.what(), true, "action")};
+                } catch (const std::exception& error) {
+                    return DriverApplyResult{
+                        std::move(accepted),
+                        close_with_failure("response_inconsistency", error.what(), true, "action")};
+                }
+                accepted.core_response_submitted = true;
+                accepted.final_response_sha256 = final_response_hash;
                 refresh_host_metrics();
-                return advance_until_boundary();
+                return DriverApplyResult{std::move(accepted), advance_until_boundary()};
             }
 
             const auto response = selected->exact_response_bytes;
             const auto trace_suffix_start = Clock::now();
             step.engine_advanced = true;
-            step.selected_response_sha256 = trace::sha256_bytes(response);
-            step.final_engine_response_hash = step.selected_response_sha256;
+            const auto final_response_hash = trace::sha256_bytes(response);
+            step.selected_response_sha256 = final_response_hash;
+            step.final_engine_response_hash = final_response_hash;
             trace_state.steps.push_back(std::move(step));
             add_timing(driver_metrics.timing.trace_hash_us, trace_suffix_start, Clock::now(), config.instrumentation);
             current_request.reset();
             current_observation.reset();
             lifecycle = Lifecycle::Advancing;
-            host->submit_response(response);
+            try {
+                host->submit_response(response);
+            } catch (const core::CoreError& error) {
+                ++driver_metrics.errors.core_errors;
+                return DriverApplyResult{
+                    std::move(accepted),
+                    close_with_failure("response_inconsistency", error.what(), true, "action")};
+            } catch (const std::exception& error) {
+                return DriverApplyResult{
+                    std::move(accepted),
+                    close_with_failure("response_inconsistency", error.what(), true, "action")};
+            }
+            accepted.core_response_submitted = true;
+            accepted.final_response_sha256 = final_response_hash;
             refresh_host_metrics();
-            return advance_until_boundary();
+            return DriverApplyResult{std::move(accepted), advance_until_boundary()};
         } catch (const protocol::ProtocolError& error) {
             emit_protocol_diagnostic(error);
-            return protocol_failure(error);
+            return DriverApplyResult{std::move(accepted), protocol_failure(error)};
         } catch (const core::CoreError& error) {
             ++driver_metrics.errors.core_errors;
-            return close_with_failure("core_error", error.what());
+            return DriverApplyResult{std::move(accepted), close_with_failure("core_error", error.what())};
         } catch (const std::exception& error) {
-            return close_with_failure(failure_code.empty() ? "simulation_error" : failure_code, error.what());
+            return DriverApplyResult{
+                std::move(accepted),
+                close_with_failure(failure_code.empty() ? "simulation_error" : failure_code, error.what())};
         }
+    }
+
+    DriverBoundary administrative_interrupt() {
+        if (lifecycle != Lifecycle::AwaitingDecision || !current_request.has_value() || host == nullptr) {
+            throw std::logic_error("EpisodeDriver interrupt called without an awaiting decision");
+        }
+        current_request.reset();
+        current_observation.reset();
+        current_raw_message.clear();
+        lifecycle = Lifecycle::Interrupted;
+        refresh_host_metrics();
+        const DriverAdministrativeInterrupt result{driver_metrics.process_call_count,
+                                                   driver_metrics.semantic_action_count};
+        host.reset();
+        observation_sessions[0].reset();
+        observation_sessions[1].reset();
+        return result;
     }
 };
 
@@ -626,8 +749,12 @@ EpisodeDriver::~EpisodeDriver() = default;
 
 DriverBoundary EpisodeDriver::advance_until_boundary() { return impl_->advance_until_boundary(); }
 
-DriverBoundary EpisodeDriver::apply_semantic_key(const std::string& semantic_key) {
+DriverApplyResult EpisodeDriver::apply_semantic_key(const std::string& semantic_key) {
     return impl_->apply_semantic_key(semantic_key);
+}
+
+DriverBoundary EpisodeDriver::administrative_interrupt() {
+    return impl_->administrative_interrupt();
 }
 
 const trace::EngineTrace& EpisodeDriver::trace() const noexcept { return impl_->trace_state; }
