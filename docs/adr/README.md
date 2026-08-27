@@ -7,6 +7,7 @@ Architecture Decision Records (ADRs) document decisions that should remain under
 - [ADR-0001 — Build a modern adapter over the pinned OCG C API](ADR-0001-modern-ocg-adapter.md) — **Accepted**
 - [ADR-0002 — Use a shared semantic EpisodeDriver for the episodic environment](ADR-0002-episodic-environment.md) — **Accepted**
 - [ADR-0003 — Ratify Episodic V1 prerequisite identities](ADR-0003-episodic-v1-normative-prerequisites.md) — **Accepted**
+- [ADR-0004 — Define a perspective-safe public episodic action identity](ADR-0004-perspective-safe-episodic-action-identity.md) — **Accepted**
 
 ## When to write an ADR
 

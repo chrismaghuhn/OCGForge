@@ -96,6 +96,10 @@ policy-safe. The candidate-domain digest hashes the supplied semantic keys
 unchanged and inherits their safety classification. Neither a semantic key
 nor a candidate-domain digest is automatically safe for public publication.
 
+The perspective-safe public replacement for episodic policy selection is
+defined by `docs/contracts/public-action-identity-v1.md`. That contract does
+not alter this internal key grammar or its replay/trace ownership.
+
 Any public `EpisodicEnvironment` projection MUST independently prove that the
 complete key and domain are perspective-safe for the acting player using the
 current `PlayerObservation`/public-projection audit. If a key or domain cannot

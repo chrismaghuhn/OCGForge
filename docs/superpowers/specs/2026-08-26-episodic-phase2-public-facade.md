@@ -1,10 +1,11 @@
-# Episodic Environment V1 — Phase 2 Public reset/step Facade
+# Episodic Environment V2 — Phase 2 Public reset/step Facade
 
 Status: implementation specification
 
 Normative architecture: ADR-0002
 
-Normative public contract: ocgforge.episodic_environment.v1
+Normative public contract for the Phase-2 implementation target:
+ocgforge.episodic_environment.v2
 
 Base architecture: merged EpisodeDriver Phase 1
 
@@ -27,11 +28,18 @@ Proposed implementation branch:
 chris/spec/episodic-phase2-public-facade
 
 Proposed implementation PR title:
-feat: add Episodic Environment V1 public facade
+feat: add Episodic Environment V2 public facade
 
 This document is documentation-only. It does not add the production
-EpisodicEnvironment type, modify EpisodeDriver, change a public contract, or
-produce Episodic V1 acceptance evidence.
+EpisodicEnvironment type, modify EpisodeDriver, or produce episodic acceptance
+evidence. Its original V1 public-facade tables are retained as historical
+design provenance; the current V2 prerequisite addendum in section 3.1 is the
+implementation target and supersedes those public-field definitions.
+
+The current prerequisite branch was based on the freshly verified
+`origin/main` at `e2557f7e059f60d7d43161f543494a0c00cc1f96`. The older SHA values
+in the historical audit section below are retained as provenance for that
+earlier specification review.
 
 ## Normative prerequisite follow-up
 
@@ -50,6 +58,17 @@ contracts:
 This follow-up ratifies definitions and pure testable helpers only. It does
 not add the Phase-2 production facade. The actual G28 witness and replay
 evidence remain pending until the implementation/final-acceptance campaign.
+
+The public-identity conflict discovered during the Phase-2 implementation
+review is resolved by ADR-0004 and the owning contracts:
+
+- `docs/contracts/public-action-identity-v1.md`;
+- `docs/contracts/episodic-environment-v2.md`; and
+- `docs/adr/ADR-0004-perspective-safe-episodic-action-identity.md`.
+
+Those documents are normative for the V2 public surface. They do not change
+the internal Action Identity, Decision Protocol, PlayerObservation, or
+EngineTrace contracts.
 
 ## 1. Decision summary
 
@@ -111,8 +130,8 @@ campaign, plus one major final-acceptance evidence correction:
 These findings are historical audit results from the specification's original
 publication. B1 and the identity portion of B3 now have explicit owners and
 definitions in the prerequisite contracts. B2's metric vocabulary is
-corrected, but its actual witness must still be closed before Episodic V1
-FINAL PASS.
+corrected, but its actual witness must still be closed before final episodic
+acceptance.
 
 ## 2. Live repository audit
 
@@ -225,7 +244,7 @@ merged.
 | ID | Classification | Finding | Required resolution |
 | --- | --- | --- | --- |
 | B1 | BLOCKER | EnvironmentConfig requires decision-contract, action-identity, and seed-derivation IDs, but no concrete accepted constants exist in the live contract/code. | Ratify exact constants in the owning normative contract or an explicit accepted identity ADR before production implementation. Do not invent them in Phase 2. |
-| B2 | MAJOR | G28/M4 evidence calls the aggregate sum of 64 per-job maxima (1344) a candidate maximum. It cannot be a single request domain or witness. | Preserve historical M4 evidence unchanged; define candidate_domain_max separately, discover a deterministic tie-broken witness, and replay it before Episodic V1 FINAL PASS. |
+| B2 | MAJOR | G28/M4 evidence calls the aggregate sum of 64 per-job maxima (1344) a candidate maximum. It cannot be a single request domain or witness. | Preserve historical M4 evidence unchanged; define candidate_domain_max separately, discover a deterministic tie-broken witness, and replay it before final episodic acceptance. |
 | B3 | MAJOR, conditional identity blocker | The accepted contract requires required_script_closure_identity, but current required_script_codes is only a deterministic required-card seed set. Runtime ScriptStore resolution also loads global and otherwise requested scripts under its existing semantics. | Ratify what the closure identity binds. Until then, preserve ScriptStore resolution exactly and do not introduce a runtime script allowlist or claim the card-code vector is the closure. |
 | M1 | MAJOR | Internal ActionCandidate locator fields and semantic keys are not automatically policy-safe. | Implement the fail-closed public projection audit and prove it over the certified corpus before publishing a public frame. |
 | M2 | MAJOR | Current Driver does not return accepted-action response metadata as a value. | Add the minimal internal DriverApplyResult described in this document; do not derive metadata from response bytes or old trace fields. |
@@ -240,6 +259,140 @@ Because the prerequisite definitions are not yet accepted and merged, the
 implementation status remains:
 
     PHASE 2 IMPLEMENTATION SHOULD NOT BEGIN
+
+## 3.1 Current V2 public-identity prerequisite addendum
+
+This addendum is the current normative correction to the original V1 public
+facade design. It is intentionally small: it defines the public identity and
+version boundary needed to resume Phase 2, but does not implement
+`EpisodicEnvironment`.
+
+### 3.1.1 Authority and retained internal path
+
+The accepted internal path remains:
+
+```text
+Decision Protocol
+internal ActionCandidate.semantic_key
+        -> EpisodeDriver
+        -> exact existing response / EngineTrace v2 path
+```
+
+The public path is separate:
+
+```text
+internal candidate
+        -> privacy projection audited against PlayerObservation
+        -> EnvironmentActionCandidate.public_action_key
+        -> Agent / Teacher / Model
+```
+
+The internal `semantic_key` is not automatically policy-safe. The internal
+`ocgforge.action_identity.v1`, `ocgforge.candidate_domain.v1`, and
+`ocgforge.semantic_decision_identity.v1` meanings remain unchanged.
+
+### 3.1.2 V2 public schema IDs
+
+| Surface | Exact value | Owner |
+| --- | --- | --- |
+| episodic public contract | `ocgforge.episodic_environment.v2` | `episodic-environment-v2.md` |
+| environment identity | `ocgforge.environment_identity.v2` | `episodic-environment-v2.md` |
+| public action identity | `ocgforge.public_action_identity.v1` | `public-action-identity-v1.md` |
+| public candidate domain | `ocgforge.public_candidate_domain.v1` | `public-action-identity-v1.md` |
+| public semantic decision identity | `ocgforge.public_semantic_decision_identity.v1` | `public-action-identity-v1.md` |
+| episode identity | `ocgforge.episode_identity.v1` | unchanged codec |
+| internal action identity | `ocgforge.action_identity.v1` | unchanged codec |
+| internal candidate domain | `ocgforge.candidate_domain.v1` | unchanged codec |
+| internal semantic decision identity | `ocgforge.semantic_decision_identity.v1` | unchanged codec |
+| observation | `ygo.player_observation.v1` | unchanged contract |
+| trace | `ygo.engine_trace.v2` | unchanged contract |
+
+The original `ocgforge.episodic_environment.v1` public surface is frozen. A
+caller or artifact cannot mix the V1 public `semantic_key` field with the V2
+public key field through an implicit compatibility alias.
+
+### 3.1.3 Public candidate projection
+
+V2 projects one value-owned `EnvironmentActionCandidate` for every internal
+candidate, in the exact authoritative protocol order. Its selection identity
+is `public_action_key`, not `semantic_key`. A public card reference contains
+only a current `ObservationLocator` copied from the acting player's
+`PlayerObservation`, with `RedactedSlot` used when the card identity is
+hidden. A hidden passcode, physical-card identity, raw message hash, internal
+continuation ID, internal digest, pointer, or cache identity is never a
+public field or public-key input.
+
+The projection must preserve complete candidate membership and count. If a
+candidate cannot be represented safely, the complete frame fails closed as a
+privacy/projection error. The candidate is not dropped, truncated, fabricated,
+sorted, or defaulted.
+
+Every current public key is resolved through a frame-local internal binding:
+
+```text
+public_action_key
+    -> exactly one current internal candidate
+    -> that candidate's existing semantic_key
+    -> exact existing Driver response path
+```
+
+Unknown, malformed, duplicate, ambiguous, or unproven mappings fail closed
+before Driver advancement. Candidate order is never used as a collision
+resolution policy.
+
+### 3.1.4 Public domain and decision identities
+
+`ocgforge.public_candidate_domain.v1` hashes the ordered vector of public
+action keys, with request kind and candidate count, using its own domain. It
+never hashes the internal key vector. The internal candidate-domain digest
+remains internal evidence.
+
+`ocgforge.public_semantic_decision_identity.v1` uses only the public episode
+identity, public decision index, acting player, public request kind, and
+public candidate-domain digest. It deliberately excludes protocol
+`DecisionRequest.decision_id`, `engine_step_index`, observation hash when its
+V1 context could carry internal identity, internal semantic keys, internal
+candidate digests, raw message hashes, continuation IDs, exact response bytes,
+and hidden card identities.
+
+The complete `PlayerObservation` remains the policy state. Its separate hash
+is not smuggled into the public decision ID when doing so could transitively
+carry internal context.
+
+### 3.1.5 Public replay
+
+V2 public replay records the environment configuration, `EpisodeSpec`, and
+ordered public action keys. For each regenerated frame it rebuilds the
+complete internal domain, repeats the perspective-safe projection, recomputes
+the public domain/decision identities, and resolves the recorded public key
+against the current frame-local binding. It then passes only the resolved
+existing internal semantic key into `EpisodeDriver`.
+
+Internal protocol/trace replay may continue to use internal semantic keys. The
+two replay surfaces are not aliases.
+
+### 3.1.6 Required paired-world fixture
+
+The prerequisite golden fixture must contain:
+
+```text
+World A internal key: card.0.3.14821890.0.8.0
+World B internal key: card.0.3.7654321.0.8.0
+same visible slot:   p0:SPELL_TRAP_ZONE:0
+```
+
+It must prove identical `PlayerObservation`, public candidate descriptor,
+`public_action_key`, public candidate-domain digest, and public semantic
+decision ID. The internal semantic keys may differ. The pure codec proof is
+`tests/episodic/public_action_identity_test.cpp`; the later Phase-2 facade
+must repeat the property through its real projection path.
+
+### 3.1.7 Scope gate
+
+This prerequisite does not change Decision Protocol legality, candidate
+ordering, PlayerObservation visibility, EngineTrace v2, rules, decks, or any
+general Phase-2 lifecycle/ML/trajectory implementation. Phase 2 may resume
+only after the prerequisite PR is merged; this task does not resume it.
 
 ## 4. Build ownership
 
@@ -284,11 +437,13 @@ EpisodeDriver into the probe or alter ygo_m4 worker behavior.
 | episode incarnation | none | facade token namespace | u64 control counter | monotonic counter and overflow handling | stale alias | none | G03-G05, G10-G13 |
 | submission token | borrowed boundary only; no token | facade | two u64 control token | issue/compare/invalidate | stale action accepted | no semantic leak | G03, G10-G13, G25 |
 | decision_index | EngineTrace index exists, different meaning | facade | u64 public index | separate counter and codec input | trace-index reinterpretation | none | G06, G10, G14, G19 |
-| candidate_domain_digest | Phase-1 characterization digest is separate/historical | facade identity codec | lowercase SHA-256 string | accepted v1 digest codec | order/count loss | key may expose hidden identity if not audited | G07-G09, G20, G28 |
-| semantic_decision_id | protocol decision_id exists | facade wrapper | lowercase SHA-256 string | decision codec | wrong observation/order binding | no new hidden data | G01, G06, G10, G20 |
+| internal candidate_domain_digest | Phase-1 characterization digest is separate/historical | internal identity codec | lowercase SHA-256 string | accepted v1 digest codec | order/count loss | internal key may expose hidden identity if published | G07-G09, G20, G28 |
+| public_candidate_domain_digest | no public Phase-1 value | V2 facade identity codec | lowercase SHA-256 string | public-key domain codec | public order/count loss | no internal key input | V2 paired-world/domain gates |
+| internal semantic_decision_id | protocol decision_id exists | internal identity codec | lowercase SHA-256 string | accepted v1 decision codec | wrong internal binding | internal-only | G01, G06, G10, G20 |
+| public_semantic_decision_id | no public Phase-1 value | V2 facade identity codec | lowercase SHA-256 string | public decision codec | unsafe transitive input | public fields only | V2 paired-world/decision gates |
 | public DecisionFrame | borrowed DriverDecisionBoundary | facade | owned value DTO | safe projection and copy | borrowed lifetime leak | direct policy boundary | G06-G13, G20, G22-G23 |
 | public candidate collection | internal ActionCandidate vector | facade projection | owned complete ordered vector | sanitized DTO and visibility checks | truncation/fabrication | response bytes/locators | G06-G09, G14-G16, G22 |
-| ActionSelection | replay key exists; no public token gate | facade | five-field value DTO | validation precedence | candidate-index alias | raw bytes never accepted | G10-G13, G20 |
+| ActionSelection | replay key exists; no public token gate | V2 facade | five-field value DTO with public_action_key | validation precedence | candidate-index alias | raw bytes/internal key never accepted | G10-G13, G20 |
 | StepAccepted | Driver boundary has no public accepted metadata | facade over DriverApplyResult | transition plus NextBoundary | result variants and metadata seam | accepted action mislabeled rejection | response hash only | G14-G20 |
 | StepRejected | no public facade type | facade | typed value variant | rejection codes and snapshot tests | mutation after rejection | safe diagnostics only | G10-G13 |
 | AcceptedActionTransition | trace has related but non-equivalent fields | Driver supplies facts; facade owns public IDs | selected key/index/submission fact/hash | DriverApplyResult | engine_advanced confusion | response bytes excluded | G14-G16 |
@@ -299,7 +454,7 @@ EpisodeDriver into the probe or alter ygo_m4 worker behavior.
 | semantic-action budget | absent in Phase 1 | Driver | u64 count/limit | authoritative count/check | closure timing drift | none | G17-G18 |
 | engine-process budget | Driver uint32 process limit | Driver | u64 internal/public limit | width/translation | canonical behavior drift | none | G18-G19 |
 | terminal views | Driver currently materializes limited terminal observation | Driver materializes both; facade caches | two PlayerObservation values | eager safe cache | terminal state mismatch | reveal-all risk | G23-G24 |
-| replay | canonical replay keys exist | test-only semantic replay harness | value script of semantic keys | cross-boundary comparator | hidden byte/index dependency | replay input leak | G20 |
+| replay | internal canonical replay keys exist | separate V2 public/internal harnesses | public script uses public_action_key; internal script uses semantic_key | regenerated-domain resolver | hidden byte/index dependency | public replay input leak | G20 plus V2 public replay gate |
 | audit-prefix hash | EngineTrace v2 canonical hash exists | Driver/closure evidence | existing v2 prefix hash | exact prefix snapshot | new hash domain drift | provenance exposure | G15-G16, G20, G24 |
 | cleanup/reset isolation | fresh Driver per SimulationJob | facade closed-state teardown | no mutable episode resource retained | destructor/reset ordering | state contamination | hidden knowledge reuse | G04-G05, G27 |
 
@@ -307,7 +462,7 @@ EpisodeDriver into the probe or alter ygo_m4 worker behavior.
 
 ### 5.1 Public configuration strategy
 
-V1 must not accept arbitrary rules, database, CardScripts, deck, format, or
+V2 must not accept arbitrary rules, database, CardScripts, deck, format, or
 patchset selectors. The public construction path should be:
 
     CertifiedEnvironmentConfig::canonical()
@@ -431,15 +586,23 @@ required-card seed set. The definition:
 
 ## 6. Public schema IDs
 
+> The original V1 table is retained as historical contract provenance. The
+> current V2 identity set is authoritative in section 3.1 and the
+> `episodic-environment-v2` contract.
+
 The following values are already concrete in accepted sources:
 
 | Semantic surface | Exact value | Authority |
 | --- | --- | --- |
-| episodic contract | ocgforge.episodic_environment.v1 | episodic-environment-v1 |
-| environment identity | ocgforge.environment_identity.v1 | episodic-environment-v1 |
+| episodic contract | ocgforge.episodic_environment.v2 | episodic-environment-v2 |
+| environment identity | ocgforge.environment_identity.v2 | episodic-environment-v2 |
 | episode identity | ocgforge.episode_identity.v1 | episodic-environment-v1 |
-| semantic decision identity | ocgforge.semantic_decision_identity.v1 | episodic-environment-v1 |
-| candidate digest | ocgforge.candidate_domain.v1 | episodic-environment-v1 |
+| internal semantic decision identity | ocgforge.semantic_decision_identity.v1 | episodic-environment-v1 |
+| public semantic decision identity | ocgforge.public_semantic_decision_identity.v1 | public-action-identity-v1 |
+| internal candidate digest | ocgforge.candidate_domain.v1 | episodic-environment-v1 |
+| public candidate digest | ocgforge.public_candidate_domain.v1 | public-action-identity-v1 |
+| internal action identity | ocgforge.action_identity.v1 | action-identity-v1 |
+| public action identity | ocgforge.public_action_identity.v1 | public-action-identity-v1 |
 | observation | ygo.player_observation.v1 | player-observation-v1 |
 | trace | ygo.engine_trace.v2 | engine-trace-v2 |
 | ocgcore patchset | ocgforge.ocgcore.api_hardening.v1 | rules-bundle lock |
@@ -479,7 +642,12 @@ implementation may serialize a C++ enum by object representation or rely on
 native endianness. All enum-to-string mappings used in an identity are
 explicit tables.
 
-### 7.1 Environment semantic ID
+### 7.1 Environment semantic ID — V1 retained layout
+
+> This is the accepted V1 environment-identity layout for the unchanged
+> internal contract. V2 adds the explicit public identity schema fields as
+> specified by `docs/contracts/episodic-environment-v2.md`; it does not
+> reinterpret this V1 payload.
 
 environment_semantic_id is the lowercase hexadecimal SHA-256 of the
 following exact sequence:
@@ -535,7 +703,7 @@ RunControl, job ID, policy identity, token counters, process identity, and
 execution provenance are excluded. Therefore repeated identical resets have
 the same episode_semantic_id while receiving different live tokens.
 
-### 7.3 Candidate-domain digest
+### 7.3 Internal candidate-domain digest — V1
 
 candidate_domain_digest is the SHA-256 of:
 
@@ -549,7 +717,10 @@ candidate_domain_digest is the SHA-256 of:
 The digest operation does not sort, normalize, deduplicate, filter, or cap.
 The full candidate vector remains in the owned public frame.
 
-### 7.4 Semantic decision ID
+### 7.4 Internal semantic decision ID — V1
+
+> The following identity remains internal. It is not the V2 public decision
+> identity.
 
 semantic_decision_id is the SHA-256 of:
 
@@ -569,6 +740,10 @@ The facade wraps the protocol decision ID; it does not replace or
 reinterpret it.
 
 ### 7.5 Golden-vector plan
+
+The V2 prerequisite additionally requires independent vectors for the public
+action key, ordered public candidate-domain digest, public semantic decision
+identity, and the paired hidden-card projection described in section 3.1.
 
 Identity tests must contain independent reference vectors, not only
 round-trips through the production codec:
@@ -616,6 +791,10 @@ build provenance. Changing either budget or cancellation metadata must not
 change it.
 
 ## 9. Public candidate and request safety
+
+> The tables in this section are the original V1 public-facade baseline. They
+> are retained for audit provenance; V2 replaces the public selection and
+> digest fields with the perspective-safe forms in section 3.1.
 
 The internal protocol types remain trusted internal types. The facade
 publishes deterministic value DTOs named EnvironmentDecisionRequest and
@@ -881,6 +1060,10 @@ semantic IDs do not change merely to provide freshness.
 
 ## 12. DecisionFrame and public decision index
 
+> V1 field names below are historical. The V2 frame uses
+> `public_semantic_decision_id`, `public_action_key`, and
+> `public_candidate_domain_digest` as specified in section 3.1.
+
 The owned public frame contains:
 
     contract_id
@@ -918,6 +1101,9 @@ The Driver's existing trace decision index and terminal-record behavior are
 unchanged.
 
 ## 13. ActionSelection and rejection ordering
+
+> V1 used `semantic_key` as the public selection field. That definition is
+> frozen; V2 uses `public_action_key` and a frame-local internal binding.
 
 ActionSelection is value-owned and contains exactly:
 
@@ -1735,6 +1921,9 @@ reset after GAME_TERMINAL, INTERRUPTED, or FAILED:
 
 ## 25. Semantic versus control-plane values
 
+> This table preserves the V1 identity classification for internal replay.
+> V2 adds separate public action/domain/decision identities; see section 3.1.
+
 | Value | Semantic identity? | Gameplay hash? | Replay equality? | Persisted semantic trajectory later? | Reason |
 | --- | ---: | ---: | ---: | ---: | --- |
 | environment_semantic_id | yes | indirectly through existing semantic environment inputs | yes | eligible | certified environment |
@@ -1822,6 +2011,10 @@ ordered accepted semantic-key vector. It contains no token, candidate index,
 raw response bytes, hidden state, PID, or timing.
 
 ## 28. Replay design
+
+> The following is the retained internal V1 replay design. V2 public replay
+> records public keys and resolves them against a regenerated public domain;
+> it never records or submits internal semantic keys. See section 3.1.
 
 The test-only semantic replay harness consumes:
 
@@ -2087,13 +2280,21 @@ This small PR owns the decisions that the implementation cannot safely guess:
 3. clarify the G28 metric vocabulary, including
    `candidate_domain_max` versus the historical aggregate
    `candidate_max_total`.
+4. define a separate perspective-safe public action identity, public
+   candidate-domain digest, and public semantic decision identity;
+5. version the public Phase-2 surface as
+   `ocgforge.episodic_environment.v2` and bind its environment identity as
+   `ocgforge.environment_identity.v2` without changing the internal identity
+   path.
 
 The prerequisite PR must merge before environment, episode, or semantic
 decision golden vectors are finalized and before production facade code is
-started. It does not need to discover the final G28 witness; deterministic
-witness discovery and independent replay may run during the implementation
-campaign after the metric definition is accepted. G28 still must close before
-Episodic V1 FINAL PASS.
+started. The public-key, public-domain, public-decision, and paired-world
+goldens in the prerequisite must merge before implementation resumes. It does
+not need to discover the final G28 witness; deterministic witness discovery
+and independent replay may run during the implementation campaign after the
+metric definition is accepted. G28 still must close before final episodic
+acceptance.
 
 ### 35.2 Phase-2 implementation PR
 
@@ -2287,6 +2488,8 @@ This specification does not modify:
 
 - ADR-0002;
 - ocgforge.episodic_environment.v1;
+- ocgforge.episodic_environment.v2 (the V2 meaning is defined by the separate
+  prerequisite contract, not by silently changing V1);
 - Decision Protocol v1;
 - PlayerObservation v1;
 - EngineTrace v2;
@@ -2298,8 +2501,10 @@ At original publication, the missing identity constants,
 required-script-closure definition, and G28 metric vocabulary were reported,
 not silently repaired. Their definitions now live in the explicitly reviewed
 owning contract/ADR changes listed in the prerequisite follow-up above. The
-actual production behavior and final acceptance claim still require the
-implementation and evidence gates defined here.
+public identity conflict is likewise resolved by the explicit V2 contract and
+ADR-0004; the V1 public meaning remains frozen. The actual production
+behavior and final acceptance claim still require the implementation and
+evidence gates defined here.
 
 No trajectory schema, writer, shard, actor/learner transport, teacher,
 WindBot, model, tensor, framework adapter, reward implementation, arbitrary
@@ -2310,8 +2515,8 @@ performance work is included.
 
 The facade design is complete enough to review, but production implementation
 is not included in this specification or in the prerequisite follow-up. It
-may begin only after the prerequisite PR merges. B2/G28 remains a required
-MAJOR closure before Episodic V1 FINAL PASS, but is not by itself an
-implementation-start blocker.
+may begin only after the public-identity prerequisite PR merges. B2/G28
+remains a required MAJOR closure before final episodic acceptance, but is not
+by itself an implementation-start blocker.
 
     PHASE 2 IMPLEMENTATION SHOULD NOT BEGIN

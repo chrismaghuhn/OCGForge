@@ -55,6 +55,7 @@ Floating upstream branches are not canonical inputs.
 | Which ocgcore revision is canonical? | `third_party/rules_bundle.lock.json` |
 | Which local core patches are canonical? | Lock/patchset identity + versioned patch files |
 | What does a `DecisionRequest` mean? | `docs/contracts/decision-protocol-v1.md` |
+| What action identity may policy callers select? | `docs/contracts/public-action-identity-v1.md` plus `docs/contracts/episodic-environment-v2.md` |
 | What may an agent observe? | `docs/contracts/player-observation-v1.md` |
 | What does trace v2 mean? | `docs/contracts/engine-trace-v2.md` |
 | Is a decision family globally engine-verified? | Decision coverage inventory + evidence |

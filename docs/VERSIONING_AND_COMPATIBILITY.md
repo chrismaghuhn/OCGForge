@@ -28,7 +28,9 @@ Current repository contract families include:
 - player view v1;
 - player observation v1;
 - engine trace v1;
-- engine trace v2.
+- engine trace v2;
+- episodic environment v1;
+- perspective-safe public action identity v1 and episodic environment v2.
 
 Trace v2 exists specifically because continuation-aware semantics differ from the older atomic trace assumptions.
 
@@ -108,6 +110,15 @@ Changing key construction or ordering can invalidate:
 - replay fixtures.
 
 Treat such a change as a contract migration unless proven representation-only.
+
+The internal `ocgforge.action_identity.v1` and the public
+`ocgforge.public_action_identity.v1` are separate identity domains. An
+episodic facade must not expose the internal semantic key merely because the
+Decision Protocol owns it. Changing a public selection field from the
+internal key to a perspective-safe key also changes candidate-domain hash
+input, public decision identity, and public replay interpretation; that
+migration is therefore `ocgforge.episodic_environment.v2`, not a reinterpretation
+of episodic environment v1.
 
 ## 8. Trace compatibility
 
