@@ -44,6 +44,7 @@ The exact versioned domains are:
 ocgforge.public_action_identity.v1
 ocgforge.public_candidate_domain.v1
 ocgforge.public_semantic_decision_identity.v1
+ocgforge.public_environment_observation.v1
 ocgforge.episodic_environment.v2
 ocgforge.environment_identity.v2
 ```
@@ -58,7 +59,8 @@ The following rules are binding:
 2. Episodic v2 exposes `public_action_key`, never the internal key as the
    policy selection field.
 3. A public key contains only data visible to the acting player's current
-   `PlayerObservation`.
+   `PlayerObservation`, and the public frame emits only the separate
+   `PublicEnvironmentObservation` projection.
 4. A hidden card is represented only by a perspective-safe current locator,
    such as its visible zone/slot; its passcode and physical identity are not
    included.
@@ -68,13 +70,16 @@ The following rules are binding:
 6. The complete legal candidate domain is preserved exactly. Privacy does not
    filter, truncate, fabricate, sort, or default candidates.
 7. The public candidate-domain digest hashes the ordered public-key vector.
-8. Public semantic decision identity does not transitively include raw message
+8. Public semantic decision identity binds the safe
+   `public_observation_digest` and does not transitively include raw message
    hashes, internal continuation IDs, internal candidate digests, protocol
    decision identity, or hidden card identities.
 9. Public replay records public keys and resolves them against the regenerated
    public domain. Internal protocol/trace replay remains internal.
-10. The internal Action Identity, Decision Protocol legality, PlayerObservation,
-    EngineTrace v2, rules, and decks remain unchanged.
+10. The internal Action Identity, Decision Protocol legality, and
+    `PlayerObservation v1` semantics remain unchanged. `EngineTrace v2`, rules,
+    and decks remain unchanged; the public environment uses the separate
+    sanitized observation contract.
 
 ## Alternatives considered
 
@@ -119,8 +124,9 @@ change. V1 is frozen and v2 is explicit.
   binding, while internal trace/replay remains unchanged.
 - The environment semantic identity must bind both the retained internal
   schemas and the new public schemas, requiring `environment_identity.v2`.
-- The existing `PlayerObservation` visibility contract remains the sole source
-  of policy-visible state.
+- `PlayerObservation v1` remains the source of perspective-safe state facts,
+  while `PublicEnvironmentObservation v1` is the only policy-facing
+  serialization at the episodic boundary.
 
 ## Compatibility / migration
 
@@ -129,17 +135,24 @@ artifacts. V2 callers must use the new public fields and schemas; an unknown
 or mixed v1/v2 identity set is rejected before mutation. No compatibility
 alias is defined.
 
+The public action, public candidate-domain, and public semantic-decision
+schemas are first accepted by this prerequisite, so their v1 definitions are
+being finalized before any caller can rely on the earlier draft layout. The
+public observation schema is independently v1 and separately owned.
+
 The episode identity schema stays v1 because its codec is unchanged. Its
 parent `environment_semantic_id` is supplied by the explicitly versioned v2
 environment identity. Internal protocol, action, candidate-domain,
 semantic-decision, observation, and trace IDs remain at their accepted v1/v2
-versions with unchanged meanings.
+versions with unchanged meanings. The public observation projection is
+separately versioned as `ocgforge.public_environment_observation.v1`.
 
 ## Verification
 
 `tests/episodic/public_action_identity_test.cpp` is the focused pure-codec
-proof. It includes exact action-key, public-domain, and public-decision golden
-vectors; a paired hidden-card fixture; ordered-domain mutation coverage; and
+proof. It includes typed-choice coverage, exact action-key, public-observation,
+public-domain, and public-decision golden vectors; a paired hidden-card fixture
+through attached decision context; ordered-domain mutation coverage; and
 unknown/collision rejection checks.
 
 The paired fixture uses:

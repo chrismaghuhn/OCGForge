@@ -65,6 +65,29 @@ void append_optional_i32(std::vector<std::uint8_t>& bytes,
     }
 }
 
+bool is_valid_choice(const std::uint8_t kind,
+                     const std::uint64_t value,
+                     const bool has_response_index) noexcept {
+    switch (static_cast<PublicChoiceKind>(kind)) {
+    case PublicChoiceKind::YesNo:
+    case PublicChoiceKind::EffectYesNo:
+        return value <= 1 && !has_response_index;
+    case PublicChoiceKind::EffectChoice:
+        return value <= std::numeric_limits<std::uint32_t>::max() && !has_response_index;
+    case PublicChoiceKind::OptionValue:
+    case PublicChoiceKind::AnnouncementNumber:
+        return has_response_index;
+    }
+    return false;
+}
+
+void validate_choice(const PublicChoice& choice) {
+    if (!is_valid_choice(static_cast<std::uint8_t>(choice.kind), choice.value,
+                         choice.response_index.has_value())) {
+        throw std::invalid_argument("public action choice is not a valid typed choice");
+    }
+}
+
 bool is_lower_token(const std::string_view value) noexcept {
     if (value.empty()) {
         return false;
@@ -141,6 +164,18 @@ bool read_u32be(const std::vector<std::uint8_t>& bytes, std::size_t& offset,
     return true;
 }
 
+bool read_u64be(const std::vector<std::uint8_t>& bytes, std::size_t& offset,
+                std::uint64_t& value) noexcept {
+    if (bytes.size() - offset < 8) {
+        return false;
+    }
+    value = 0;
+    for (int shift = 56; shift >= 0; shift -= 8) {
+        value |= static_cast<std::uint64_t>(bytes[offset++]) << shift;
+    }
+    return true;
+}
+
 bool read_string(const std::vector<std::uint8_t>& bytes, std::size_t& offset,
                  std::string_view& value) noexcept {
     std::uint32_t length = 0;
@@ -179,12 +214,43 @@ bool read_optional_u8(const std::vector<std::uint8_t>& bytes,
     return true;
 }
 
+bool read_optional_choice(const std::vector<std::uint8_t>& bytes,
+                          std::size_t& offset) noexcept {
+    std::uint8_t present = 0;
+    if (!read_u8(bytes, offset, present) || present > 1) {
+        return false;
+    }
+    if (present == 0) {
+        return true;
+    }
+    std::uint8_t kind = 0;
+    std::uint64_t value = 0;
+    if (!read_u8(bytes, offset, kind) || !read_u64be(bytes, offset, value)) {
+        return false;
+    }
+    std::uint8_t response_index_present = 0;
+    if (!read_u8(bytes, offset, response_index_present) || response_index_present > 1) {
+        return false;
+    }
+    if (response_index_present == 1) {
+        std::uint32_t response_index = 0;
+        if (!read_u32be(bytes, offset, response_index)) {
+            return false;
+        }
+    }
+    return is_valid_choice(kind, value, response_index_present == 1);
+}
+
 bool is_canonical_public_action_bytes(const std::vector<std::uint8_t>& bytes) noexcept {
     std::size_t offset = 0;
     std::string_view value;
     if (!read_string(bytes, offset, value) || value != kPublicActionIdentitySchemaId ||
         !read_string(bytes, offset, value) || value != kPublicActionIdentitySchemaId ||
         !read_string(bytes, offset, value) || !is_lower_token(value)) {
+        return false;
+    }
+
+    if (!read_optional_choice(bytes, offset)) {
         return false;
     }
 
@@ -236,6 +302,21 @@ void append_reference(std::vector<std::uint8_t>& bytes,
     }
 }
 
+void append_choice(std::vector<std::uint8_t>& bytes,
+                   const std::optional<PublicChoice>& choice) {
+    append_u8(bytes, choice.has_value() ? 1 : 0);
+    if (!choice.has_value()) {
+        return;
+    }
+    validate_choice(*choice);
+    append_u8(bytes, static_cast<std::uint8_t>(choice->kind));
+    append_u64be(bytes, choice->value);
+    append_u8(bytes, choice->response_index.has_value() ? 1 : 0);
+    if (choice->response_index.has_value()) {
+        append_u32be(bytes, *choice->response_index);
+    }
+}
+
 bool is_lower_hex_digest(const std::string_view value) noexcept {
     if (value.size() != 64) {
         return false;
@@ -274,10 +355,11 @@ std::vector<std::uint8_t> canonical_public_action_key_bytes(
     }
 
     std::vector<std::uint8_t> bytes;
-    bytes.reserve(192);
+    bytes.reserve(224);
     append_string(bytes, kPublicActionIdentitySchemaId);
     append_string(bytes, kPublicActionIdentitySchemaId);
     append_string(bytes, input.action_kind);
+    append_choice(bytes, input.choice);
     append_reference(bytes, input.source_reference);
     append_reference(bytes, input.target_reference);
     append_optional_u32(bytes, input.phase);
@@ -343,18 +425,20 @@ std::vector<std::uint8_t> canonical_public_semantic_decision_identity_bytes(
     const PublicSemanticDecisionIdentityInput& input) {
     if (!is_lower_hex_digest(input.episode_semantic_id) || input.acting_player > 1 ||
         !is_lower_token(input.request_kind) ||
+        !is_lower_hex_digest(input.public_observation_digest) ||
         !is_lower_hex_digest(input.public_candidate_domain_digest)) {
         throw std::invalid_argument("public semantic decision identity contains an invalid field");
     }
 
     std::vector<std::uint8_t> bytes;
-    bytes.reserve(256);
+    bytes.reserve(320);
     append_string(bytes, kPublicSemanticDecisionIdentitySchemaId);
     append_string(bytes, kPublicSemanticDecisionIdentitySchemaId);
     append_string(bytes, input.episode_semantic_id);
     append_u64be(bytes, input.decision_index);
     append_u8(bytes, input.acting_player);
     append_string(bytes, input.request_kind);
+    append_string(bytes, input.public_observation_digest);
     append_string(bytes, input.public_candidate_domain_digest);
     return bytes;
 }

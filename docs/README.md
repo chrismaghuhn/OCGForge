@@ -37,6 +37,7 @@ This index keeps those layers separate.
 - [Engine trace v1](contracts/engine-trace-v1.md)
 - [Engine trace v2](contracts/engine-trace-v2.md)
 - [Player observation v1](contracts/player-observation-v1.md)
+- [Perspective-safe public environment observation v1](contracts/public-environment-observation-v1.md) — **Policy-facing projection; implementation pending**
 - [Player view v1](contracts/player-view-v1.md)
 - [Episodic environment v1](contracts/episodic-environment-v1.md) — **Accepted semantics; implementation evidence pending**
 - [Perspective-safe public action identity v1](contracts/public-action-identity-v1.md) — **Accepted prerequisite; implementation pending**

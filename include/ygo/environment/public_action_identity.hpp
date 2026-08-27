@@ -25,6 +25,22 @@ inline constexpr std::string_view kEnvironmentIdentityV2SchemaId =
     "ocgforge.environment_identity.v2";
 inline constexpr std::string_view kPublicActionKeyPrefix = "public_action.v1.";
 
+enum class PublicChoiceKind : std::uint8_t {
+    YesNo = 1,
+    EffectYesNo = 2,
+    EffectChoice = 3,
+    OptionValue = 4,
+    AnnouncementNumber = 5,
+};
+
+struct PublicChoice final {
+    PublicChoiceKind kind = PublicChoiceKind::YesNo;
+    std::uint64_t value = 0;
+    // For option/announcement values this is the exact engine response
+    // selector. It is not the environment's candidate-vector index.
+    std::optional<std::uint32_t> response_index;
+};
+
 enum class PublicCardReferenceKind : std::uint8_t {
     VisibleCard = 0,
     RedactedSlot = 1,
@@ -37,6 +53,7 @@ struct PublicCardReference final {
 
 struct PublicActionKeyInput final {
     std::string action_kind;
+    std::optional<PublicChoice> choice;
     std::optional<PublicCardReference> source_reference;
     std::optional<PublicCardReference> target_reference;
     std::optional<std::uint32_t> phase;
@@ -61,6 +78,7 @@ struct PublicSemanticDecisionIdentityInput final {
     std::uint64_t decision_index = 0;
     std::uint8_t acting_player = 0;
     std::string request_kind;
+    std::string public_observation_digest;
     std::string public_candidate_domain_digest;
 };
 

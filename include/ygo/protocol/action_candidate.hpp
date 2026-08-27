@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -38,6 +39,12 @@ struct ActionCandidate {
     std::uint32_t source_position = 0;
     std::uint32_t source_index = 0;
     std::int32_t amount = -1;
+    // Typed semantic choice metadata for policy projection. These fields are
+    // auxiliary decoder output; they do not alter semantic_key or response
+    // ownership. choice_index is an engine/list selector, never a candidate
+    // vector index invented by the environment.
+    std::optional<std::uint64_t> choice_value;
+    std::optional<std::uint32_t> choice_index;
     std::string continuation_id;
     bool submits_engine_response = true;
     std::vector<std::uint8_t> exact_response_bytes;

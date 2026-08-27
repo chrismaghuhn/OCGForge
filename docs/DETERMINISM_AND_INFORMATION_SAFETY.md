@@ -61,7 +61,12 @@ The engine is omniscient.
 
 The agent is not.
 
-`PlayerObservation` is built for an explicit `perspective_player` and is the intended agent-facing state.
+`PlayerObservation` is built for an explicit `perspective_player` and remains
+the perspective-safe observation-layer source. The episodic public boundary
+emits the separately versioned
+`ocgforge.public_environment_observation.v1` projection; it must not publish
+an attached `PlayerObservation v1` directly when that record contains internal
+decision or continuation identity.
 
 Raw omniscient queries are not an acceptable shortcut for a model adapter.
 

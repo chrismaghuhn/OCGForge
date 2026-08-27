@@ -152,6 +152,8 @@ void add_idle_card(DecisionRequest& request, std::uint32_t command, std::uint32_
     candidate.source_location = location;
     candidate.source_sequence = sequence;
     candidate.phase = command;
+    candidate.source_index = index;
+    candidate.choice_index = index;
     candidate.exact_response_bytes = response_i32(command | (index << 16));
     request.candidates.push_back(std::move(candidate));
 }
@@ -167,6 +169,8 @@ void add_battle_card(DecisionRequest& request, std::uint32_t command, std::uint3
     candidate.source_location = location;
     candidate.source_sequence = sequence;
     candidate.phase = command;
+    candidate.source_index = index;
+    candidate.choice_index = index;
     candidate.exact_response_bytes = response_i32(command | (index << 16));
     request.candidates.push_back(std::move(candidate));
 }
@@ -349,6 +353,7 @@ DecisionRequest decode_yes_no(const std::vector<std::uint8_t>& frame, bool effec
             ActionCandidate candidate;
             candidate.action_kind = ActionKind::YesNo;
             candidate.semantic_key = choice == 0 ? "yes_no.no" : "yes_no.yes";
+            candidate.choice_value = choice;
             candidate.source_card = code;
             candidate.source_controller = controller;
             candidate.source_location = location;
@@ -362,6 +367,7 @@ DecisionRequest decode_yes_no(const std::vector<std::uint8_t>& frame, bool effec
             ActionCandidate candidate;
             candidate.action_kind = ActionKind::YesNo;
             candidate.semantic_key = choice == 0 ? "yes_no.no" : "yes_no.yes";
+            candidate.choice_value = choice;
             candidate.exact_response_bytes = response_i32(choice);
             request.candidates.push_back(std::move(candidate));
         }
@@ -392,6 +398,7 @@ DecisionRequest decode_position(const std::vector<std::uint8_t>& frame) {
         ActionCandidate candidate;
         candidate.action_kind = ActionKind::Position;
         candidate.semantic_key = "position." + std::to_string(code) + "." + std::to_string(position);
+        candidate.choice_value = position;
         candidate.source_card = code;
         candidate.position = position;
         candidate.exact_response_bytes = response_i32(position);
@@ -431,6 +438,7 @@ DecisionRequest decode_chain(const std::vector<std::uint8_t>& frame) {
         ActionCandidate candidate;
         candidate.action_kind = ActionKind::Chain;
         candidate.semantic_key = card_key("chain", 0, index, code, controller, location, sequence);
+        candidate.choice_index = index;
         candidate.source_card = code;
         candidate.source_controller = controller;
         candidate.source_location = location;
@@ -536,6 +544,8 @@ DecisionRequest decode_select_option(const std::vector<std::uint8_t>& frame) {
         ActionCandidate candidate;
         candidate.action_kind = ActionKind::Option;
         candidate.semantic_key = "option." + std::to_string(index) + "." + std::to_string(value);
+        candidate.choice_value = value;
+        candidate.choice_index = index;
         candidate.phase = index;
         candidate.exact_response_bytes = encode_int32_response(static_cast<std::int32_t>(index));
         request.candidates.push_back(std::move(candidate));
@@ -894,6 +904,8 @@ DecisionRequest decode_announce_number(const std::vector<std::uint8_t>& frame) {
         ActionCandidate candidate;
         candidate.action_kind = ActionKind::Announcement;
         candidate.semantic_key = "announce_number." + std::to_string(index) + "." + std::to_string(value);
+        candidate.choice_value = value;
+        candidate.choice_index = index;
         candidate.phase = index;
         candidate.exact_response_bytes = encode_int32_response(static_cast<std::int32_t>(index));
         request.candidates.push_back(std::move(candidate));
@@ -947,6 +959,7 @@ DecisionRequest decode_announce_mask(const std::vector<std::uint8_t>& frame, boo
             ActionCandidate candidate;
             candidate.action_kind = ActionKind::Announcement;
             candidate.semantic_key = "announce_mask." + std::to_string(item.source_index);
+            candidate.choice_index = item.source_index;
             candidate.source_index = item.source_index;
             candidate.exact_response_bytes = race ? encode_uint64_response(item.mask_value)
                                                   : encode_uint32_response(static_cast<std::uint32_t>(item.mask_value));

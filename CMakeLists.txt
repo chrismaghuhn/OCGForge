@@ -161,6 +161,7 @@ add_library(ygo_m4 STATIC
     src/environment/identity_contract.cpp
     src/environment/candidate_domain_evidence.cpp
     src/environment/public_action_identity.cpp
+    src/environment/public_environment_observation.cpp
     src/simulation/canonical_simulation.cpp
 )
 target_include_directories(ygo_m4 PUBLIC "${CMAKE_SOURCE_DIR}/include")

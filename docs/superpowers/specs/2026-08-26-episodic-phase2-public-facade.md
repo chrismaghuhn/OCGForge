@@ -283,6 +283,7 @@ The public path is separate:
 ```text
 internal candidate
         -> privacy projection audited against PlayerObservation
+        -> PublicEnvironmentObservation v1
         -> EnvironmentActionCandidate.public_action_key
         -> Agent / Teacher / Model
 ```
@@ -304,7 +305,8 @@ The internal `semantic_key` is not automatically policy-safe. The internal
 | internal action identity | `ocgforge.action_identity.v1` | unchanged codec |
 | internal candidate domain | `ocgforge.candidate_domain.v1` | unchanged codec |
 | internal semantic decision identity | `ocgforge.semantic_decision_identity.v1` | unchanged codec |
-| observation | `ygo.player_observation.v1` | unchanged contract |
+| internal observation | `ygo.player_observation.v1` | unchanged contract |
+| public observation | `ocgforge.public_environment_observation.v1` | `public-environment-observation-v1.md` |
 | trace | `ygo.engine_trace.v2` | unchanged contract |
 
 The original `ocgforge.episodic_environment.v1` public surface is frozen. A
@@ -320,7 +322,22 @@ only a current `ObservationLocator` copied from the acting player's
 `PlayerObservation`, with `RedactedSlot` used when the card identity is
 hidden. A hidden passcode, physical-card identity, raw message hash, internal
 continuation ID, internal digest, pointer, or cache identity is never a
-public field or public-key input.
+public field or public-key input. Typed choice metadata is mandatory wherever
+the internal family has a semantic selector:
+
+```text
+YesNo              -> 0/1 boolean choice
+EffectYesNo        -> 0/1 effect-response choice
+EffectChoice       -> exact engine/list selector for an idle/battle effect
+OptionValue        -> u64 option value plus exact response selector
+AnnouncementNumber -> u64 announced number plus exact response selector
+```
+
+The option/announcement response selector is an engine response coordinate,
+not a synthetic public candidate-vector index. Decoder auxiliary
+`choice_value`/`choice_index` metadata supplies these values without parsing
+or publishing `semantic_key`; it does not alter protocol legality or internal
+identity.
 
 The projection must preserve complete candidate membership and count. If a
 candidate cannot be represented safely, the complete frame fails closed as a
@@ -347,17 +364,19 @@ action keys, with request kind and candidate count, using its own domain. It
 never hashes the internal key vector. The internal candidate-domain digest
 remains internal evidence.
 
-`ocgforge.public_semantic_decision_identity.v1` uses only the public episode
-identity, public decision index, acting player, public request kind, and
+`ocgforge.public_semantic_decision_identity.v1` binds the public episode
+identity, public decision index, acting player, public request kind, the
+`public_observation_digest` from `PublicEnvironmentObservation v1`, and the
 public candidate-domain digest. It deliberately excludes protocol
-`DecisionRequest.decision_id`, `engine_step_index`, observation hash when its
-V1 context could carry internal identity, internal semantic keys, internal
+`DecisionRequest.decision_id`, `engine_step_index`, the internal
+`PlayerObservation.observation_hash`, internal semantic keys, internal
 candidate digests, raw message hashes, continuation IDs, exact response bytes,
 and hidden card identities.
 
-The complete `PlayerObservation` remains the policy state. Its separate hash
-is not smuggled into the public decision ID when doing so could transitively
-carry internal context.
+The public frame carries `PublicEnvironmentObservation v1`; the attached
+`PlayerObservation v1` is never emitted directly. The public observation
+projection copies only its audited safe state and safe context fields and
+computes its own digest.
 
 ### 3.1.5 Public replay
 
@@ -381,9 +400,11 @@ World B internal key: card.0.3.7654321.0.8.0
 same visible slot:   p0:SPELL_TRAP_ZONE:0
 ```
 
-It must prove identical `PlayerObservation`, public candidate descriptor,
-`public_action_key`, public candidate-domain digest, and public semantic
-decision ID. The internal semantic keys may differ. The pure codec proof is
+It must prove identical `PublicEnvironmentObservation`, public candidate
+descriptor, `public_action_key`, public candidate-domain digest, and public
+semantic decision ID. The paired internal requests may carry different
+private decision/continuation IDs; the public observation projection must
+still be identical. The pure codec proof is
 `tests/episodic/public_action_identity_test.cpp`; the later Phase-2 facade
 must repeat the property through its real projection path.
 

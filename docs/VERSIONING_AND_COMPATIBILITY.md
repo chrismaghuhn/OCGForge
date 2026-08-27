@@ -31,6 +31,7 @@ Current repository contract families include:
 - engine trace v2;
 - episodic environment v1;
 - perspective-safe public action identity v1 and episodic environment v2.
+- perspective-safe public environment observation v1.
 
 Trace v2 exists specifically because continuation-aware semantics differ from the older atomic trace assumptions.
 
@@ -119,6 +120,13 @@ internal key to a perspective-safe key also changes candidate-domain hash
 input, public decision identity, and public replay interpretation; that
 migration is therefore `ocgforge.episodic_environment.v2`, not a reinterpretation
 of episodic environment v1.
+
+The public environment observation is also a separate schema:
+`ocgforge.public_environment_observation.v1`. It is produced from the
+perspective-safe fields of `ygo.player_observation.v1`, but it is not that
+record's canonical serialization. In particular, attached internal decision
+and continuation IDs and the v1 observation hash never cross the public
+boundary.
 
 ## 8. Trace compatibility
 

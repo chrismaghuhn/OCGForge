@@ -304,6 +304,7 @@ ActionCandidate make_pick_candidate(const SelectionContinuation& continuation, c
     candidate.action_kind = kind;
     candidate.semantic_key = continuation.continuation_id + ".pick." + std::to_string(item.source_index);
     copy_card_fields(candidate, item);
+    candidate.choice_index = item.source_index;
     candidate.continuation_id = continuation.continuation_id;
     candidate.submits_engine_response = false;
     return candidate;
@@ -419,6 +420,7 @@ void add_counter_candidates(DecisionRequest& request) {
         }
         ActionCandidate candidate = make_pick_candidate(continuation, item, ActionKind::AssignAmount);
         candidate.amount = static_cast<std::int32_t>(amount);
+        candidate.choice_value = amount;
         candidate.semantic_key = continuation.continuation_id + ".amount." + std::to_string(item.source_index) + "." +
                                  std::to_string(amount);
         request.candidates.push_back(std::move(candidate));

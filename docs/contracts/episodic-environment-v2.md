@@ -4,6 +4,11 @@
 **Status:** Accepted public-identity successor under ADR-0004; production implementation is not included in this prerequisite.
 **Owning layer:** `environment` / shared `EpisodeDriver` orchestration above CoreHost, protocol, observation, and trace layers.
 
+This is the first accepted definition of the v2 public surface. Its field
+layout is finalized by this pre-implementation prerequisite; it does not
+silently migrate an already accepted v2 caller. The accepted v1 surface
+remains frozen and is not a compatibility alias for v2.
+
 This contract is the public reset/step successor required by the
 perspective-safe action-identity boundary. It defines the v2 delta from
 `ocgforge.episodic_environment.v1`; it does not redefine the rules engine,
@@ -43,7 +48,8 @@ not an alias for v2.
 | public candidate domain | `ocgforge.public_candidate_domain.v1` | ordered public-key digest |
 | internal semantic decision identity | `ocgforge.semantic_decision_identity.v1` | unchanged internal identity |
 | public semantic decision identity | `ocgforge.public_semantic_decision_identity.v1` | safe public frame identity |
-| observation | `ygo.player_observation.v1` | unchanged perspective-safe state |
+| internal observation | `ygo.player_observation.v1` | unchanged observation-layer record |
+| public observation | `ocgforge.public_environment_observation.v1` | sanitized policy-facing state and digest |
 | trace | `ygo.engine_trace.v2` | unchanged internal/audit trace |
 
 Unknown or incompatible v2 IDs fail closed before authoritative mutation.
@@ -68,7 +74,8 @@ Its v2 field order is:
 | 9 | episode identity `ocgforge.episode_identity.v1` |
 | 10 | internal decision identity `ocgforge.semantic_decision_identity.v1` |
 | 11 | public decision identity `ocgforge.public_semantic_decision_identity.v1` |
-| 12..28 | the unchanged seed, rules-bundle, Core API, patchset, CardScripts, database, format, duel-mode, flags, locked-deck, and required-script-closure fields owned by episodic v1 |
+| 12 | public observation `ocgforge.public_environment_observation.v1` |
+| 13..29 | the unchanged seed, rules-bundle, Core API, patchset, CardScripts, database, format, duel-mode, flags, locked-deck, and required-script-closure fields owned by episodic v1 |
 
 The retained internal schema IDs pin the trusted internal path; they do not
 make any per-frame internal key public. No candidate key, raw message hash,
@@ -82,6 +89,7 @@ V2 uses value-owned public DTOs distinct from the internal protocol structs:
 EnvironmentActionCandidate {
     action_kind
     public_action_key
+    optional typed choice {kind, value, response_index}
     optional safe source/target references
     optional safe phase/position/source-index/amount values
     optional safe continuation operation
@@ -103,15 +111,19 @@ DecisionFrame {
     decision_index
     engine_step_index                // public only if independently safe in the v2 DTO
     acting_player
-    PlayerObservation
+    PublicEnvironmentObservation
     EnvironmentDecisionRequest
+    public_observation_digest
     public_candidate_domain_digest
 }
 ```
 
-The `engine_step_index` line is retained only where its public use is
-explicitly proven safe; it is never an input to the public semantic decision
-ID. V2 must not expose `semantic_key`, raw response bytes, raw message hash,
+The public observation is the explicit sanitized projection defined by
+`docs/contracts/public-environment-observation-v1.md`. The attached
+`PlayerObservation v1` is never emitted directly. The `engine_step_index`
+line is retained only where its public use is explicitly proven safe; it is
+never an input to the public semantic decision ID. V2 must not expose
+`semantic_key`, raw response bytes, raw message hash, internal decision ID,
 internal continuation ID, internal candidate digest, pointer/cache identity,
 or hidden card identity in a public DTO.
 
@@ -146,8 +158,10 @@ processing, and all EngineTrace v2 semantics.
 
 ## 6. Identity and replay rules
 
-The public frame uses `public_candidate_domain_digest` and
+The public frame uses `public_observation_digest`,
+`public_candidate_domain_digest`, and
 `public_semantic_decision_id` from
+`docs/contracts/public-environment-observation-v1.md` and
 `docs/contracts/public-action-identity-v1.md`. The internal domain digest,
 protocol decision ID, raw message hash, and continuation identity remain
 private/internal values.
@@ -160,15 +174,17 @@ semantic keys under their unchanged contracts.
 ## 7. Acceptance boundary for this prerequisite
 
 This contract is a normative prerequisite, not an implementation claim. The
-focused codec test must prove the paired-world property, canonical golden
-vectors, ordered public-domain hashing, and fail-closed collision behavior.
+focused codec test must prove the paired-world property through attached
+decision context, canonical golden vectors, typed-choice completeness,
+safe-observation hashing, ordered public-domain hashing, and fail-closed
+collision behavior.
 The later Phase-2 implementation must additionally prove complete projection,
 frame-local unique mapping, replay, lifecycle, zero-mutation rejection, and
 the existing G01-G32 regression/privacy gates.
 
 ## 8. Explicit non-goals
 
-V2 does not implement the environment, change legality or ordering, change
-observation visibility, change EngineTrace v2, change rules/decks, or add
-trajectory/ML/model behavior. Production Phase 2 remains blocked until this
-prerequisite is merged.
+V2 does not implement the environment, change Decision Protocol legality or
+ordering, change the visibility rules of `PlayerObservation v1`, change
+`EngineTrace v2`, change rules/decks, or add trajectory/ML/model behavior.
+Production Phase 2 remains blocked until this prerequisite is merged.
