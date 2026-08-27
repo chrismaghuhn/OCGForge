@@ -90,7 +90,9 @@ fail-closed consistency check used by tests and integration callers.
 Because `decision_id` and `continuation_id` are internal identity values, a
 `PlayerObservation v1` must not be emitted directly as an episodic public
 frame. `ocgforge.public_environment_observation.v1` copies only its audited
-safe state and public decision-context fields and computes its own digest.
+safe state and public decision-context fields and computes its own digest. The
+safe-state bytes are owned by the nested `ocgforge.public_safe_state.v1`
+codec, not by this v1 record's canonical JSON serializer.
 
 ## Canonical serialization
 

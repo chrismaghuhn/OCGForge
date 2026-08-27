@@ -45,13 +45,16 @@ ocgforge.public_action_identity.v1
 ocgforge.public_candidate_domain.v1
 ocgforge.public_semantic_decision_identity.v1
 ocgforge.public_environment_observation.v1
+ocgforge.public_safe_state.v1
 ocgforge.episodic_environment.v2
 ocgforge.environment_identity.v2
 ```
 
 The normative details are owned by
 `docs/contracts/public-action-identity-v1.md` and
-`docs/contracts/episodic-environment-v2.md`.
+`docs/contracts/episodic-environment-v2.md`; the public observation and its
+nested safe-state codec are owned by
+`docs/contracts/public-environment-observation-v1.md`.
 
 The following rules are binding:
 
@@ -77,9 +80,21 @@ The following rules are binding:
 9. Public replay records public keys and resolves them against the regenerated
    public domain. Internal protocol/trace replay remains internal.
 10. The internal Action Identity, Decision Protocol legality, and
-    `PlayerObservation v1` semantics remain unchanged. `EngineTrace v2`, rules,
-    and decks remain unchanged; the public environment uses the separate
-    sanitized observation contract.
+    `PlayerObservation v1` field/byte semantics remain unchanged. `EngineTrace
+    v2`, rules, and decks remain unchanged; the public environment uses the
+    separate sanitized observation contract.
+
+### Policy-facing role correction
+
+`PlayerObservation v1` remains the authoritative observation-layer source
+record and retains its existing fields, canonical bytes, and attached
+`DecisionContext` semantics for internal integration. It is no longer a
+policy-facing episodic wire value: its attached internal decision identities
+cannot safely cross that boundary. `PublicEnvironmentObservation v1`
+supersedes direct policy use through an explicit security-boundary projection,
+and `PublicEnvironmentObservation v1` owns the policy-facing safe-state bytes
+and digest. This is a correction to cross-boundary usage, not a silent change
+to the v1 observation schema or serializer.
 
 ## Alternatives considered
 
@@ -126,7 +141,9 @@ change. V1 is frozen and v2 is explicit.
   schemas and the new public schemas, requiring `environment_identity.v2`.
 - `PlayerObservation v1` remains the source of perspective-safe state facts,
   while `PublicEnvironmentObservation v1` is the only policy-facing
-  serialization at the episodic boundary.
+  serialization at the episodic boundary. Its nested `public_safe_state.v1`
+  bytes have an explicit field order, null encoding, enum mapping, and
+  container ordering.
 
 ## Compatibility / migration
 
@@ -145,15 +162,18 @@ parent `environment_semantic_id` is supplied by the explicitly versioned v2
 environment identity. Internal protocol, action, candidate-domain,
 semantic-decision, observation, and trace IDs remain at their accepted v1/v2
 versions with unchanged meanings. The public observation projection is
-separately versioned as `ocgforge.public_environment_observation.v1`.
+separately versioned as `ocgforge.public_environment_observation.v1`, and its
+nested canonical state codec is separately named
+`ocgforge.public_safe_state.v1`.
 
 ## Verification
 
 `tests/episodic/public_action_identity_test.cpp` is the focused pure-codec
-proof. It includes typed-choice coverage, exact action-key, public-observation,
-public-domain, and public-decision golden vectors; a paired hidden-card fixture
-through attached decision context; ordered-domain mutation coverage; and
-unknown/collision rejection checks.
+proof. It includes typed-choice coverage, exact action-key, public-safe-state,
+public-observation, public-domain, and public-decision golden vectors; a paired
+hidden-card fixture through attached decision context and the real
+`PlayerObservation` serializer; hidden-identity rejection; ordered-domain
+mutation coverage; and unknown/collision rejection checks.
 
 The paired fixture uses:
 

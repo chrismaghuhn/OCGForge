@@ -14,6 +14,9 @@ ocgforge.public_semantic_decision_identity.v1
 The public semantic decision identity consumes the separately owned
 `ocgforge.public_environment_observation.v1` digest defined by
 `docs/contracts/public-environment-observation-v1.md`.
+That observation owns the nested `ocgforge.public_safe_state.v1` codec; the
+codec's exact bytes are generated from `PlayerObservation` and are not a
+caller-supplied action/observation alias.
 
 The successor public environment contract that consumes them is:
 
@@ -261,7 +264,10 @@ domain identity. It deliberately does not contain or commit to:
 
 The public frame carries `PublicEnvironmentObservation v1`, not the attached
 `PlayerObservation v1`. Its own digest binds the safe public state without
-transitively carrying internal decision or continuation identity.
+transitively carrying internal decision or continuation identity. The safe
+state bytes are produced by `canonical_public_safe_state_bytes` under
+`ocgforge.public_safe_state.v1`; public replay regenerates them rather than
+accepting persisted arbitrary state bytes.
 
 ## 7. Public v2 replay
 

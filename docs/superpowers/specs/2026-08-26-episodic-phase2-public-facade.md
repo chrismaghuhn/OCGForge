@@ -307,6 +307,7 @@ The internal `semantic_key` is not automatically policy-safe. The internal
 | internal semantic decision identity | `ocgforge.semantic_decision_identity.v1` | unchanged codec |
 | internal observation | `ygo.player_observation.v1` | unchanged contract |
 | public observation | `ocgforge.public_environment_observation.v1` | `public-environment-observation-v1.md` |
+| public safe-state codec | `ocgforge.public_safe_state.v1` | `public-environment-observation-v1.md` |
 | trace | `ygo.engine_trace.v2` | unchanged contract |
 
 The original `ocgforge.episodic_environment.v1` public surface is frozen. A
@@ -375,8 +376,11 @@ and hidden card identities.
 
 The public frame carries `PublicEnvironmentObservation v1`; the attached
 `PlayerObservation v1` is never emitted directly. The public observation
-projection copies only its audited safe state and safe context fields and
-computes its own digest.
+projection generates its audited safe state through the exact
+`ocgforge.public_safe_state.v1` codec, copies only safe context fields, and
+computes its own digest. The codec is owned by the projection and accepts the
+real `PlayerObservation` source record; callers do not provide arbitrary state
+bytes or reuse the v1 observation serialization.
 
 ### 3.1.5 Public replay
 
@@ -400,11 +404,12 @@ World B internal key: card.0.3.7654321.0.8.0
 same visible slot:   p0:SPELL_TRAP_ZONE:0
 ```
 
-It must prove identical `PublicEnvironmentObservation`, public candidate
-descriptor, `public_action_key`, public candidate-domain digest, and public
-semantic decision ID. The paired internal requests may carry different
-private decision/continuation IDs; the public observation projection must
-still be identical. The pure codec proof is
+It must prove identical `PlayerObservation`-derived safe-state bytes,
+`PublicEnvironmentObservation`, public candidate descriptor,
+`public_action_key`, public candidate-domain digest, and public semantic
+decision ID. The paired internal requests may carry different private
+decision/continuation IDs containing the hidden candidate identity; the public
+observation projection must still be identical. The pure codec proof is
 `tests/episodic/public_action_identity_test.cpp`; the later Phase-2 facade
 must repeat the property through its real projection path.
 
@@ -666,8 +671,9 @@ explicit tables.
 ### 7.1 Environment semantic ID — V1 retained layout
 
 > This is the accepted V1 environment-identity layout for the unchanged
-> internal contract. V2 adds the explicit public identity schema fields as
-> specified by `docs/contracts/episodic-environment-v2.md`; it does not
+> internal contract. V2 adds the explicit public identity schema fields,
+> including `ocgforge.public_safe_state.v1`, as specified by
+> `docs/contracts/episodic-environment-v2.md`; it does not
 > reinterpret this V1 payload.
 
 environment_semantic_id is the lowercase hexadecimal SHA-256 of the
@@ -1994,10 +2000,12 @@ schedule, or host path may affect a semantic value.
 
 ### Public frame
 
-The frame contains one perspective-safe PlayerObservation value, a
-sanitized request, complete sanitized candidates, semantic IDs, digest, and
-token. It contains no raw CoreHost query, pointer, cache, response byte,
-opponent-private observation, hidden locator, or recurrent/model state.
+The frame contains one `PublicEnvironmentObservation v1` value generated from
+a perspective-safe `PlayerObservation` source record, a sanitized request,
+complete sanitized candidates, semantic IDs, digest, and token. Its safe-state
+bytes come only from the `ocgforge.public_safe_state.v1` codec. It contains no
+raw CoreHost query, pointer, cache, response byte, opponent-private
+observation, hidden identity, or recurrent/model state.
 
 ### Candidate projection
 

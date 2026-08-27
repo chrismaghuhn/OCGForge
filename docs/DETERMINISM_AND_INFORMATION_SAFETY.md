@@ -126,6 +126,14 @@ For deterministic hashes:
 
 A “same JSON object” claim is insufficient if byte-level hashes are persisted.
 
+The policy-facing episodic observation applies this rule through the
+`ocgforge.public_safe_state.v1` codec. That codec owns the safe-state field
+order, length-prefix/null/boolean encoding, fixed enum codes, deterministic
+sorting of unordered containers, and the exclusion of internal process
+metadata such as `engine_step_index` from visible-event records. Its bytes are
+generated from the perspective-safe `PlayerObservation` fields and are not a
+caller-supplied string or the v1 observation serialization.
+
 ## 11. Trace identity vs. gameplay identity
 
 A trace can contain provenance that differs between toolchains or artifact paths.

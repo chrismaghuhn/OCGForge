@@ -155,6 +155,16 @@ boundary then emits the separate
 must not be serialized directly when its attached decision context contains
 internal identity.
 
+The public projection owns the exact nested
+`ocgforge.public_safe_state.v1` serializer. It encodes only the explicitly
+listed safe-state fields (`globals`, `zones`, `entities`, `relationships`,
+`chain`, `visible_events`, and `match_context`) with fixed primitive/optional/
+enum encodings and deterministic container ordering. The projection generates
+those bytes from `PlayerObservation`; a call site cannot substitute the v1
+observation bytes or arbitrary text. `PlayerObservation` v1 field and byte
+semantics remain unchanged, but its direct policy-facing use is superseded by
+this public projection.
+
 `PublicEnvironmentObservation` is the intended state boundary for:
 
 - agents;

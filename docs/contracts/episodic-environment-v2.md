@@ -50,6 +50,7 @@ not an alias for v2.
 | public semantic decision identity | `ocgforge.public_semantic_decision_identity.v1` | safe public frame identity |
 | internal observation | `ygo.player_observation.v1` | unchanged observation-layer record |
 | public observation | `ocgforge.public_environment_observation.v1` | sanitized policy-facing state and digest |
+| public safe-state codec | `ocgforge.public_safe_state.v1` | exact canonical bytes nested in the public observation |
 | trace | `ygo.engine_trace.v2` | unchanged internal/audit trace |
 
 Unknown or incompatible v2 IDs fail closed before authoritative mutation.
@@ -75,7 +76,8 @@ Its v2 field order is:
 | 10 | internal decision identity `ocgforge.semantic_decision_identity.v1` |
 | 11 | public decision identity `ocgforge.public_semantic_decision_identity.v1` |
 | 12 | public observation `ocgforge.public_environment_observation.v1` |
-| 13..29 | the unchanged seed, rules-bundle, Core API, patchset, CardScripts, database, format, duel-mode, flags, locked-deck, and required-script-closure fields owned by episodic v1 |
+| 13 | public safe-state codec `ocgforge.public_safe_state.v1` |
+| 14..30 | the unchanged seed, rules-bundle, Core API, patchset, CardScripts, database, format, duel-mode, flags, locked-deck, and required-script-closure fields owned by episodic v1 |
 
 The retained internal schema IDs pin the trusted internal path; they do not
 make any per-frame internal key public. No candidate key, raw message hash,
@@ -119,10 +121,13 @@ DecisionFrame {
 ```
 
 The public observation is the explicit sanitized projection defined by
-`docs/contracts/public-environment-observation-v1.md`. The attached
-`PlayerObservation v1` is never emitted directly. The `engine_step_index`
-line is retained only where its public use is explicitly proven safe; it is
-never an input to the public semantic decision ID. V2 must not expose
+`docs/contracts/public-environment-observation-v1.md`. Its
+`canonical_safe_state_bytes` are generated internally by the
+`ocgforge.public_safe_state.v1` codec from the listed perspective-safe
+`PlayerObservation v1` state fields; callers do not supply arbitrary state
+bytes. The attached `PlayerObservation v1` is never emitted directly. The
+`engine_step_index` line is retained only where its public use is explicitly
+proven safe; it is never an input to the public semantic decision ID. V2 must not expose
 `semantic_key`, raw response bytes, raw message hash, internal decision ID,
 internal continuation ID, internal candidate digest, pointer/cache identity,
 or hidden card identity in a public DTO.
@@ -175,7 +180,8 @@ semantic keys under their unchanged contracts.
 
 This contract is a normative prerequisite, not an implementation claim. The
 focused codec test must prove the paired-world property through attached
-decision context, canonical golden vectors, typed-choice completeness,
+decision context, the exact `ocgforge.public_safe_state.v1` golden vector,
+canonical public-observation bytes, typed-choice completeness,
 safe-observation hashing, ordered public-domain hashing, and fail-closed
 collision behavior.
 The later Phase-2 implementation must additionally prove complete projection,
