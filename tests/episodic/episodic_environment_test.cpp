@@ -36,7 +36,8 @@ void test_owned_first_frame() {
     require(frame.contract_id == ygo::environment::kEpisodicEnvironmentContractId,
             "frame contract identity changed");
     require(frame.acting_player == frame.request.player &&
-                frame.acting_player == frame.observation.perspective_player,
+                frame.acting_player == frame.public_observation.perspective_player &&
+                frame.decision_index == frame.public_observation.decision_index,
             "frame player/observation coupling was not enforced");
     require(frame.submission_token.valid(), "first frame did not receive a valid token");
     require(!frame.request.candidates.empty(), "first frame candidate domain was empty");
@@ -44,11 +45,11 @@ void test_owned_first_frame() {
     std::vector<std::string> keys;
     keys.reserve(frame.request.candidates.size());
     for (const auto& candidate : frame.request.candidates) {
-        keys.push_back(candidate.semantic_key);
+        keys.push_back(candidate.public_action_key);
     }
     require(keys.size() == frame.request.candidates.size(), "candidate projection lost an entry");
-    require(frame.candidate_domain_digest ==
-                ygo::environment::candidate_domain_digest(
+    require(frame.public_candidate_domain_digest ==
+                ygo::environment::public_candidate_domain_digest(
                     ygo::environment::environment_decision_kind_name(frame.request.kind), keys),
             "candidate digest was not computed over the owned ordered domain");
     require(environment->lifecycle() == ygo::environment::Lifecycle::AwaitingAction,
@@ -57,15 +58,15 @@ void test_owned_first_frame() {
     ygo::environment::ActionSelection selection;
     selection.contract_id = frame.contract_id;
     selection.episode_semantic_id = frame.episode_semantic_id;
-    selection.semantic_decision_id = frame.semantic_decision_id;
+    selection.public_semantic_decision_id = frame.public_semantic_decision_id;
     selection.submission_token = frame.submission_token;
-    selection.semantic_key = frame.request.candidates.front().semantic_key;
+    selection.public_action_key = frame.request.candidates.front().public_action_key;
     const auto step = environment->step(selection);
     require(std::holds_alternative<ygo::environment::StepAccepted>(step),
             "a complete public candidate was not accepted by step");
     const auto& step_accepted = std::get<ygo::environment::StepAccepted>(step);
-    require(step_accepted.transition.selected_semantic_key == selection.semantic_key,
-            "accepted transition changed the selected semantic key");
+    require(step_accepted.transition.selected_public_action_key == selection.public_action_key,
+            "accepted transition changed the selected public action key");
     require(step_accepted.transition.core_response_submitted,
             "atomic first candidate did not report its response submission");
 }

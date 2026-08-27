@@ -10,19 +10,22 @@
 
 #include "ygo/environment/candidate_domain_evidence.hpp"
 #include "ygo/environment/identity_contract.hpp"
-#include "ygo/observation/player_observation.hpp"
+#include "ygo/environment/public_action_identity.hpp"
+#include "ygo/environment/public_environment_observation.hpp"
 
 namespace ygo::environment {
 
 inline constexpr std::string_view kEpisodicEnvironmentContractId =
-    "ocgforge.episodic_environment.v1";
+    kEpisodicEnvironmentV2ContractId;
 inline constexpr std::string_view kEnvironmentIdentitySchemaId =
-    "ocgforge.environment_identity.v1";
+    kEnvironmentIdentityV2SchemaId;
 inline constexpr std::string_view kEpisodeIdentitySchemaId =
     "ocgforge.episode_identity.v1";
 inline constexpr std::string_view kSemanticDecisionIdentitySchemaId =
     "ocgforge.semantic_decision_identity.v1";
 inline constexpr std::string_view kObservationContractId = "ygo.player_observation.v1";
+
+using PublicEnvironmentObservation = PublicEnvironmentObservationInput;
 
 struct CertifiedDeckIdentity final {
     std::string id;
@@ -36,9 +39,16 @@ struct CertifiedEnvironmentConfig final {
     std::string decision_contract_id = std::string(kDecisionContractId);
     std::string observation_contract_id = std::string(kObservationContractId);
     std::string action_identity_schema_id = std::string(kActionIdentitySchemaId);
+    std::string public_action_identity_schema_id = std::string(kPublicActionIdentitySchemaId);
     std::string candidate_digest_schema_id = std::string(kCandidateDomainSchemaId);
+    std::string public_candidate_digest_schema_id = std::string(kPublicCandidateDomainSchemaId);
     std::string episode_identity_schema_id = std::string(kEpisodeIdentitySchemaId);
     std::string decision_identity_schema_id = std::string(kSemanticDecisionIdentitySchemaId);
+    std::string public_decision_identity_schema_id =
+        std::string(kPublicSemanticDecisionIdentitySchemaId);
+    std::string public_observation_contract_id =
+        std::string(kPublicEnvironmentObservationSchemaId);
+    std::string public_safe_state_schema_id = std::string(kPublicSafeStateSchemaId);
     std::string seed_derivation_id = std::string(kSeedDerivationId);
 
     std::string rules_bundle_id;
@@ -105,33 +115,26 @@ enum class EnvironmentActionKind : std::uint8_t {
     Finish,
     Cancel,
     AssignAmount,
+    Unsupported,
 };
 
 struct EnvironmentActionCandidate final {
-    EnvironmentActionKind action_kind = EnvironmentActionKind::IdleCommand;
-    std::string semantic_key;
-    std::optional<std::uint32_t> source_card;
-    std::optional<std::uint8_t> source_controller;
-    std::optional<std::uint32_t> source_location;
-    std::optional<std::uint32_t> source_sequence;
-    std::optional<std::uint32_t> target_card;
-    std::optional<std::uint8_t> target_controller;
-    std::optional<std::uint32_t> target_location;
-    std::optional<std::uint32_t> target_sequence;
-    std::uint32_t phase = 0;
-    std::uint8_t position = 0;
-    std::optional<std::uint32_t> source_position;
-    std::uint32_t source_index = 0;
-    std::int32_t amount = -1;
-    std::string continuation_id;
+    EnvironmentActionKind action_kind = EnvironmentActionKind::Unsupported;
+    std::string public_action_key;
+    std::optional<PublicChoice> choice;
+    std::optional<PublicCardReference> source_reference;
+    std::optional<PublicCardReference> target_reference;
+    std::optional<std::uint32_t> phase;
+    std::optional<std::uint8_t> position;
+    std::optional<std::uint32_t> source_index;
+    std::optional<std::int32_t> amount;
+    std::string continuation_operation;
     bool submits_engine_response = true;
 };
 
 struct EnvironmentContinuationView final {
-    std::string continuation_id;
     std::string continuation_kind;
     std::uint32_t continuation_step = 0;
-    std::uint8_t original_message_type = 0;
     std::vector<std::uint32_t> selected_indices;
     std::vector<std::uint32_t> remaining_indices;
     std::vector<std::uint16_t> assigned_amounts;
@@ -142,8 +145,6 @@ struct EnvironmentContinuationView final {
     std::uint64_t available_mask = 0;
     std::uint64_t selected_mask = 0;
     std::uint32_t continuation_steps = 0;
-    std::uint64_t peak_candidate_count = 0;
-    std::uint64_t terminal_solution_count = 0;
     bool exact_sum = true;
     bool greater_sum = false;
     bool can_finish = false;
@@ -152,11 +153,7 @@ struct EnvironmentContinuationView final {
 
 struct EnvironmentDecisionRequest final {
     EnvironmentDecisionKind kind = EnvironmentDecisionKind::Unsupported;
-    std::string decision_id;
-    std::uint64_t engine_step_index = 0;
     std::uint8_t player = 0;
-    std::uint8_t engine_message_type = 0;
-    std::string engine_message_name;
     std::vector<EnvironmentActionCandidate> candidates;
     std::optional<EnvironmentContinuationView> continuation;
 };
@@ -176,21 +173,24 @@ struct SubmissionToken final {
 struct DecisionFrame final {
     std::string contract_id;
     std::string episode_semantic_id;
-    std::string semantic_decision_id;
+    std::string public_semantic_decision_id;
     SubmissionToken submission_token;
     std::uint64_t decision_index = 0;
+    // Safe engine-progress evidence. It is deliberately excluded from the
+    // public semantic decision identity and from public observation bytes.
     std::uint64_t engine_step_index = 0;
     std::uint8_t acting_player = 0;
-    observation::PlayerObservation observation;
+    PublicEnvironmentObservation public_observation;
     EnvironmentDecisionRequest request;
-    std::string candidate_domain_digest;
+    std::string public_observation_digest;
+    std::string public_candidate_domain_digest;
 };
 
 struct AcceptedActionTransition final {
     std::string episode_semantic_id;
-    std::string semantic_decision_id;
+    std::string public_semantic_decision_id;
     std::uint64_t decision_index = 0;
-    std::string selected_semantic_key;
+    std::string selected_public_action_key;
     bool core_response_submitted = false;
     std::optional<std::string> final_response_sha256;
 };
@@ -225,7 +225,7 @@ struct EpisodeInterrupted final {
     std::string episode_semantic_id;
     InterruptionReason reason = InterruptionReason::AdministrativeCancel;
     std::uint64_t semantic_action_count = 0;
-    std::optional<std::string> last_semantic_decision_id;
+    std::optional<std::string> last_public_semantic_decision_id;
     std::optional<std::uint64_t> last_decision_index;
     std::uint64_t final_engine_step_index = 0;
     std::string last_valid_audit_prefix_hash;
@@ -267,7 +267,7 @@ struct EpisodeFailure final {
     FailureCode failure_code = FailureCode::InvalidAuthoritativeState;
     FailureStage failure_stage = FailureStage::Validation;
     std::uint64_t semantic_action_count = 0;
-    std::optional<std::string> last_semantic_decision_id;
+    std::optional<std::string> last_public_semantic_decision_id;
     std::optional<std::string> last_valid_audit_prefix_hash;
     bool mutation_may_have_occurred = false;
     std::optional<std::string> restricted_diagnostic_reference;
@@ -286,29 +286,30 @@ enum class RejectionCode : std::uint8_t {
     InvalidLifecycle,
     WrongEpisode,
     StaleSubmissionToken,
-    WrongSemanticDecision,
-    UnknownSemanticKey,
+    WrongPublicSemanticDecision,
+    UnknownPublicActionKey,
+    PublicActionDomainDivergence,
     UnsupportedInterruptionReason,
 };
 
 struct ActionSelection final {
     std::string contract_id;
     std::string episode_semantic_id;
-    std::string semantic_decision_id;
+    std::string public_semantic_decision_id;
     SubmissionToken submission_token;
-    std::string semantic_key;
+    std::string public_action_key;
 };
 
 struct StepRejected final {
     std::string contract_id;
     RejectionCode rejection_code = RejectionCode::InvalidLifecycle;
     std::string submitted_episode_semantic_id;
-    std::string submitted_semantic_decision_id;
+    std::string submitted_public_semantic_decision_id;
     SubmissionToken submitted_submission_token;
-    std::string submitted_semantic_key;
+    std::string submitted_public_action_key;
     std::string current_episode_semantic_id;
-    std::string current_semantic_decision_id;
-    std::string current_candidate_domain_digest;
+    std::string current_public_semantic_decision_id;
+    std::string current_public_candidate_domain_digest;
     bool authoritative_state_unchanged = true;
 };
 
@@ -377,6 +378,10 @@ using ResetResult = std::variant<ResetAccepted, ResetRejected>;
 using StepResult = std::variant<StepAccepted, StepRejected>;
 using InterruptResult = std::variant<InterruptAccepted, InterruptRejected, EpisodeFailure>;
 
+namespace detail {
+struct EpisodicEnvironmentTestAccess;
+}
+
 std::string_view environment_decision_kind_name(EnvironmentDecisionKind kind) noexcept;
 std::string_view environment_action_kind_name(EnvironmentActionKind kind) noexcept;
 std::string_view interruption_reason_name(InterruptionReason reason) noexcept;
@@ -399,13 +404,15 @@ public:
     ResetResult reset(const EpisodeSpec& spec, const RunControl& control);
     StepResult step(const ActionSelection& selection);
     InterruptResult interrupt(const InterruptRequest& request);
-    std::optional<observation::PlayerObservation> perspective_terminal_view(
+    std::optional<PublicEnvironmentObservation> perspective_terminal_view(
         std::uint8_t player) const;
 
     Lifecycle lifecycle() const noexcept;
     const CertifiedEnvironmentConfig& config() const noexcept;
 
 private:
+    friend struct detail::EpisodicEnvironmentTestAccess;
+
     explicit EpisodicEnvironment(CertifiedEnvironmentConfig config);
     struct Impl;
     std::unique_ptr<Impl> impl_;

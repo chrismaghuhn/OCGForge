@@ -36,9 +36,9 @@ std::vector<std::uint8_t> from_hex(const std::string& value) {
 void test_environment_vector() {
     const auto config = ygo::environment::CertifiedEnvironmentConfig::canonical();
     const auto bytes = ygo::environment::canonical_environment_identity_bytes(config);
-    require(bytes.size() == 1248, "environment identity byte length changed");
+    require(bytes.size() == 1453, "environment identity byte length changed");
     require(ygo::environment::environment_semantic_id(config) ==
-                "185ebed21595b29d867779a6f7ce8ddb4ac704a20db78e830e915d3088f49feb",
+                "9048c70765192ad2fd06ba7d0960809c4891688b15395379e2c266a457dc94c5",
             "environment identity golden digest failed");
     require(config.environment_semantic_id == ygo::environment::environment_semantic_id(config),
             "canonical environment config did not retain its computed identity");
@@ -53,7 +53,7 @@ void test_episode_vector() {
     const auto bytes = ygo::environment::canonical_episode_identity_bytes(config, spec);
     require(bytes.size() == 383, "episode identity byte length changed");
     require(ygo::environment::episode_semantic_id(config, spec) ==
-                "454995a3a7678326977fc2c332e064d0f6294e02ec9598294ff51e80bab25d16",
+                "5b4c04d53af2e049744eced3cff763429d21dd1e4762d334df510c7a5cfd6700",
             "episode identity golden digest failed");
     auto changed = spec;
     changed.starting_player = 1;

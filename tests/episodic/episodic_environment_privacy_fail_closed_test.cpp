@@ -26,7 +26,7 @@ std::string describe_failure(const ygo::environment::EpisodeFailure& failure) {
            std::string(ygo::environment::failure_stage_name(failure.failure_stage));
 }
 
-void test_unsafe_opponent_identity_fails_closed() {
+void test_hidden_opponent_identity_uses_redacted_public_projection() {
     auto factory = ygo::environment::EpisodicEnvironment::create(
         ygo::environment::CertifiedEnvironmentConfig::canonical());
     require(std::holds_alternative<std::unique_ptr<ygo::environment::EpisodicEnvironment>>(factory),
@@ -42,49 +42,49 @@ void test_unsafe_opponent_identity_fails_closed() {
     require(std::holds_alternative<ygo::environment::ResetAccepted>(reset),
             "privacy fixture reset was rejected");
     auto next = std::move(std::get<ygo::environment::ResetAccepted>(reset).next);
+    constexpr std::uint64_t kHistoricalPrefix = 220;
     std::uint64_t accepted_actions = 0;
-    for (;;) {
+    while (accepted_actions <= kHistoricalPrefix) {
         const auto* frame = decision_frame(next);
-        require(frame != nullptr, "privacy fixture closed before reaching its hidden-identity boundary");
+        require(frame != nullptr, "V2 privacy fixture closed before the historical boundary");
         require(!frame->request.candidates.empty(), "privacy fixture published an empty domain");
+        require(frame->decision_index == frame->public_observation.decision_index,
+                "V2 public decision index was not coupled to the public observation");
 
         ygo::environment::ActionSelection selection;
         selection.contract_id = frame->contract_id;
         selection.episode_semantic_id = frame->episode_semantic_id;
-        selection.semantic_decision_id = frame->semantic_decision_id;
+        selection.public_semantic_decision_id = frame->public_semantic_decision_id;
         selection.submission_token = frame->submission_token;
-        selection.semantic_key = frame->request.candidates.front().semantic_key;
+        selection.public_action_key = frame->request.candidates.front().public_action_key;
         auto step = environment->step(selection);
         require(std::holds_alternative<ygo::environment::StepAccepted>(step),
-                "privacy fixture selection was rejected before the unsafe boundary");
+                "V2 privacy fixture selection was rejected before the historical boundary");
         const auto& accepted = std::get<ygo::environment::StepAccepted>(step);
         ++accepted_actions;
-        if (const auto* failure = std::get_if<ygo::environment::EpisodeFailure>(&accepted.next)) {
-            require(failure->failure_code == ygo::environment::FailureCode::PrivacyInvariant,
-                    "unsafe candidate domain did not fail with PRIVACY_INVARIANT");
-            require(failure->failure_stage == ygo::environment::FailureStage::Projection,
-                    "unsafe candidate domain failed at an unexpected stage");
-            require(environment->lifecycle() == ygo::environment::Lifecycle::Failed,
-                    "privacy failure did not close the environment");
-            std::cout << "episodic_environment_privacy_fail_closed_after_actions=" << accepted_actions << '\n';
-            return;
+        require(!std::holds_alternative<ygo::environment::EpisodeFailure>(accepted.next),
+                "V2 hidden-card projection still failed closed");
+        if (accepted_actions > kHistoricalPrefix) {
+            break;
         }
         const auto* next_frame = decision_frame(accepted.next);
-        require(next_frame != nullptr, "privacy fixture closed without a typed privacy failure");
+        require(next_frame != nullptr, "V2 privacy fixture closed before the historical boundary");
         require(next_frame->decision_index == frame->decision_index + 1,
-                "public decision index did not advance exactly once");
+                "V2 public decision index did not advance exactly once");
         require(next_frame->submission_token != frame->submission_token,
-                "public frame token was reused");
+                "V2 public frame token was reused");
         next = accepted.next;
-        require(accepted_actions < 256, "privacy fixture did not reach its boundary in time");
     }
+    require(accepted_actions == kHistoricalPrefix + 1,
+            "V2 privacy fixture did not cross the historical hidden-card boundary");
+    std::cout << "episodic_environment_privacy_redacted_after_actions=" << accepted_actions << '\n';
 }
 
 }  // namespace
 
 int main() {
     try {
-        test_unsafe_opponent_identity_fails_closed();
+        test_hidden_opponent_identity_uses_redacted_public_projection();
         return 0;
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n';
