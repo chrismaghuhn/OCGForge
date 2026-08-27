@@ -27,6 +27,8 @@ This index keeps those layers separate.
 
 - [ADR-0001 — Modern OCG adapter](adr/ADR-0001-modern-ocg-adapter.md)
 - [ADR-0002 — Shared semantic EpisodeDriver for episodic environment](adr/ADR-0002-episodic-environment.md) — **Accepted**
+- [ADR-0003 — Episodic V1 prerequisite identities](adr/ADR-0003-episodic-v1-normative-prerequisites.md) — **Accepted**
+- [ADR-0004 — Perspective-safe public episodic action identity](adr/ADR-0004-perspective-safe-episodic-action-identity.md) — **Accepted**
 - [ADR index and policy](adr/README.md)
 
 ## Versioned contracts
@@ -35,8 +37,11 @@ This index keeps those layers separate.
 - [Engine trace v1](contracts/engine-trace-v1.md)
 - [Engine trace v2](contracts/engine-trace-v2.md)
 - [Player observation v1](contracts/player-observation-v1.md)
+- [Perspective-safe public environment observation v1](contracts/public-environment-observation-v1.md) — **Policy-facing projection; implementation pending**
 - [Player view v1](contracts/player-view-v1.md)
 - [Episodic environment v1](contracts/episodic-environment-v1.md) — **Accepted semantics; implementation evidence pending**
+- [Perspective-safe public action identity v1](contracts/public-action-identity-v1.md) — **Accepted prerequisite; implementation pending**
+- [Episodic environment v2](contracts/episodic-environment-v2.md) — **Accepted public-identity successor; implementation pending**
 
 A contract is not a milestone completion claim. It defines semantics for the surface that uses that version. Accepted contract semantics do not imply that an implementation or acceptance milestone has passed.
 

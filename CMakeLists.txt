@@ -171,6 +171,8 @@ add_library(ygo_m4 STATIC
     src/environment/episodic_environment.cpp
     src/environment/identity_contract.cpp
     src/environment/candidate_domain_evidence.cpp
+    src/environment/public_action_identity.cpp
+    src/environment/public_environment_observation.cpp
     src/simulation/canonical_simulation.cpp
 )
 target_include_directories(ygo_m4 PUBLIC "${CMAKE_SOURCE_DIR}/include")
@@ -275,6 +277,9 @@ target_link_libraries(episodic_environment_privacy_fail_closed_test PRIVATE ygo_
 add_test(NAME episodic_environment_privacy_fail_closed_test
          COMMAND episodic_environment_privacy_fail_closed_test)
 
+add_executable(public_action_identity_test tests/episodic/public_action_identity_test.cpp)
+target_link_libraries(public_action_identity_test PRIVATE ygo_m4)
+add_test(NAME public_action_identity_test COMMAND public_action_identity_test)
 
 if(DEFINED ENV{OCGFORGE_PHASE1_RAW_ROOT} AND
    DEFINED ENV{OCGFORGE_PHASE1_POST_RAW_ROOT} AND

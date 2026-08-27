@@ -87,6 +87,13 @@ Stale-action rejection is owned by the request/continuation identity and the
 environment's non-semantic freshness token; a key alone is not a freshness
 token.
 
+`ActionCandidate.choice_value` and `choice_index` are auxiliary decoder
+metadata for the separate perspective-safe public projection. They do not
+change any v1 semantic-key grammar or EngineTrace meaning. In particular,
+public projection must use the typed choice metadata for option and
+announcement values and engine/list selectors rather than treating an
+environment candidate-vector index as action identity.
+
 ## Privacy and replay boundary
 
 Action Identity v1 describes the existing internal semantic-key grammar.
@@ -96,11 +103,17 @@ policy-safe. The candidate-domain digest hashes the supplied semantic keys
 unchanged and inherits their safety classification. Neither a semantic key
 nor a candidate-domain digest is automatically safe for public publication.
 
+The perspective-safe public replacement for episodic policy selection is
+defined by `docs/contracts/public-action-identity-v1.md`. That contract does
+not alter this internal key grammar or its replay/trace ownership.
+
 Any public `EpisodicEnvironment` projection MUST independently prove that the
 complete key and domain are perspective-safe for the acting player using the
 current `PlayerObservation`/public-projection audit. If a key or domain cannot
-be proven perspective-safe, publication fails closed. The public observation
-boundary remains `PlayerObservation` v1.
+be proven perspective-safe, publication fails closed. The episodic public
+observation boundary is the separately versioned
+`ocgforge.public_environment_observation.v1` projection; `PlayerObservation`
+v1 remains its perspective-safe source record.
 
 Replay compares the ordered semantic keys and their owning decision/domain
 identities. It does not persist exact response bytes as caller-facing action

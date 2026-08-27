@@ -5,8 +5,10 @@
 This is a new semantic contract. It does not redefine `player-view-v1`.
 `EngineState` remains omniscient inside the pinned OCG core; a
 `PlayerObservation` is always built for one explicit `perspective_player` and
-is the only state projection intended for an agent, teacher, search adapter,
-or model adapter.
+is the perspective-safe observation-layer record. Its attached decision
+context is an internal integration record; the only policy-facing episodic
+serialization is the separate
+`ocgforge.public_environment_observation.v1` projection.
 
 The contract has three deliberately separate parts:
 
@@ -84,6 +86,13 @@ the safe observation locators referenced by candidates. The complete ordered
 `ActionCandidate[]` remains in the authoritative `DecisionRequest`; it is not
 copied into card-state structures. `candidate_observation_consistent` is the
 fail-closed consistency check used by tests and integration callers.
+
+Because `decision_id` and `continuation_id` are internal identity values, a
+`PlayerObservation v1` must not be emitted directly as an episodic public
+frame. `ocgforge.public_environment_observation.v1` copies only its audited
+safe state and public decision-context fields and computes its own digest. The
+safe-state bytes are owned by the nested `ocgforge.public_safe_state.v1`
+codec, not by this v1 record's canonical JSON serializer.
 
 ## Canonical serialization
 
