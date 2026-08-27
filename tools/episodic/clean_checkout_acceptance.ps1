@@ -5,7 +5,8 @@ param(
     [string]$ExpectedHead,
     [string]$RulesCache,
     [string]$ToolchainRoot,
-    [string]$EvidenceOutput
+    [string]$EvidenceOutput,
+    [string]$WorktreeParent
 )
 
 $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..')).Path
@@ -63,8 +64,13 @@ if ($resolvedExpected -ne $expected) {
     throw "expected head does not resolve exactly: requested $expected, resolved $resolvedExpected"
 }
 
-$worktreeParent = [System.IO.Path]::GetTempPath()
-$worktree = Join-Path $worktreeParent ("ocgforge-episodic-g32-" + [guid]::NewGuid().ToString('N'))
+if ([string]::IsNullOrWhiteSpace($WorktreeParent)) {
+    $worktreeParent = Join-Path (Split-Path -Parent $repoRoot) 'ocgforge-g32'
+} else {
+    $worktreeParent = [System.IO.Path]::GetFullPath($WorktreeParent)
+}
+New-Item -ItemType Directory -Force -Path $worktreeParent | Out-Null
+$worktree = Join-Path $worktreeParent ("g32-" + [guid]::NewGuid().ToString('N').Substring(0, 8))
 $build = Join-Path $worktree 'build\g32-clean'
 $runA = Join-Path $worktree 'artifacts\episodic\v2\g32-run-a'
 $runB = Join-Path $worktree 'artifacts\episodic\v2\g32-run-b'
