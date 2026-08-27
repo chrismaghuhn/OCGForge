@@ -33,6 +33,24 @@ This document is documentation-only. It does not add the production
 EpisodicEnvironment type, modify EpisodeDriver, change a public contract, or
 produce Episodic V1 acceptance evidence.
 
+## Normative prerequisite follow-up
+
+The open identity and evidence-vocabulary findings recorded below were
+resolved after this specification was merged by ADR-0003 and the owning
+contracts:
+
+- `ocgforge.decision_protocol.v1`;
+- `ocgforge.action_identity.v1`;
+- `ocgforge.seed_derivation.v1`;
+- `ocgforge.script_resolution.v1`;
+- `ocgforge.required_script_closure.v1` and its
+  `ocgforge.required_script_closure_identity.v1` hash domain; and
+- `ocgforge.candidate_domain_evidence.v1`.
+
+This follow-up ratifies definitions and pure testable helpers only. It does
+not add the Phase-2 production facade. The actual G28 witness and replay
+evidence remain pending until the implementation/final-acceptance campaign.
+
 ## 1. Decision summary
 
 The smallest safe Phase-2 architecture is a value-owning facade above the
@@ -73,26 +91,28 @@ transport or a production service.
 The design has two identity prerequisites that block the implementation
 campaign, plus one major final-acceptance evidence correction:
 
-1. The accepted EnvironmentConfig names decision-contract,
-   action-identity, and seed-derivation identifiers, but the live accepted
-   sources do not assign concrete values to those identifiers. A Phase-2
-   implementation must not invent values in a facade PR.
+1. At the time of this specification's audit, the accepted EnvironmentConfig
+   named decision-contract, action-identity, and seed-derivation identifiers,
+   but the live accepted sources did not assign concrete values to those
+   identifiers. A Phase-2 implementation must not invent values in a facade
+   PR.
 2. The live accepted M4 candidate_max value of 1344 is an aggregate sum of
    64 per-job maxima, not one legal candidate-domain size. G28 requires one
    replayable witness whose candidate count equals the accepted maximum.
    The current traceable witness is 21. This is a major final-acceptance
    evidence correction, not by itself an implementation-start blocker.
-3. The accepted required_script_closure_identity has no ratified meaning in
-   the live sources. The current required_script_codes value is a
-   deterministic required-card seed set, not a complete runtime script
-   closure or script allowlist. Phase 2 must preserve ScriptStore semantics
-   until a prerequisite decision defines the identity.
+3. At the time of this specification's audit, the accepted
+   required_script_closure_identity had no ratified meaning in the live
+   sources. The current required_script_codes value is a deterministic
+   required-card seed set, not a complete runtime script closure or script
+   allowlist. Phase 2 must preserve ScriptStore semantics under the
+   resolution contract ratified by ADR-0003.
 
-These findings do not require changing the accepted contracts in this
-specification PR. B1, and the identity portion of B3, require an explicit
-prerequisite decision before the implementation PR starts. B2 must be closed
-before Episodic V1 FINAL PASS, but does not alone prevent implementation once
-the true identity blockers are resolved.
+These findings are historical audit results from the specification's original
+publication. B1 and the identity portion of B3 now have explicit owners and
+definitions in the prerequisite contracts. B2's metric vocabulary is
+corrected, but its actual witness must still be closed before Episodic V1
+FINAL PASS.
 
 ## 2. Live repository audit
 
@@ -196,6 +216,12 @@ cross-build semantic ID.
 
 ## 3. Findings and implementation gates
 
+The B1/B2/B3 rows below preserve the findings as recorded at this
+specification's original publication. The normative follow-up resolution is
+recorded above and owned by ADR-0003 and the linked contracts; it does not
+authorize Phase-2 implementation before that prerequisite PR is accepted and
+merged.
+
 | ID | Classification | Finding | Required resolution |
 | --- | --- | --- | --- |
 | B1 | BLOCKER | EnvironmentConfig requires decision-contract, action-identity, and seed-derivation IDs, but no concrete accepted constants exist in the live contract/code. | Ratify exact constants in the owning normative contract or an explicit accepted identity ADR before production implementation. Do not invent them in Phase 2. |
@@ -210,8 +236,8 @@ cross-build semantic ID.
 | N1 | NOTE | The local facade is serial-call only and does not claim thread safety. | Document the requirement; no lock-order semantics are added in V1. |
 | N2 | NOTE | M4 worker process isolation remains useful for acceptance probes, but Phase 2 does not add a worker protocol or RPC. | Reuse the existing process harness only as a test boundary. |
 
-Because B1 and the identity portion of B3 remain open, the implementation
-status is:
+Because the prerequisite definitions are not yet accepted and merged, the
+implementation status remains:
 
     PHASE 2 IMPLEMENTATION SHOULD NOT BEGIN
 
@@ -391,22 +417,17 @@ Current ScriptStore/CoreHost semantics remain unchanged:
 - Phase 2 must not reject a requested script merely because its card code is
   absent from the deck-derived set.
 
-The accepted required_script_closure_identity remains unresolved. Its exact
-meaning, field sequence, and relationship to the pinned CardScripts tree,
-ScriptStore resolution contract, global scripts, and required-card seed set
-must be ratified by the prerequisite identity decision. Until then:
+At original publication, the accepted required_script_closure_identity had no
+ratified meaning. ADR-0003 and `docs/contracts/script-resolution-v1.md` now
+define it as a resolution-environment identity over the resolved CardScripts
+tree, ScriptStore resolution contract, ordered required globals, and
+required-card seed set. The definition:
 
-- preserve the current ScriptStore resolution semantics exactly;
-- do not encode the deck-derived vector as the closure identity;
-- do not claim transitive closure or preflight a new closure;
-- do not add a script allowlist;
-- treat the missing closure definition as B3 and as a conditional blocker
-  for environment-identity implementation.
-
-Once ratified, the closure identity may bind a versioned combination of the
-resolved CardScripts tree, resolution contract, required globals, and
-required-card seed set, but that choice belongs to the prerequisite decision
-and must not be invented in the Phase-2 implementation PR.
+- preserves the current ScriptStore resolution semantics exactly;
+- does not encode the deck-derived vector as the complete runtime closure;
+- does not claim or preflight a transitive runtime closure;
+- does not add a script allowlist; and
+- remains separate from the actual Phase-2 environment implementation.
 
 ## 6. Public schema IDs
 
@@ -423,20 +444,20 @@ The following values are already concrete in accepted sources:
 | trace | ygo.engine_trace.v2 | engine-trace-v2 |
 | ocgcore patchset | ocgforge.ocgcore.api_hardening.v1 | rules-bundle lock |
 
-The following fields are named by the accepted EnvironmentConfig but have no
-concrete accepted constant in the live sources:
+The following fields are named by the accepted EnvironmentConfig and are now
+ratified by the prerequisite contracts:
 
 | Field | Current live state | Required action |
 | --- | --- | --- |
-| decision_contract_id | Decision protocol v1 is named, but no exact public ID constant is declared in decision-protocol-v1.md or code. | Ratify one exact value before implementation. |
-| action_identity_schema_id | Semantic-key rules exist, but no separate accepted action identity ID is declared. | Ratify one exact value or explicitly bind it to a named existing contract. |
-| seed_derivation_id | The four-word derivation is implemented, but no accepted schema/domain ID is declared. | Ratify one exact value and bind it to the shared helper. |
-| required_script_closure_identity | The accepted field is named, but the live sources define neither its closure meaning nor its canonical bytes. | Ratify the exact bound inputs and byte layout. Do not substitute required_script_codes or add an allowlist. |
+| decision_contract_id | `ocgforge.decision_protocol.v1` identifies the complete DecisionRequest/ActionCandidate semantic contract. | Consume the value owned by `docs/contracts/decision-protocol-v1.md`. |
+| action_identity_schema_id | `ocgforge.action_identity.v1` identifies semantic-key construction and continuation action identity. | Consume the value owned by `docs/contracts/action-identity-v1.md`. |
+| seed_derivation_id | `ocgforge.seed_derivation.v1` identifies the shared four-word CoreHost seed mapping. | Consume the value owned by `docs/contracts/seed-derivation-v1.md`. |
+| required_script_closure_identity | Lowercase SHA-256 over the v1 resolution-environment payload. | Consume the schema/domain and canonical bytes owned by `docs/contracts/script-resolution-v1.md`; do not substitute `required_script_codes` or add an allowlist. |
 
 The implementation must reject an unknown or incompatible value for each
-field once the constants are ratified. Until then, these are not permitted
-to be filled with a guessed string or guessed closure payload. The first
-three missing constants are finding B1; the closure definition is finding B3.
+field. The table above records the prerequisite resolution of the original
+B1/B3 findings; production facade validation and the actual G28 witness remain
+implementation-campaign work.
 
 ## 7. Canonical primitive encoding and identity byte layouts
 
@@ -468,13 +489,13 @@ following exact sequence:
 | 0 | hash domain | string | constant ocgforge.environment_identity.v1 | yes | Separates this digest domain |
 | 1 | identity schema ID | string | same accepted constant | yes | Binds the field schema |
 | 2 | episodic contract ID | string | ocgforge.episodic_environment.v1 | yes | Public semantic contract |
-| 3 | decision contract ID | string | ratified constant, currently undefined | yes, blocked | Decision boundary version |
+| 3 | decision contract ID | string | `ocgforge.decision_protocol.v1` | yes | Decision boundary version |
 | 4 | observation contract ID | string | ygo.player_observation.v1 | yes | Safe observation schema |
-| 5 | action identity schema ID | string | ratified constant, currently undefined | yes, blocked | Semantic-key identity rules |
+| 5 | action identity schema ID | string | `ocgforge.action_identity.v1` | yes | Semantic-key identity rules |
 | 6 | candidate digest schema ID | string | ocgforge.candidate_domain.v1 | yes | Domain digest codec |
 | 7 | episode identity schema ID | string | ocgforge.episode_identity.v1 | yes | Episode identity codec |
 | 8 | decision identity schema ID | string | ocgforge.semantic_decision_identity.v1 | yes | Decision identity codec |
-| 9 | seed derivation ID | string | ratified constant, currently undefined | yes, blocked | Root-to-CoreHost seed mapping |
+| 9 | seed derivation ID | string | `ocgforge.seed_derivation.v1` | yes | Root-to-CoreHost seed mapping |
 | 10 | rules bundle ID | string | locked bundle | yes | Rules identity |
 | 11 | Core API version | string | locked bundle | yes | API capability |
 | 12 | ocgcore commit | string | locked bundle | yes | Engine source |
@@ -490,7 +511,7 @@ following exact sequence:
 | 22 | duel mode | string | canonical simulation config | yes | Core mode semantics |
 | 23 | duel flags | u64 | canonical simulation config | yes | Core option bits |
 | 24 | locked decks | vector of {deck ID string, deck hash string} | ordered canonical deck definitions | yes | Deck identity and order |
-| 25 | required script closure identity | ratified value, exact type/layout unresolved | prerequisite identity decision; not required_script_codes | yes, blocked | Binds the accepted runtime closure meaning without changing ScriptStore semantics |
+| 25 | required script closure identity | lowercase SHA-256 over the v1 resolution-environment payload | `docs/contracts/script-resolution-v1.md`; not required_script_codes | yes | Binds the accepted runtime closure meaning without changing ScriptStore semantics |
 
 No path, compiler, build, worker, process, pointer, timestamp, counter, or
 RunControl field occurs in this sequence.
@@ -2273,10 +2294,12 @@ This specification does not modify:
 - M4 worker protocol;
 - canonical simulation result semantics.
 
-The missing identity constants, required-script-closure definition, and G28
-metric vocabulary are reported, not silently repaired. Any resolution belongs
-in an explicitly reviewed owning contract/evidence change before the affected
-production behavior or final acceptance claim.
+At original publication, the missing identity constants,
+required-script-closure definition, and G28 metric vocabulary were reported,
+not silently repaired. Their definitions now live in the explicitly reviewed
+owning contract/ADR changes listed in the prerequisite follow-up above. The
+actual production behavior and final acceptance claim still require the
+implementation and evidence gates defined here.
 
 No trajectory schema, writer, shard, actor/learner transport, teacher,
 WindBot, model, tensor, framework adapter, reward implementation, arbitrary
@@ -2286,8 +2309,9 @@ performance work is included.
 ## 40. Implementation readiness
 
 The facade design is complete enough to review, but production implementation
-is not authorized by this specification while B1 or the identity portion of
-B3 remains unresolved. B2/G28 remains a required MAJOR closure before
-Episodic V1 FINAL PASS, but is not by itself an implementation-start blocker.
+is not included in this specification or in the prerequisite follow-up. It
+may begin only after the prerequisite PR merges. B2/G28 remains a required
+MAJOR closure before Episodic V1 FINAL PASS, but is not by itself an
+implementation-start blocker.
 
     PHASE 2 IMPLEMENTATION SHOULD NOT BEGIN

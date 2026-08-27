@@ -14,6 +14,7 @@
 #include "ocgapi_constants.h"
 #include "ocgapi_types.h"
 #include "ygo/core/core_host.hpp"
+#include "ygo/core/rules_bundle.hpp"
 #include "ygo/m3/canonical_rules.hpp"
 #include "ygo/m3/conformance_policy.hpp"
 #include "ygo/observation/decision_integration.hpp"
@@ -435,23 +436,6 @@ bool candidate_is_code(const ActionCandidate& candidate, std::uint32_t code) {
            candidate.semantic_key.find(std::to_string(code)) != std::string::npos;
 }
 
-ygo::core::SeedBundle seed_bundle() {
-    constexpr std::uint64_t seed = 2;
-    return {{seed, seed ^ 0x9e3779b97f4a7c15ULL, seed + 0x6a09e667f3bcc909ULL,
-             (seed << 1) ^ 0xbb67ae8584caa73bULL}};
-}
-
-std::vector<std::uint32_t> required_script_codes(const ygo::core::FixtureDeck& deck_a,
-                                                  const ygo::core::FixtureDeck& deck_b) {
-    std::vector<std::uint32_t> codes = deck_a.main_deck;
-    codes.insert(codes.end(), deck_a.extra_deck.begin(), deck_a.extra_deck.end());
-    codes.insert(codes.end(), deck_b.main_deck.begin(), deck_b.main_deck.end());
-    codes.insert(codes.end(), deck_b.extra_deck.begin(), deck_b.extra_deck.end());
-    std::sort(codes.begin(), codes.end());
-    codes.erase(std::unique(codes.begin(), codes.end()), codes.end());
-    return codes;
-}
-
 const ygo::observation::ObservedCard* find_card(
     const ygo::observation::PlayerObservation& observation, std::uint32_t code,
     ygo::observation::SemanticZone zone) {
@@ -570,7 +554,7 @@ ygo::core::CoreHostConfig make_config(const std::vector<std::uint32_t>& required
     config.rules.bundle_id = std::string(ygo::m3::canonical_rules().rules_bundle_id);
     config.duel_flags = ygo::m3::canonical_rules().duel_flags;
     config.required_script_codes = required_scripts;
-    config.seed = seed_bundle();
+    config.seed = ygo::core::derive_seed_bundle(2);
     return config;
 }
 
@@ -1115,7 +1099,7 @@ Evidence run_fixture(const FixtureSpec& spec) {
     const auto deck_b = ygo::core::load_fixture_deck(YGO_M3_DECK_B);
     const auto& seat_zero_deck = spec.mirror_seats ? deck_b : deck_a;
     const auto& seat_one_deck = spec.mirror_seats ? deck_a : deck_b;
-    auto required_scripts = required_script_codes(deck_a, deck_b);
+    auto required_scripts = ygo::core::canonical_required_script_codes(deck_a, deck_b);
     auto config = make_config(required_scripts);
     require(config.duel_flags == ygo::m3::canonical_rules().duel_flags,
             "M3 fixture did not use the canonical duel mode");
@@ -1124,9 +1108,7 @@ Evidence run_fixture(const FixtureSpec& spec) {
         // battle destruction and the terminal result before unrelated engine
         // branches; the pinned rules and scripts remain unchanged.
         constexpr std::uint64_t battle_seed = 1;
-        config.seed = {{battle_seed, battle_seed ^ 0x9e3779b97f4a7c15ULL,
-                        battle_seed + 0x6a09e667f3bcc909ULL,
-                        (battle_seed << 1) ^ 0xbb67ae8584caa73bULL}};
+        config.seed = ygo::core::derive_seed_bundle(battle_seed);
     }
     ygo::core::CoreHost host(config);
     host.load_deck(0, seat_zero_deck);

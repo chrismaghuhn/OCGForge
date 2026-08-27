@@ -8,6 +8,7 @@
 
 #include "common.h"
 #include "ygo/core/core_host.hpp"
+#include "ygo/core/rules_bundle.hpp"
 #include "ygo/m3/canonical_rules.hpp"
 #include "ygo/observation/observation_builder.hpp"
 #include "ygo/observation/serialization.hpp"
@@ -33,17 +34,6 @@ void require(bool condition, const char* message) {
     }
 }
 
-std::vector<std::uint32_t> required_scripts(const ygo::core::FixtureDeck& a,
-                                            const ygo::core::FixtureDeck& b) {
-    std::vector<std::uint32_t> codes = a.main_deck;
-    codes.insert(codes.end(), a.extra_deck.begin(), a.extra_deck.end());
-    codes.insert(codes.end(), b.main_deck.begin(), b.main_deck.end());
-    codes.insert(codes.end(), b.extra_deck.begin(), b.extra_deck.end());
-    std::sort(codes.begin(), codes.end());
-    codes.erase(std::unique(codes.begin(), codes.end()), codes.end());
-    return codes;
-}
-
 ygo::observation::PlayerObservation build_world(std::uint32_t hidden_code, bool face_up) {
     const auto deck_a = ygo::core::load_fixture_deck(YGO_M3_DECK_A);
     const auto deck_b = ygo::core::load_fixture_deck(YGO_M3_DECK_B);
@@ -52,7 +42,7 @@ ygo::observation::PlayerObservation build_world(std::uint32_t hidden_code, bool 
     config.rules.card_data_tsv = YGO_M0_CARD_DATA_TSV;
     config.rules.bundle_id = std::string(ygo::m3::canonical_rules().rules_bundle_id);
     config.duel_flags = ygo::m3::canonical_rules().duel_flags;
-    config.required_script_codes = required_scripts(deck_a, deck_b);
+    config.required_script_codes = ygo::core::canonical_required_script_codes(deck_a, deck_b);
     config.seed.words = {2, 0x9e3779b97f4a7c17ULL, 0x6a09e667f3bcc90bULL, 0xbb67ae8584caa73fULL};
     ygo::core::CoreHost host(config);
     host.load_deck(0, deck_a);

@@ -48,12 +48,7 @@ int main() {
     try {
         const auto deck_a = ygo::core::load_fixture_deck(YGO_M3_DECK_A);
         const auto deck_b = ygo::core::load_fixture_deck(YGO_M3_DECK_B);
-        std::vector<std::uint32_t> unique_codes = deck_a.main_deck;
-        unique_codes.insert(unique_codes.end(), deck_a.extra_deck.begin(), deck_a.extra_deck.end());
-        unique_codes.insert(unique_codes.end(), deck_b.main_deck.begin(), deck_b.main_deck.end());
-        unique_codes.insert(unique_codes.end(), deck_b.extra_deck.begin(), deck_b.extra_deck.end());
-        std::sort(unique_codes.begin(), unique_codes.end());
-        unique_codes.erase(std::unique(unique_codes.begin(), unique_codes.end()), unique_codes.end());
+        const auto unique_codes = ygo::core::canonical_required_script_codes(deck_a, deck_b);
         require(unique_codes.size() == 50, "unexpected unique fixed-deck code count");
 
         auto config = make_config(unique_codes);

@@ -133,22 +133,6 @@ Arguments parse_arguments(int argc, char** argv) {
     return arguments;
 }
 
-ygo::core::SeedBundle seed_bundle(std::uint64_t seed) {
-    return {{seed, seed ^ 0x9e3779b97f4a7c15ULL, seed + 0x6a09e667f3bcc909ULL,
-             (seed << 1) ^ 0xbb67ae8584caa73bULL}};
-}
-
-std::vector<std::uint32_t> required_script_codes(const ygo::core::FixtureDeck& deck_a,
-                                                 const ygo::core::FixtureDeck& deck_b) {
-    std::vector<std::uint32_t> codes = deck_a.main_deck;
-    codes.insert(codes.end(), deck_a.extra_deck.begin(), deck_a.extra_deck.end());
-    codes.insert(codes.end(), deck_b.main_deck.begin(), deck_b.main_deck.end());
-    codes.insert(codes.end(), deck_b.extra_deck.begin(), deck_b.extra_deck.end());
-    std::sort(codes.begin(), codes.end());
-    codes.erase(std::unique(codes.begin(), codes.end()), codes.end());
-    return codes;
-}
-
 const ygo::protocol::ActionCandidate& choose_candidate(const ygo::protocol::DecisionRequest& request,
                                                        const ygo::core::SeedBundle& seed,
                                                        const std::vector<std::uint32_t>& focus_codes) {
@@ -408,7 +392,8 @@ int run_canonical_full_game(const Arguments& arguments) {
     config.duel_flags = ygo::m3::canonical_rules().duel_flags;
     config.deck_a = ygo::core::load_fixture_deck(YGO_M3_DECK_A);
     config.deck_b = ygo::core::load_fixture_deck(YGO_M3_DECK_B);
-    config.required_script_codes = required_script_codes(config.deck_a, config.deck_b);
+    config.required_script_codes =
+        ygo::core::canonical_required_script_codes(config.deck_a, config.deck_b);
     config.mode = ygo::simulation::SimulationMode::Conformance;
     config.observation_mode = ygo::simulation::ObservationMode::Full;
 
@@ -493,7 +478,7 @@ int run(const Arguments& arguments) {
     config.rules.core_patchset_sha256 = std::string(ygo::m3::canonical_rules().core_patchset_sha256);
     config.duel_flags = ygo::m3::canonical_rules().duel_flags;
     config.starting_player = arguments.starting_player;
-    config.seed = seed_bundle(arguments.seed);
+    config.seed = ygo::core::derive_seed_bundle(arguments.seed);
     const auto fixed_deck_a = ygo::core::load_fixture_deck(
         arguments.m3_fixed_matchup ? YGO_M3_DECK_A : YGO_M0_PLAYER_A);
     const auto fixed_deck_b = ygo::core::load_fixture_deck(
@@ -501,7 +486,7 @@ int run(const Arguments& arguments) {
     const auto& deck_a = arguments.mirror_seats && arguments.m3_fixed_matchup ? fixed_deck_b : fixed_deck_a;
     const auto& deck_b = arguments.mirror_seats && arguments.m3_fixed_matchup ? fixed_deck_a : fixed_deck_b;
     if (arguments.m3_fixed_matchup) {
-        config.required_script_codes = required_script_codes(deck_a, deck_b);
+        config.required_script_codes = ygo::core::canonical_required_script_codes(deck_a, deck_b);
     }
 
     ygo::core::CoreHost host(config);

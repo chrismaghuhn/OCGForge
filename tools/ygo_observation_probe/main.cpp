@@ -69,11 +69,6 @@ Arguments parse_arguments(int argc, char** argv) {
     return arguments;
 }
 
-ygo::core::SeedBundle seed_bundle(std::uint64_t seed) {
-    return {{seed, seed ^ 0x9e3779b97f4a7c15ULL, seed + 0x6a09e667f3bcc909ULL,
-             (seed << 1) ^ 0xbb67ae8584caa73bULL}};
-}
-
 ygo::observation::StaticDeckContext known_deck(const ygo::core::FixtureDeck& deck) {
     ygo::observation::StaticDeckContext context;
     context.known = true;
@@ -94,7 +89,7 @@ int run(const Arguments& arguments) {
     config.duel_flags = DUEL_PZONE | DUEL_SEPARATE_PZONE;
     config.starting_draw_count = 0;
     config.draw_count_per_turn = 0;
-    config.seed = seed_bundle(arguments.seed);
+    config.seed = ygo::core::derive_seed_bundle(arguments.seed);
 
     ygo::core::CoreHost host(config);
     host.load_deck(0, deck_a);

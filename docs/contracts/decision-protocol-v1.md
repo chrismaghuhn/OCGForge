@@ -1,5 +1,18 @@
 # Decision protocol v1
 
+## Contract ID
+
+```text
+ocgforge.decision_protocol.v1
+```
+
+This ID names the complete `DecisionRequest`/`ActionCandidate` public
+semantic contract: typed request families, complete legal candidate
+membership, authoritative ordering, continuation linkage, and response
+submission ownership. The independent semantic-key identity rules are owned
+by `ocgforge.action_identity.v1` in
+`docs/contracts/action-identity-v1.md`.
+
 ## Purpose
 
 This contract is the player-facing decision boundary over the pinned OCG

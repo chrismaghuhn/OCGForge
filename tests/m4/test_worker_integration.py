@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import tempfile
 import time
@@ -170,6 +171,134 @@ def write_pool_failure_diagnostics(
         return
 
 
+_MISSING_TRACE_VALUE = object()
+
+
+def _bounded_json(value: object, *, limit: int = 512) -> str:
+    try:
+        encoded = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    except (TypeError, ValueError):
+        encoded = repr(value)
+    if len(encoded) <= limit:
+        return encoded
+    return encoded[: limit - 3] + "..."
+
+
+def _canonical_trace_records(path: Path) -> tuple[list[bytes], list[dict[str, object]]]:
+    canonical_lines: list[bytes] = []
+    records: list[dict[str, object]] = []
+    for line in path.read_bytes().splitlines():
+        if not line or line.startswith(b"#"):
+            continue
+        canonical_lines.append(line)
+        value = json.loads(line.decode("utf-8"))
+        if not isinstance(value, dict):
+            raise ValueError(f"trace line is not an object: {path}")
+        records.append(value)
+    return canonical_lines, records
+
+
+def first_canonical_trace_difference(left: Path, right: Path) -> str:
+    """Return the first canonical line/field difference between two traces."""
+
+    try:
+        left_lines, left_records = _canonical_trace_records(left)
+        right_lines, right_records = _canonical_trace_records(right)
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError) as error:
+        return f"trace-read-error={type(error).__name__}:{error}"
+
+    for line_index in range(max(len(left_records), len(right_records))):
+        if line_index >= len(left_records):
+            return f"canonical_line={line_index + 1} field=<missing-left>"
+        if line_index >= len(right_records):
+            return f"canonical_line={line_index + 1} field=<missing-right>"
+        left_record = left_records[line_index]
+        right_record = right_records[line_index]
+        keys = list(dict.fromkeys([*left_record.keys(), *right_record.keys()]))
+        for key in keys:
+            left_value = left_record.get(key, _MISSING_TRACE_VALUE)
+            right_value = right_record.get(key, _MISSING_TRACE_VALUE)
+            if left_value != right_value:
+                return (
+                    f"canonical_line={line_index + 1} field={key} "
+                    f"left={_bounded_json(left_value)} right={_bounded_json(right_value)}"
+                )
+        if left_lines[line_index] != right_lines[line_index]:
+            return (
+                f"canonical_line={line_index + 1} field=<canonical_bytes> "
+                f"left={_bounded_json(left_lines[line_index].decode('utf-8', 'replace'))} "
+                f"right={_bounded_json(right_lines[line_index].decode('utf-8', 'replace'))}"
+            )
+    if len(left_records) != len(right_records):
+        return f"canonical_line_count left={len(left_records)} right={len(right_records)}"
+    return "none"
+
+
+def _trace_job_paths(jobs: list[dict[str, object]]) -> dict[str, Path]:
+    return {
+        str(job["job_id"]): Path(str(job["trace_output"]))
+        for job in jobs
+        if isinstance(job.get("trace_output"), str)
+    }
+
+
+def write_trace_mismatch_diagnostics(
+    *,
+    baseline_worker_count: int,
+    baseline_jobs: list[dict[str, object]],
+    baseline_results: list[dict[str, object]],
+    worker_count: int,
+    jobs: list[dict[str, object]],
+    results: list[dict[str, object]],
+) -> None:
+    """Retain both canonical traces and their first field diff when opted in."""
+
+    artifact_dir = os.environ.get("YGO_M4_FAILURE_ARTIFACT_DIR")
+    if not artifact_dir:
+        return
+    try:
+        root = Path(artifact_dir) / "worker-count-trace-mismatch"
+        root.mkdir(parents=True, exist_ok=True)
+        baseline_paths = _trace_job_paths(baseline_jobs)
+        current_paths = _trace_job_paths(jobs)
+        rows: list[dict[str, object]] = []
+        for baseline_result, result in zip(baseline_results, results):
+            job_id = str(result["job_id"])
+            baseline_path = baseline_paths[job_id]
+            current_path = current_paths[job_id]
+            baseline_name = f"w{baseline_worker_count}-{job_id}.jsonl"
+            current_name = f"w{worker_count}-{job_id}.jsonl"
+            shutil.copyfile(baseline_path, root / baseline_name)
+            shutil.copyfile(current_path, root / current_name)
+            rows.append(
+                {
+                    "job_id": job_id,
+                    "baseline_trace_hash": baseline_result.get("trace_hash"),
+                    "current_trace_hash": result.get("trace_hash"),
+                    "baseline_gameplay_hash": baseline_result.get("gameplay_hash"),
+                    "current_gameplay_hash": result.get("gameplay_hash"),
+                    "first_canonical_difference": first_canonical_trace_difference(
+                        baseline_path, current_path
+                    ),
+                    "baseline_artifact": baseline_name,
+                    "current_artifact": current_name,
+                }
+            )
+        payload = {
+            "schema": "ocgforge.m4.trace-mismatch-diagnostic.v1",
+            "baseline_worker_count": baseline_worker_count,
+            "worker_count": worker_count,
+            "rows": rows,
+        }
+        (root / "comparison.json").write_text(
+            json.dumps(payload, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+    except (KeyError, OSError, TypeError, ValueError, json.JSONDecodeError):
+        # Diagnostics must never replace the original trace-hash assertion.
+        return
+
+
 def run_pool_with_diagnostics(
     jobs: list[dict[str, object]],
     *,
@@ -283,42 +412,84 @@ class NativeWorkerIntegrationTests(unittest.TestCase):
         baseline_jobs = make_jobs(8)
         baseline_projection: list[tuple[object, ...]] | None = None
         trace_baseline: list[str] | None = None
-        for worker_count in (1, 2, 4, 8):
-            with self.subTest(worker_count=worker_count), tempfile.TemporaryDirectory(
-                prefix=f"ocgforge-m4-integration-w{worker_count}-"
-            ) as directory:
-                results = run_pool_with_diagnostics(
-                    baseline_jobs,
-                    worker_count=worker_count,
-                    output_dir=Path(directory),
-                    test_name="worker-counts",
-                    phase="throughput",
-                )
-                projection = [semantic_projection(result) for result in results]
-                if baseline_projection is None:
-                    baseline_projection = projection
-                self.assertEqual(projection, baseline_projection)
+        baseline_trace_jobs: list[dict[str, object]] | None = None
+        baseline_trace_results: list[dict[str, object]] | None = None
+        baseline_trace_worker_count: int | None = None
+        with tempfile.TemporaryDirectory(prefix="ocgforge-m4-traces-") as trace_root_directory:
+            trace_root = Path(trace_root_directory)
+            for worker_count in (1, 2, 4, 8):
+                with self.subTest(worker_count=worker_count), tempfile.TemporaryDirectory(
+                    prefix=f"ocgforge-m4-integration-w{worker_count}-"
+                ) as directory:
+                    results = run_pool_with_diagnostics(
+                        baseline_jobs,
+                        worker_count=worker_count,
+                        output_dir=Path(directory),
+                        test_name="worker-counts",
+                        phase="throughput",
+                    )
+                    projection = [semantic_projection(result) for result in results]
+                    if baseline_projection is None:
+                        baseline_projection = projection
+                    self.assertEqual(projection, baseline_projection)
 
-            with self.subTest(worker_count=f"{worker_count}-conformance"), tempfile.TemporaryDirectory(
-                prefix=f"ocgforge-m4-trace-w{worker_count}-"
-            ) as directory:
-                trace_jobs = make_jobs(8, mode="conformance", persist_trace=True)
-                for job in trace_jobs:
-                    job["trace_output"] = str(Path(directory) / f"{job['job_id']}.jsonl")
-                results = run_pool_with_diagnostics(
-                    trace_jobs,
-                    worker_count=worker_count,
-                    output_dir=Path(directory),
-                    test_name="worker-counts",
-                    phase="conformance",
-                )
-                self.assertTrue(
-                    all(isinstance(result["trace_hash"], str) and result["trace_hash"] for result in results)
-                )
-                traces = [result["trace_hash"] for result in results]
-                if trace_baseline is None:
-                    trace_baseline = traces
-                self.assertEqual(traces, trace_baseline)
+                with self.subTest(worker_count=f"{worker_count}-conformance"):
+                    directory = trace_root / f"w{worker_count}"
+                    directory.mkdir()
+                    trace_jobs = make_jobs(8, mode="conformance", persist_trace=True)
+                    for job in trace_jobs:
+                        job["trace_output"] = str(directory / f"{job['job_id']}.jsonl")
+                    results = run_pool_with_diagnostics(
+                        trace_jobs,
+                        worker_count=worker_count,
+                        output_dir=directory,
+                        test_name="worker-counts",
+                        phase="conformance",
+                    )
+                    self.assertTrue(
+                        all(isinstance(result["trace_hash"], str) and result["trace_hash"] for result in results)
+                    )
+                    traces = [result["trace_hash"] for result in results]
+                    if trace_baseline is None:
+                        trace_baseline = traces
+                        baseline_trace_jobs = trace_jobs
+                        baseline_trace_results = results
+                        baseline_trace_worker_count = worker_count
+                    elif traces != trace_baseline:
+                        assert baseline_trace_jobs is not None
+                        assert baseline_trace_results is not None
+                        assert baseline_trace_worker_count is not None
+                        mismatches = []
+                        for baseline_result, result in zip(baseline_trace_results, results):
+                            if baseline_result.get("trace_hash") == result.get("trace_hash"):
+                                continue
+                            job_id = str(result["job_id"])
+                            baseline_path = _trace_job_paths(baseline_trace_jobs)[job_id]
+                            current_path = _trace_job_paths(trace_jobs)[job_id]
+                            mismatches.append(
+                                {
+                                    "job_id": job_id,
+                                    "baseline_trace_hash": baseline_result.get("trace_hash"),
+                                    "current_trace_hash": result.get("trace_hash"),
+                                    "baseline_gameplay_hash": baseline_result.get("gameplay_hash"),
+                                    "current_gameplay_hash": result.get("gameplay_hash"),
+                                    "first_canonical_difference": first_canonical_trace_difference(
+                                        baseline_path, current_path
+                                    ),
+                                }
+                            )
+                        write_trace_mismatch_diagnostics(
+                            baseline_worker_count=baseline_trace_worker_count,
+                            baseline_jobs=baseline_trace_jobs,
+                            baseline_results=baseline_trace_results,
+                            worker_count=worker_count,
+                            jobs=trace_jobs,
+                            results=results,
+                        )
+                        self.fail(
+                            "trace hashes differ across worker counts: "
+                            + _bounded_json(mismatches, limit=4096)
+                        )
 
 
 if __name__ == "__main__":

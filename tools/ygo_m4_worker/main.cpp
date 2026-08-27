@@ -42,17 +42,6 @@ std::uint32_t process_id() {
 #endif
 }
 
-std::vector<std::uint32_t> required_script_codes(const ygo::core::FixtureDeck& deck_a,
-                                                 const ygo::core::FixtureDeck& deck_b) {
-    std::vector<std::uint32_t> codes = deck_a.main_deck;
-    codes.insert(codes.end(), deck_a.extra_deck.begin(), deck_a.extra_deck.end());
-    codes.insert(codes.end(), deck_b.main_deck.begin(), deck_b.main_deck.end());
-    codes.insert(codes.end(), deck_b.extra_deck.begin(), deck_b.extra_deck.end());
-    std::sort(codes.begin(), codes.end());
-    codes.erase(std::unique(codes.begin(), codes.end()), codes.end());
-    return codes;
-}
-
 ygo::simulation::CanonicalSimulationConfig build_canonical_config() {
     const auto& rules = ygo::m3::canonical_rules();
     ygo::simulation::CanonicalSimulationConfig config;
@@ -69,7 +58,8 @@ ygo::simulation::CanonicalSimulationConfig build_canonical_config() {
     config.patchset_sha256 = std::string(rules.core_patchset_sha256);
     config.deck_a = ygo::core::load_fixture_deck(YGO_M3_DECK_A);
     config.deck_b = ygo::core::load_fixture_deck(YGO_M3_DECK_B);
-    config.required_script_codes = required_script_codes(config.deck_a, config.deck_b);
+    config.required_script_codes =
+        ygo::core::canonical_required_script_codes(config.deck_a, config.deck_b);
     config.mode = ygo::simulation::SimulationMode::Throughput;
     config.observation_mode = ygo::simulation::ObservationMode::Full;
     config.instrumentation = false;
