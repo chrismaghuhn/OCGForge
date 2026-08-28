@@ -145,7 +145,21 @@ try {
     Invoke-Checked -Command 'python' -Arguments @('tests/protocol/decision_coverage_test.py') -WorkingDirectory $worktree
     Invoke-Checked -Command 'python' -Arguments @('tests/observation/observation_coverage_test.py') -WorkingDirectory $worktree
     Invoke-Checked -Command 'python' -Arguments @('tests/episodic/episode_driver_ownership_guard.py') -WorkingDirectory $worktree
-    Invoke-Checked -Command 'python' -Arguments @('-B', '-m', 'unittest', 'tests.m4.test_benchmark_integrity', 'tests.m4.test_failure_isolation', 'tests.m4.test_job_generation', 'tests.m4.test_process_metrics', 'tests.m4.test_worker_protocol', '-v') -WorkingDirectory $worktree
+    $cleanWorker = Join-Path $build 'ygo_m4_worker.exe'
+    if (-not (Test-Path -LiteralPath $cleanWorker)) {
+        throw "clean-checkout M4 worker is missing: $cleanWorker"
+    }
+    $previousM4Worker = $env:YGO_M4_WORKER
+    try {
+        $env:YGO_M4_WORKER = $cleanWorker
+        Invoke-Checked -Command 'python' -Arguments @('-B', '-m', 'unittest', 'tests.m4.test_benchmark_integrity', 'tests.m4.test_failure_isolation', 'tests.m4.test_job_generation', 'tests.m4.test_process_metrics', 'tests.m4.test_worker_protocol', '-v') -WorkingDirectory $worktree
+    } finally {
+        if ($null -eq $previousM4Worker) {
+            Remove-Item Env:YGO_M4_WORKER -ErrorAction SilentlyContinue
+        } else {
+            $env:YGO_M4_WORKER = $previousM4Worker
+        }
+    }
     Invoke-Checked -Command 'python' -Arguments @(
         'tests/determinism/m1_engine_determinism_test.py',
         '--probe', (Join-Path $build 'm1_engine_conformance_test.exe')
