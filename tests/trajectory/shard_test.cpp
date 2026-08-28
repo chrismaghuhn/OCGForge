@@ -10,6 +10,12 @@
 #include <string>
 #include <vector>
 
+#ifdef _WIN32
+#include <process.h>
+#else
+#include <unistd.h>
+#endif
+
 #include "test_fixtures.hpp"
 #include "ygo/trace/sha256.hpp"
 
@@ -35,6 +41,47 @@ void require_throw(Function&& function, const std::string& message) {
     }
     require(threw, message);
 }
+
+std::filesystem::path unique_publication_root() {
+#ifdef _WIN32
+    const auto process_id = static_cast<unsigned long long>(_getpid());
+#else
+    const auto process_id = static_cast<unsigned long long>(getpid());
+#endif
+    const auto base = std::filesystem::temp_directory_path();
+    for (unsigned int attempt = 0; attempt < 1000; ++attempt) {
+        const auto candidate = base / (std::string("ocgforge_phase3b_publication_test_") +
+                                       std::to_string(process_id) + "_" +
+                                       std::to_string(attempt));
+        std::error_code error;
+        if (std::filesystem::create_directory(candidate, error)) {
+            return candidate;
+        }
+        if (!error && std::filesystem::exists(candidate)) {
+            continue;
+        }
+        if (error == std::errc::file_exists) {
+            continue;
+        }
+        throw std::runtime_error("could not create unique publication test root: " +
+                                 error.message());
+    }
+    throw std::runtime_error("could not find a unique publication test root");
+}
+
+struct PublicationTreeCleanup final {
+    std::filesystem::path root;
+    std::filesystem::path link_like_target;
+
+    ~PublicationTreeCleanup() {
+        std::error_code ignored;
+        if (!link_like_target.empty()) {
+            std::filesystem::remove(link_like_target, ignored);
+        }
+        ignored.clear();
+        std::filesystem::remove_all(root, ignored);
+    }
+};
 
 void test_shard_codec() {
     CandidateTrajectoryShard empty;
@@ -132,17 +179,12 @@ void test_shard_codec() {
 }
 
 void test_atomic_publication() {
-    const auto root = std::filesystem::temp_directory_path() / "ocgforge_phase3b_publication_test";
+    const auto root = unique_publication_root();
     const std::vector<std::uint8_t> bytes = {1, 2, 3, 4, 5};
     const auto digest = trace::sha256_bytes(bytes);
     const auto symlink_target = root / "symlink" /
                                (std::string("trajectory_shard.") + digest + ".bin");
-    std::error_code ignored;
-    std::filesystem::remove(symlink_target, ignored);
-    ignored.clear();
-    std::filesystem::remove_all(root, ignored);
-    ignored.clear();
-    std::filesystem::create_directories(root);
+    PublicationTreeCleanup cleanup{root, symlink_target};
     std::string error;
     const auto first = storage::publish_content_addressed_artifact(
         root, "trajectory_shard", digest, bytes, &error);
@@ -212,9 +254,6 @@ void test_atomic_publication() {
         require(item.path() == competing_path,
                 "competing publication left a temporary partial artifact behind");
     }
-    std::filesystem::remove(symlink_target, ignored);
-    ignored.clear();
-    std::filesystem::remove_all(root, ignored);
 }
 
 }  // namespace
