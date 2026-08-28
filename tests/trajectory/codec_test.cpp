@@ -3,7 +3,9 @@
 #include "ygo/trajectory/policy_provenance.hpp"
 
 #include <algorithm>
+#include <cstdint>
 #include <iostream>
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -183,6 +185,21 @@ void test_primitive_strictness() {
     require(is_valid_utf8("valid-\xE2\x98\x83"), "valid UTF-8 was rejected");
     require(!is_valid_utf8("\xC0\x80"), "overlong UTF-8 was accepted");
     require(!is_lower_hex_digest(std::string(64, 'A')), "upper-case digest was accepted");
+
+    ByteWriter malformed_provenance;
+    malformed_provenance.string(kPolicyProvenanceContractId);
+    malformed_provenance.string(kPolicyProvenanceContractId);
+    malformed_provenance.u32be(std::numeric_limits<std::uint32_t>::max());
+    require(!decode_policy_provenance_envelope(malformed_provenance.data()),
+            "provenance count exceeded the remaining input without failing closed");
+
+    ByteWriter malformed_request;
+    malformed_request.string(kTrustedTrajectoryContractId);
+    malformed_request.string("yes_no");
+    malformed_request.u8(0);
+    malformed_request.u32be(std::numeric_limits<std::uint32_t>::max());
+    require(!decode_public_environment_decision_request(malformed_request.data()),
+            "candidate count exceeded the remaining input without failing closed");
 }
 
 void test_policy_codecs() {
@@ -403,6 +420,15 @@ void test_closure_variants() {
                    "6534b091e2ea30fdd3f81c99545fbcd4c2176bdd072cbe09cbeb3b3e8779b84a",
                    "failed closure golden");
     require(static_cast<bool>(decode_episode_closure(failed_bytes)), "failed closure did not decode");
+    auto wrong_perspective = std::get<TerminalClosure>(envelope_fixture().closure);
+    wrong_perspective.terminal_view_player_0.perspective_player = 1;
+    bool rejected = false;
+    try {
+        (void)canonical_episode_closure_bytes(EpisodeClosure{wrong_perspective});
+    } catch (const std::exception&) {
+        rejected = true;
+    }
+    require(rejected, "terminal closure accepted a player-1 view in the player-0 slot");
     (void)episode_id;
 }
 

@@ -6,6 +6,7 @@
 #include <stdexcept>
 #include <string>
 #include <tuple>
+#include <type_traits>
 #include <utility>
 
 #include "ygo/environment/public_action_identity.hpp"
@@ -789,9 +790,6 @@ bool read_optional_i32(ByteReader& reader, std::optional<std::int32_t>& value) n
     return true;
 }
 
-void write_optional_frame(ByteWriter& writer, const std::optional<PublicFrameSnapshot>& value);
-bool read_optional_frame(ByteReader& reader, std::optional<PublicFrameSnapshot>& value) noexcept;
-
 std::vector<std::uint8_t> policy_artifact_identity_input(const PolicyArtifact& value) {
     ByteWriter writer;
     writer.string(kPolicyArtifactIdentityDomain);
@@ -1208,6 +1206,10 @@ DecodeResult<CollectionDisposition> decode_collection_disposition(
             if (!reader.u32be(count)) {
                 return failure<CollectionDisposition>("missing quarantine count");
             }
+            if (count > reader.remaining() / 4) {
+                return failure<CollectionDisposition>(
+                    "quarantine count exceeds the remaining input");
+            }
             value.policy_rejections.reserve(count);
             for (std::uint32_t index = 0; index < count; ++index) {
                 std::string token;
@@ -1330,6 +1332,9 @@ bool read_policy_provenance_direct(ByteReader& reader,
         !reader.u32be(count)) {
         return false;
     }
+    if (count > reader.remaining()) {
+        return false;
+    }
     try {
         value.policy_artifacts.clear();
         value.policy_artifacts.reserve(count);
@@ -1345,6 +1350,9 @@ bool read_policy_provenance_direct(ByteReader& reader,
         value.policy_artifacts.push_back(std::move(artifact));
     }
     if (!reader.u32be(count)) {
+        return false;
+    }
+    if (count > reader.remaining()) {
         return false;
     }
     try {
@@ -1379,6 +1387,9 @@ bool read_disposition_direct(ByteReader& reader, CollectionDisposition& value) n
     }
     std::uint32_t count = 0;
     if (!reader.u32be(count)) {
+        return false;
+    }
+    if (count > reader.remaining() / 4) {
         return false;
     }
     try {
@@ -1448,18 +1459,10 @@ DecodeResult<PolicyProvenanceEnvelope> decode_policy_provenance_envelope(
     try {
         ByteReader reader(bytes);
         PolicyProvenanceEnvelope value;
-        std::string domain;
-        std::string schema;
-        std::uint32_t count = 0;
-        if (!reader.string(domain) || domain != kPolicyProvenanceContractId ||
-            !reader.string(schema) || schema != kPolicyProvenanceContractId ||
-            !reader.u32be(count)) {
-            return failure<PolicyProvenanceEnvelope>("malformed provenance envelope header");
-        }
         // Use the direct parser so nested entries are consumed in linear time;
         // each entry is self-delimiting by its fixed field order and length
         // prefixed strings/optionals.
-        if (!reader.set_position(0) || !read_policy_provenance_direct(reader, value)) {
+        if (!read_policy_provenance_direct(reader, value)) {
             return failure<PolicyProvenanceEnvelope>("malformed provenance envelope entries");
         }
         if (!reader.at_end()) {
@@ -1753,6 +1756,10 @@ DecodeResult<environment::EnvironmentDecisionRequest> decode_public_environment_
             !reader.u32be(count)) {
             return failure<environment::EnvironmentDecisionRequest>("malformed decision request header");
         }
+        if (count > reader.remaining()) {
+            return failure<environment::EnvironmentDecisionRequest>(
+                "decision candidate count exceeds the remaining input");
+        }
         const auto kind = decision_kind_from_token(kind_token);
         if (!kind.has_value()) {
             return failure<environment::EnvironmentDecisionRequest>("unknown decision kind");
@@ -1800,6 +1807,9 @@ bool read_public_request_direct(ByteReader& reader,
     if (!reader.string(schema) || schema != kCandidateSchema ||
         !reader.string(kind_token) || !reader.u8(value.player) || value.player > 1 ||
         !reader.u32be(count)) {
+        return false;
+    }
+    if (count > reader.remaining()) {
         return false;
     }
     const auto kind = decision_kind_from_token(kind_token);
@@ -2023,6 +2033,7 @@ void validate_public_record(const DecisionRecord& value) {
     }
     if (value.successor.kind == SuccessorKind::NextFrame) {
         if (!value.successor.next_frame.has_value() ||
+            value.frame.decision_index == std::numeric_limits<std::uint64_t>::max() ||
             value.successor.next_frame->next_decision_index != value.frame.decision_index + 1) {
             throw std::invalid_argument("record successor index is inconsistent");
         }
@@ -2102,6 +2113,8 @@ DecodeResult<DecisionRecord> decode_public_decision_record(
 
 void validate_terminal_closure(const TerminalClosure& value) {
     if (value.winner > 1 || value.win_reason == 255 ||
+        value.terminal_view_player_0.perspective_player != 0 ||
+        value.terminal_view_player_1.perspective_player != 1 ||
         environment::public_observation_digest(value.terminal_view_player_0) !=
             value.terminal_view_player_0_digest ||
         environment::public_observation_digest(value.terminal_view_player_1) !=
@@ -2115,6 +2128,7 @@ void validate_terminal_closure(const TerminalClosure& value) {
             throw std::invalid_argument("zero-action terminal has a last decision index");
         }
     } else if (!value.last_decision_index.has_value() ||
+               *value.last_decision_index == std::numeric_limits<std::uint64_t>::max() ||
                *value.last_decision_index + 1 != value.semantic_action_count) {
         throw std::invalid_argument("terminal last decision index is inconsistent");
     }
@@ -2521,13 +2535,16 @@ void validate_envelope_sequence(const EpisodeEnvelope& value) {
             throw std::invalid_argument("interrupted closure count is inconsistent");
         }
         if (interrupted->pending_unacted_frame.has_value()) {
-            if (!value.records.empty() &&
+            if (interrupted->pending_unacted_frame->episode_semantic_id !=
+                    value.manifest.episode_semantic_id ||
+                interrupted->pending_unacted_frame->decision_index != count ||
+                (!value.records.empty() &&
                 (value.records.back().successor.kind != SuccessorKind::NextFrame ||
                 !value.records.back().successor.next_frame.has_value() ||
                 value.records.back().successor.next_frame->kind !=
                     NextFrameTargetKind::InterruptionPendingUnactedFrame ||
                 value.records.back().successor.next_frame->next_public_semantic_decision_id !=
-                    interrupted->pending_unacted_frame->public_semantic_decision_id)) {
+                    interrupted->pending_unacted_frame->public_semantic_decision_id))) {
                 throw std::invalid_argument("pending interruption successor is inconsistent");
             }
         } else if (!value.records.empty() &&
@@ -2570,6 +2587,10 @@ DecodeResult<EpisodeEnvelope> decode_episode_envelope(
             !read_manifest(reader, value.manifest) ||
             !reader.u32be(count)) {
             return failure<EpisodeEnvelope>("malformed episode envelope header");
+        }
+        if (count > reader.remaining()) {
+            return failure<EpisodeEnvelope>(
+                "episode record count exceeds the remaining input");
         }
         value.records.reserve(count);
         for (std::uint32_t index = 0; index < count; ++index) {

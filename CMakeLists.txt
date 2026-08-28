@@ -192,6 +192,7 @@ add_library(ygo_trajectory STATIC
     src/trajectory/shard.cpp
     src/trajectory/restricted_evidence.cpp
     src/trajectory/storage.cpp
+    src/trajectory/admission.cpp
 )
 target_include_directories(ygo_trajectory PUBLIC "${CMAKE_SOURCE_DIR}/include")
 target_link_libraries(ygo_trajectory PUBLIC ygo_m4)
@@ -216,6 +217,10 @@ add_test(NAME trajectory_shard_test COMMAND trajectory_shard_test)
 add_executable(trajectory_restricted_evidence_test tests/trajectory/restricted_evidence_test.cpp)
 target_link_libraries(trajectory_restricted_evidence_test PRIVATE ygo_trajectory)
 add_test(NAME trajectory_restricted_evidence_test COMMAND trajectory_restricted_evidence_test)
+
+add_executable(trajectory_replay_admission_test tests/trajectory/replay_admission_test.cpp)
+target_link_libraries(trajectory_replay_admission_test PRIVATE ygo_trajectory)
+add_test(NAME trajectory_replay_admission_test COMMAND trajectory_replay_admission_test)
 
 add_executable(ygo_core_probe tools/ygo_core_probe/main.cpp)
 target_link_libraries(ygo_core_probe PRIVATE ygo_m4)

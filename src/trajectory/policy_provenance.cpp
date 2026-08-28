@@ -137,10 +137,7 @@ bool validate_policy_provenance(const PolicyProvenanceEnvelope& value,
         }
 
         std::vector<std::string> assignment_ids;
-        std::array<bool, 2> epoch_zero{};
-        std::array<std::uint32_t, 2> previous_epoch{};
-        std::array<std::uint64_t, 2> previous_index{};
-        std::array<bool, 2> have_previous{};
+        std::array<std::vector<const ParticipantPolicyAssignment*>, 2> assignments_by_player;
         for (const auto& assignment : value.participant_assignments) {
             const auto encoded = canonical_participant_policy_assignment_bytes(assignment);
             const auto decoded = decode_participant_policy_assignment(encoded);
@@ -154,23 +151,7 @@ bool validate_policy_provenance(const PolicyProvenanceEnvelope& value,
                 set_error(error, "assignment references an undeclared policy artifact");
                 return false;
             }
-            if (assignment.assignment_epoch == 0 &&
-                assignment.effective_from_decision_index == 0) {
-                if (epoch_zero[assignment.player]) {
-                    set_error(error, "duplicate epoch-zero participant assignment");
-                    return false;
-                }
-                epoch_zero[assignment.player] = true;
-            }
-            if (have_previous[assignment.player] &&
-                (assignment.assignment_epoch <= previous_epoch[assignment.player] ||
-                 assignment.effective_from_decision_index <= previous_index[assignment.player])) {
-                set_error(error, "participant assignment epochs are not increasing");
-                return false;
-            }
-            previous_epoch[assignment.player] = assignment.assignment_epoch;
-            previous_index[assignment.player] = assignment.effective_from_decision_index;
-            have_previous[assignment.player] = true;
+            assignments_by_player[assignment.player].push_back(&assignment);
             assignment_ids.push_back(assignment.participant_policy_assignment_id);
 
             const auto expected_deck_index = assignment.deck_role == DeckRole::FirstLockedDeck ? 0u : 1u;
@@ -188,11 +169,36 @@ bool validate_policy_provenance(const PolicyProvenanceEnvelope& value,
                 return false;
             }
         }
-        if (!epoch_zero[0] || !epoch_zero[1] ||
-            !std::is_sorted(assignment_ids.begin(), assignment_ids.end()) ||
+        if (!std::is_sorted(assignment_ids.begin(), assignment_ids.end()) ||
             std::adjacent_find(assignment_ids.begin(), assignment_ids.end()) != assignment_ids.end()) {
-            set_error(error, "provenance lacks exactly ordered epoch-zero assignments");
+            set_error(error, "participant assignments are not uniquely ordered");
             return false;
+        }
+        for (std::uint8_t player = 0; player < 2; ++player) {
+            auto& assignments = assignments_by_player[player];
+            std::sort(assignments.begin(), assignments.end(),
+                      [](const auto* left, const auto* right) {
+                          if (left->assignment_epoch != right->assignment_epoch) {
+                              return left->assignment_epoch < right->assignment_epoch;
+                          }
+                          return left->effective_from_decision_index <
+                                 right->effective_from_decision_index;
+                      });
+            if (assignments.empty() || assignments.front()->assignment_epoch != 0 ||
+                assignments.front()->effective_from_decision_index != 0) {
+                set_error(error, "provenance lacks an epoch-zero assignment for a player");
+                return false;
+            }
+            for (std::size_t index = 1; index < assignments.size(); ++index) {
+                const auto& previous = *assignments[index - 1];
+                const auto& current = *assignments[index];
+                if (current.assignment_epoch <= previous.assignment_epoch ||
+                    current.effective_from_decision_index <=
+                        previous.effective_from_decision_index) {
+                    set_error(error, "participant assignment epochs are not increasing");
+                    return false;
+                }
+            }
         }
         (void)spec;
         return true;

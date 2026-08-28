@@ -29,6 +29,9 @@ bool read_decks(ByteReader& reader,
     if (!reader.u32be(count)) {
         return false;
     }
+    if (count > reader.remaining() / 8) {
+        return false;
+    }
     try {
         decks.clear();
         decks.reserve(count);
