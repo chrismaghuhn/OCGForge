@@ -5,6 +5,7 @@
 #include <iostream>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "ocgapi_constants.h"
@@ -177,7 +178,8 @@ int main() {
                 semantic_key = is_continuation ? choose_continuation(request).semantic_key
                                                : choose_atomic(request).semantic_key;
             }
-            boundary = driver.apply_semantic_key(semantic_key);
+            auto apply_result = driver.apply_semantic_key(semantic_key);
+            boundary = std::move(apply_result.next);
 
             if (saw_tribute && is_continuation) {
                 const auto process_after_apply = driver.metrics().process_call_count;

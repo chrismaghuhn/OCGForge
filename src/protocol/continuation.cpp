@@ -306,6 +306,9 @@ ActionCandidate make_pick_candidate(const SelectionContinuation& continuation, c
     copy_card_fields(candidate, item);
     candidate.choice_index = item.source_index;
     candidate.continuation_id = continuation.continuation_id;
+    candidate.continuation_operation = kind == ActionKind::AssignAmount
+                                           ? ContinuationOperation::AssignAmount
+                                           : ContinuationOperation::Pick;
     candidate.submits_engine_response = false;
     return candidate;
 }
@@ -317,6 +320,7 @@ void add_finish_and_cancel(DecisionRequest& request) {
         finish.action_kind = ActionKind::Finish;
         finish.semantic_key = continuation.continuation_id + ".finish";
         finish.continuation_id = continuation.continuation_id;
+        finish.continuation_operation = ContinuationOperation::Finish;
         finish.submits_engine_response = true;
         finish.exact_response_bytes = terminal_response(continuation);
         request.candidates.push_back(std::move(finish));
@@ -326,6 +330,7 @@ void add_finish_and_cancel(DecisionRequest& request) {
         cancel.action_kind = ActionKind::Cancel;
         cancel.semantic_key = continuation.continuation_id + ".cancel";
         cancel.continuation_id = continuation.continuation_id;
+        cancel.continuation_operation = ContinuationOperation::Cancel;
         cancel.submits_engine_response = true;
         cancel.exact_response_bytes = encode_int32_response(-1);
         request.candidates.push_back(std::move(cancel));
@@ -384,6 +389,7 @@ void add_ordering_candidates(DecisionRequest& request) {
     bypass.action_kind = ActionKind::Cancel;
     bypass.semantic_key = continuation.continuation_id + ".bypass";
     bypass.continuation_id = continuation.continuation_id;
+    bypass.continuation_operation = ContinuationOperation::Bypass;
     bypass.exact_response_bytes = encode_order_bypass_response();
     request.candidates.push_back(std::move(bypass));
     continuation.can_finish = continuation.remaining_indices.empty();
@@ -519,6 +525,26 @@ std::string continuation_kind_name(ContinuationKind kind) {
         return "announce_mask";
     }
     return "unknown";
+}
+
+std::string_view continuation_operation_name(const ContinuationOperation operation) noexcept {
+    switch (operation) {
+    case ContinuationOperation::None:
+        return {};
+    case ContinuationOperation::Pick:
+        return "pick";
+    case ContinuationOperation::AssignAmount:
+        // Preserve the established public descriptor spelling while keeping
+        // the owning source metadata typed.
+        return "amount";
+    case ContinuationOperation::Finish:
+        return "finish";
+    case ContinuationOperation::Cancel:
+        return "cancel";
+    case ContinuationOperation::Bypass:
+        return "bypass";
+    }
+    return {};
 }
 
 DecisionRequest make_continuation_request(DecisionRequestKind request_kind, std::uint8_t player,

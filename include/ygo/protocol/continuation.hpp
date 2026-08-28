@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "ygo/protocol/action_candidate.hpp"
@@ -105,6 +106,7 @@ struct ContinuationTransition {
 };
 
 std::string continuation_kind_name(ContinuationKind kind);
+std::string_view continuation_operation_name(ContinuationOperation operation) noexcept;
 
 DecisionRequest begin_unordered_continuation(std::uint8_t player, std::uint8_t engine_message_type,
                                              std::string engine_message_name, std::string raw_message_hash,

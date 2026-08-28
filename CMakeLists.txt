@@ -143,6 +143,16 @@ target_compile_definitions(ygo_m0 PUBLIC
     YGO_M3_RULES_BUNDLE_ID="${M0_RULES_BUNDLE_ID}"
     YGO_M3_CORE_PATCHSET_ID="${M0_RULES_CORE_PATCHSET_ID}"
     YGO_M3_CORE_PATCHSET_SHA256="${M0_RULES_CORE_PATCHSET_SHA256}"
+    YGO_M0_CARDSCRIPTS_ROOT="${M0_CARDSCRIPTS_DIR}"
+    YGO_M0_BABELCDB_ROOT="${M0_BABELCDB_DIR}"
+    YGO_M0_CORE_API_VERSION="${M0_CORE_API_VERSION}"
+    YGO_M0_CORE_COMMIT="${M0_CORE_COMMIT}"
+    YGO_M0_CORE_RESOLVED_CHECKOUT_SHA256="${M0_CORE_RESOLVED_CHECKOUT_SHA256}"
+    YGO_M0_CARDSCRIPTS_COMMIT="${M0_CARDSCRIPTS_COMMIT}"
+    YGO_M0_CARDSCRIPTS_RESOLVED_CHECKOUT_SHA256="${M0_CARDSCRIPTS_RESOLVED_CHECKOUT_SHA256}"
+    YGO_M0_DATABASE_COMMIT="${M0_DATABASE_COMMIT}"
+    YGO_M0_DATABASE_RESOLVED_CHECKOUT_SHA256="${M0_DATABASE_RESOLVED_CHECKOUT_SHA256}"
+    YGO_M0_DATABASE_ARTIFACT_SHA256="${M0_DATABASE_ARTIFACT_SHA256}"
 )
 option(YGO_M4_DIRECT_CANONICAL_WRITER
        "Use the direct canonical serializer writer"
@@ -158,6 +168,7 @@ endif()
 
 add_library(ygo_m4 STATIC
     src/environment/episode_driver.cpp
+    src/environment/episodic_environment.cpp
     src/environment/identity_contract.cpp
     src/environment/candidate_domain_evidence.cpp
     src/environment/public_action_identity.cpp
@@ -182,6 +193,19 @@ target_compile_definitions(ygo_core_probe PRIVATE
     YGO_M3_DECK_B="${CMAKE_SOURCE_DIR}/fixtures/decks/salamangreat_ml_v1.ydk"
     YGO_M3_CARDSCRIPTS="${M0_CARDSCRIPTS_DIR}"
 )
+
+add_executable(ygo_episodic_probe tools/ygo_episodic_probe/main.cpp)
+target_link_libraries(ygo_episodic_probe PRIVATE ygo_m4)
+add_test(NAME ygo_episodic_probe_smoke
+         COMMAND ygo_episodic_probe --seed 2 --max-actions 2)
+
+add_executable(ygo_episodic_reset_probe tools/ygo_episodic_reset_probe/main.cpp)
+target_link_libraries(ygo_episodic_reset_probe PRIVATE ygo_m4)
+target_include_directories(ygo_episodic_reset_probe PRIVATE
+                           "${CMAKE_SOURCE_DIR}/src/environment")
+
+add_executable(ygo_episodic_internal_witness tools/ygo_episodic_internal_witness/main.cpp)
+target_link_libraries(ygo_episodic_internal_witness PRIVATE ygo_m4)
 
 add_executable(ygo_m4_worker
     tools/ygo_m4_worker/json_protocol.cpp
@@ -251,6 +275,72 @@ add_test(NAME episode_driver_tribute_integration_test COMMAND episode_driver_tri
 add_executable(normative_prerequisites_test tests/episodic/normative_prerequisites_test.cpp)
 target_link_libraries(normative_prerequisites_test PRIVATE ygo_m4)
 add_test(NAME normative_prerequisites_test COMMAND normative_prerequisites_test)
+
+add_executable(episodic_identity_test tests/episodic/episodic_identity_test.cpp)
+target_link_libraries(episodic_identity_test PRIVATE ygo_m4)
+add_test(NAME episodic_identity_test COMMAND episodic_identity_test)
+
+add_executable(episodic_environment_test tests/episodic/episodic_environment_test.cpp)
+target_link_libraries(episodic_environment_test PRIVATE ygo_m4)
+add_test(NAME episodic_environment_test COMMAND episodic_environment_test)
+
+add_executable(episodic_environment_privacy_fail_closed_test
+               tests/episodic/episodic_environment_privacy_fail_closed_test.cpp)
+target_link_libraries(episodic_environment_privacy_fail_closed_test PRIVATE ygo_m4)
+add_test(NAME episodic_environment_privacy_fail_closed_test
+         COMMAND episodic_environment_privacy_fail_closed_test)
+
+add_executable(episodic_environment_v2_public_projection_test
+               tests/episodic/episodic_environment_v2_public_projection_test.cpp)
+target_link_libraries(episodic_environment_v2_public_projection_test PRIVATE ygo_m4)
+add_test(NAME episodic_environment_v2_public_projection_test
+         COMMAND episodic_environment_v2_public_projection_test)
+
+add_executable(episodic_paired_world_test tests/episodic/episodic_paired_world_test.cpp)
+target_link_libraries(episodic_paired_world_test PRIVATE ygo_m4)
+target_include_directories(episodic_paired_world_test PRIVATE
+                           "${CMAKE_SOURCE_DIR}/src/environment")
+add_test(NAME episodic_paired_world_test COMMAND episodic_paired_world_test)
+
+add_executable(episodic_lifecycle_test tests/episodic/episodic_lifecycle_test.cpp)
+target_link_libraries(episodic_lifecycle_test PRIVATE ygo_m4)
+add_test(NAME episodic_lifecycle_test COMMAND episodic_lifecycle_test)
+
+add_executable(episodic_rejection_test tests/episodic/episodic_rejection_test.cpp)
+target_link_libraries(episodic_rejection_test PRIVATE ygo_m4)
+add_test(NAME episodic_rejection_test COMMAND episodic_rejection_test)
+
+add_executable(episodic_interrupt_test tests/episodic/episodic_interrupt_test.cpp)
+target_link_libraries(episodic_interrupt_test PRIVATE ygo_m4)
+add_test(NAME episodic_interrupt_test COMMAND episodic_interrupt_test)
+
+add_executable(episodic_budget_test tests/episodic/episodic_budget_test.cpp)
+target_link_libraries(episodic_budget_test PRIVATE ygo_m4)
+add_test(NAME episodic_budget_test COMMAND episodic_budget_test)
+
+add_executable(episodic_terminal_privacy_test tests/episodic/episodic_terminal_privacy_test.cpp)
+target_link_libraries(episodic_terminal_privacy_test PRIVATE ygo_m4)
+add_test(NAME episodic_terminal_privacy_test COMMAND episodic_terminal_privacy_test)
+
+add_executable(episodic_replay_test tests/episodic/episodic_replay_test.cpp)
+target_link_libraries(episodic_replay_test PRIVATE ygo_m4)
+add_test(NAME episodic_replay_test COMMAND episodic_replay_test)
+
+add_executable(episodic_fault_injection_test tests/episodic/episodic_fault_injection_test.cpp)
+target_link_libraries(episodic_fault_injection_test PRIVATE ygo_m4)
+target_compile_definitions(episodic_fault_injection_test PRIVATE
+    YGO_M3_DECK_A="${CMAKE_SOURCE_DIR}/fixtures/decks/swordsoul_tenyi_ml_v1.ydk"
+    YGO_M3_DECK_B="${CMAKE_SOURCE_DIR}/fixtures/decks/salamangreat_ml_v1.ydk"
+    YGO_M3_CARDSCRIPTS="${M0_CARDSCRIPTS_DIR}"
+)
+add_test(NAME episodic_fault_injection_test COMMAND episodic_fault_injection_test)
+
+add_executable(episodic_reset_after_failure_test
+               tests/episodic/episodic_reset_after_failure_test.cpp)
+target_link_libraries(episodic_reset_after_failure_test PRIVATE ygo_m4)
+target_include_directories(episodic_reset_after_failure_test PRIVATE
+                           "${CMAKE_SOURCE_DIR}/src/environment")
+add_test(NAME episodic_reset_after_failure_test COMMAND episodic_reset_after_failure_test)
 
 add_executable(public_action_identity_test tests/episodic/public_action_identity_test.cpp)
 target_link_libraries(public_action_identity_test PRIVATE ygo_m4)
