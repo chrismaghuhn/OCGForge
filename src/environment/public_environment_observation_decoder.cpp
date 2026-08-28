@@ -31,7 +31,7 @@ bool valid_utf8(const std::string_view value) noexcept {
         } else {
             return false;
         }
-        if (index + width > value.size()) {
+        if (width > value.size() - index) {
             return false;
         }
         for (std::size_t continuation = 1; continuation < width; ++continuation) {
@@ -169,6 +169,7 @@ public:
     }
 
     bool end() const noexcept { return position_ == bytes_.size(); }
+    std::size_t remaining() const noexcept { return bytes_.size() - position_; }
 
 private:
     const std::vector<std::uint8_t>& bytes_;
@@ -240,7 +241,7 @@ bool read_properties(Cursor& cursor, bool& present_value) noexcept {
         return false;
     }
     std::uint32_t marker_count = 0;
-    if (!cursor.u32(marker_count)) {
+    if (!cursor.u32(marker_count) || marker_count > cursor.remaining()) {
         return false;
     }
     std::uint8_t previous_marker = 0;
@@ -258,7 +259,7 @@ bool read_properties(Cursor& cursor, bool& present_value) noexcept {
         return false;
     }
     std::uint32_t counter_count = 0;
-    if (!cursor.u32(counter_count)) {
+    if (!cursor.u32(counter_count) || counter_count > cursor.remaining() / 8) {
         return false;
     }
     std::uint32_t previous_type = 0;
@@ -280,7 +281,7 @@ bool read_properties(Cursor& cursor, bool& present_value) noexcept {
 
 bool read_sorted_targets(Cursor& cursor) noexcept {
     std::uint32_t count = 0;
-    if (!cursor.u32(count)) {
+    if (!cursor.u32(count) || count > cursor.remaining() / 4) {
         return false;
     }
     std::string previous;
@@ -297,7 +298,8 @@ bool read_sorted_targets(Cursor& cursor) noexcept {
     return true;
 }
 
-bool read_safe_state(const std::vector<std::uint8_t>& bytes) noexcept {
+bool read_safe_state(const std::vector<std::uint8_t>& bytes,
+                    const std::uint8_t expected_perspective) noexcept {
     Cursor cursor(bytes);
     std::string schema;
     if (!cursor.string(schema) || schema != kPublicSafeStateSchemaId ||
@@ -307,7 +309,7 @@ bool read_safe_state(const std::vector<std::uint8_t>& bytes) noexcept {
 
     std::uint64_t ignored_u64 = 0;
     std::uint32_t count = 0;
-    if (!cursor.u64(ignored_u64) || !cursor.u32(count)) {
+    if (!cursor.u64(ignored_u64) || !cursor.u32(count) || count > cursor.remaining() / 4) {
         return false;
     }
     for (std::uint32_t index = 0; index < count; ++index) {
@@ -331,7 +333,7 @@ bool read_safe_state(const std::vector<std::uint8_t>& bytes) noexcept {
     }
 
     // Zones are canonically sorted by their complete tuple.
-    if (!cursor.u32(count)) {
+    if (!cursor.u32(count) || count > cursor.remaining() / 15) {
         return false;
     }
     std::tuple<std::uint8_t, std::uint8_t, std::uint32_t, std::uint32_t, std::uint32_t, bool>
@@ -359,7 +361,7 @@ bool read_safe_state(const std::vector<std::uint8_t>& bytes) noexcept {
     }
 
     // Entities are sorted by locator and retain all fixed-width public fields.
-    if (!cursor.u32(count)) {
+    if (!cursor.u32(count) || count > cursor.remaining() / 16) {
         return false;
     }
     std::string previous_locator;
@@ -409,7 +411,7 @@ bool read_safe_state(const std::vector<std::uint8_t>& bytes) noexcept {
     }
 
     // Relationships are sorted by kind/source/target.
-    if (!cursor.u32(count)) {
+    if (!cursor.u32(count) || count > cursor.remaining() / 9) {
         return false;
     }
     std::tuple<std::uint8_t, std::string, std::string> previous_relationship;
@@ -431,7 +433,7 @@ bool read_safe_state(const std::vector<std::uint8_t>& bytes) noexcept {
     }
 
     // Chain links retain source order; their target vectors are sorted.
-    if (!cursor.u32(ignored_u32) || !cursor.u32(count)) {
+    if (!cursor.u32(ignored_u32) || !cursor.u32(count) || count > cursor.remaining() / 12) {
         return false;
     }
     for (std::uint32_t index = 0; index < count; ++index) {
@@ -443,7 +445,7 @@ bool read_safe_state(const std::vector<std::uint8_t>& bytes) noexcept {
     }
 
     // Visible events are sorted by public event index.
-    if (!cursor.u32(count)) {
+    if (!cursor.u32(count) || count > cursor.remaining() / 25) {
         return false;
     }
     std::uint64_t previous_event_index = 0;
@@ -468,7 +470,8 @@ bool read_safe_state(const std::vector<std::uint8_t>& bytes) noexcept {
 
     // Match context and two canonical sorted static decks.
     std::uint8_t perspective = 0;
-    if (!cursor.u8(perspective) || perspective > 1 || !cursor.u64(ignored_u64)) {
+    if (!cursor.u8(perspective) || perspective > 1 || perspective != expected_perspective ||
+        !cursor.u64(ignored_u64)) {
         return false;
     }
     if (!cursor.boolean(ignored_bool) || !cursor.boolean(ignored_bool)) {
@@ -476,7 +479,7 @@ bool read_safe_state(const std::vector<std::uint8_t>& bytes) noexcept {
     }
     for (int deck = 0; deck < 2; ++deck) {
         bool known = false;
-        if (!cursor.boolean(known) || !cursor.u32(count)) {
+        if (!cursor.boolean(known) || !cursor.u32(count) || count > cursor.remaining() / 4) {
             return false;
         }
         const auto main_count = count;
@@ -490,7 +493,7 @@ bool read_safe_state(const std::vector<std::uint8_t>& bytes) noexcept {
             previous_code = code;
             have_code = true;
         }
-        if (!cursor.u32(count)) {
+        if (!cursor.u32(count) || count > cursor.remaining() / 4) {
             return false;
         }
         previous_code = 0;
@@ -527,7 +530,7 @@ bool decode_canonical_public_environment_observation(
         std::uint64_t decision_index = 0;
         std::vector<std::uint8_t> safe_state;
         if (!cursor.u8(perspective) || perspective > 1 || !cursor.u64(decision_index) ||
-            !cursor.raw(safe_state) || !read_safe_state(safe_state)) {
+            !cursor.raw(safe_state) || !read_safe_state(safe_state, perspective)) {
             return false;
         }
 
@@ -536,12 +539,12 @@ bool decode_canonical_public_environment_observation(
         if (!cursor.u8(present) || present > 1) {
             return false;
         }
-    if (present == 1) {
-        std::string kind;
-        if (!cursor.string(kind) || !lower_token(kind)) {
-            return false;
-        }
-        context.kind = std::move(kind);
+        if (present == 1) {
+            std::string kind;
+            if (!cursor.string(kind) || !lower_token(kind)) {
+                return false;
+            }
+            context.kind = std::move(kind);
         }
         if (!cursor.u8(present) || present > 1) {
             return false;
@@ -554,7 +557,7 @@ bool decode_canonical_public_environment_observation(
             context.player = player;
         }
         std::uint32_t count = 0;
-        if (!cursor.u32(count)) {
+        if (!cursor.u32(count) || count > cursor.remaining() / 4) {
             return false;
         }
         std::string previous;

@@ -329,6 +329,18 @@ void test_administrative_pending_frame_and_failure() {
                 std::get<InterruptedClosure>(sealed->closure).pending_unacted_frame.has_value(),
             "administrative interruption fabricated an action");
 
+    TrajectoryRecorder mismatched_pending(config, spec, policy_provenance);
+    require(mismatched_pending.on_reset_accepted(ResetAccepted{v2_frame(initial, 7)}),
+            "mismatched-pending reset was rejected");
+    auto changed_pending = v2_frame(initial, 7);
+    changed_pending.request.candidates.front().submits_engine_response = false;
+    std::string mismatch_error;
+    require(!mismatched_pending.on_interrupt_accepted(
+                changed_pending, InterruptAccepted{interruption}, &mismatch_error),
+            "administrative interruption accepted a semantically changed pending frame");
+    require(mismatched_pending.lifecycle() == RecorderLifecycle::Closed,
+            "mismatched pending frame did not fail closed");
+
     TrajectoryRecorder failed(config, spec, policy_provenance);
     require(failed.on_reset_accepted(ResetAccepted{v2_frame(initial, 7)}),
             "failure reset was rejected");

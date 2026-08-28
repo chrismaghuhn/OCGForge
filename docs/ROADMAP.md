@@ -232,13 +232,16 @@ Parallelism must not introduce nondeterministic authoritative ordering.
 
 ### F. Trajectory and training interfaces
 
-Phase 3A proposes a contract-only prerequisite for this work:
+Phase 3A is the accepted contract prerequisite for this work:
 `ocgforge.trusted_trajectory.v1` and
 `ocgforge.policy_provenance.v1`. It fixes logical episode, public action,
-closure, identity, privacy, and producer-attribution semantics before any
-trajectory runtime or persistence work. See ADR-0005 and
-`docs/trajectory/PHASE3A_ACCEPTANCE.md`. This proposal does not authorize
-Phase-3B shards/admission, Teacher, model, or ML implementation.
+closure, identity, privacy, and producer-attribution semantics. The single
+Phase-3B implementation PR now owns the physical shard, restricted-evidence,
+semantic-replay admission, receipt, and dataset-manifest layers above V2.
+See ADR-0005, `docs/trajectory/PHASE3A_ACCEPTANCE.md`, and the
+[Phase-3B acceptance matrix](trajectory/PHASE3B_ACCEPTANCE.md). The Phase-3B
+implementation remains subject to its exact-head gates and independent
+review; it does not begin Teacher, model, or ML work.
 
 Potential scope:
 

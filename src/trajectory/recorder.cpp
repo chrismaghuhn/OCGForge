@@ -487,7 +487,8 @@ bool TrajectoryRecorder::on_interrupt_accepted(
     std::optional<PublicFrameSnapshot> pending;
     if (!capture_frame(*pending_frame, pending, records_.size(), error) || !pending.has_value() ||
         pending->decision_index != records_.size() ||
-        pending->public_semantic_decision_id != current_frame_->public_semantic_decision_id) {
+        canonical_public_frame_snapshot_bytes(*pending) !=
+            canonical_public_frame_snapshot_bytes(*current_frame_)) {
         return fail_closed(environment::FailureCode::PublicFrameInvariant,
                            environment::FailureStage::Interruption, true, error,
                            "administrative pending frame does not match current frame");

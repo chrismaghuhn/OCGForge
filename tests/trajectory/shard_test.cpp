@@ -122,16 +122,29 @@ void test_atomic_publication() {
     require(second.has_value() && second->path == first->path,
             "identical artifact publication was not idempotent");
 
+    const auto competing_root = root / "competing";
+    std::filesystem::create_directories(competing_root);
+    const auto competing_path = competing_root /
+                                (std::string("trajectory_shard.") + digest + ".bin");
+    const std::vector<std::uint8_t> competing_bytes = {0x7f};
     {
-        std::ofstream overwrite(first->path, std::ios::binary | std::ios::trunc);
-        overwrite.put('\x7f');
+        std::ofstream competing(competing_path, std::ios::binary | std::ios::trunc);
+        competing.write(reinterpret_cast<const char*>(competing_bytes.data()),
+                        static_cast<std::streamsize>(competing_bytes.size()));
     }
     const auto conflict = storage::publish_content_addressed_artifact(
-        root, "trajectory_shard", digest, bytes, &error);
+        competing_root, "trajectory_shard", digest, bytes, &error);
     require(!conflict.has_value(), "nonidentical final artifact was overwritten");
+    std::ifstream preserved(competing_path, std::ios::binary);
+    std::vector<std::uint8_t> preserved_bytes(competing_bytes.size());
+    preserved.read(reinterpret_cast<char*>(preserved_bytes.data()),
+                   static_cast<std::streamsize>(preserved_bytes.size()));
+    require(preserved_bytes == competing_bytes,
+            "nonidentical competing artifact was modified during publication");
 
     for (const auto& item : std::filesystem::directory_iterator(root)) {
-        require(item.path() == first->path, "temporary publication artifact was left behind");
+        require(item.path() == first->path || item.path() == competing_root,
+                "temporary publication artifact was left behind");
     }
     std::filesystem::remove_all(root, ignored);
 }

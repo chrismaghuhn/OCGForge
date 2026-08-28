@@ -12,6 +12,7 @@
 #include <utility>
 #include <vector>
 
+#include "episodic_environment_test_access.hpp"
 #include "test_fixtures.hpp"
 
 namespace {
@@ -207,6 +208,41 @@ CollectedEpisode collect_real_administrative_interruption() {
     CollectedEpisode result{*sealed, {}, {}, control};
     attach_single_entry_artifacts(result);
     attach_interruption_evidence(result, accepted->interruption);
+    return result;
+}
+
+CollectedEpisode collect_real_failure() {
+    const auto config = CertifiedEnvironmentConfig::canonical();
+    const auto spec = episode_spec(44);
+    auto factory = EpisodicEnvironment::create(config);
+    require(std::holds_alternative<std::unique_ptr<EpisodicEnvironment>>(factory),
+            "real V2 failure factory rejected certified environment");
+    auto environment = std::move(std::get<std::unique_ptr<EpisodicEnvironment>>(factory));
+
+    RunControl control;
+    control.engine_process_budget = 128;
+    control.semantic_action_budget = 8;
+    control.cancellation.source = "phase3b-failure";
+    detail::EpisodicEnvironmentTestAccess::force_next_reset_failure(*environment);
+    const auto reset = environment->reset(spec, control);
+    const auto* reset_accepted = std::get_if<ResetAccepted>(&reset);
+    require(reset_accepted != nullptr && std::holds_alternative<EpisodeFailure>(reset_accepted->next),
+            "real V2 failure did not return an accepted failure boundary");
+    const auto& failure = std::get<EpisodeFailure>(reset_accepted->next);
+    require(failure.failure_code == FailureCode::UnsupportedProtocol &&
+                failure.failure_stage == FailureStage::Advance &&
+                !failure.mutation_may_have_occurred && failure.semantic_action_count == 0,
+            "real V2 failure returned unexpected closure evidence");
+
+    TrajectoryRecorder recorder(config, spec, provenance());
+    require(recorder.on_reset_accepted(*reset_accepted),
+            "recorder rejected the real V2 failure boundary");
+    const auto sealed = recorder.seal();
+    require(sealed.has_value() && sealed->records.empty() &&
+                std::holds_alternative<FailedClosure>(sealed->closure),
+            "real V2 failure was not structurally persisted as a failed closure");
+    CollectedEpisode result{*sealed, {}, {}, control};
+    attach_single_entry_artifacts(result);
     return result;
 }
 
@@ -460,9 +496,10 @@ CandidateTrajectoryShard shard_for(const std::vector<CollectedEpisode*>& episode
     return result;
 }
 
-DatasetManifest manifest_for(const std::vector<AdmissionReceipt>& receipts) {
+DatasetManifest manifest_for(const std::vector<VerifiedAdmissionReceipt>& verified_receipts) {
     DatasetManifest result;
-    for (const auto& receipt : receipts) {
+    for (const auto& verified : verified_receipts) {
+        const auto& receipt = verified.receipt();
         const auto receipt_id = admission_receipt_id(receipt);
         for (const auto& commitment : receipt.entries) {
             result.members.push_back(DatasetManifestMember{
@@ -490,6 +527,7 @@ void test_real_replay_and_admission() {
     auto engine_budget = collect_real_engine_budget_interruption();
     auto semantic_budget = collect_real_semantic_budget_interruption();
     auto administrative = collect_real_administrative_interruption();
+    auto failure = collect_real_failure();
     auto continuation = collect_real_continuation_interruption();
     auto terminal = collect_real_terminal();
 
@@ -497,6 +535,8 @@ void test_real_replay_and_admission() {
     replay_collected(semantic_budget);
     replay_collected(administrative);
     replay_collected(continuation);
+    require(!replay_episode(failure.envelope, std::nullopt, ReplayOptions{}).accepted,
+            "failed V2 envelope was accepted for semantic replay");
     require(!replay_episode(terminal.envelope, std::nullopt, ReplayOptions{}).accepted,
             "terminal replay accepted without explicit run-control input");
     replay_collected(terminal);
@@ -516,12 +556,13 @@ void test_real_replay_and_admission() {
     require(continuation_receipt.has_value(),
             "real V2 admission receipt issuance failed: " + error);
     const auto decoded_receipt = decode_admission_receipt(
-        canonical_admission_receipt_bytes(*continuation_receipt));
+        canonical_admission_receipt_bytes(continuation_receipt->receipt()));
     require(static_cast<bool>(decoded_receipt),
             "real V2 admission receipt did not strict round-trip");
-    require(admission_receipt_id(*continuation_receipt) ==
+    require(admission_receipt_id(continuation_receipt->receipt()) ==
                 "admission_receipt.v1." +
-                    trace::sha256_bytes(canonical_admission_receipt_bytes(*continuation_receipt)),
+                    trace::sha256_bytes(canonical_admission_receipt_bytes(
+                        continuation_receipt->receipt())),
             "real V2 admission receipt identity is not content-addressed");
 
     const std::vector<CollectedEpisode*> combined{&engine_budget, &administrative};
@@ -533,6 +574,26 @@ void test_real_replay_and_admission() {
             "whole-shard admission did not return both real interruption entries: " + error);
     const auto packed_receipt = issue_admission_receipt(*verification_a, &error);
     require(packed_receipt.has_value(), "packed admission receipt issuance failed: " + error);
+
+    auto quarantined = failure.envelope;
+    quarantined.manifest.collection_disposition.kind =
+        CollectionDispositionKind::QuarantinedAfterPolicyRejection;
+    quarantined.manifest.collection_disposition.policy_rejections = {
+        RejectionCode::StaleSubmissionToken};
+    const auto quarantined_entry = shard_entry(quarantined);
+    auto mixed_shard = shard_a;
+    mixed_shard.entries.push_back(quarantined_entry);
+    std::sort(mixed_shard.entries.begin(), mixed_shard.entries.end(),
+              [](const auto& left, const auto& right) {
+                  return left.episode_envelope_sha256 < right.episode_envelope_sha256;
+              });
+    auto mixed_evidence = evidence_for(mixed_shard, combined);
+    mixed_evidence.candidate_shard_artifact_sha256 =
+        candidate_shard_artifact_sha256(mixed_shard);
+    const auto mixed_admission = admit_collected(
+        mixed_shard, mixed_evidence, replay_options_for(engine_budget), &error);
+    require(!mixed_admission.has_value(),
+            "whole-shard admission partially admitted a mixed good/quarantined shard");
 
     const std::vector<CollectedEpisode*> split_left{&engine_budget};
     const std::vector<CollectedEpisode*> split_right{&administrative};
@@ -566,15 +627,30 @@ void test_real_replay_and_admission() {
                                      {*split_receipt_left, *split_receipt_right}, &error),
             "split dataset manifest validation failed: " + error);
 
-    auto quarantined = engine_budget.envelope;
-    quarantined.manifest.collection_disposition.kind =
-        CollectionDispositionKind::QuarantinedAfterPolicyRejection;
-    quarantined.manifest.collection_disposition.policy_rejections = {
-        RejectionCode::StaleSubmissionToken};
+    auto unknown_receipt = packed_manifest;
+    unknown_receipt.members.front().admission_receipt_id =
+        "admission_receipt.v1." + std::string(64, 'f');
+    require(!validate_dataset_manifest(unknown_receipt, {*packed_receipt}, &error),
+            "dataset manifest accepted an unknown verified receipt identity");
+    auto conflicting_physical_binding = packed_manifest;
+    conflicting_physical_binding.members.front().candidate_shard_artifact_sha256 =
+        std::string(64, 'f');
+    require(!validate_dataset_manifest(conflicting_physical_binding, {*packed_receipt}, &error),
+            "dataset manifest accepted conflicting physical receipt provenance");
+    require(!validate_dataset_manifest(packed_manifest,
+                                      {*packed_receipt, *packed_receipt}, &error),
+            "dataset manifest accepted duplicate verified receipt inputs");
+
     CandidateTrajectoryShard rejected_shard;
-    rejected_shard.entries.push_back(shard_entry(quarantined));
-    const auto rejected_episodes = std::vector<CollectedEpisode*>{};
-    const auto rejected_evidence = evidence_for(rejected_shard, rejected_episodes);
+    rejected_shard.entries.push_back(shard_entry(engine_budget.envelope));
+    auto rejected_evidence = evidence_for(rejected_shard, {&engine_budget});
+    auto rejected_envelope = engine_budget.envelope;
+    rejected_envelope.manifest.collection_disposition.kind =
+        CollectionDispositionKind::QuarantinedAfterPolicyRejection;
+    rejected_envelope.manifest.collection_disposition.policy_rejections = {
+        RejectionCode::StaleSubmissionToken};
+    rejected_shard.entries.front() = shard_entry(rejected_envelope);
+    rejected_evidence = evidence_for(rejected_shard, {});
     require(!admit_collected(rejected_shard, rejected_evidence,
                              replay_options_for(engine_budget), &error),
             "quarantined episode was admitted");

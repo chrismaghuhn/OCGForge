@@ -80,6 +80,7 @@ std::vector<std::uint8_t> canonical_admission_receipt_bytes(const AdmissionRecei
     writer.string(value.admission_contract_id);
     writer.string(value.candidate_shard_artifact_sha256);
     writer.string(value.restricted_evidence_artifact_sha256);
+    require_length(value.entries.size());
     writer.u32be(static_cast<std::uint32_t>(value.entries.size()));
     for (const auto& entry : value.entries) {
         writer.string(entry.trajectory_record_id);
@@ -149,7 +150,7 @@ std::string admission_receipt_id(const AdmissionReceipt& value) {
            trace::sha256_bytes(canonical_admission_receipt_bytes(value));
 }
 
-std::optional<AdmissionReceipt> issue_admission_receipt(
+std::optional<VerifiedAdmissionReceipt> issue_admission_receipt(
     const admission::AdmissionVerification& verification,
     std::string* error) {
     try {
@@ -159,7 +160,7 @@ std::optional<AdmissionReceipt> issue_admission_receipt(
             verification.restricted_evidence_artifact_sha256();
         receipt.entries = verification.entries();
         (void)canonical_admission_receipt_bytes(receipt);
-        return receipt;
+        return VerifiedAdmissionReceipt(std::move(receipt));
     } catch (const std::exception& exception) {
         set_error(error, exception.what());
         return std::nullopt;

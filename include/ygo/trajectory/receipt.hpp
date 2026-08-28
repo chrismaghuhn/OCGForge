@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "ygo/trajectory/admission.hpp"
@@ -17,7 +18,24 @@ DecodeResult<AdmissionReceipt> decode_admission_receipt(
 
 std::string admission_receipt_id(const AdmissionReceipt& value);
 
-std::optional<AdmissionReceipt> issue_admission_receipt(
+class VerifiedAdmissionReceipt final {
+public:
+    const AdmissionReceipt& receipt() const noexcept { return receipt_; }
+
+private:
+    explicit VerifiedAdmissionReceipt(AdmissionReceipt receipt)
+        : receipt_(std::move(receipt)) {}
+
+    friend std::optional<VerifiedAdmissionReceipt> issue_admission_receipt(
+        const admission::AdmissionVerification&, std::string*);
+
+    AdmissionReceipt receipt_;
+};
+
+// Decoding a canonical receipt yields a value for codec inspection. Dataset
+// membership requires this separate capability, which can only be issued from
+// a completed AdmissionVerification.
+std::optional<VerifiedAdmissionReceipt> issue_admission_receipt(
     const admission::AdmissionVerification& verification,
     std::string* error = nullptr);
 

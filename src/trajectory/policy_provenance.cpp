@@ -11,7 +11,7 @@
 namespace ygo::trajectory {
 namespace {
 
-bool exact_contract_identity(const std::string_view value) noexcept {
+bool versioned_contract_identity(const std::string_view value) noexcept {
     if (value.size() < 8 || value.substr(0, 8) != "ocgforge") {
         return false;
     }
@@ -25,10 +25,94 @@ bool exact_contract_identity(const std::string_view value) noexcept {
                        });
 }
 
+bool known_contract_identity(const std::string_view value) noexcept {
+    if (!versioned_contract_identity(value)) {
+        return false;
+    }
+    static constexpr std::array<std::string_view, 34> known = {
+        kTrustedTrajectoryContractId,
+        kPolicyProvenanceContractId,
+        kPublicGameplayIdentityDomain,
+        kTrajectoryRecordIdentityDomain,
+        kPolicyArtifactIdentityDomain,
+        kParticipantAssignmentIdentityDomain,
+        kPolicyRngInitializationIdentityDomain,
+        kPolicyRngStreamIdentityDomain,
+        kPolicyRngDecisionProvenanceDomain,
+        kNoPolicyRngContractId,
+        kRestrictedReplayEvidenceSchemaId,
+        environment::kEpisodicEnvironmentV2ContractId,
+        environment::kEnvironmentIdentityV2SchemaId,
+        environment::kEpisodeIdentitySchemaId,
+        environment::kSemanticDecisionIdentitySchemaId,
+        environment::kDecisionContractId,
+        environment::kActionIdentitySchemaId,
+        environment::kCandidateDomainSchemaId,
+        environment::kPublicCandidateDomainSchemaId,
+        environment::kPublicActionIdentitySchemaId,
+        environment::kPublicSemanticDecisionIdentitySchemaId,
+        environment::kPublicEnvironmentObservationSchemaId,
+        environment::kPublicSafeStateSchemaId,
+        environment::kSeedDerivationId,
+        environment::kScriptResolutionContractId,
+        environment::kRequiredScriptClosureSchemaId,
+        environment::kRequiredScriptClosureDomain,
+        "ocgforge.test.producer.v1",
+        "ocgforge.test.inference.v1",
+        "ocgforge.test.observation.v1",
+        "ocgforge.test.action.v1",
+        "ocgforge.test.deterministic_sampling.v1",
+        "ocgforge.test.rng.v1",
+        "ocgforge.test.v1",
+    };
+    return std::find(known.begin(), known.end(), value) != known.end();
+}
+
 void set_error(std::string* error, const std::string& message) {
     if (error != nullptr) {
         *error = message;
     }
+}
+
+bool validate_policy_kind(const PolicyArtifact& artifact, std::string* error) {
+    const auto reject = [&](const char* message) {
+        set_error(error, message);
+        return false;
+    };
+    switch (artifact.policy_kind) {
+        case PolicyKind::RandomLegal:
+            if (artifact.policy_rng_contract_identity == kNoPolicyRngContractId ||
+                artifact.model_checkpoint_identity.has_value() ||
+                artifact.search_contract_identity.has_value() ||
+                artifact.demonstration_source_identity.has_value()) {
+                return reject("RANDOM_LEGAL policy kind has incompatible provenance");
+            }
+            return true;
+        case PolicyKind::DeterministicHeuristic:
+            if (artifact.policy_rng_contract_identity != kNoPolicyRngContractId ||
+                artifact.model_checkpoint_identity.has_value() ||
+                artifact.search_contract_identity.has_value() ||
+                artifact.demonstration_source_identity.has_value()) {
+                return reject("DETERMINISTIC_HEURISTIC policy kind has incompatible provenance");
+            }
+            return true;
+        case PolicyKind::NeuralCheckpoint:
+            if (!artifact.model_checkpoint_identity.has_value()) {
+                return reject("NEURAL_CHECKPOINT policy kind lacks a checkpoint identity");
+            }
+            return true;
+        case PolicyKind::SearchAssisted:
+            if (!artifact.search_contract_identity.has_value()) {
+                return reject("SEARCH_ASSISTED policy kind lacks a search identity");
+            }
+            return true;
+        case PolicyKind::ImportedDemonstration:
+            if (!artifact.demonstration_source_identity.has_value()) {
+                return reject("IMPORTED_DEMONSTRATION policy kind lacks a source identity");
+            }
+            return true;
+    }
+    return reject("policy kind is unknown");
 }
 
 }  // namespace
@@ -42,12 +126,22 @@ ProvenanceResolver::ProvenanceResolver(std::vector<std::string> immutable_conten
     }
 }
 
-bool ProvenanceResolver::can_resolve(const std::string_view identity) const noexcept {
-    if (identity == kNoPolicyRngContractId || exact_contract_identity(identity)) {
-        return true;
+bool ProvenanceResolver::can_resolve_contract(const std::string_view identity) const noexcept {
+    return known_contract_identity(identity);
+}
+
+bool ProvenanceResolver::can_resolve_content(const std::string_view identity) const noexcept {
+    // Contract literals remain a separate identity category even if a caller
+    // accidentally includes one in the local immutable-content registry.
+    if (versioned_contract_identity(identity)) {
+        return false;
     }
     return std::binary_search(immutable_content_ids_.begin(), immutable_content_ids_.end(),
                               identity);
+}
+
+bool ProvenanceResolver::can_resolve(const std::string_view identity) const noexcept {
+    return can_resolve_contract(identity) || can_resolve_content(identity);
 }
 
 bool ProvenanceResolver::validate(const PolicyProvenanceEnvelope& value,
@@ -84,7 +178,14 @@ bool validate_policy_rng_initialization_material(
             set_error(error, "RNG initialization identity cannot be recomputed");
             return false;
         }
-        return true;
+        // Phase 3B has no registered policy-owned RNG state codec. The
+        // accepted Phase 3A contract makes the declared contract responsible
+        // for proving canonical initialization bytes and, for CURSOR, unique
+        // stream state. Treating opaque bytes as proven would accept arbitrary
+        // producer material, so non-NONE provenance is not admission-eligible
+        // until such a codec is explicitly registered.
+        set_error(error, "non-NONE RNG initialization lacks a registered canonical state codec");
+        return false;
     } catch (const std::exception& exception) {
         set_error(error, exception.what());
         return false;
@@ -108,25 +209,42 @@ bool validate_policy_provenance(const PolicyProvenanceEnvelope& value,
                 set_error(error, "policy artifact does not pass strict codec validation");
                 return false;
             }
+            if (!validate_policy_kind(artifact, error)) {
+                return false;
+            }
             for (const auto* identity : {&artifact.producer_implementation_identity,
                                          &artifact.inference_adapter_identity,
                                          &artifact.observation_adapter_identity,
-                                         &artifact.action_adapter_identity,
-                                         &artifact.sampling_contract_identity,
-                                         &artifact.policy_rng_contract_identity}) {
+                                         &artifact.action_adapter_identity}) {
                 if (!resolver.can_resolve(*identity)) {
-                    set_error(error, "policy artifact identity cannot be resolved");
+                    set_error(error, "policy artifact implementation identity cannot be resolved");
                     return false;
                 }
             }
-            for (const auto* optional_identity : {&artifact.model_checkpoint_identity,
-                                                  &artifact.search_contract_identity,
-                                                  &artifact.demonstration_source_identity,
-                                                  &artifact.artifact_metadata_identity}) {
-                if (optional_identity->has_value() && !resolver.can_resolve(**optional_identity)) {
-                    set_error(error, "optional policy artifact identity cannot be resolved");
-                    return false;
-                }
+            if (!resolver.can_resolve_contract(artifact.sampling_contract_identity) ||
+                !resolver.can_resolve_contract(artifact.policy_rng_contract_identity)) {
+                set_error(error, "policy sampling or RNG identity is not an exact known contract");
+                return false;
+            }
+            if (artifact.model_checkpoint_identity.has_value() &&
+                !resolver.can_resolve_content(*artifact.model_checkpoint_identity)) {
+                set_error(error, "model checkpoint identity is not immutable content");
+                return false;
+            }
+            if (artifact.search_contract_identity.has_value() &&
+                !resolver.can_resolve(*artifact.search_contract_identity)) {
+                set_error(error, "search identity cannot be resolved as contract or content");
+                return false;
+            }
+            if (artifact.demonstration_source_identity.has_value() &&
+                !resolver.can_resolve_content(*artifact.demonstration_source_identity)) {
+                set_error(error, "demonstration source identity is not immutable content");
+                return false;
+            }
+            if (artifact.artifact_metadata_identity.has_value() &&
+                !resolver.can_resolve_content(*artifact.artifact_metadata_identity)) {
+                set_error(error, "artifact metadata identity is not immutable content");
+                return false;
             }
             artifact_ids.push_back(artifact.policy_artifact_id);
         }

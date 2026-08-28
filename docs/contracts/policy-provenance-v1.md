@@ -3,7 +3,7 @@
 ## Status and purpose
 
 **Contract ID:** `ocgforge.policy_provenance.v1`
-**Status:** Proposed Phase-3A contract.
+**Status:** Accepted Phase-3A contract.
 **Owning layer:** future `ygo::trajectory` collection provenance.
 
 This contract records exact producer attribution for accepted public actions:

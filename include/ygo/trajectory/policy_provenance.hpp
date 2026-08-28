@@ -21,6 +21,14 @@ public:
     ProvenanceResolver() = default;
     explicit ProvenanceResolver(std::vector<std::string> immutable_content_ids);
 
+    // Contract identities are exact, locally recognized versioned contract
+    // literals. They are not content-addressed files.
+    bool can_resolve_contract(std::string_view identity) const noexcept;
+    // Content identities are resolved only from the explicit immutable
+    // registry supplied to this resolver, and an exact contract literal is
+    // never accepted as content. No mutable alias or online lookup is
+    // permitted.
+    bool can_resolve_content(std::string_view identity) const noexcept;
     bool can_resolve(std::string_view identity) const noexcept;
     bool validate(const PolicyProvenanceEnvelope& value,
                   const environment::CertifiedEnvironmentConfig& config,

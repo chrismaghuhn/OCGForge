@@ -93,11 +93,12 @@ void set_error(std::string* error, std::string message) {
     }
 }
 
-const AdmissionReceipt* find_receipt(const std::vector<AdmissionReceipt>& receipts,
-                                      const std::string_view receipt_id) {
-    for (const auto& receipt : receipts) {
-        if (admission_receipt_id(receipt) == receipt_id) {
-            return &receipt;
+const AdmissionReceipt* find_receipt(
+    const std::vector<VerifiedAdmissionReceipt>& receipts,
+    const std::string_view receipt_id) {
+    for (const auto& verified : receipts) {
+        if (admission_receipt_id(verified.receipt()) == receipt_id) {
+            return &verified.receipt();
         }
     }
     return nullptr;
@@ -206,15 +207,15 @@ DecodeResult<DatasetManifest> decode_dataset_manifest(
 }
 
 bool validate_dataset_manifest(const DatasetManifest& value,
-                               const std::vector<AdmissionReceipt>& verified_receipts,
+                               const std::vector<VerifiedAdmissionReceipt>& verified_receipts,
                                std::string* error) {
     try {
         validate_manifest(value);
         std::vector<std::string> verified_receipt_ids;
         verified_receipt_ids.reserve(verified_receipts.size());
-        for (const auto& receipt : verified_receipts) {
-            (void)canonical_admission_receipt_bytes(receipt);
-            verified_receipt_ids.push_back(admission_receipt_id(receipt));
+        for (const auto& verified : verified_receipts) {
+            (void)canonical_admission_receipt_bytes(verified.receipt());
+            verified_receipt_ids.push_back(admission_receipt_id(verified.receipt()));
         }
         std::sort(verified_receipt_ids.begin(), verified_receipt_ids.end());
         if (std::adjacent_find(verified_receipt_ids.begin(), verified_receipt_ids.end()) !=

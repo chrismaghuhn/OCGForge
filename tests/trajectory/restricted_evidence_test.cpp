@@ -138,9 +138,11 @@ void test_rng_material_binding() {
         RngInitializationEvidenceEntry{initialization.policy_rng_initialization_identity,
                                        initialization.initialization_material});
     std::string error;
-    require(validate_restricted_collection_evidence_bundle(
+    require(!validate_restricted_collection_evidence_bundle(
                 bundle, shard, bundle.candidate_shard_artifact_sha256, &error),
-            "valid RNG initialization evidence was rejected: " + error);
+            "unregistered RNG state codec was accepted as trusted evidence");
+    require(error.find("registered canonical state codec") != std::string::npos,
+            "unregistered RNG state rejection was not explicit");
     auto wrong_material = bundle;
     wrong_material.rng_initializations.front().initialization_material = {9, 9};
     require(!validate_restricted_collection_evidence_bundle(

@@ -179,11 +179,11 @@ semantic ID.
 ### Atomic publication
 
 The storage helper writes a temporary sibling, flushes and closes it,
-rereads exact bytes, verifies the expected digest, and atomically renames it
-to the content-addressed final name. An existing final file is idempotent
-only when its bytes are identical; a mismatch fails. Temporary names and
-paths never enter canonical bytes. A partial temporary file is never treated
-as published.
+rereads exact bytes, verifies the expected digest, and atomically creates the
+content-addressed final directory entry without replacement. An existing
+final file is idempotent only when its bytes are identical; a mismatch or
+symbolic-link target fails. Temporary names and paths never enter canonical
+bytes. A partial temporary file is never treated as published.
 
 ## 6. Provenance and RNG validation
 
@@ -195,11 +195,14 @@ Contract identities are validated as exact versioned contracts and are not
 pretended to be mutable URLs or downloadable artifacts.
 
 For every referenced non-`NONE` RNG initialization, the restricted raw
-material recomputes the declared initialization identity. `CURSOR` is
-accepted only when its declared contract and initialization identity prove a
-unique stream state; otherwise the producer must use `STATE`. `NONE` uses the
-accepted no-RNG contract and exact IDs. RNG raw material remains restricted
-evidence and is excluded from gameplay and record identities.
+material must recompute the declared initialization identity and pass a
+registered contract-specific state codec. `CURSOR` is accepted only when its
+declared contract and initialization identity prove a unique stream state;
+otherwise the producer must use `STATE`. This Phase-3B V1 implementation has
+no registered policy-owned state codec, so non-`NONE` initialization and
+decision provenance fail closed during admission. `NONE` uses the accepted
+no-RNG contract and exact IDs. RNG raw material remains restricted evidence
+and is excluded from gameplay and record identities.
 
 ## 7. Replay and whole-shard admission
 
@@ -215,8 +218,15 @@ decision index, final engine step, and both perspective-safe terminal views.
 Zero-decision terminals are valid. Interrupted closure requires the exact
 restricted evidence companion. Budget interruptions replay with the exact
 recorded run-control values; administrative cancellation replays to the exact
-pending frame and then calls the public V2 interrupt boundary. Failed
-episodes remain structurally persistable but cannot be admitted.
+pending frame and then calls the public V2 interrupt boundary. The accepted
+Phase-3A terminal identity does not persist run-control values, so terminal
+replay requires an explicit caller-supplied valid `ReplayOptions::terminal_run_control`.
+This is verifier input, not a canonical default or migration; a terminal
+envelope is rejected when that input is absent or invalid. Interrupted replay
+requires an explicit caller-supplied cancellation source in addition to its
+restricted evidence, because the source is likewise not a persisted public
+identity field. Failed episodes remain structurally persistable but cannot be
+admitted.
 
 Admission is whole-shard atomic: every entry must independently pass schema,
 canonicality, identities, complete ordered domain, privacy, provenance, RNG,
@@ -287,4 +297,3 @@ regressions, existing M4 isolation/integrity tests, independent-process byte
 comparisons, corruption/truncation rejection, and re-sharding invariance.
 Hosted CI status remains distinct from local status and is reported only for
 the exact final head.
-

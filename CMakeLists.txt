@@ -221,6 +221,8 @@ target_link_libraries(trajectory_restricted_evidence_test PRIVATE ygo_trajectory
 add_test(NAME trajectory_restricted_evidence_test COMMAND trajectory_restricted_evidence_test)
 
 add_executable(trajectory_replay_admission_test tests/trajectory/replay_admission_test.cpp)
+target_include_directories(trajectory_replay_admission_test PRIVATE
+                           "${CMAKE_SOURCE_DIR}/src/environment")
 target_link_libraries(trajectory_replay_admission_test PRIVATE ygo_trajectory)
 add_test(NAME trajectory_replay_admission_test COMMAND trajectory_replay_admission_test)
 
@@ -231,6 +233,20 @@ add_test(NAME trajectory_receipt_test COMMAND trajectory_receipt_test)
 add_executable(trajectory_dataset_manifest_test tests/trajectory/dataset_manifest_test.cpp)
 target_link_libraries(trajectory_dataset_manifest_test PRIVATE ygo_trajectory)
 add_test(NAME trajectory_dataset_manifest_test COMMAND trajectory_dataset_manifest_test)
+
+add_executable(trajectory_artifact_determinism_test
+               tests/trajectory/artifact_determinism_test.cpp)
+target_include_directories(trajectory_artifact_determinism_test PRIVATE
+                           "${CMAKE_SOURCE_DIR}/tests/trajectory")
+target_link_libraries(trajectory_artifact_determinism_test PRIVATE ygo_trajectory)
+add_test(NAME trajectory_artifact_determinism_test COMMAND trajectory_artifact_determinism_test)
+
+add_executable(trajectory_privacy_test tests/trajectory/privacy_test.cpp)
+target_include_directories(trajectory_privacy_test PRIVATE
+                           "${CMAKE_SOURCE_DIR}/tests/trajectory"
+                           "${CMAKE_SOURCE_DIR}/src/environment")
+target_link_libraries(trajectory_privacy_test PRIVATE ygo_trajectory)
+add_test(NAME trajectory_privacy_test COMMAND trajectory_privacy_test)
 
 add_executable(ygo_core_probe tools/ygo_core_probe/main.cpp)
 target_link_libraries(ygo_core_probe PRIVATE ygo_m4)

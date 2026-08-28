@@ -66,6 +66,25 @@ bool read_exact_file(const std::filesystem::path& path,
     return true;
 }
 
+bool existing_final_is_safe_regular_file(const std::filesystem::path& path,
+                                         std::string* error) {
+    std::error_code status_error;
+    const auto status = std::filesystem::symlink_status(path, status_error);
+    if (status_error) {
+        set_error(error, "cannot inspect published artifact type: " + status_error.message());
+        return false;
+    }
+    if (std::filesystem::is_symlink(status)) {
+        set_error(error, "published artifact path is a symbolic link");
+        return false;
+    }
+    if (!std::filesystem::is_regular_file(status)) {
+        set_error(error, "published artifact path is not a regular file");
+        return false;
+    }
+    return true;
+}
+
 bool remove_temporary_directory(const std::filesystem::path& path) noexcept {
     std::error_code ignored;
     std::filesystem::remove_all(path, ignored);
@@ -113,6 +132,9 @@ std::optional<PublishedArtifact> publish_content_addressed_artifact(
                                  std::string(expected_artifact_sha256) + ".bin";
     const auto final_path = directory / filename;
     if (std::filesystem::exists(final_path, filesystem_error) && !filesystem_error) {
+        if (!existing_final_is_safe_regular_file(final_path, error)) {
+            return std::nullopt;
+        }
         std::vector<std::uint8_t> existing;
         if (!read_exact_file(final_path, existing, error)) {
             return std::nullopt;
@@ -179,22 +201,40 @@ std::optional<PublishedArtifact> publish_content_addressed_artifact(
             break;
         }
 
+        // A rename after an existence check is racy on platforms where rename
+        // replaces an existing destination. Create a hard-link directory entry
+        // instead: link creation is atomic and never replaces the final name.
+        // The temporary file was already flushed, closed, reread, and hashed;
+        // removing its private directory after the link leaves the published
+        // final entry immutable.
         filesystem_error.clear();
-        std::filesystem::rename(temporary_file, final_path, filesystem_error);
-        if (filesystem_error) {
-            if (std::filesystem::exists(final_path, filesystem_error) && !filesystem_error) {
-                std::vector<std::uint8_t> existing;
-                if (read_exact_file(final_path, existing, error) && existing == bytes) {
-                    success = true;
-                    break;
-                }
-                set_error(error, "content-addressed artifact publication conflicts with existing bytes");
-                break;
-            }
-            set_error(error, "atomic artifact publication failed: " + filesystem_error.message());
+        std::filesystem::create_hard_link(temporary_file, final_path, filesystem_error);
+        if (!filesystem_error) {
+            success = true;
             break;
         }
-        success = true;
+
+        std::error_code final_probe_error;
+        const bool final_exists = std::filesystem::exists(final_path, final_probe_error);
+        if (final_probe_error) {
+            set_error(error, "cannot inspect competing final artifact: " +
+                                final_probe_error.message());
+            break;
+        }
+        if (final_exists) {
+            if (!existing_final_is_safe_regular_file(final_path, error)) {
+                break;
+            }
+            std::vector<std::uint8_t> existing;
+            if (read_exact_file(final_path, existing, error) && existing == bytes) {
+                success = true;
+                break;
+            }
+            set_error(error, "content-addressed artifact publication conflicts with existing bytes");
+            break;
+        }
+        set_error(error, "atomic artifact publication failed: " + filesystem_error.message());
+        break;
     } while (false);
 
     remove_temporary_directory(temporary_directory);

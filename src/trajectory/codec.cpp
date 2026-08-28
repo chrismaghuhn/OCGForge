@@ -100,6 +100,34 @@ bool valid_policy_role(const std::uint8_t value) noexcept { return value <= 4; }
 bool valid_seat_role(const std::uint8_t value) noexcept { return value <= 1; }
 bool valid_deck_role(const std::uint8_t value) noexcept { return value <= 1; }
 bool valid_rng_mode(const std::uint8_t value) noexcept { return value <= 2; }
+bool valid_environment_decision_kind(const std::uint8_t value) noexcept {
+    return value <= static_cast<std::uint8_t>(environment::EnvironmentDecisionKind::Unsupported);
+}
+bool valid_environment_action_kind(const std::uint8_t value) noexcept {
+    return value <= static_cast<std::uint8_t>(environment::EnvironmentActionKind::Unsupported);
+}
+bool valid_public_choice_kind(const std::uint8_t value) noexcept {
+    return value >= static_cast<std::uint8_t>(environment::PublicChoiceKind::YesNo) &&
+           value <= static_cast<std::uint8_t>(environment::PublicChoiceKind::AnnouncementNumber);
+}
+bool valid_public_card_reference_kind(const std::uint8_t value) noexcept { return value <= 1; }
+bool valid_collection_disposition_kind(const std::uint8_t value) noexcept { return value <= 1; }
+bool valid_rejection_code(const std::uint8_t value) noexcept {
+    return value <= static_cast<std::uint8_t>(environment::RejectionCode::UnsupportedInterruptionReason);
+}
+bool valid_transition_class(const std::uint8_t value) noexcept { return value <= 2; }
+bool valid_next_frame_target_kind(const std::uint8_t value) noexcept { return value <= 1; }
+bool valid_successor_kind(const std::uint8_t value) noexcept { return value <= 3; }
+bool valid_failure_code(const std::uint8_t value) noexcept {
+    return value <= static_cast<std::uint8_t>(environment::FailureCode::ResourceIdentityMismatch);
+}
+bool valid_failure_stage(const std::uint8_t value) noexcept {
+    return value <= static_cast<std::uint8_t>(environment::FailureStage::Teardown);
+}
+bool valid_interruption_reason(const std::uint8_t value) noexcept {
+    return value <= static_cast<std::uint8_t>(environment::InterruptionReason::AdministrativeCancel);
+}
+bool valid_closure_kind(const std::uint8_t value) noexcept { return value <= 2; }
 
 void validate_policy_artifact(const PolicyArtifact& value) {
     if (!valid_policy_kind(enum_value(value.policy_kind))) {
@@ -135,6 +163,14 @@ void validate_policy_artifact(const PolicyArtifact& value) {
         if (optional_identity->has_value()) {
             require_nonempty(**optional_identity, "optional provenance identity");
         }
+    }
+    if ((value.policy_kind == PolicyKind::NeuralCheckpoint &&
+         !value.model_checkpoint_identity.has_value()) ||
+        (value.policy_kind == PolicyKind::SearchAssisted &&
+         !value.search_contract_identity.has_value()) ||
+        (value.policy_kind == PolicyKind::ImportedDemonstration &&
+         !value.demonstration_source_identity.has_value())) {
+        throw std::invalid_argument("policy kind lacks its mandatory provenance identity");
     }
     const auto expected = policy_artifact_id_for(value);
     require_identity(value.policy_artifact_id, "policy_artifact.v1.", "policy artifact");
@@ -241,7 +277,8 @@ void validate_rng_decision(const PolicyRngDecisionProvenance& value) {
 }
 
 void validate_public_candidate(const environment::EnvironmentActionCandidate& value) {
-    if (value.action_kind == environment::EnvironmentActionKind::Unsupported ||
+    if (!valid_environment_action_kind(static_cast<std::uint8_t>(value.action_kind)) ||
+        value.action_kind == environment::EnvironmentActionKind::Unsupported ||
         value.public_action_key.empty()) {
         throw std::invalid_argument("trajectory candidate is unsupported or empty");
     }
@@ -277,7 +314,9 @@ void validate_continuation(const environment::EnvironmentContinuationView& value
 }
 
 void validate_request(const environment::EnvironmentDecisionRequest& value) {
-    if (value.player > 1 || value.kind == environment::EnvironmentDecisionKind::Unsupported ||
+    if (value.player > 1 ||
+        !valid_environment_decision_kind(static_cast<std::uint8_t>(value.kind)) ||
+        value.kind == environment::EnvironmentDecisionKind::Unsupported ||
         value.candidates.empty()) {
         throw std::invalid_argument("trajectory request is invalid or incomplete");
     }
@@ -302,6 +341,7 @@ void validate_public_frame(const PublicFrameSnapshot& value) {
     require_contract(value.v2_contract_id, environment::kEpisodicEnvironmentV2ContractId,
                      "V2 contract");
     require_digest(value.episode_semantic_id, "episode");
+    validate_request(value.request);
     if (value.acting_player > 1 || value.request.player != value.acting_player ||
         value.public_observation.perspective_player != value.acting_player ||
         value.public_observation.decision_index != value.decision_index) {
@@ -342,12 +382,14 @@ void validate_public_frame(const PublicFrameSnapshot& value) {
 }
 
 void validate_successor(const Successor& value) {
+    if (!valid_successor_kind(static_cast<std::uint8_t>(value.kind))) {
+        throw std::invalid_argument("successor kind is unknown");
+    }
     if (value.kind == SuccessorKind::NextFrame) {
         if (!value.next_frame.has_value()) {
             throw std::invalid_argument("next-frame successor has no target");
         }
-        if (static_cast<std::uint8_t>(value.next_frame->kind) >
-            static_cast<std::uint8_t>(NextFrameTargetKind::InterruptionPendingUnactedFrame)) {
+        if (!valid_next_frame_target_kind(static_cast<std::uint8_t>(value.next_frame->kind))) {
             throw std::invalid_argument("next-frame target kind is unknown");
         }
         require_digest(value.next_frame->next_public_semantic_decision_id, "successor decision");
@@ -524,7 +566,7 @@ bool is_valid_utf8(const std::string_view value) noexcept {
         } else {
             return false;
         }
-        if (index + width > value.size()) {
+        if (width > value.size() - index) {
             return false;
         }
         for (std::size_t continuation = 1; continuation < width; ++continuation) {
@@ -689,8 +731,7 @@ bool read_optional_public_choice(ByteReader& reader,
     if (!read_optional_u32(reader, response_index)) {
         return false;
     }
-    if (kind < static_cast<std::uint8_t>(environment::PublicChoiceKind::YesNo) || kind >
-        static_cast<std::uint8_t>(environment::PublicChoiceKind::AnnouncementNumber)) {
+    if (!valid_public_choice_kind(kind)) {
         return false;
     }
     const auto choice_kind = static_cast<environment::PublicChoiceKind>(kind);
@@ -734,7 +775,8 @@ bool read_optional_reference(ByteReader& reader,
     }
     std::uint8_t kind = 0;
     std::string locator;
-    if (!reader.u8(kind) || kind > 1 || !reader.string(locator) || locator.empty()) {
+    if (!reader.u8(kind) || !valid_public_card_reference_kind(kind) ||
+        !reader.string(locator) || locator.empty()) {
         return false;
     }
     value = environment::PublicCardReference{
@@ -1172,8 +1214,7 @@ std::vector<std::uint8_t> canonical_collection_disposition_bytes(
             throw std::invalid_argument("quarantine disposition has no rejection");
         }
         for (const auto rejection : value.policy_rejections) {
-            if (static_cast<std::uint8_t>(rejection) >
-                static_cast<std::uint8_t>(environment::RejectionCode::UnsupportedInterruptionReason)) {
+            if (!valid_rejection_code(static_cast<std::uint8_t>(rejection))) {
                 throw std::invalid_argument("quarantine has unknown rejection code");
             }
         }
@@ -1183,6 +1224,7 @@ std::vector<std::uint8_t> canonical_collection_disposition_bytes(
     ByteWriter writer;
     writer.u8(static_cast<std::uint8_t>(value.kind));
     if (value.kind == CollectionDispositionKind::QuarantinedAfterPolicyRejection) {
+        require_length(value.policy_rejections.size());
         writer.u32be(static_cast<std::uint32_t>(value.policy_rejections.size()));
         for (const auto rejection : value.policy_rejections) {
             writer.string(environment::rejection_code_name(rejection));
@@ -1197,7 +1239,7 @@ DecodeResult<CollectionDisposition> decode_collection_disposition(
         ByteReader reader(bytes);
         CollectionDisposition value;
         std::uint8_t kind = 0;
-        if (!reader.u8(kind) || kind > 1) {
+        if (!reader.u8(kind) || !valid_collection_disposition_kind(kind)) {
             return failure<CollectionDisposition>("unknown collection disposition");
         }
         value.kind = static_cast<CollectionDispositionKind>(kind);
@@ -1217,7 +1259,7 @@ DecodeResult<CollectionDisposition> decode_collection_disposition(
                     return failure<CollectionDisposition>("malformed quarantine token");
                 }
                 bool found = false;
-                for (std::uint8_t code = 0; code <= 7; ++code) {
+                for (std::uint8_t code = 0; valid_rejection_code(code); ++code) {
                     const auto rejection = static_cast<environment::RejectionCode>(code);
                     if (token == environment::rejection_code_name(rejection)) {
                         value.policy_rejections.push_back(rejection);
@@ -1377,7 +1419,7 @@ bool read_policy_provenance_direct(ByteReader& reader,
 
 bool read_disposition_direct(ByteReader& reader, CollectionDisposition& value) noexcept {
     std::uint8_t kind = 0;
-    if (!reader.u8(kind) || kind > 1) {
+    if (!reader.u8(kind) || !valid_collection_disposition_kind(kind)) {
         return false;
     }
     value.kind = static_cast<CollectionDispositionKind>(kind);
@@ -1403,7 +1445,7 @@ bool read_disposition_direct(ByteReader& reader, CollectionDisposition& value) n
             return false;
         }
         bool found = false;
-        for (std::uint8_t code = 0; code <= 7; ++code) {
+        for (std::uint8_t code = 0; valid_rejection_code(code); ++code) {
             const auto rejection = static_cast<environment::RejectionCode>(code);
             if (token == environment::rejection_code_name(rejection)) {
                 value.policy_rejections.push_back(rejection);
@@ -1443,10 +1485,12 @@ std::vector<std::uint8_t> canonical_policy_provenance_envelope_bytes(
     ByteWriter writer;
     writer.string(kPolicyProvenanceContractId);
     writer.string(kPolicyProvenanceContractId);
+    require_length(value.policy_artifacts.size());
     writer.u32be(static_cast<std::uint32_t>(value.policy_artifacts.size()));
     for (const auto& artifact : value.policy_artifacts) {
         writer.raw(canonical_policy_artifact_bytes(artifact));
     }
+    require_length(value.participant_assignments.size());
     writer.u32be(static_cast<std::uint32_t>(value.participant_assignments.size()));
     for (const auto& assignment : value.participant_assignments) {
         writer.raw(canonical_participant_policy_assignment_bytes(assignment));
@@ -1544,6 +1588,9 @@ bool read_u32_vector(ByteReader& reader, std::vector<std::uint32_t>& values) noe
     if (!reader.u32be(count)) {
         return false;
     }
+    if (count > reader.remaining() / 4) {
+        return false;
+    }
     values.clear();
     try {
         values.reserve(count);
@@ -1571,6 +1618,9 @@ void write_u16_vector(ByteWriter& writer, const std::vector<std::uint16_t>& valu
 bool read_u16_vector(ByteReader& reader, std::vector<std::uint16_t>& values) noexcept {
     std::uint32_t count = 0;
     if (!reader.u32be(count)) {
+        return false;
+    }
+    if (count > reader.remaining() / 2) {
         return false;
     }
     values.clear();
@@ -1966,7 +2016,7 @@ DecodeResult<PublicFrameSnapshot> decode_public_frame_snapshot(
 
 bool read_successor(ByteReader& reader, Successor& value) noexcept {
     std::uint8_t kind = 0;
-    if (!reader.u8(kind) || kind > static_cast<std::uint8_t>(SuccessorKind::Failed)) {
+    if (!reader.u8(kind) || !valid_successor_kind(kind)) {
         return false;
     }
     value.kind = static_cast<SuccessorKind>(kind);
@@ -1976,8 +2026,7 @@ bool read_successor(ByteReader& reader, Successor& value) noexcept {
     }
     NextFrameTarget target;
     std::uint8_t target_kind = 0;
-    if (!reader.u8(target_kind) || target_kind >
-                                     static_cast<std::uint8_t>(NextFrameTargetKind::InterruptionPendingUnactedFrame) ||
+    if (!reader.u8(target_kind) || !valid_next_frame_target_kind(target_kind) ||
         !reader.u64be(target.next_decision_index) ||
         !reader.string(target.next_public_semantic_decision_id)) {
         return false;
@@ -2079,7 +2128,7 @@ bool read_decision_record(ByteReader& reader, DecisionRecord& value) noexcept {
     std::uint8_t transition = 0;
     if (!reader.string(schema) || schema != kTrustedTrajectoryContractId ||
         !read_public_frame(reader, value.frame) || !reader.string(value.selected_public_action_key) ||
-        !reader.u8(transition) || transition > static_cast<std::uint8_t>(TransitionClass::FinalContinuationResponse) ||
+        !reader.u8(transition) || !valid_transition_class(transition) ||
         !read_successor(reader, value.successor)) {
         return false;
     }
@@ -2144,8 +2193,8 @@ void validate_interrupted_closure(const InterruptedClosure& value) {
 }
 
 void validate_failed_closure(const FailedClosure& value) {
-    if (static_cast<std::uint8_t>(value.failure_code) > 15 ||
-        static_cast<std::uint8_t>(value.failure_stage) > 6) {
+    if (!valid_failure_code(static_cast<std::uint8_t>(value.failure_code)) ||
+        !valid_failure_stage(static_cast<std::uint8_t>(value.failure_stage))) {
         throw std::invalid_argument("failed closure has an unknown failure code");
     }
 }
@@ -2212,7 +2261,8 @@ DecodeResult<EpisodeClosure> decode_episode_closure(
         ByteReader reader(bytes);
         std::string schema;
         std::uint8_t kind = 0;
-        if (!reader.string(schema) || schema != kClosureSchema || !reader.u8(kind) || kind > 2) {
+        if (!reader.string(schema) || schema != kClosureSchema || !reader.u8(kind) ||
+            !valid_closure_kind(kind)) {
             return failure<EpisodeClosure>("malformed closure header");
         }
         EpisodeClosure value;
@@ -2246,8 +2296,9 @@ DecodeResult<EpisodeClosure> decode_episode_closure(
             FailedClosure failed;
             std::uint8_t failure_code = 0;
             std::uint8_t failure_stage = 0;
-            if (!reader.u8(failure_code) || failure_code > 15 || !reader.u8(failure_stage) ||
-                failure_stage > 6 || !reader.boolean(failed.mutation_may_have_occurred) ||
+            if (!reader.u8(failure_code) || !valid_failure_code(failure_code) ||
+                !reader.u8(failure_stage) || !valid_failure_stage(failure_stage) ||
+                !reader.boolean(failed.mutation_may_have_occurred) ||
                 !reader.u64be(failed.record_count)) {
                 return failure<EpisodeClosure>("malformed failed closure");
             }
@@ -2442,7 +2493,8 @@ bool read_collection_record(ByteReader& reader, DecisionRecord& value) noexcept 
 bool read_closure_from_reader(ByteReader& reader, EpisodeClosure& value) noexcept {
     std::string schema;
     std::uint8_t kind = 0;
-    if (!reader.string(schema) || schema != kClosureSchema || !reader.u8(kind) || kind > 2) {
+    if (!reader.string(schema) || schema != kClosureSchema || !reader.u8(kind) ||
+        !valid_closure_kind(kind)) {
         return false;
     }
     if (kind == 0) {
@@ -2475,8 +2527,9 @@ bool read_closure_from_reader(ByteReader& reader, EpisodeClosure& value) noexcep
         FailedClosure failed;
         std::uint8_t failure_code = 0;
         std::uint8_t failure_stage = 0;
-        if (!reader.u8(failure_code) || failure_code > 15 || !reader.u8(failure_stage) ||
-            failure_stage > 6 || !reader.boolean(failed.mutation_may_have_occurred) ||
+        if (!reader.u8(failure_code) || !valid_failure_code(failure_code) ||
+            !reader.u8(failure_stage) || !valid_failure_stage(failure_stage) ||
+            !reader.boolean(failed.mutation_may_have_occurred) ||
             !reader.u64be(failed.record_count)) {
             return false;
         }
@@ -2524,6 +2577,8 @@ void validate_envelope_sequence(const EpisodeEnvelope& value) {
         if (terminal->semantic_action_count != count ||
             (count == 0 ? terminal->last_decision_index.has_value()
                         : !terminal->last_decision_index.has_value() ||
+                              *terminal->last_decision_index ==
+                                  std::numeric_limits<std::uint64_t>::max() ||
                               *terminal->last_decision_index + 1 != count)) {
             throw std::invalid_argument("terminal closure count is inconsistent");
         }
@@ -2619,8 +2674,7 @@ void validate_restricted_evidence(const RestrictedReplayEvidence& value) {
     require_contract(value.v2_contract_id, environment::kEpisodicEnvironmentV2ContractId,
                      "restricted evidence V2 contract");
     require_digest(value.episode_semantic_id, "restricted evidence episode");
-    if (static_cast<std::uint8_t>(value.interruption_reason) >
-        static_cast<std::uint8_t>(environment::InterruptionReason::AdministrativeCancel) ||
+    if (!valid_interruption_reason(static_cast<std::uint8_t>(value.interruption_reason)) ||
         value.engine_process_budget == 0 || value.semantic_action_budget == 0 ||
         value.observed_engine_process_count > value.engine_process_budget ||
         value.observed_semantic_action_count > value.semantic_action_budget) {
@@ -2657,7 +2711,7 @@ DecodeResult<RestrictedReplayEvidence> decode_restricted_replay_evidence(
             !reader.string(value.v2_contract_id) ||
             value.v2_contract_id != environment::kEpisodicEnvironmentV2ContractId ||
             !reader.string(value.episode_semantic_id) || !reader.u8(closure_kind) ||
-            closure_kind != 1 || !reader.u8(reason) || reason > 2 ||
+            closure_kind != 1 || !reader.u8(reason) || !valid_interruption_reason(reason) ||
             !reader.u64be(value.engine_process_budget) ||
             !reader.u64be(value.semantic_action_budget) ||
             !reader.u64be(value.observed_engine_process_count) ||

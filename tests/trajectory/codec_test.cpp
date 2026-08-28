@@ -229,8 +229,10 @@ void test_policy_codecs() {
     require_golden(none_bytes,
                    "7bc39e6f0375614ffa3bda3ababc91efc51d5a08e78e4d85752ac779522a0ba0",
                    "NONE RNG initialization golden");
-    require(static_cast<bool>(decode_policy_rng_initialization_identity(none_bytes)),
-            "NONE RNG did not decode");
+    const auto decoded_none = decode_policy_rng_initialization_identity(none_bytes);
+    require(decoded_none && canonical_policy_rng_initialization_identity_bytes(*decoded_none.value) ==
+                                  none_bytes,
+            "NONE RNG did not strictly round-trip");
     PolicyRngDecisionProvenance provenance;
     provenance.acting_policy_assignment_id = assignment_value.participant_policy_assignment_id;
     provenance.policy_rng_identity = kNoPolicyRngContractId;
@@ -242,8 +244,10 @@ void test_policy_codecs() {
     require_golden(rng_bytes,
                    "a1abfc52b91580d78dc0ec260ceb51cad825e83635a0820afcf2a0fec047115b",
                    "NONE RNG decision golden");
-    require(static_cast<bool>(decode_policy_rng_decision_provenance(rng_bytes)),
-            "NONE decision RNG did not decode");
+    const auto decoded_rng = decode_policy_rng_decision_provenance(rng_bytes);
+    require(decoded_rng && canonical_policy_rng_decision_provenance_bytes(*decoded_rng.value) ==
+                                rng_bytes,
+            "NONE decision RNG did not strictly round-trip");
     PolicyRngInitializationIdentity initialized;
     initialized.policy_rng_contract_identity = "ocgforge.test.rng.v1";
     initialized.policy_rng_stream_id = "main";
@@ -253,8 +257,11 @@ void test_policy_codecs() {
     require_golden(initialized_bytes,
                    "879760849e945af6f07b47efdef84e26844f60b7955249becf1509789b2ddbb8",
                    "initialized RNG golden");
-    require(static_cast<bool>(decode_policy_rng_initialization_identity(initialized_bytes)),
-            "initialized RNG did not decode");
+    const auto decoded_initialized = decode_policy_rng_initialization_identity(initialized_bytes);
+    require(decoded_initialized &&
+                canonical_policy_rng_initialization_identity_bytes(*decoded_initialized.value) ==
+                    initialized_bytes,
+            "initialized RNG did not strictly round-trip");
     PolicyRngStreamIdentity stream;
     stream.policy_artifact_id = artifact.policy_artifact_id;
     stream.participant_policy_assignment_id = assignment_value.participant_policy_assignment_id;
@@ -266,8 +273,10 @@ void test_policy_codecs() {
     require_golden(stream_bytes,
                    "65534e4163d27244d2502ae65c48922d370f97dbf6274312596f3a3e91eef7d3",
                    "RNG stream golden");
-    require(static_cast<bool>(decode_policy_rng_stream_identity(stream_bytes)),
-            "RNG stream did not decode");
+    const auto decoded_stream = decode_policy_rng_stream_identity(stream_bytes);
+    require(decoded_stream && canonical_policy_rng_stream_identity_bytes(*decoded_stream.value) ==
+                                  stream_bytes,
+            "RNG stream did not strictly round-trip");
     PolicyRngDecisionProvenance cursor_provenance;
     cursor_provenance.decision_index = 3;
     cursor_provenance.acting_policy_assignment_id = assignment_value.participant_policy_assignment_id;
@@ -282,8 +291,10 @@ void test_policy_codecs() {
     require_golden(cursor_bytes,
                    "1356976f4a889f786d5ec2034ab41ffb3d5fd23b85f66401a91a88fe24682bec",
                    "CURSOR RNG golden");
-    require(static_cast<bool>(decode_policy_rng_decision_provenance(cursor_bytes)),
-            "CURSOR decision RNG did not decode");
+    const auto decoded_cursor = decode_policy_rng_decision_provenance(cursor_bytes);
+    require(decoded_cursor && canonical_policy_rng_decision_provenance_bytes(*decoded_cursor.value) ==
+                                  cursor_bytes,
+            "CURSOR decision RNG did not strictly round-trip");
     cursor_provenance.mode = PolicyRngMode::State;
     cursor_provenance.pre_cursor.reset();
     cursor_provenance.post_cursor.reset();
@@ -293,8 +304,10 @@ void test_policy_codecs() {
     require_golden(state_bytes,
                    "d310e79f552018f1272f623ee089ef51dbd4c84d0e3236c7d589358caffabcf3",
                    "STATE RNG golden");
-    require(static_cast<bool>(decode_policy_rng_decision_provenance(state_bytes)),
-            "STATE decision RNG did not decode");
+    const auto decoded_state = decode_policy_rng_decision_provenance(state_bytes);
+    require(decoded_state && canonical_policy_rng_decision_provenance_bytes(*decoded_state.value) ==
+                                 state_bytes,
+            "STATE decision RNG did not strictly round-trip");
     auto policy_envelope = PolicyProvenanceEnvelope{};
     policy_envelope.policy_artifacts = {artifact};
     policy_envelope.participant_assignments = {assignment_value};
@@ -307,6 +320,15 @@ void test_policy_codecs() {
     auto corrupted = artifact_bytes;
     corrupted.back() ^= 1;
     require(!decode_policy_artifact(corrupted), "corrupt policy artifact was accepted");
+    auto unknown_kind = artifact;
+    unknown_kind.policy_kind = static_cast<PolicyKind>(0xff);
+    bool unknown_kind_rejected = false;
+    try {
+        (void)canonical_policy_artifact_bytes(unknown_kind);
+    } catch (const std::exception&) {
+        unknown_kind_rejected = true;
+    }
+    require(unknown_kind_rejected, "policy artifact writer accepted an unknown enum");
 }
 
 void test_public_codecs() {
@@ -323,6 +345,15 @@ void test_public_codecs() {
                    "public candidate golden");
     require(static_cast<bool>(decode_public_environment_action_candidate(candidate_bytes)),
             "candidate did not decode");
+    auto unknown_action = record.frame.request.candidates.front();
+    unknown_action.action_kind = static_cast<EnvironmentActionKind>(0xff);
+    bool unknown_action_rejected = false;
+    try {
+        (void)canonical_public_environment_action_candidate_bytes(unknown_action);
+    } catch (const std::exception&) {
+        unknown_action_rejected = true;
+    }
+    require(unknown_action_rejected, "public candidate writer accepted an unknown enum");
     const auto request_bytes = canonical_public_environment_decision_request_bytes(record.frame.request);
     require_golden(request_bytes,
                    "01825c5d6ef7d5b615658cab5e683c0703e9706f954da7c4cedbdddcf9f7e312",
@@ -476,6 +507,101 @@ void test_provenance_resolution() {
     bad.participant_assignments.front().resolved_locked_deck_sha256[0] = '0';
     require(!resolver.validate(bad, config, spec),
             "mismatched certified deck provenance was accepted");
+
+    require(!resolver.can_resolve("ocgforge.unknown_contract.v1"),
+            "unknown versioned contract identity was resolved as trusted");
+    require(resolver.can_resolve_contract("ocgforge.test.v1") &&
+                !resolver.can_resolve_content("ocgforge.test.v1"),
+            "contract identity was not kept distinct from content identity");
+    const auto immutable_content = std::string("content.v1.") + std::string(64, 'c');
+    ProvenanceResolver content_resolver({immutable_content});
+    require(content_resolver.can_resolve_content(immutable_content) &&
+                !content_resolver.can_resolve_contract(immutable_content),
+            "explicit content identity was not kept distinct from contract identity");
+    ProvenanceResolver mixed_registry({"ocgforge.test.v1", immutable_content});
+    require(!mixed_registry.can_resolve_content("ocgforge.test.v1"),
+            "a contract literal in the content registry crossed identity categories");
+    ProvenanceResolver unknown_contract_registry({"ocgforge.unknown_content.v1"});
+    require(!unknown_contract_registry.can_resolve_content("ocgforge.unknown_content.v1"),
+            "an unknown versioned contract-shaped identity crossed into content");
+    auto unknown_identity = envelope;
+    unknown_identity.policy_artifacts.front().producer_implementation_identity =
+        "ocgforge.unknown_producer.v1";
+    unknown_identity.policy_artifacts.front().policy_artifact_id =
+        compute_policy_artifact_id(unknown_identity.policy_artifacts.front());
+    for (auto& assignment_value : unknown_identity.participant_assignments) {
+        assignment_value.policy_artifact_id =
+            unknown_identity.policy_artifacts.front().policy_artifact_id;
+        assignment_value.participant_policy_assignment_id =
+            compute_participant_policy_assignment_id(assignment_value);
+    }
+    std::sort(unknown_identity.participant_assignments.begin(),
+              unknown_identity.participant_assignments.end(),
+              [](const auto& left, const auto& right) {
+                  return left.participant_policy_assignment_id <
+                         right.participant_policy_assignment_id;
+              });
+    require(!resolver.validate(unknown_identity, config, spec),
+            "unknown policy producer identity was admitted");
+
+    auto missing_checkpoint = envelope;
+    missing_checkpoint.policy_artifacts.front().policy_kind = PolicyKind::NeuralCheckpoint;
+    missing_checkpoint.policy_artifacts.front().policy_artifact_id =
+        compute_policy_artifact_id(missing_checkpoint.policy_artifacts.front());
+    for (auto& assignment_value : missing_checkpoint.participant_assignments) {
+        assignment_value.policy_artifact_id =
+            missing_checkpoint.policy_artifacts.front().policy_artifact_id;
+        assignment_value.participant_policy_assignment_id =
+            compute_participant_policy_assignment_id(assignment_value);
+    }
+    std::sort(missing_checkpoint.participant_assignments.begin(),
+              missing_checkpoint.participant_assignments.end(),
+              [](const auto& left, const auto& right) {
+                  return left.participant_policy_assignment_id <
+                         right.participant_policy_assignment_id;
+              });
+    require(!resolver.validate(missing_checkpoint, config, spec),
+            "neural policy without a checkpoint identity was admitted");
+
+    auto contract_in_content_field = envelope;
+    contract_in_content_field.policy_artifacts.front().artifact_metadata_identity =
+        "ocgforge.test.v1";
+    contract_in_content_field.policy_artifacts.front().policy_artifact_id =
+        compute_policy_artifact_id(contract_in_content_field.policy_artifacts.front());
+    for (auto& assignment_value : contract_in_content_field.participant_assignments) {
+        assignment_value.policy_artifact_id =
+            contract_in_content_field.policy_artifacts.front().policy_artifact_id;
+        assignment_value.participant_policy_assignment_id =
+            compute_participant_policy_assignment_id(assignment_value);
+    }
+    std::sort(contract_in_content_field.participant_assignments.begin(),
+              contract_in_content_field.participant_assignments.end(),
+              [](const auto& left, const auto& right) {
+                  return left.participant_policy_assignment_id <
+                         right.participant_policy_assignment_id;
+              });
+    require(!resolver.validate(contract_in_content_field, config, spec),
+            "contract identity was accepted in a content-only metadata field");
+
+    auto content_in_contract_field = envelope;
+    content_in_contract_field.policy_artifacts.front().sampling_contract_identity =
+        immutable_content;
+    content_in_contract_field.policy_artifacts.front().policy_artifact_id =
+        compute_policy_artifact_id(content_in_contract_field.policy_artifacts.front());
+    for (auto& assignment_value : content_in_contract_field.participant_assignments) {
+        assignment_value.policy_artifact_id =
+            content_in_contract_field.policy_artifacts.front().policy_artifact_id;
+        assignment_value.participant_policy_assignment_id =
+            compute_participant_policy_assignment_id(assignment_value);
+    }
+    std::sort(content_in_contract_field.participant_assignments.begin(),
+              content_in_contract_field.participant_assignments.end(),
+              [](const auto& left, const auto& right) {
+                  return left.participant_policy_assignment_id <
+                         right.participant_policy_assignment_id;
+              });
+    require(!content_resolver.validate(content_in_contract_field, config, spec),
+            "content identity was accepted in a contract-only sampling field");
 }
 
 }  // namespace

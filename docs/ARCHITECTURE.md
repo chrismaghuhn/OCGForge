@@ -262,21 +262,32 @@ A future Python ML interface should wrap the authoritative C++/core environment 
 
 ## 11. Future architecture boundaries
 
-### Proposed Phase-3A trusted trajectory core
+### Phase-3A/3B trusted trajectory and admission layers
 
-The proposed `ygo::trajectory` layer sits above `EpisodicEnvironment V2` and
-below future persistence, evaluation/Teacher, model-adapter, and ML layers.
-It owns immutable public frames, complete ordered public candidate domains,
-selected public action keys, closure semantics, and collection policy
-provenance. It must not query the core or trace, reconstruct legal domains,
-advance the environment, or consume private observations. The proposal is
-documented in ADR-0005 and the versioned trusted-trajectory contracts; it is
-not a production recorder, storage layer, Teacher, or ML implementation.
+The accepted Phase-3A `ygo::trajectory` boundary sits above
+`EpisodicEnvironment V2`. The Phase-3B implementation adds the following
+explicitly owned layers in the same boundary:
+
+- `ygo::trajectory` owns Phase-3A values, strict canonical codecs, identity
+  derivation, and `TrajectoryRecorder` semantics;
+- `ygo::trajectory::storage` owns immutable candidate shards, restricted
+  evidence, and atomic local publication;
+- `ygo::trajectory::admission` owns strict validation, semantic V2 replay,
+  whole-shard admission, and `AdmissionReceipt`; and
+- `ygo::trajectory::dataset` owns `DatasetManifest` and re-sharding-invariant
+  logical dataset identity.
+
+These layers consume only value-owned V2 public frames, ordered public
+candidate values, V2 closures, and explicit collection provenance. They must
+not query the core or trace, reconstruct legal domains, advance V2 outside
+the public API, or consume private observations. The implementation and
+acceptance evidence are being delivered in the single Phase-3B PR; this
+branch's acceptance matrix is [PHASE3B_ACCEPTANCE.md](trajectory/PHASE3B_ACCEPTANCE.md).
+No learner/model projection is introduced here.
 
 Future work may add:
 
 - performance/throughput measurement;
-- an episodic environment API;
 - checkpoint/fork support;
 - vectorized execution;
 - model/action vocabulary adapters;

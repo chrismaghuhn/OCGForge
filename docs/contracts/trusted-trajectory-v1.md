@@ -3,8 +3,7 @@
 ## Status and authority
 
 **Contract ID:** `ocgforge.trusted_trajectory.v1`
-**Status:** Proposed Phase-3A contract. It becomes normative only when the
-corresponding contract PR is accepted.
+**Status:** Accepted Phase-3A contract.
 **Owning layer:** future `ygo::trajectory`, above `EpisodicEnvironment V2`.
 
 This contract defines the logical, immutable trajectory values that a future

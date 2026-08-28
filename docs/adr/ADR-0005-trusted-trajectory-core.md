@@ -2,9 +2,9 @@
 
 ## Status
 
-Proposed. This ADR becomes architectural authority only when this Phase-3A
-contract PR is accepted. It does not authorize Phase 3B persistence, a
-Teacher, model adapters, or ML work.
+Accepted. This ADR is the Phase-3A architectural authority. It does not
+authorize Teacher, model adapters, or ML work; Phase 3B persistence and
+admission are separately versioned and evidenced by their own contracts.
 
 ## Context
 

@@ -23,7 +23,7 @@ DecodeResult<DatasetManifest> decode_dataset_manifest(
     const std::vector<std::uint8_t>& bytes) noexcept;
 
 bool validate_dataset_manifest(const DatasetManifest& value,
-                               const std::vector<AdmissionReceipt>& verified_receipts,
+                               const std::vector<VerifiedAdmissionReceipt>& verified_receipts,
                                std::string* error = nullptr);
 
 }  // namespace ygo::trajectory::dataset
