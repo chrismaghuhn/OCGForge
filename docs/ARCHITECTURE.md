@@ -262,6 +262,17 @@ A future Python ML interface should wrap the authoritative C++/core environment 
 
 ## 11. Future architecture boundaries
 
+### Proposed Phase-3A trusted trajectory core
+
+The proposed `ygo::trajectory` layer sits above `EpisodicEnvironment V2` and
+below future persistence, evaluation/Teacher, model-adapter, and ML layers.
+It owns immutable public frames, complete ordered public candidate domains,
+selected public action keys, closure semantics, and collection policy
+provenance. It must not query the core or trace, reconstruct legal domains,
+advance the environment, or consume private observations. The proposal is
+documented in ADR-0005 and the versioned trusted-trajectory contracts; it is
+not a production recorder, storage layer, Teacher, or ML implementation.
+
 Future work may add:
 
 - performance/throughput measurement;
