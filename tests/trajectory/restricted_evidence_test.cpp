@@ -1,6 +1,7 @@
 #include "ygo/trajectory/restricted_evidence.hpp"
 
 #include <algorithm>
+#include <cstddef>
 #include <iostream>
 #include <stdexcept>
 #include <string>
@@ -100,6 +101,42 @@ void test_bundle_codec_and_cross_references() {
     corrupt.back() ^= 1;
     require(!decode_restricted_collection_evidence_bundle(corrupt),
             "corrupt restricted evidence was accepted");
+
+    ByteReader count_reader(bytes);
+    require(count_reader.string(error) && count_reader.string(error) &&
+                count_reader.string(error) && count_reader.position() + 4 <= bytes.size(),
+            "could not locate restricted interrupted count");
+    auto bad_interrupted_count = bytes;
+    const auto interrupted_count_position = count_reader.position();
+    bad_interrupted_count[interrupted_count_position] = 0xff;
+    bad_interrupted_count[interrupted_count_position + 1] = 0xff;
+    bad_interrupted_count[interrupted_count_position + 2] = 0xff;
+    bad_interrupted_count[interrupted_count_position + 3] = 0xff;
+    require(!decode_restricted_collection_evidence_bundle(bad_interrupted_count),
+            "restricted evidence accepted a count beyond its input");
+
+    ByteReader nested_reader(bytes);
+    std::string ignored;
+    std::uint32_t interrupted_count = 0;
+    require(nested_reader.string(ignored) && nested_reader.string(ignored) &&
+                nested_reader.string(ignored) && nested_reader.u32be(interrupted_count) &&
+                nested_reader.string(ignored) && nested_reader.position() > 0,
+            "could not locate nested restricted evidence hash");
+    auto corrupted_nested_hash = bytes;
+    corrupted_nested_hash[nested_reader.position() - 1] = 'z';
+    require(!decode_restricted_collection_evidence_bundle(corrupted_nested_hash),
+            "restricted evidence accepted a corrupted nested envelope hash");
+
+    for (const auto cut : {std::size_t{0}, std::size_t{1}, bytes.size() / 2,
+                           bytes.size() - 1}) {
+        if (cut >= bytes.size()) {
+            continue;
+        }
+        const std::vector<std::uint8_t> prefix(bytes.begin(), bytes.begin() +
+                                                            static_cast<std::ptrdiff_t>(cut));
+        require(!decode_restricted_collection_evidence_bundle(prefix),
+                "restricted evidence accepted a boundary truncation");
+    }
 }
 
 void test_rng_material_binding() {

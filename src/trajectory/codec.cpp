@@ -335,6 +335,65 @@ void validate_request(const environment::EnvironmentDecisionRequest& value) {
             }
         }
     }
+    if (!value.continuation.has_value()) {
+        for (const auto& candidate : value.candidates) {
+            if (!candidate.continuation_operation.empty()) {
+                throw std::invalid_argument(
+                    "atomic request contains a continuation operation");
+            }
+            if (!candidate.submits_engine_response) {
+                throw std::invalid_argument(
+                    "atomic request contains a non-submitting candidate");
+            }
+        }
+        return;
+    }
+
+    const auto& continuation = *value.continuation;
+    validate_continuation(continuation);
+    const auto is_remaining_index = [&continuation](const std::uint32_t source_index) {
+        return std::find(continuation.remaining_indices.begin(),
+                         continuation.remaining_indices.end(), source_index) !=
+               continuation.remaining_indices.end();
+    };
+    for (const auto& candidate : value.candidates) {
+        if (candidate.continuation_operation.empty()) {
+            throw std::invalid_argument(
+                "continuation request contains a candidate without an operation");
+        }
+        if (candidate.continuation_operation == "pick") {
+            if (candidate.action_kind != environment::EnvironmentActionKind::Pick ||
+                candidate.submits_engine_response ||
+                continuation.continuation_kind == "counter" ||
+                !candidate.source_index.has_value() ||
+                !is_remaining_index(*candidate.source_index)) {
+                throw std::invalid_argument("pick continuation candidate is structurally invalid");
+            }
+        } else if (candidate.continuation_operation == "amount") {
+            if (candidate.action_kind != environment::EnvironmentActionKind::AssignAmount ||
+                candidate.submits_engine_response || continuation.continuation_kind != "counter" ||
+                !candidate.source_index.has_value() || !candidate.amount.has_value() ||
+                *candidate.amount < 0 || !is_remaining_index(*candidate.source_index)) {
+                throw std::invalid_argument(
+                    "amount continuation candidate is structurally invalid");
+            }
+        } else if (candidate.continuation_operation == "finish") {
+            if (candidate.action_kind != environment::EnvironmentActionKind::Finish ||
+                !candidate.submits_engine_response || !continuation.can_finish) {
+                throw std::invalid_argument("finish continuation candidate is structurally invalid");
+            }
+        } else if (candidate.continuation_operation == "cancel") {
+            if (candidate.action_kind != environment::EnvironmentActionKind::Cancel ||
+                !candidate.submits_engine_response || !continuation.can_cancel) {
+                throw std::invalid_argument("cancel continuation candidate is structurally invalid");
+            }
+        } else if (candidate.continuation_operation == "bypass") {
+            if (candidate.action_kind != environment::EnvironmentActionKind::Cancel ||
+                !candidate.submits_engine_response || continuation.continuation_kind != "ordering") {
+                throw std::invalid_argument("bypass continuation candidate is structurally invalid");
+            }
+        }
+    }
 }
 
 void validate_public_frame(const PublicFrameSnapshot& value) {
@@ -2556,6 +2615,10 @@ void validate_envelope_sequence(const EpisodeEnvelope& value) {
     }
     for (std::size_t index = 0; index < value.records.size(); ++index) {
         const auto& record = value.records[index];
+        if (record.frame.episode_semantic_id != value.manifest.episode_semantic_id) {
+            throw std::invalid_argument(
+                "trajectory record frame episode identity differs from its manifest");
+        }
         validate_decision_record(record);
         if (record.frame.decision_index != index) {
             throw std::invalid_argument("trajectory record decision indices are not contiguous");

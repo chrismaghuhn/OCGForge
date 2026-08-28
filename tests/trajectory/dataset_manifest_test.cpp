@@ -1,6 +1,7 @@
 #include "ygo/trajectory/dataset_manifest.hpp"
 
 #include <algorithm>
+#include <cstddef>
 #include <iostream>
 #include <stdexcept>
 #include <string>
@@ -109,8 +110,34 @@ void test_conflicts_and_strict_codec() {
     trailing.push_back(0);
     require(!decode_dataset_manifest(trailing), "dataset manifest trailing bytes were accepted");
     auto corrupt = bytes;
-    corrupt[0] = 0xff;
+    corrupt[bytes.size() / 2] ^= 1;
     require(!decode_dataset_manifest(corrupt), "corrupt dataset manifest was accepted");
+
+    ByteReader count_reader(bytes);
+    std::string ignored;
+    require(count_reader.string(ignored) && count_reader.string(ignored) &&
+                count_reader.string(ignored) && count_reader.string(ignored) &&
+                count_reader.string(ignored) && count_reader.position() + 4 <= bytes.size(),
+            "could not locate dataset manifest count");
+    auto bad_count = bytes;
+    const auto count_position = count_reader.position();
+    bad_count[count_position] = 0xff;
+    bad_count[count_position + 1] = 0xff;
+    bad_count[count_position + 2] = 0xff;
+    bad_count[count_position + 3] = 0xff;
+    require(!decode_dataset_manifest(bad_count),
+            "dataset manifest accepted a count beyond its input");
+
+    for (const auto cut : {std::size_t{0}, std::size_t{1}, bytes.size() / 2,
+                           bytes.size() - 1}) {
+        if (cut >= bytes.size()) {
+            continue;
+        }
+        const std::vector<std::uint8_t> prefix(bytes.begin(), bytes.begin() +
+                                                            static_cast<std::ptrdiff_t>(cut));
+        require(!decode_dataset_manifest(prefix),
+                "dataset manifest accepted a boundary truncation");
+    }
 
     auto invalid_commitment = current_receipt;
     invalid_commitment.entries.front().environment_semantic_id[0] = 'z';

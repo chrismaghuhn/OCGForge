@@ -214,8 +214,10 @@ selected-key membership, transition class, and successor semantics. Stored
 observations are evidence only; regenerated V2 values are authoritative.
 
 Terminal closure compares winner, win reason, semantic action count, last
-decision index, final engine step, and both perspective-safe terminal views.
-Zero-decision terminals are valid. Interrupted closure requires the exact
+decision index, the canonical terminal closure/public gameplay identity, and
+both perspective-safe terminal views. Terminal closure does not persist or
+compare `final_engine_step_index`; that field belongs only to restricted
+interruption evidence. Zero-decision terminals are valid. Interrupted closure requires the exact
 restricted evidence companion. Budget interruptions replay with the exact
 recorded run-control values; administrative cancellation replays to the exact
 pending frame and then calls the public V2 interrupt boundary. The accepted

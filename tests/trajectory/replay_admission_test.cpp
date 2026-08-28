@@ -551,6 +551,19 @@ void test_real_replay_and_admission() {
             "real V2 continuation shard admission failed: " + error);
     require(continuation_verification->entries().size() == 1,
             "real V2 continuation admission did not commit one entry");
+    const auto continuation_shard_sha256 = candidate_shard_artifact_sha256(continuation_shard);
+    const auto continuation_evidence_sha256 =
+        restricted_collection_evidence_artifact_sha256(continuation_evidence);
+    require(!verify_candidate_shard_for_admission(
+                continuation_shard, continuation_evidence, std::string(64, '0'),
+                continuation_evidence_sha256, replay_options_for(continuation),
+                ProvenanceResolver{}, &error),
+            "admission accepted a receipt binding to the wrong candidate shard artifact");
+    require(!verify_candidate_shard_for_admission(
+                continuation_shard, continuation_evidence, continuation_shard_sha256,
+                std::string(64, '0'), replay_options_for(continuation), ProvenanceResolver{},
+                &error),
+            "admission accepted a receipt binding to the wrong restricted evidence artifact");
     const auto continuation_receipt = issue_admission_receipt(
         *continuation_verification, &error);
     require(continuation_receipt.has_value(),

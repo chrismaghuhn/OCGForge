@@ -1,6 +1,7 @@
 #include "ygo/trajectory/receipt.hpp"
 
 #include <algorithm>
+#include <cstddef>
 #include <iostream>
 #include <stdexcept>
 #include <string>
@@ -60,8 +61,49 @@ void test_golden_and_strict_codec() {
     trailing.push_back(0);
     require(!decode_admission_receipt(trailing), "admission receipt trailing bytes were accepted");
     auto corrupt = bytes;
-    corrupt[0] = 0xff;
+    ByteReader corrupt_reader(corrupt);
+    std::string corrupt_ignored;
+    std::uint32_t corrupt_count = 0;
+    require(corrupt_reader.string(corrupt_ignored) &&
+                corrupt_reader.string(corrupt_ignored) &&
+                corrupt_reader.string(corrupt_ignored) &&
+                corrupt_reader.string(corrupt_ignored) &&
+                corrupt_reader.string(corrupt_ignored) &&
+                corrupt_reader.u32be(corrupt_count) && corrupt_count == 2 &&
+                corrupt_reader.string(corrupt_ignored) &&
+                corrupt_reader.string(corrupt_ignored) &&
+                corrupt_reader.string(corrupt_ignored) &&
+                corrupt_reader.string(corrupt_ignored) &&
+                corrupt_reader.string(corrupt_ignored),
+            "could not locate nested receipt digest for corruption test");
+    corrupt[corrupt_reader.position() - 1] = 'z';
     require(!decode_admission_receipt(corrupt), "corrupt admission receipt was accepted");
+
+    ByteReader count_reader(bytes);
+    std::string ignored;
+    require(count_reader.string(ignored) && count_reader.string(ignored) &&
+                count_reader.string(ignored) && count_reader.string(ignored) &&
+                count_reader.string(ignored) && count_reader.position() + 4 <= bytes.size(),
+            "could not locate admission receipt count");
+    auto bad_count = bytes;
+    const auto count_position = count_reader.position();
+    bad_count[count_position] = 0xff;
+    bad_count[count_position + 1] = 0xff;
+    bad_count[count_position + 2] = 0xff;
+    bad_count[count_position + 3] = 0xff;
+    require(!decode_admission_receipt(bad_count),
+            "admission receipt accepted a count beyond its input");
+
+    for (const auto cut : {std::size_t{0}, std::size_t{1}, bytes.size() / 2,
+                           bytes.size() - 1}) {
+        if (cut >= bytes.size()) {
+            continue;
+        }
+        const std::vector<std::uint8_t> prefix(bytes.begin(), bytes.begin() +
+                                                            static_cast<std::ptrdiff_t>(cut));
+        require(!decode_admission_receipt(prefix),
+                "admission receipt accepted a boundary truncation");
+    }
 
     auto unsorted = receipt;
     std::swap(unsorted.entries[0], unsorted.entries[1]);

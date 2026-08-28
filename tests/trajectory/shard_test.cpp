@@ -2,6 +2,8 @@
 #include "ygo/trajectory/storage.hpp"
 
 #include <algorithm>
+#include <cstddef>
+#include <cstdlib>
 #include <fstream>
 #include <iostream>
 #include <stdexcept>
@@ -94,6 +96,19 @@ void test_shard_codec() {
     require(!decode_candidate_trajectory_shard(bad_length),
             "shard with a bad entry length was accepted");
 
+    auto bad_count = bytes;
+    ByteReader count_reader(bad_count);
+    require(count_reader.string(ignored) && count_reader.string(ignored) &&
+                count_reader.position() + 4 <= bad_count.size(),
+            "could not locate shard entry count");
+    const auto count_position = count_reader.position();
+    bad_count[count_position] = 0xff;
+    bad_count[count_position + 1] = 0xff;
+    bad_count[count_position + 2] = 0xff;
+    bad_count[count_position + 3] = 0xff;
+    require(!decode_candidate_trajectory_shard(bad_count),
+            "shard accepted a count beyond its input");
+
     auto truncated = bytes;
     truncated.pop_back();
     require(!decode_candidate_trajectory_shard(truncated), "truncated shard was accepted");
@@ -103,15 +118,31 @@ void test_shard_codec() {
     auto corrupt = bytes;
     corrupt.back() ^= 1;
     require(!decode_candidate_trajectory_shard(corrupt), "corrupt shard was accepted");
+
+    for (const auto cut : {std::size_t{0}, std::size_t{1}, bytes.size() / 2,
+                           bytes.size() - 1}) {
+        if (cut >= bytes.size()) {
+            continue;
+        }
+        const std::vector<std::uint8_t> prefix(bytes.begin(), bytes.begin() +
+                                                            static_cast<std::ptrdiff_t>(cut));
+        require(!decode_candidate_trajectory_shard(prefix),
+                "shard accepted a boundary truncation");
+    }
 }
 
 void test_atomic_publication() {
     const auto root = std::filesystem::temp_directory_path() / "ocgforge_phase3b_publication_test";
-    std::error_code ignored;
-    std::filesystem::remove_all(root, ignored);
-    std::filesystem::create_directories(root);
     const std::vector<std::uint8_t> bytes = {1, 2, 3, 4, 5};
     const auto digest = trace::sha256_bytes(bytes);
+    const auto symlink_target = root / "symlink" /
+                               (std::string("trajectory_shard.") + digest + ".bin");
+    std::error_code ignored;
+    std::filesystem::remove(symlink_target, ignored);
+    ignored.clear();
+    std::filesystem::remove_all(root, ignored);
+    ignored.clear();
+    std::filesystem::create_directories(root);
     std::string error;
     const auto first = storage::publish_content_addressed_artifact(
         root, "trajectory_shard", digest, bytes, &error);
@@ -142,10 +173,47 @@ void test_atomic_publication() {
     require(preserved_bytes == competing_bytes,
             "nonidentical competing artifact was modified during publication");
 
+    const auto non_regular_root = root / "non_regular";
+    std::filesystem::create_directories(non_regular_root);
+    const auto directory_target = non_regular_root /
+                                  (std::string("trajectory_shard.") + digest + ".bin");
+    std::filesystem::create_directory(directory_target);
+    require(!storage::publish_content_addressed_artifact(
+                 non_regular_root, "trajectory_shard", digest, bytes, &error),
+            "directory final artifact target was accepted");
+
+    const auto symlink_root = root / "symlink";
+    std::filesystem::create_directories(symlink_root);
+    const auto symlink_source = symlink_root / "source_dir";
+    std::filesystem::create_directory(symlink_source);
+    std::error_code symlink_error;
+    std::filesystem::create_directory_symlink(symlink_source, symlink_target, symlink_error);
+#ifdef _WIN32
+    if (symlink_error) {
+        const auto command = std::string("cmd /c mklink /J \"") + symlink_target.string() +
+                             "\" \"" + symlink_source.string() + "\" >NUL";
+        if (std::system(command.c_str()) == 0) {
+            symlink_error.clear();
+        }
+    }
+#endif
+    require(!symlink_error, "could not create symlink final artifact for negative coverage: " +
+                                symlink_error.message());
+    require(!storage::publish_content_addressed_artifact(
+                 symlink_root, "trajectory_shard", digest, bytes, &error),
+            "symbolic-link final artifact target was accepted");
+
     for (const auto& item : std::filesystem::directory_iterator(root)) {
-        require(item.path() == first->path || item.path() == competing_root,
+        require(item.path() == first->path || item.path() == competing_root ||
+                    item.path() == non_regular_root || item.path() == symlink_root,
                 "temporary publication artifact was left behind");
     }
+    for (const auto& item : std::filesystem::directory_iterator(competing_root)) {
+        require(item.path() == competing_path,
+                "competing publication left a temporary partial artifact behind");
+    }
+    std::filesystem::remove(symlink_target, ignored);
+    ignored.clear();
     std::filesystem::remove_all(root, ignored);
 }
 

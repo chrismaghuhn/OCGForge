@@ -92,9 +92,18 @@ EnvironmentActionCandidate candidate(const EnvironmentActionKind action_kind,
                                      const bool submits_engine_response) {
     PublicActionKeyInput key_input;
     key_input.action_kind = std::string(environment_action_kind_name(action_kind));
+    if (action_kind == EnvironmentActionKind::Pick ||
+        action_kind == EnvironmentActionKind::AssignAmount) {
+        key_input.source_index = 0;
+    }
+    if (action_kind == EnvironmentActionKind::AssignAmount) {
+        key_input.amount = 0;
+    }
     key_input.continuation_operation = continuation_operation;
     EnvironmentActionCandidate value;
     value.action_kind = action_kind;
+    value.source_index = key_input.source_index;
+    value.amount = key_input.amount;
     value.continuation_operation = continuation_operation;
     value.submits_engine_response = submits_engine_response;
     value.public_action_key = public_action_key(key_input);
@@ -231,11 +240,34 @@ void test_atomic_record_and_rejection() {
     rejected.submitted_public_action_key = "restricted-action";
     rejected.submitted_submission_token.episode_incarnation = 99;
     rejected.submitted_submission_token.frame_generation = 99;
+
+    TrajectoryRecorder invalid_rejection(config, spec, policy_provenance);
+    require(invalid_rejection.on_reset_accepted(ResetAccepted{v2_frame(initial, 7)}),
+            "recorder rejected reset for invalid rejection invariant test");
+    auto changed_state = rejected;
+    changed_state.authoritative_state_unchanged = false;
+    std::string invalid_error;
+    require(!invalid_rejection.on_step_rejected(changed_state, true, &invalid_error),
+            "recorder accepted a StepRejected that violated the unchanged-state invariant");
+    require(invalid_rejection.lifecycle() == RecorderLifecycle::AwaitingAction &&
+                invalid_rejection.records().empty() && !invalid_rejection.closure().has_value() &&
+                invalid_rejection.manifest().collection_disposition.kind ==
+                    CollectionDispositionKind::Clean,
+            "invalid StepRejected encoded failure or quarantine mutation");
+
     require(recorder.on_step_rejected(rejected, true), "recorder rejected policy rejection");
+    require(recorder.on_step_rejected(rejected, true),
+            "recorder rejected a second observed policy rejection");
     require(recorder.records().empty(), "rejected action created a record");
     require(recorder.manifest().collection_disposition.kind ==
                 CollectionDispositionKind::QuarantinedAfterPolicyRejection,
             "policy rejection did not quarantine the collection");
+    require(recorder.manifest().collection_disposition.policy_rejections.size() == 2 &&
+                recorder.manifest().collection_disposition.policy_rejections[0] ==
+                    RejectionCode::StaleSubmissionToken &&
+                recorder.manifest().collection_disposition.policy_rejections[1] ==
+                    RejectionCode::StaleSubmissionToken,
+            "observed equal policy rejection classifications were deduplicated or reordered");
 
     const auto episode_id = episode_semantic_id(config, spec);
     StepAccepted accepted;

@@ -99,7 +99,6 @@ bool equal_observation(const environment::PublicEnvironmentObservation& expected
 bool compare_terminal(const EpisodeEnvelope& envelope,
                       environment::EpisodicEnvironment& environment,
                       const environment::EpisodeTerminal& actual,
-                      std::uint64_t& final_engine_step,
                       std::string& error) {
     const auto* expected = std::get_if<TerminalClosure>(&envelope.closure);
     if (expected == nullptr || actual.contract_id != environment::kEpisodicEnvironmentV2ContractId ||
@@ -121,7 +120,6 @@ bool compare_terminal(const EpisodeEnvelope& envelope,
         }
         return false;
     }
-    final_engine_step = actual.final_engine_step_index;
     return true;
 }
 
@@ -618,8 +616,7 @@ ReplayResult replay_episode(const EpisodeEnvelope& envelope,
         }
 
         if (const auto* terminal = std::get_if<environment::EpisodeTerminal>(&boundary)) {
-            if (!compare_terminal(envelope, *environment, *terminal,
-                                  result.final_engine_step_index, error)) {
+            if (!compare_terminal(envelope, *environment, *terminal, error)) {
                 fail(result, std::move(error));
                 return result;
             }

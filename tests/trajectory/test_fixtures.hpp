@@ -88,9 +88,18 @@ inline EnvironmentActionCandidate candidate(const EnvironmentActionKind action_k
                                             const bool submits_engine_response = true) {
     PublicActionKeyInput key_input;
     key_input.action_kind = std::string(environment_action_kind_name(action_kind));
+    if (action_kind == EnvironmentActionKind::Pick ||
+        action_kind == EnvironmentActionKind::AssignAmount) {
+        key_input.source_index = 0;
+    }
+    if (action_kind == EnvironmentActionKind::AssignAmount) {
+        key_input.amount = 0;
+    }
     key_input.continuation_operation = continuation_operation;
     EnvironmentActionCandidate value;
     value.action_kind = action_kind;
+    value.source_index = key_input.source_index;
+    value.amount = key_input.amount;
     value.continuation_operation = continuation_operation;
     value.submits_engine_response = submits_engine_response;
     value.public_action_key = public_action_key(key_input);

@@ -447,11 +447,13 @@ bool TrajectoryRecorder::on_step_rejected(const environment::StepRejected& rejec
         rejected.current_episode_semantic_id != current_frame_->episode_semantic_id ||
         rejected.current_public_semantic_decision_id != current_frame_->public_semantic_decision_id ||
         rejected.current_public_candidate_domain_digest !=
-            current_frame_->public_candidate_domain_digest ||
-        !rejected.authoritative_state_unchanged) {
+            current_frame_->public_candidate_domain_digest) {
         return fail_closed(environment::FailureCode::PublicFrameInvariant,
                            environment::FailureStage::Action, false, error,
                            "rejection current-frame evidence does not match recorder");
+    }
+    if (!rejected.authoritative_state_unchanged) {
+        return set_error(error, "StepRejected violates the V2 unchanged-state invariant");
     }
     if (policy_origin) {
         if (manifest_.collection_disposition.kind == CollectionDispositionKind::Clean) {

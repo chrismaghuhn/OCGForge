@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <iostream>
 #include <limits>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -30,6 +31,17 @@ void require(const bool condition, const std::string& message) {
 void require_golden(const std::vector<std::uint8_t>& bytes, const std::string& expected,
                     const std::string& message) {
     require(trace::sha256_bytes(bytes) == expected, message + " (SHA-256 mismatch)");
+}
+
+template <typename Function>
+void require_throw(Function&& function, const std::string& message) {
+    bool threw = false;
+    try {
+        function();
+    } catch (const std::exception&) {
+        threw = true;
+    }
+    require(threw, message);
 }
 
 PublicEnvironmentObservationInput public_observation(const std::uint8_t perspective,
@@ -65,9 +77,9 @@ ParticipantPolicyAssignment assignment(const PolicyArtifact& artifact, const std
     result.player = player;
     result.seat_role = seat_role;
     result.deck_role = deck_role;
-    result.resolved_locked_deck_id = player == 0 ?
+    result.resolved_locked_deck_id = deck_role == DeckRole::FirstLockedDeck ?
         "ocgforge.swordsoul_tenyi.ml_v1" : "ocgforge.salamangreat.ml_v1";
-    result.resolved_locked_deck_sha256 = player == 0 ?
+    result.resolved_locked_deck_sha256 = deck_role == DeckRole::FirstLockedDeck ?
         "8ee4b699de19ff256e388d46f35b8696a60ff6ec59f0324f060a2468876711b7" :
         "6041abe0a59463d0715ae1da9100090ad487de02a02794e8ec0686d4c0513188";
     result.policy_artifact_id = artifact.policy_artifact_id;
@@ -75,6 +87,53 @@ ParticipantPolicyAssignment assignment(const PolicyArtifact& artifact, const std
     result.effective_from_decision_index = effective;
     result.participant_policy_assignment_id = compute_participant_policy_assignment_id(result);
     return result;
+}
+
+EnvironmentActionCandidate continuation_candidate(
+    const EnvironmentActionKind action_kind, const std::string& operation,
+    const bool submits_engine_response, const std::optional<std::uint32_t> source_index = {},
+    const std::optional<std::int32_t> amount = {}) {
+    PublicActionKeyInput key_input;
+    key_input.action_kind = std::string(environment_action_kind_name(action_kind));
+    key_input.source_index = source_index;
+    key_input.amount = amount;
+    key_input.continuation_operation = operation;
+    EnvironmentActionCandidate value;
+    value.action_kind = action_kind;
+    value.source_index = source_index;
+    value.amount = amount;
+    value.continuation_operation = operation;
+    value.submits_engine_response = submits_engine_response;
+    value.public_action_key = public_action_key(key_input);
+    return value;
+}
+
+EnvironmentDecisionRequest continuation_request(
+    const std::string& kind, EnvironmentActionCandidate candidate_value,
+    const bool can_finish = false, const bool can_cancel = false) {
+    EnvironmentDecisionRequest value;
+    value.kind = EnvironmentDecisionKind::CardSelection;
+    value.player = 0;
+    EnvironmentContinuationView continuation;
+    continuation.continuation_kind = kind;
+    continuation.remaining_indices = {0, 1};
+    continuation.available_mask = 3;
+    continuation.min_count = 1;
+    continuation.max_count = 1;
+    continuation.continuation_steps = 2;
+    continuation.can_finish = can_finish;
+    continuation.can_cancel = can_cancel;
+    value.continuation = continuation;
+    value.candidates.push_back(std::move(candidate_value));
+    return value;
+}
+
+EnvironmentDecisionRequest atomic_request(EnvironmentActionCandidate candidate_value) {
+    EnvironmentDecisionRequest value;
+    value.kind = EnvironmentDecisionKind::YesNo;
+    value.player = 0;
+    value.candidates.push_back(std::move(candidate_value));
+    return value;
 }
 
 DecisionRecord record_fixture(const CertifiedEnvironmentConfig& config,
@@ -384,7 +443,124 @@ void test_public_codecs() {
             "restricted evidence did not decode");
 }
 
+void test_continuation_operation_validation() {
+    const auto valid_pick = continuation_candidate(EnvironmentActionKind::Pick, "pick", false, 0);
+    const auto valid_amount = continuation_candidate(EnvironmentActionKind::AssignAmount, "amount",
+                                                     false, 0, 2);
+    const auto valid_finish = continuation_candidate(EnvironmentActionKind::Finish, "finish", true);
+    const auto valid_cancel = continuation_candidate(EnvironmentActionKind::Cancel, "cancel", true);
+    const auto valid_bypass = continuation_candidate(EnvironmentActionKind::Cancel, "bypass", true);
+
+    require(static_cast<bool>(decode_public_environment_decision_request(
+                canonical_public_environment_decision_request_bytes(
+                    continuation_request("unordered", valid_pick)))),
+            "valid pick continuation was rejected");
+    require(static_cast<bool>(decode_public_environment_decision_request(
+                canonical_public_environment_decision_request_bytes(
+                    continuation_request("counter", valid_amount)))),
+            "valid amount continuation was rejected");
+    require(static_cast<bool>(decode_public_environment_decision_request(
+                canonical_public_environment_decision_request_bytes(
+                    continuation_request("unordered", valid_finish, true)))),
+            "valid finish continuation was rejected");
+    require(static_cast<bool>(decode_public_environment_decision_request(
+                canonical_public_environment_decision_request_bytes(
+                    continuation_request("unordered", valid_cancel, false, true)))),
+            "valid cancel continuation was rejected");
+    require(static_cast<bool>(decode_public_environment_decision_request(
+                canonical_public_environment_decision_request_bytes(
+                    continuation_request("ordering", valid_bypass)))),
+            "valid ordering bypass continuation was rejected");
+
+    require_throw(
+        [&] {
+            (void)canonical_public_environment_decision_request_bytes(
+                atomic_request(continuation_candidate(EnvironmentActionKind::YesNo, "pick", true)));
+        },
+        "atomic request retained a continuation operation");
+    require_throw(
+        [&] {
+            (void)canonical_public_environment_decision_request_bytes(
+                atomic_request(continuation_candidate(EnvironmentActionKind::YesNo, "", false)));
+        },
+        "atomic candidate without a response was accepted");
+    require_throw(
+        [&] {
+            (void)canonical_public_environment_decision_request_bytes(
+                continuation_request("unordered",
+                                     continuation_candidate(EnvironmentActionKind::YesNo, "pick", false,
+                                                            0)));
+        },
+        "pick operation with a non-Pick action kind was accepted");
+    require_throw(
+        [&] {
+            (void)canonical_public_environment_decision_request_bytes(
+                continuation_request("counter", valid_pick));
+        },
+        "pick operation was accepted for counter allocation");
+    require_throw(
+        [&] {
+            (void)canonical_public_environment_decision_request_bytes(
+                continuation_request("unordered",
+                                     continuation_candidate(EnvironmentActionKind::Pick, "pick", true, 0)));
+        },
+        "pick operation that submits an engine response was accepted");
+    require_throw(
+        [&] {
+            (void)canonical_public_environment_decision_request_bytes(
+                continuation_request("counter",
+                                     continuation_candidate(EnvironmentActionKind::AssignAmount, "amount",
+                                                            false, {}, 2)));
+        },
+        "amount operation without a source index was accepted");
+    require_throw(
+        [&] {
+            (void)canonical_public_environment_decision_request_bytes(
+                continuation_request("unordered", valid_amount));
+        },
+        "amount operation outside counter allocation was accepted");
+    require_throw(
+        [&] {
+            (void)canonical_public_environment_decision_request_bytes(
+                continuation_request("counter",
+                                     continuation_candidate(EnvironmentActionKind::AssignAmount, "amount",
+                                                            false, 0, -1)));
+        },
+        "negative amount operation was accepted");
+    require_throw(
+        [&] {
+            (void)canonical_public_environment_decision_request_bytes(
+                continuation_request("counter",
+                                     continuation_candidate(EnvironmentActionKind::AssignAmount, "amount",
+                                                            false, 2, 2)));
+        },
+        "amount source outside the public remaining indices was accepted");
+    require_throw(
+        [&] {
+            (void)canonical_public_environment_decision_request_bytes(
+                continuation_request("unordered",
+                                     continuation_candidate(EnvironmentActionKind::Finish, "finish", true),
+                                     false));
+        },
+        "finish operation ignored can_finish=false");
+    require_throw(
+        [&] {
+            (void)canonical_public_environment_decision_request_bytes(
+                continuation_request("unordered",
+                                     continuation_candidate(EnvironmentActionKind::Cancel, "cancel", true),
+                                     false, false));
+        },
+        "cancel operation ignored can_cancel=false");
+    require_throw(
+        [&] {
+            (void)canonical_public_environment_decision_request_bytes(
+                continuation_request("unordered", valid_bypass));
+        },
+        "bypass operation was accepted outside ordering continuation");
+}
+
 void test_envelope_codec_and_identity() {
+    const auto config = CertifiedEnvironmentConfig::canonical();
     auto envelope = envelope_fixture();
     const auto bytes = canonical_episode_envelope_bytes(envelope);
     require_golden(canonical_policy_provenance_envelope_bytes(envelope.manifest.policy_provenance),
@@ -420,6 +596,26 @@ void test_envelope_codec_and_identity() {
     auto truncated = bytes;
     truncated.pop_back();
     require(!decode_episode_envelope(truncated), "truncated envelope was accepted");
+
+    auto mixed_episode = envelope;
+    EpisodeSpec other_spec;
+    other_spec.root_seed = 18;
+    mixed_episode.records.front().frame.episode_semantic_id =
+        episode_semantic_id(config, other_spec);
+    PublicSemanticDecisionIdentityInput mixed_identity;
+    mixed_identity.episode_semantic_id = mixed_episode.records.front().frame.episode_semantic_id;
+    mixed_identity.decision_index = mixed_episode.records.front().frame.decision_index;
+    mixed_identity.acting_player = mixed_episode.records.front().frame.acting_player;
+    mixed_identity.request_kind = std::string(environment_decision_kind_name(
+        mixed_episode.records.front().frame.request.kind));
+    mixed_identity.public_observation_digest =
+        mixed_episode.records.front().frame.public_observation_digest;
+    mixed_identity.public_candidate_domain_digest =
+        mixed_episode.records.front().frame.public_candidate_domain_digest;
+    mixed_episode.records.front().frame.public_semantic_decision_id =
+        public_semantic_decision_id(mixed_identity);
+    require_throw([&] { (void)canonical_episode_envelope_bytes(mixed_episode); },
+                  "mixed-episode frame was admitted into an envelope");
 }
 
 void test_closure_variants() {
@@ -507,6 +703,104 @@ void test_provenance_resolution() {
     bad.participant_assignments.front().resolved_locked_deck_sha256[0] = '0';
     require(!resolver.validate(bad, config, spec),
             "mismatched certified deck provenance was accepted");
+
+    const auto provenance_for = [&](const SeatAssignment seat_assignment,
+                                    const std::uint8_t starting_player) {
+        PolicyProvenanceEnvelope result;
+        const auto policy = deterministic_artifact();
+        result.policy_artifacts = {policy};
+        for (std::uint8_t player = 0; player < 2; ++player) {
+            const auto deck_index = seat_assignment == SeatAssignment::Mirror ? 1 - player : player;
+            result.participant_assignments.push_back(
+                assignment(policy, player,
+                           deck_index == 0 ? DeckRole::FirstLockedDeck
+                                           : DeckRole::SecondLockedDeck,
+                           player == starting_player ? SeatRole::StartingPlayer
+                                                     : SeatRole::NonStartingPlayer));
+        }
+        std::sort(result.participant_assignments.begin(), result.participant_assignments.end(),
+                  [](const auto& left, const auto& right) {
+                      return left.participant_policy_assignment_id <
+                             right.participant_policy_assignment_id;
+                  });
+        return result;
+    };
+
+    for (const auto seat_assignment : {SeatAssignment::Normal, SeatAssignment::Mirror}) {
+        for (const auto starting_player : {std::uint8_t{0}, std::uint8_t{1}}) {
+            auto combination = provenance_for(seat_assignment, starting_player);
+            EpisodeSpec combination_spec = spec;
+            combination_spec.seat_assignment = seat_assignment;
+            combination_spec.starting_player = starting_player;
+            error.clear();
+            require(resolver.validate(combination, config, combination_spec, &error),
+                    "seat/deck provenance combination did not resolve: " + error);
+        }
+    }
+
+    auto mirror_wrong_deck = provenance_for(SeatAssignment::Mirror, 0);
+    auto mirror_player_zero = std::find_if(
+        mirror_wrong_deck.participant_assignments.begin(),
+        mirror_wrong_deck.participant_assignments.end(),
+        [](const auto& value) { return value.player == 0; });
+    require(mirror_player_zero != mirror_wrong_deck.participant_assignments.end(),
+            "mirror provenance fixture lacks player zero");
+    mirror_player_zero->deck_role = DeckRole::FirstLockedDeck;
+    mirror_player_zero->resolved_locked_deck_id = "ocgforge.swordsoul_tenyi.ml_v1";
+    mirror_player_zero->resolved_locked_deck_sha256 =
+        "8ee4b699de19ff256e388d46f35b8696a60ff6ec59f0324f060a2468876711b7";
+    mirror_player_zero->participant_policy_assignment_id =
+        compute_participant_policy_assignment_id(*mirror_player_zero);
+    std::sort(mirror_wrong_deck.participant_assignments.begin(),
+              mirror_wrong_deck.participant_assignments.end(),
+              [](const auto& left, const auto& right) {
+                  return left.participant_policy_assignment_id <
+                         right.participant_policy_assignment_id;
+              });
+    EpisodeSpec mirror_spec = spec;
+    mirror_spec.seat_assignment = SeatAssignment::Mirror;
+    require(!resolver.validate(mirror_wrong_deck, config, mirror_spec),
+            "mirror provenance accepted a pre-swap player/deck mapping");
+
+    const auto provenance_with_artifact = [&](const PolicyArtifact& policy) {
+        PolicyProvenanceEnvelope result;
+        result.policy_artifacts = {policy};
+        result.participant_assignments = {
+            assignment(policy, 0, DeckRole::FirstLockedDeck, SeatRole::StartingPlayer),
+            assignment(policy, 1, DeckRole::SecondLockedDeck, SeatRole::NonStartingPlayer)};
+        std::sort(result.participant_assignments.begin(), result.participant_assignments.end(),
+                  [](const auto& left, const auto& right) {
+                      return left.participant_policy_assignment_id <
+                             right.participant_policy_assignment_id;
+                  });
+        return result;
+    };
+
+    auto random_artifact = deterministic_artifact();
+    random_artifact.policy_kind = PolicyKind::RandomLegal;
+    random_artifact.sampling_contract_identity = "ocgforge.test.random_sampling.v1";
+    random_artifact.policy_rng_contract_identity = "ocgforge.test.rng.v1";
+    random_artifact.policy_artifact_id = compute_policy_artifact_id(random_artifact);
+    auto random_provenance = provenance_with_artifact(random_artifact);
+    require(resolver.validate(random_provenance, config, spec),
+            "complete RANDOM_LEGAL sampling provenance was rejected");
+
+    auto incomplete_deterministic = deterministic_artifact();
+    incomplete_deterministic.sampling_contract_identity =
+        "ocgforge.test.incomplete_sampling.v1";
+    incomplete_deterministic.policy_artifact_id =
+        compute_policy_artifact_id(incomplete_deterministic);
+    require(!resolver.validate(provenance_with_artifact(incomplete_deterministic), config, spec),
+            "incomplete sampling contract was admitted for deterministic policy");
+
+    auto deterministic_with_random_sampling = deterministic_artifact();
+    deterministic_with_random_sampling.sampling_contract_identity =
+        "ocgforge.test.random_sampling.v1";
+    deterministic_with_random_sampling.policy_artifact_id =
+        compute_policy_artifact_id(deterministic_with_random_sampling);
+    require(!resolver.validate(provenance_with_artifact(deterministic_with_random_sampling),
+                               config, spec),
+            "non-deterministic sampling contract was admitted for deterministic policy");
 
     require(!resolver.can_resolve("ocgforge.unknown_contract.v1"),
             "unknown versioned contract identity was resolved as trusted");
@@ -611,6 +905,7 @@ int main() {
         test_primitive_strictness();
         test_policy_codecs();
         test_public_codecs();
+        test_continuation_operation_validation();
         test_envelope_codec_and_identity();
         test_identity_input_codecs();
         test_closure_variants();

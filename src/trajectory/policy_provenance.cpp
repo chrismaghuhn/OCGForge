@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
+#include <optional>
 #include <stdexcept>
 #include <utility>
 
@@ -29,7 +30,7 @@ bool known_contract_identity(const std::string_view value) noexcept {
     if (!versioned_contract_identity(value)) {
         return false;
     }
-    static constexpr std::array<std::string_view, 34> known = {
+    static constexpr std::array<std::string_view, 36> known = {
         kTrustedTrajectoryContractId,
         kPolicyProvenanceContractId,
         kPublicGameplayIdentityDomain,
@@ -62,10 +63,31 @@ bool known_contract_identity(const std::string_view value) noexcept {
         "ocgforge.test.observation.v1",
         "ocgforge.test.action.v1",
         "ocgforge.test.deterministic_sampling.v1",
+        "ocgforge.test.random_sampling.v1",
+        "ocgforge.test.incomplete_sampling.v1",
         "ocgforge.test.rng.v1",
         "ocgforge.test.v1",
     };
     return std::find(known.begin(), known.end(), value) != known.end();
+}
+
+struct SamplingContractCapabilities final {
+    bool complete = false;
+    bool deterministic = false;
+};
+
+std::optional<SamplingContractCapabilities> sampling_contract_capabilities(
+    const std::string_view identity) noexcept {
+    if (identity == "ocgforge.test.deterministic_sampling.v1") {
+        return SamplingContractCapabilities{true, true};
+    }
+    if (identity == "ocgforge.test.random_sampling.v1") {
+        return SamplingContractCapabilities{true, false};
+    }
+    if (identity == "ocgforge.test.incomplete_sampling.v1") {
+        return SamplingContractCapabilities{false, false};
+    }
+    return std::nullopt;
 }
 
 void set_error(std::string* error, const std::string& message) {
@@ -74,11 +96,20 @@ void set_error(std::string* error, const std::string& message) {
     }
 }
 
-bool validate_policy_kind(const PolicyArtifact& artifact, std::string* error) {
+bool validate_policy_kind(const PolicyArtifact& artifact,
+                         const ProvenanceResolver& resolver,
+                         std::string* error) {
     const auto reject = [&](const char* message) {
         set_error(error, message);
         return false;
     };
+    if (!resolver.can_resolve_contract(artifact.sampling_contract_identity)) {
+        return reject("sampling contract identity is not an exact known contract");
+    }
+    const auto sampling = sampling_contract_capabilities(artifact.sampling_contract_identity);
+    if (!sampling.has_value() || !sampling->complete) {
+        return reject("sampling contract does not prove complete candidate sampling");
+    }
     switch (artifact.policy_kind) {
         case PolicyKind::RandomLegal:
             if (artifact.policy_rng_contract_identity == kNoPolicyRngContractId ||
@@ -94,6 +125,9 @@ bool validate_policy_kind(const PolicyArtifact& artifact, std::string* error) {
                 artifact.search_contract_identity.has_value() ||
                 artifact.demonstration_source_identity.has_value()) {
                 return reject("DETERMINISTIC_HEURISTIC policy kind has incompatible provenance");
+            }
+            if (!sampling->deterministic) {
+                return reject("DETERMINISTIC_HEURISTIC policy kind lacks deterministic sampling");
             }
             return true;
         case PolicyKind::NeuralCheckpoint:
@@ -201,6 +235,11 @@ bool validate_policy_provenance(const PolicyProvenanceEnvelope& value,
                                 const ProvenanceResolver& resolver,
                                 std::string* error) {
     try {
+        if (spec.seat_assignment != environment::SeatAssignment::Normal &&
+            spec.seat_assignment != environment::SeatAssignment::Mirror) {
+            set_error(error, "EpisodeSpec has an unknown seat assignment");
+            return false;
+        }
         std::vector<std::string> artifact_ids;
         for (const auto& artifact : value.policy_artifacts) {
             const auto encoded = canonical_policy_artifact_bytes(artifact);
@@ -209,7 +248,7 @@ bool validate_policy_provenance(const PolicyProvenanceEnvelope& value,
                 set_error(error, "policy artifact does not pass strict codec validation");
                 return false;
             }
-            if (!validate_policy_kind(artifact, error)) {
+            if (!validate_policy_kind(artifact, resolver, error)) {
                 return false;
             }
             for (const auto* identity : {&artifact.producer_implementation_identity,
@@ -272,8 +311,13 @@ bool validate_policy_provenance(const PolicyProvenanceEnvelope& value,
             assignments_by_player[assignment.player].push_back(&assignment);
             assignment_ids.push_back(assignment.participant_policy_assignment_id);
 
-            const auto expected_deck_index = assignment.deck_role == DeckRole::FirstLockedDeck ? 0u : 1u;
-            if (config.locked_decks.size() != 2 ||
+            const auto expected_deck_index = spec.seat_assignment == environment::SeatAssignment::Mirror
+                                                 ? 1u - assignment.player
+                                                 : static_cast<unsigned int>(assignment.player);
+            const auto expected_deck_role = expected_deck_index == 0
+                                                ? DeckRole::FirstLockedDeck
+                                                : DeckRole::SecondLockedDeck;
+            if (assignment.deck_role != expected_deck_role || config.locked_decks.size() != 2 ||
                 assignment.resolved_locked_deck_id != config.locked_decks[expected_deck_index].id ||
                 assignment.resolved_locked_deck_sha256 != config.locked_decks[expected_deck_index].sha256) {
                 set_error(error, "assignment deck does not match certified V2 input");
@@ -318,7 +362,6 @@ bool validate_policy_provenance(const PolicyProvenanceEnvelope& value,
                 }
             }
         }
-        (void)spec;
         return true;
     } catch (const std::exception& exception) {
         set_error(error, exception.what());
