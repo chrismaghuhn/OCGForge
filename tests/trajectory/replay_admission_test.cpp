@@ -1,4 +1,5 @@
 #include "ygo/trajectory/admission.hpp"
+#include "ygo/trajectory/receipt.hpp"
 #include "ygo/trajectory/recorder.hpp"
 
 #include <algorithm>
@@ -482,6 +483,18 @@ void test_real_replay_and_admission() {
             "real V2 continuation shard admission failed: " + error);
     require(continuation_verification->entries().size() == 1,
             "real V2 continuation admission did not commit one entry");
+    const auto continuation_receipt = issue_admission_receipt(
+        *continuation_verification, &error);
+    require(continuation_receipt.has_value(),
+            "real V2 admission receipt issuance failed: " + error);
+    const auto decoded_receipt = decode_admission_receipt(
+        canonical_admission_receipt_bytes(*continuation_receipt));
+    require(static_cast<bool>(decoded_receipt),
+            "real V2 admission receipt did not strict round-trip");
+    require(admission_receipt_id(*continuation_receipt) ==
+                "admission_receipt.v1." +
+                    trace::sha256_bytes(canonical_admission_receipt_bytes(*continuation_receipt)),
+            "real V2 admission receipt identity is not content-addressed");
 
     const std::vector<CollectedEpisode*> combined{&engine_budget, &administrative};
     const auto shard_a = shard_for(combined);
@@ -526,10 +539,10 @@ void test_real_replay_and_admission() {
 int main() {
     try {
         test_real_replay_and_admission();
-        std::cout << "replay and admission tests passed\n";
+        std::cout << "replay, admission, and receipt tests passed\n";
         return 0;
     } catch (const std::exception& error) {
-        std::cerr << "replay and admission tests failed: " << error.what()
+        std::cerr << "replay, admission, and receipt tests failed: " << error.what()
                   << '\n';
         return 1;
     }
