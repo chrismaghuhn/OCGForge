@@ -24,6 +24,9 @@ _CTEST_DURATION = re.compile(r"(?P<prefix>\b(?:Passed|Failed)\s+)\d+(?:\.\d+)?\s
 _CTEST_TOTAL_DURATION = re.compile(r"(?P<prefix>\bTotal Test time \(real\) = )\d+(?:\.\d+)?\s+sec\b")
 _CTEST_LABEL_DURATION = re.compile(r"(?P<prefix>\bM4_[A-Z0-9_]+\s*=\s*)\d+(?:\.\d+)?\s+sec\*proc\b")
 _PYTHON_DURATION = re.compile(r"(?P<prefix>\bRan \d+ tests in )\d+(?:\.\d+)?s\b")
+_CTEST_TEST_RESULT = re.compile(
+    r"^\s*\d+/\d+\s+Test\s+#\d+:\s+(?P<name>\S+).*?(?P<status>Passed|Failed)\b"
+)
 
 
 def git_value(*args: str) -> str:
@@ -78,6 +81,17 @@ def display_command(command: list[str]) -> list[str]:
     return rendered
 
 
+def parse_ctest_test_results(output: str) -> dict[str, str]:
+    """Extract explicit per-test CTest results from the normal summary output."""
+    results: dict[str, str] = {}
+    for line in output.splitlines():
+        match = _CTEST_TEST_RESULT.match(line)
+        if match is None:
+            continue
+        results[match.group("name")] = "PASS" if match.group("status") == "Passed" else "FAIL"
+    return results
+
+
 def run_command(
     command: list[str],
     *,
@@ -98,6 +112,7 @@ def run_command(
         "stdout_tail": stdout_lines[-8:],
         "stderr_tail": stderr_lines[-8:],
         "result": result,
+        "ctest_tests": parse_ctest_test_results(completed.stdout),
     }
 
 
@@ -109,6 +124,26 @@ def gate(gate_id: str, result: str, command: str, reason: str, runs: Iterable[di
         "reason": reason,
         "runs": list(runs),
     }
+
+
+def gate_from_ctest_evidence(
+    gate_id: str,
+    run: dict[str, Any],
+    expected_tests: set[str],
+    reason: str,
+) -> dict[str, Any]:
+    """Bind a gate to the exact named tests observed in one CTest invocation."""
+    observed = run.get("ctest_tests", {})
+    missing = sorted(test for test in expected_tests if test not in observed)
+    failed = sorted(test for test in expected_tests if observed.get(test) != "PASS" and test not in missing)
+    result = "PASS" if run.get("returncode") == 0 and not missing and not failed else "FAIL"
+    details = reason
+    if missing:
+        details += "; missing executed test(s): " + ", ".join(missing)
+    if failed:
+        details += "; failed test(s): " + ", ".join(failed)
+    command = "ctest exact tests: " + ", ".join(sorted(expected_tests))
+    return gate(gate_id, result, command, details, [run])
 
 
 def run_ctest(build_dir: Path, regex: str, label: str) -> dict[str, Any]:
@@ -145,7 +180,7 @@ def run_acceptance(probe: Path, build_dir: Path, output_dir: Path, run_all: bool
 
     focused = run_ctest(
         build_dir,
-        "^(episodic_.*|episode_driver_.*|normative_prerequisites_test|public_action_identity_test|ygo_episodic_probe_smoke)$",
+        "^(episodic_.*|episode_driver_.*|normative_prerequisites_test|public_action_identity_test|m4_simulation_contract_test|ygo_episodic_probe_smoke)$",
         "focused-episodic-ctest",
     )
     runs[focused["label"]] = focused
@@ -216,7 +251,6 @@ def run_acceptance(probe: Path, build_dir: Path, output_dir: Path, run_all: bool
         )
         runs[python_suite["label"]] = python_suite
 
-    focused_ok = focused["returncode"] == 0
     worker_ok = worker["returncode"] == 0
     witness_ok = witness["returncode"] == 0 and witness_path.is_file()
     internal_witness_ok = internal_witness["returncode"] == 0 and internal_witness_path.is_file()
@@ -240,7 +274,6 @@ def run_acceptance(probe: Path, build_dir: Path, output_dir: Path, run_all: bool
     full_ok = full is not None and full["returncode"] == 0
     python_ok = python_suite is not None and python_suite["returncode"] == 0
 
-    ctest_run = [focused]
     if not run_all:
         g31_result = "NOT_RUN"
         g31_reason = "full local acceptance was not requested"
@@ -254,34 +287,34 @@ def run_acceptance(probe: Path, build_dir: Path, output_dir: Path, run_all: bool
     gates = [
         gate("G01", "PASS" if worker_ok else "FAIL", "G21-worker-determinism", "independent public reset/frame identities", [worker]),
         gate("G02", "PASS" if worker_ok else "FAIL", "G21-worker-determinism", "distinct seed/seat corpus identities", [worker]),
-        gate("G03", "PASS" if "episodic_lifecycle_test" in focused["stdout_tail"] or focused_ok else "NOT_RUN", "episodic_lifecycle_test", "fresh incarnation/token behavior covered by lifecycle test", ctest_run),
+        gate_from_ctest_evidence("G03", focused, {"episodic_lifecycle_test"}, "fresh incarnation/token behavior covered by the lifecycle test"),
         gate("G04", "PASS" if interleaving_ok else "FAIL", "ygo_episodic_reset_probe --mode interleaving", "A-B-C-A-D-A persistent reset isolation with fresh references", [interleaving]),
         gate("G05", "PASS" if soak_ok else "BLOCKED" if soak_blocked else "FAIL", "ygo_episodic_reset_probe --mode soak --episodes 500", "500-episode persistent reset/resource isolation with mixed closures; public continuation coverage is required for PASS", [soak]),
-        gate("G06", "PASS" if focused_ok else "FAIL", "episodic_environment_test + v2_public_projection_test", "public frame/player/observation coupling", ctest_run),
-        gate("G07", "PASS" if focused_ok else "FAIL", "v2_public_projection_test", "complete public projection preserves the exercised authoritative domain", ctest_run),
+        gate_from_ctest_evidence("G06", focused, {"episodic_environment_test", "episodic_environment_v2_public_projection_test", "episodic_paired_world_test"}, "public frame/player/observation coupling"),
+        gate_from_ctest_evidence("G07", focused, {"episodic_environment_v2_public_projection_test", "episodic_paired_world_test"}, "complete public projection preserves the exercised authoritative domain"),
         gate("G08", "PASS" if worker_ok else "FAIL", "G21-worker-determinism", "ordered public domains reproduce across processes", [worker]),
-        gate("G09", "PASS" if focused_ok else "FAIL", "episodic_environment_test + public_action_identity_test", "independent public digest recomputation and mutation coverage", ctest_run),
-        gate("G10", "PASS" if focused_ok else "FAIL", "episodic_rejection_test", "stale token/decision validation precedes membership", ctest_run),
-        gate("G11", "PASS" if focused_ok else "FAIL", "episodic_rejection_test", "unknown public key rejection", ctest_run),
-        gate("G12", "PASS" if focused_ok else "FAIL", "episodic_lifecycle_test + episodic_interrupt_test", "closed-state and reset lifecycle rejection", ctest_run),
-        gate("G13", "PASS" if focused_ok else "FAIL", "episodic_rejection_test", "caller-side rejection certifies zero mutation", ctest_run),
-        gate("G14", "PASS" if focused_ok else "FAIL", "episode_driver_* + episodic_replay_test", "continuation seam and public replay prefix", ctest_run),
-        gate("G15", "PASS" if focused_ok else "FAIL", "episode_driver_*", "final continuation response path retained", ctest_run),
-        gate("G16", "PASS" if focused_ok else "FAIL", "episodic_environment_test", "atomic response submission classification", ctest_run),
-        gate("G17", "PASS" if focused_ok else "FAIL", "episodic_budget_test", "semantic budget interruption", ctest_run),
-        gate("G18", "PASS" if focused_ok else "FAIL", "episodic_budget_test", "engine process budget interruption", ctest_run),
-        gate("G19", "PASS" if focused_ok else "FAIL", "m4_simulation_contract_test + episode_driver_*", "canonical simulation regression suite", ctest_run),
-        gate("G20", "PASS" if focused_ok else "FAIL", "episodic_replay_test", "public-key replay reproduces public frames", ctest_run),
+        gate_from_ctest_evidence("G09", focused, {"episodic_environment_test", "public_action_identity_test"}, "independent public digest recomputation and mutation coverage"),
+        gate_from_ctest_evidence("G10", focused, {"episodic_rejection_test"}, "stale token/decision validation precedes membership"),
+        gate_from_ctest_evidence("G11", focused, {"episodic_rejection_test"}, "unknown public key rejection"),
+        gate_from_ctest_evidence("G12", focused, {"episodic_lifecycle_test", "episodic_interrupt_test"}, "closed-state and reset lifecycle rejection"),
+        gate_from_ctest_evidence("G13", focused, {"episodic_rejection_test"}, "caller-side rejection certifies zero mutation"),
+        gate_from_ctest_evidence("G14", focused, {"episode_driver_seam_test", "episode_driver_ownership_guard", "episode_driver_stale_key_test", "episode_driver_tribute_integration_test", "episodic_replay_test"}, "continuation seam and public replay prefix"),
+        gate_from_ctest_evidence("G15", focused, {"episode_driver_seam_test", "episode_driver_ownership_guard", "episode_driver_stale_key_test", "episode_driver_tribute_integration_test"}, "final continuation response path retained"),
+        gate_from_ctest_evidence("G16", focused, {"episodic_environment_test"}, "atomic response submission classification"),
+        gate_from_ctest_evidence("G17", focused, {"episodic_budget_test"}, "semantic budget interruption"),
+        gate_from_ctest_evidence("G18", focused, {"episodic_budget_test"}, "engine process budget interruption"),
+        gate_from_ctest_evidence("G19", focused, {"m4_simulation_contract_test", "episode_driver_seam_test", "episode_driver_ownership_guard", "episode_driver_stale_key_test", "episode_driver_tribute_integration_test"}, "canonical simulation regression suite"),
+        gate_from_ctest_evidence("G20", focused, {"episodic_replay_test"}, "public-key replay reproduces public frames"),
         gate("G21", "PASS" if worker_ok else "FAIL", "episodic_worker_determinism.py", "independent-process public determinism", [worker]),
-        gate("G22", "PASS" if focused_ok else "FAIL", "public_action_identity_test + v2_public_projection_test", "paired-world/public redaction contract", ctest_run),
-        gate("G23", "PASS" if focused_ok else "FAIL", "episodic_terminal_privacy_test", "terminal views absent before true terminal and safe at terminal", ctest_run),
-        gate("G24", "PASS" if focused_ok else "FAIL", "episodic_budget_test + episodic_terminal_privacy_test", "interruptions are not outcomes", ctest_run),
-        gate("G25", "PASS" if focused_ok else "FAIL", "episodic_interrupt_test", "administrative cancellation", ctest_run),
-        gate("G26", "PASS" if focused_ok else "FAIL", "episodic_fault_injection_test", "driver fault closes fail-closed", ctest_run),
-        gate("G27", "PASS" if focused_ok else "FAIL", "episodic_reset_after_failure_test", "facade reset after a typed public failure restores fresh operation", ctest_run),
+        gate_from_ctest_evidence("G22", focused, {"episodic_paired_world_test"}, "facade-level paired-world/public redaction contract"),
+        gate_from_ctest_evidence("G23", focused, {"episodic_paired_world_test", "episodic_terminal_privacy_test"}, "paired terminal views obey perspective-safe projection"),
+        gate_from_ctest_evidence("G24", focused, {"episodic_budget_test", "episodic_terminal_privacy_test"}, "interruptions are not outcomes"),
+        gate_from_ctest_evidence("G25", focused, {"episodic_interrupt_test"}, "administrative cancellation"),
+        gate_from_ctest_evidence("G26", focused, {"episodic_fault_injection_test"}, "driver fault closes fail-closed"),
+        gate_from_ctest_evidence("G27", focused, {"episodic_reset_after_failure_test"}, "facade reset after a typed public failure restores fresh operation"),
         gate("G28", "PASS" if g28_ok else "FAIL", "internal witness + episodic_witness_discovery.py", "accepted internal v1 tie-break, complete public projection witness, and independent replay agree on the maximum", [internal_witness, witness]),
         gate("G29", "PASS" if reward_ok else "FAIL", "reward_independence.py", "external reward policies remain outside environment values", [reward]),
-        gate("G30", "PASS" if focused_ok else "FAIL", "episodic_identity_test + terminal identity test", "versioned V2 identity rejection and golden IDs", ctest_run),
+        gate_from_ctest_evidence("G30", focused, {"episodic_identity_test", "episodic_terminal_privacy_test"}, "versioned V2 identity rejection and golden IDs"),
         gate("G31", g31_result, "full-ctest + repository Python suites", g31_reason, [item for item in (full, python_suite, rules) if item is not None]),
         gate("G32", "BLOCKED", "not run", "clean exact-head checkout/render/hash gate is not yet executed", []),
     ]

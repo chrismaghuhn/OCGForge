@@ -201,6 +201,8 @@ add_test(NAME ygo_episodic_probe_smoke
 
 add_executable(ygo_episodic_reset_probe tools/ygo_episodic_reset_probe/main.cpp)
 target_link_libraries(ygo_episodic_reset_probe PRIVATE ygo_m4)
+target_include_directories(ygo_episodic_reset_probe PRIVATE
+                           "${CMAKE_SOURCE_DIR}/src/environment")
 
 add_executable(ygo_episodic_internal_witness tools/ygo_episodic_internal_witness/main.cpp)
 target_link_libraries(ygo_episodic_internal_witness PRIVATE ygo_m4)
@@ -294,6 +296,12 @@ target_link_libraries(episodic_environment_v2_public_projection_test PRIVATE ygo
 add_test(NAME episodic_environment_v2_public_projection_test
          COMMAND episodic_environment_v2_public_projection_test)
 
+add_executable(episodic_paired_world_test tests/episodic/episodic_paired_world_test.cpp)
+target_link_libraries(episodic_paired_world_test PRIVATE ygo_m4)
+target_include_directories(episodic_paired_world_test PRIVATE
+                           "${CMAKE_SOURCE_DIR}/src/environment")
+add_test(NAME episodic_paired_world_test COMMAND episodic_paired_world_test)
+
 add_executable(episodic_lifecycle_test tests/episodic/episodic_lifecycle_test.cpp)
 target_link_libraries(episodic_lifecycle_test PRIVATE ygo_m4)
 add_test(NAME episodic_lifecycle_test COMMAND episodic_lifecycle_test)
@@ -330,6 +338,8 @@ add_test(NAME episodic_fault_injection_test COMMAND episodic_fault_injection_tes
 add_executable(episodic_reset_after_failure_test
                tests/episodic/episodic_reset_after_failure_test.cpp)
 target_link_libraries(episodic_reset_after_failure_test PRIVATE ygo_m4)
+target_include_directories(episodic_reset_after_failure_test PRIVATE
+                           "${CMAKE_SOURCE_DIR}/src/environment")
 add_test(NAME episodic_reset_after_failure_test COMMAND episodic_reset_after_failure_test)
 
 add_executable(public_action_identity_test tests/episodic/public_action_identity_test.cpp)

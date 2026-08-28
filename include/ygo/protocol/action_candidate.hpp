@@ -23,6 +23,18 @@ enum class ActionKind {
     AssignAmount,
 };
 
+// Auxiliary metadata owned by the continuation protocol. This classifies the
+// operation independently of the internal semantic key so public projection
+// never has to infer policy-facing identity from that key.
+enum class ContinuationOperation {
+    None,
+    Pick,
+    AssignAmount,
+    Finish,
+    Cancel,
+    Bypass,
+};
+
 struct ActionCandidate {
     ActionKind action_kind = ActionKind::IdleCommand;
     std::string semantic_key;
@@ -46,6 +58,7 @@ struct ActionCandidate {
     std::optional<std::uint64_t> choice_value;
     std::optional<std::uint32_t> choice_index;
     std::string continuation_id;
+    ContinuationOperation continuation_operation = ContinuationOperation::None;
     bool submits_engine_response = true;
     std::vector<std::uint8_t> exact_response_bytes;
 };

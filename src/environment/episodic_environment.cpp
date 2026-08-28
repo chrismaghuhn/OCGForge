@@ -18,7 +18,7 @@
 #include "ygo/core/core_error.hpp"
 #include "ygo/core/rules_bundle.hpp"
 #include "ygo/environment/episode_driver.hpp"
-#include "ygo/environment/episodic_environment_test_access.hpp"
+#include "episodic_environment_test_access.hpp"
 #include "ygo/core/seed_bundle.hpp"
 #include "ygo/environment/identity_contract.hpp"
 #include "ygo/m3/canonical_rules.hpp"
@@ -919,24 +919,9 @@ std::optional<PublicChoice> project_choice(
     return std::nullopt;
 }
 
-bool ends_with(const std::string& value, const std::string_view suffix) {
-    return value.size() >= suffix.size() &&
-           value.compare(value.size() - suffix.size(), suffix.size(), suffix) == 0;
-}
-
 std::string project_continuation_operation(const protocol::ActionCandidate& candidate) {
-    switch (candidate.action_kind) {
-    case protocol::ActionKind::Pick:
-        return "pick";
-    case protocol::ActionKind::AssignAmount:
-        return "amount";
-    case protocol::ActionKind::Finish:
-        return "finish";
-    case protocol::ActionKind::Cancel:
-        return ends_with(candidate.semantic_key, ".bypass") ? "bypass" : "cancel";
-    default:
-        return {};
-    }
+    const auto operation = protocol::continuation_operation_name(candidate.continuation_operation);
+    return std::string(operation);
 }
 
 struct ProjectedCandidate final {
@@ -1647,6 +1632,36 @@ struct EpisodicEnvironment::Impl final {
         }
     }
 };
+
+DecisionFrame detail::EpisodicEnvironmentTestAccess::project_frame_for_test(
+    EpisodicEnvironment& environment, const protocol::DecisionRequest& request,
+    const observation::PlayerObservation& observation, std::string episode_semantic_id,
+    const std::uint64_t decision_index) {
+    auto harness = std::make_unique<EpisodicEnvironment::Impl>(environment.impl_->config);
+    harness->current_episode_id = std::move(episode_semantic_id);
+    harness->episode_incarnation_counter = 1;
+    const DriverDecisionBoundary boundary{&request, &observation};
+    return harness->project_frame(boundary, decision_index).frame;
+}
+
+void detail::EpisodicEnvironmentTestAccess::install_terminal_views_for_test(
+    EpisodicEnvironment& environment,
+    const observation::PlayerObservation& player_zero_observation,
+    const observation::PlayerObservation& player_one_observation,
+    const std::uint64_t decision_index) {
+    auto& impl = *environment.impl_;
+    impl.terminal_views[0] = impl.project_public_observation_for_index(
+        player_zero_observation, decision_index);
+    impl.terminal_views[1] = impl.project_public_observation_for_index(
+        player_one_observation, decision_index);
+    impl.public_decision_index = decision_index;
+    impl.current_frame.reset();
+    impl.current_bindings.clear();
+    impl.terminal.reset();
+    impl.interruption.reset();
+    impl.failure.reset();
+    impl.lifecycle_state = Lifecycle::GameTerminal;
+}
 
 void detail::EpisodicEnvironmentTestAccess::force_next_reset_failure(
     EpisodicEnvironment& environment) {

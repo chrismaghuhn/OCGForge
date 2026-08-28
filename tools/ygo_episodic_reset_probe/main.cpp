@@ -1,5 +1,5 @@
 #include "ygo/environment/episodic_environment.hpp"
-#include "ygo/environment/episodic_environment_test_access.hpp"
+#include "episodic_environment_test_access.hpp"
 
 #include <algorithm>
 #include <cstdint>

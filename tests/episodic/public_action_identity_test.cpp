@@ -4,12 +4,14 @@
 #include "ygo/observation/serialization.hpp"
 #include "ygo/protocol/continuation.hpp"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
 #include <iostream>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -441,6 +443,42 @@ void test_public_domain_order_and_mapping_collision() {
         invalid_domain_rejected = true;
     }
     require(invalid_domain_rejected, "non-canonical public domain was accepted");
+}
+
+void test_continuation_operation_metadata_is_typed_and_not_key_derived() {
+    ygo::protocol::SelectionContinuation continuation;
+    continuation.continuation_kind = ygo::protocol::ContinuationKind::Ordering;
+    continuation.raw_message_hash = "paired-world-ordering";
+    continuation.items.push_back({{7654321, 0, 8, 0, 0}, 3, 0, 0, 0, 0});
+    const auto request = ygo::protocol::make_continuation_request(
+        ygo::protocol::DecisionRequestKind::Ordering, 1, 0, "synthetic-ordering", 19,
+        continuation);
+
+    const auto bypass = std::find_if(
+        request.candidates.begin(), request.candidates.end(),
+        [](const ygo::protocol::ActionCandidate& candidate) {
+            constexpr std::string_view suffix = ".bypass";
+            return candidate.semantic_key.size() >= suffix.size() &&
+                   candidate.semantic_key.compare(candidate.semantic_key.size() - suffix.size(), suffix.size(), suffix) == 0;
+        });
+    require(bypass != request.candidates.end(), "ordering continuation did not publish its bypass candidate");
+    require(bypass->continuation_operation == ygo::protocol::ContinuationOperation::Bypass,
+            "ordering bypass did not carry typed continuation metadata");
+
+    auto mutated = *bypass;
+    mutated.semantic_key = "cont.synthetic-ordering.hidden-card.14821890";
+    require(mutated.continuation_operation == bypass->continuation_operation,
+            "typed continuation operation changed when the internal key changed");
+
+    ygo::environment::PublicActionKeyInput first;
+    first.action_kind = "cancel";
+    first.continuation_operation = std::string(
+        ygo::protocol::continuation_operation_name(bypass->continuation_operation));
+    auto second = first;
+    second.continuation_operation = std::string(
+        ygo::protocol::continuation_operation_name(mutated.continuation_operation));
+    require(ygo::environment::public_action_key(first) == ygo::environment::public_action_key(second),
+            "public action identity depended on the mutated internal semantic key");
 }
 
 void test_public_codec_rejects_non_locator_reference() {

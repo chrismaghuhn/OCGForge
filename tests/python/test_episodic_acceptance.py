@@ -1,6 +1,12 @@
 import unittest
 
-from tools.episodic.acceptance import ROOT, canonicalize_evidence_line, display_command
+from tools.episodic.acceptance import (
+    ROOT,
+    canonicalize_evidence_line,
+    display_command,
+    gate_from_ctest_evidence,
+    parse_ctest_test_results,
+)
 
 
 class EpisodicAcceptanceEvidenceTests(unittest.TestCase):
@@ -64,6 +70,46 @@ class EpisodicAcceptanceEvidenceTests(unittest.TestCase):
             "Ran 8 tests in <elapsed>s",
             canonicalize_evidence_line("Ran 8 tests in 0.023s"),
         )
+
+    def test_parse_ctest_test_results_requires_explicit_passed_test_names(self):
+        output = """
+1/2 Test #9: episodic_environment_test ...................   Passed    0.01 sec
+2/2 Test #12: episodic_paired_world_test .................***Failed    0.02 sec
+"""
+        self.assertEqual(
+            {
+                "episodic_environment_test": "PASS",
+                "episodic_paired_world_test": "FAIL",
+            },
+            parse_ctest_test_results(output),
+        )
+
+    def test_gate_from_ctest_evidence_fails_when_expected_test_is_missing(self):
+        run = {
+            "returncode": 0,
+            "ctest_tests": {"episodic_environment_test": "PASS"},
+        }
+        result = gate_from_ctest_evidence(
+            "G22",
+            run,
+            {"episodic_environment_test", "episodic_paired_world_test"},
+            "paired-world evidence",
+        )
+        self.assertEqual("FAIL", result["result"])
+        self.assertIn("episodic_paired_world_test", result["reason"])
+
+    def test_gate_from_ctest_evidence_does_not_treat_unrelated_green_run_as_pass(self):
+        run = {
+            "returncode": 0,
+            "ctest_tests": {"m4_simulation_contract_test": "PASS"},
+        }
+        result = gate_from_ctest_evidence(
+            "G22",
+            run,
+            {"episodic_paired_world_test"},
+            "paired-world evidence",
+        )
+        self.assertEqual("FAIL", result["result"])
 
 
 if __name__ == "__main__":

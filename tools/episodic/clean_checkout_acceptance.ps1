@@ -145,6 +145,13 @@ try {
         throw 'clean-checkout acceptance manifest changed between identical renders'
     }
 
+    Invoke-Checked -Command 'git' -Arguments @('-C', $worktree, 'diff', '--check') -WorkingDirectory $worktree
+    $afterEvidenceStatus = (& git -C $worktree status --porcelain)
+    $cleanAfterEvidence = [string]::IsNullOrWhiteSpace(($afterEvidenceStatus -join ''))
+    if (-not $cleanAfterEvidence) {
+        throw 'clean worktree is not clean after acceptance evidence generation'
+    }
+
     New-Item -ItemType Directory -Force -Path $resolvedEvidenceOutput | Out-Null
     Copy-Item -LiteralPath $manifestA -Destination (Join-Path $resolvedEvidenceOutput 'episodic_acceptance_manifest.json') -Force
     $summary = [ordered]@{
@@ -153,6 +160,8 @@ try {
         expected_head = $expected
         actual_head = $actualHead
         clean_worktree = $true
+        clean_worktree_after_evidence = $cleanAfterEvidence
+        git_diff_check = $true
         identical_manifest_renders = $true
         worktree_path = $worktree
         rules_cache = $resolvedRulesCache
