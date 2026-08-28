@@ -95,19 +95,27 @@ trajectory_record_id
 ```
 
 The existing environment, episode, and public-decision IDs retain their
-accepted owners. The new public gameplay ID binds only public gameplay values.
-The new record ID additionally binds exact policy/collection provenance. It
-does not bind physical storage, compression, host, build, provider, wall
-clock, worker, PID, path, or completion order.
+accepted owners. The new public gameplay ID binds global public gameplay
+values, including both participants' accepted frames and terminal views. The
+new record ID additionally binds exact policy/collection provenance. Neither
+global identity is a participant learner or policy feature. They do not bind
+physical storage, compression, host, build, provider, wall clock, worker, PID,
+path, or completion order.
 
 ### 4. Public gameplay versus collection provenance
 
 The canonical public gameplay projection contains public V2 frames, complete
 ordered public domains, selected public keys, accepted transition classes, and
-closure. Policy artifact, participant assignment, and policy-RNG provenance
-are canonical collection provenance. They identify the producer but never
-become policy input, public-gameplay identity input, or a requirement to
-reproduce floating-point inference for environment replay.
+closure. The raw `EpisodeEnvelope` and global gameplay identity are
+collection/replay values, never direct learner or policy input. A participant
+learner projection contains only its own public records and terminal view.
+
+Policy artifact, participant assignment, and policy-RNG provenance are
+canonical collection provenance. They identify the producer but never become
+policy input, public-gameplay identity input, or a requirement to reproduce
+floating-point inference for environment replay. A policy may retain
+policy-local recurrent/strategic state only when derived from prior permitted
+perspective-safe public inputs and policy-local state.
 
 Derived rewards, tensors, candidate indexes, recurrent windows, replay
 priorities, exports, and storage layouts are outside the core contract.
@@ -118,8 +126,10 @@ Rejected `step()` calls create no `DecisionRecord`. A collector that observes
 a policy-generated rejection must mark the episode as quarantined under the
 default trusted collection profile; a later retry does not erase that fact.
 `TERMINAL`, `INTERRUPTED`, and `FAILED` remain separate closure kinds. Only a
-true terminal has a winner and win reason. Failed episodes are never normal
-learner samples.
+true terminal has a winner and win reason. An `INTERRUPTED` admission replay
+also requires exact restricted reason/run-control/count/engine-step evidence,
+which Phase 3B must bind to the candidate before receipt issuance. Failed
+episodes are never normal learner samples.
 
 ### 6. Framework neutrality
 
@@ -165,14 +175,25 @@ learner feature.
 
 ## Compatibility / migration
 
-The decision introduces these proposed Phase-3A domains:
+The decision introduces these proposed Phase-3A domains and fixed contract
+identifier:
 
 ```text
 ocgforge.trusted_trajectory.v1
 ocgforge.policy_provenance.v1
+ocgforge.policy_artifact_identity.v1
+ocgforge.participant_policy_assignment_identity.v1
+ocgforge.policy_rng_initialization_identity.v1
+ocgforge.policy_rng_stream_identity.v1
+ocgforge.policy_rng_decision_provenance.v1
+ocgforge.no_policy_rng.v1
 ocgforge.public_gameplay_trajectory_identity.v1
 ocgforge.trajectory_record_identity.v1
+ocgforge.restricted_replay_evidence.v1
 ```
+
+`ocgforge.no_policy_rng.v1` is a fixed exact versioned contract identifier,
+not a content-addressed artifact.
 
 An incompatible field, visibility, ordering, codec, or digest-input change
 requires a new versioned contract or identity domain. No reader may treat an

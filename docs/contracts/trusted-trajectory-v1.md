@@ -22,12 +22,19 @@ The words **MUST**, **MUST NOT**, and **FAIL CLOSED** are normative.
 
 ## 1. Contract domains
 
-| Domain | Purpose |
+| Domain or fixed contract identifier | Purpose |
 | --- | --- |
 | `ocgforge.trusted_trajectory.v1` | logical episode schema and canonical episode/value codec |
 | `ocgforge.policy_provenance.v1` | exact producer, participant assignment, and policy-RNG provenance; defined in [policy-provenance-v1.md](policy-provenance-v1.md) |
-| `ocgforge.public_gameplay_trajectory_identity.v1` | public gameplay-only trajectory identity |
+| `ocgforge.policy_artifact_identity.v1` | immutable policy-artifact identity codec |
+| `ocgforge.participant_policy_assignment_identity.v1` | participant-to-policy assignment identity codec |
+| `ocgforge.policy_rng_initialization_identity.v1` | concrete policy RNG initialization identity codec |
+| `ocgforge.policy_rng_stream_identity.v1` | policy-local RNG stream identity codec |
+| `ocgforge.policy_rng_decision_provenance.v1` | per-accepted-decision policy RNG provenance codec |
+| `ocgforge.no_policy_rng.v1` | fixed exact versioned contract identifier for a deterministic policy with no RNG |
+| `ocgforge.public_gameplay_trajectory_identity.v1` | global public-gameplay replay identity; never a participant learner feature |
 | `ocgforge.trajectory_record_identity.v1` | trusted record identity that additionally binds collection provenance |
+| `ocgforge.restricted_replay_evidence.v1` | restricted Phase-3B admission-replay companion for an `INTERRUPTED` closure |
 
 Existing `environment_semantic_id`, `episode_semantic_id`, and
 `public_semantic_decision_id` keep their existing meanings and codecs. This
@@ -236,28 +243,37 @@ An administrative V2 interrupt while `F_t` is awaiting an action emits no
 `DecisionRecord`. `EpisodeClosure.pending_unacted_frame`, when present, is a
 copy of that public frame snapshot without a selected action, token, or
 engine-step field. It documents the boundary at which collection stopped; it
-is not an action, a reward transition, or a successor of a prior action.
+is not an action, reward transition, or next `DecisionRecord`. When `N > 0`,
+the immediately preceding accepted record may refer to this boundary only
+through the `NEXT_FRAME` pending-frame target defined in section 5; that
+reference does not turn the frame into an accepted action.
 
 ### 4.4 Budget interruption
 
 An engine-process or semantic-action budget can produce `INTERRUPTED` after
 an accepted action or before a new actionable frame is published. The record
 for an already accepted action remains valid and points to `INTERRUPTED`; the
-closure holds no winner, loss, draw, or implicit reward. Run-control counts
-and budget values are restricted verification evidence, not learner data or
-public gameplay identity input.
+closure holds no winner, loss, draw, or implicit reward. The exact reason,
+run-control budgets, observed counts, and final engine-step evidence are
+restricted verification evidence under section 13.1. They are not learner
+data or public-gameplay identity inputs.
 
 ### 4.5 Envelope sequence invariants
 
 For an envelope with `N` decision records, record `i` MUST have
 `decision_index = i` for every `0 <= i < N`. The records are encoded in that
 order with no gap, duplicate, reorder, or hidden action. Every nonfinal record
-has a `NEXT_FRAME` successor to record `i + 1`; the final record has exactly
-one closure successor. The closure count field, where present, equals `N`.
+has a `NEXT_FRAME` successor with target kind `NEXT_DECISION_RECORD` to record
+`i + 1`. The final record has exactly one successor: either the matching
+closure tag, or a `NEXT_FRAME` successor with target kind
+`INTERRUPTION_PENDING_UNACTED_FRAME`. The closure count field, where present,
+equals `N`.
 
 For an administrative interruption with a pending unacted frame, that frame's
-decision index MUST equal `N`. If `N > 0`, record `N - 1` must point to it with
-`NEXT_FRAME`; if `N = 0`, it is the first actionable frame after reset. An
+decision index MUST equal `N`. If `N > 0`, record `N - 1` MUST point to it with
+the pending-frame `NEXT_FRAME` target; the envelope closure MUST be
+`INTERRUPTED`, and no `DecisionRecord` follows. If `N = 0`, the pending frame
+is the first actionable frame after reset and has no predecessor record. An
 interruption reached directly from an accepted final record has no pending
 frame and that record points directly to `INTERRUPTED`.
 
@@ -283,13 +299,22 @@ the response bytes nor its hash.
 
 | Code | Tag | Payload |
 | ---: | --- | --- |
-| 0 | `NEXT_FRAME` | `next_decision_index:u64`, `next_public_semantic_decision_id:string` |
+| 0 | `NEXT_FRAME` | `next_frame_target_kind:u8`, `next_decision_index:u64`, `next_public_semantic_decision_id:string` |
 | 1 | `TERMINAL` | no payload |
 | 2 | `INTERRUPTED` | no payload |
 | 3 | `FAILED` | no payload |
 
-For `NEXT_FRAME`, the index MUST equal current `decision_index + 1` and the
-ID MUST exactly equal the next record's `frame.public_semantic_decision_id`.
+`next_frame_target_kind` uses one `u8`: `0=NEXT_DECISION_RECORD` and
+`1=INTERRUPTION_PENDING_UNACTED_FRAME`. For either target kind, the index MUST
+equal current `decision_index + 1`.
+
+For `NEXT_DECISION_RECORD`, the ID MUST exactly equal the next record's
+`frame.public_semantic_decision_id`; a final record cannot use this target
+kind. For `INTERRUPTION_PENDING_UNACTED_FRAME`, the ID MUST exactly equal
+`EpisodeClosure.pending_unacted_frame.public_semantic_decision_id`; it is
+valid only on the final record of an `INTERRUPTED` envelope with that pending
+frame present. No `DecisionRecord` may follow the pending-frame target.
+
 For a closure tag, the one envelope closure MUST have the same kind. No record
 may follow a closure successor.
 
@@ -333,10 +358,11 @@ pending_unacted_frame: optional PublicFrameSnapshot
 It has no winner, loss, draw, win reason, terminal view, or implicit numeric
 reward. The optional pending frame is allowed only for an administrative
 cancellation while V2 awaited that exact action; it cannot be present after a
-record with a closure successor. The V2 interruption reason, run-control
-values, engine process count, semantic action count, engine step, and audit
-prefix are restricted replay/collection evidence, not learner features or
-public-gameplay identity inputs.
+record with a **direct** closure successor. When it has a preceding record,
+that record uses the pending-frame `NEXT_FRAME` target from section 5. The V2
+interruption reason, run-control values, engine process count, semantic action
+count, engine step, and audit prefix are restricted replay/collection evidence,
+not learner features or public-gameplay identity inputs.
 
 ### 6.3 FAILED
 
@@ -388,26 +414,30 @@ candidate-vector index and does not authorize candidate-position selection.
 
 ## 8. Privacy classification
 
-The following table is normative. “Public canonical” means it may appear in
-the public gameplay projection. “Collection provenance only” means it may
-be retained in the trusted envelope but never supplied as learner features.
-“Restricted verification evidence” is admission/replay evidence outside the
-public trajectory projection. “Forbidden” means it is not retained in the
-canonical learner-visible record or either new identity input.
+The following table is normative. “Public canonical” means that a value may
+appear in the **global** public-gameplay projection. It does not make global
+metadata or another participant's values safe learner/policy input.
+“Collection provenance only” means it may be retained in the trusted envelope
+but never supplied as learner features. “Restricted verification evidence” is
+admission/replay evidence outside the public trajectory projection. “Forbidden”
+means it is not retained in the canonical learner-visible record or either new
+identity input.
 
 | Value | Classification | Rule |
 | --- | --- | --- |
-| `PublicEnvironmentObservation`, public digest | public canonical | exact accepted V2 value and digest |
+| `PublicEnvironmentObservation`, public digest | public canonical | exact accepted V2 value and digest; a participant projection receives only its own records |
 | public request, ordered public candidates, public-domain digest | public canonical | complete V2 domain, never a summary substitute |
-| `public_semantic_decision_id`, selected `public_action_key` | public canonical | existing V2 public identity and exact selected key |
-| true terminal winner/win reason and perspective-safe terminal views | public canonical | only under `TERMINAL` |
+| `public_semantic_decision_id`, selected `public_action_key` | public canonical | existing V2 public identity and exact selected key; IDs are verifier metadata, not automatic learner features |
+| true terminal winner/win reason and perspective-safe terminal views | global public canonical | only under `TERMINAL`; a participant projection may receive only its own terminal view |
+| raw `EpisodeEnvelope` | collection/replay container only | never direct learner or policy input; it contains both participants' records and restricted manifest inputs |
+| `public_gameplay_trajectory_id` and `trajectory_record_id` | global collection/replay identity | never learner/policy input, feature, action field, reward input, or participant-stream metadata |
 | policy artifact, assignment, policy RNG, clean/quarantine disposition | collection provenance only | exact producer attribution, never learner feature |
 | V2 reset identity inputs and root seed | restricted replay/admission input | needed for semantic replay, not learner-visible |
 | `semantic_gameplay_hash` | restricted verification evidence | EngineTrace v2 includes internal semantics; never an identity input here |
 | `final_audit_prefix_hash` / `last_valid_audit_prefix_hash` | restricted verification evidence | audit-chain value, never learner-visible or an identity input |
 | `final_response_sha256` | restricted verification evidence | raw-response-derived hash; never public canonical |
-| `engine_step_index` | restricted verification evidence | excluded unless a later admission profile proves a restricted use; never a v1 trajectory identity input |
-| V2 interruption reason and numeric `RunControlEvidence` | restricted verification evidence | excluded from the canonical envelope and both new identities |
+| `engine_step_index` | restricted verification evidence | only the final engine-step value is required by `RestrictedReplayEvidence` for an `INTERRUPTED` admission replay; never a v1 trajectory identity input |
+| V2 interruption reason, `RunControlEvidence`, and final engine-step evidence | restricted verification evidence | required only by `RestrictedReplayEvidence` for an `INTERRUPTED` admission replay; excluded from the envelope and both new identities |
 | cancellation source and arbitrary run-control metadata | forbidden | excluded from every v1 envelope and identity; a future admission contract must classify it independently before any retention |
 | hidden card passcode and hidden-card-derived field | forbidden | a hash of a secret is also forbidden unless independently proved safe |
 | opponent-private `PlayerObservation` | forbidden | including any attached decision context not in public projection |
@@ -429,8 +459,13 @@ or forbidden, never silently promoted to public canonical data.
 | `environment_semantic_id` | existing V2 certified environment semantics | collection, storage, model, host, wall time |
 | `episode_semantic_id` | existing reset semantics within that environment | selected actions, policy provenance, storage |
 | `public_semantic_decision_id` | existing public frame semantics | token, engine step, internal decision/key/digest |
-| `public_gameplay_trajectory_id` | ordered public gameplay and public closure | policy, policy RNG, rejection disposition, storage/build/provider |
-| `trajectory_record_id` | one trusted collection record | physical shard/dataset/object/compression/build/provider/hardware/time |
+| `public_gameplay_trajectory_id` | ordered **global** public gameplay and global public closure for collection/replay | policy, policy RNG, rejection disposition, storage/build/provider, learner/policy input |
+| `trajectory_record_id` | one trusted collection record | physical shard/dataset/object/compression/build/provider/hardware/time, learner/policy input |
+
+`public_gameplay_trajectory_id` is global, not participant-perspective-safe
+metadata. It commits the global sequence of records and, on a terminal, both
+perspective terminal views. Therefore neither it nor `trajectory_record_id` may
+be supplied to a learner, policy, reward adapter, or participant stream.
 
 Required consequences are:
 
@@ -448,9 +483,10 @@ Neither new identity includes an artifact path, storage location, object hash,
 compression choice, collector build, compiler, processor, provider, worker,
 PID, thread, scheduling order, host name, wall time, or framework.
 
-`trajectory_record_id`, like the policy-provenance envelope that it commits,
-is collection provenance only. It MUST NOT be emitted as a learner observation,
-candidate field, action key, reward input, or public gameplay identity alias.
+The raw `EpisodeEnvelope`, `public_gameplay_trajectory_id`, and
+`trajectory_record_id` are global collection/replay values. They MUST NOT be
+emitted as a learner observation, policy input, candidate field, action key,
+reward input, participant-stream metadata, or public-gameplay identity alias.
 
 ### 9.1 Public gameplay trajectory identity codec
 
@@ -482,6 +518,9 @@ Only `TERMINAL` and `INTERRUPTED` envelopes can receive this identity.
 `FAILED` cannot. The identity excludes the manifest reset-input bytes, policy
 provenance, policy RNG, collection disposition, rejection evidence,
 run-control evidence, audit values, response values, and physical provenance.
+It nevertheless commits every global public record and, for a terminal, both
+terminal perspective views. It is thus a global replay/collection identity,
+not a perspective-safe participant learner/policy feature.
 
 ### 9.2 Trusted trajectory-record identity codec
 
@@ -674,9 +713,12 @@ public gameplay identity.
 The `TERMINAL` payload is, in order: winner `u8`, win reason `u8`, semantic
 action count `u64be`, optional last decision index, player-0 terminal public
 observation bytes and digest, then player-1 terminal public observation bytes
-and digest. The `INTERRUPTED` payload is, in order: record count `u64be`, then
-optional pending unacted public frame bytes. The `FAILED` payload is, in
-order: failure code `u8`, failure stage `u8`, mutation-may-have-occurred
+and digest. Both views are global collection/replay data; section 12.2 limits
+a participant learner projection to its own view. The `INTERRUPTED` payload is,
+in order: record count `u64be`, then optional pending unacted public frame
+bytes. Its exact interruption reason/run-control evidence is not nested here;
+it is the restricted Phase-3B companion in section 13.1. The `FAILED` payload
+is, in order: failure code `u8`, failure stage `u8`, mutation-may-have-occurred
 boolean, then record count `u64be`.
 
 `FailureCode` uses the exact V2 codes: `0=RETRY_FAILURE`, `1=CORE_ERROR`,
@@ -796,20 +838,40 @@ Changing reward policy MUST NOT change the environment ID, episode ID, public
 frame ID, candidate domain, selected action, outcome, or public gameplay
 trajectory ID. `INTERRUPTED` and `FAILED` have no implicit numeric reward.
 
-### 12.2 Recurrent POMDP streams
+### 12.2 Recurrent POMDP streams and participant learner projection
 
+The raw global `EpisodeEnvelope` MUST NEVER be direct learner or policy input.
 A future learner may derive:
 
 ```text
 AgentDecisionStream(episode, participant_assignment)
 ```
 
-It contains only the records made by that assignment, in global
-`decision_index` order. Player 0 and player 1 streams MUST NOT be concatenated
-merely because their global frames are adjacent. Two participant assignments
-using the same checkpoint still own distinct recurrent state. Burn-in,
-sequence length, overlap, padding, and hidden-state data are derived values,
-not canonical fields.
+It is a participant-scoped learner projection, not a view of the raw envelope.
+For records made by that assignment, it may contain only the acting public
+observation, complete ordered request/candidate domain, selected public action
+key, and accepted transition class, in global `decision_index` order. It must
+exclude successor references, verifier IDs/digests, the record's collection
+provenance, and every other participant's record.
+
+When the global closure is `TERMINAL`, this projection may contain only the
+terminal public observation for that assignment's player. It MUST NOT contain
+the opponent terminal view. When an `INTERRUPTED` closure has a pending unacted
+frame, the projection may contain it only when the frame's acting player
+resolves to that participant assignment; it remains a non-action boundary, not
+a training transition.
+
+The projection MUST exclude V2 reset/replay identity bytes and root seed, raw
+`EpisodeEnvelope`, all global trajectory/record identities, and verifier
+identity/digest metadata unless a future perspective-safety contract proves a
+specific value safe for that use. It MUST NOT use a global identity as a
+feature or indirect join key.
+
+Player 0 and player 1 streams MUST NOT be concatenated merely because their
+global frames are adjacent. Two participant assignments using the same
+checkpoint still own distinct recurrent state. Burn-in, sequence length,
+overlap, padding, and hidden-state data are derived values, not canonical
+fields.
 
 ## 13. Replay and Phase-3B handoff
 
@@ -817,15 +879,56 @@ A future semantic replay verifies, from restricted V2 reset inputs and public
 evidence, the environment/episode identities, each regenerated ordered public
 frame, its public observation digest, complete ordered public domain, selected
 public action-key sequence, transition class, successor, and closure. Stored
-public observations are evidence, not engine input. Replay never requires a
-submission token, internal semantic key, candidate vector position, machine
-identity, wall clock, worker order, or re-execution of neural inference.
+public observations are evidence, not engine input. A `TERMINAL` closure is
+verified from that replay. An `INTERRUPTED` envelope proves its public action
+prefix but cannot alone prove why V2 stopped; it requires the exact restricted
+companion in section 13.1 before Phase 3B may claim interruption replay
+verification. Replay never requires a submission token, internal semantic key,
+candidate vector position, machine identity, wall clock, worker order, or
+re-execution of neural inference.
+
+### 13.1 Restricted interruption replay evidence
+
+`RestrictedReplayEvidence` is a Phase-3B admission-replay companion, not an
+`EpisodeEnvelope` field, learner value, reward input, or public/trusted-record
+identity input. It is required exactly when the envelope closure is
+`INTERRUPTED`; it is invalid for `TERMINAL` and `FAILED` envelopes.
+
+`canonical_restricted_replay_evidence_bytes` encodes these exact fields:
+
+| Order | Field | Encoding |
+| ---: | --- | --- |
+| 0 | evidence schema | string `ocgforge.restricted_replay_evidence.v1` |
+| 1 | V2 contract ID | string `ocgforge.episodic_environment.v2` |
+| 2 | episode semantic ID | string |
+| 3 | closure kind | `u8`, exactly `1=INTERRUPTED` |
+| 4 | interruption reason | `u8`: `0=ENGINE_PROCESS_BUDGET`, `1=SEMANTIC_ACTION_BUDGET`, `2=ADMINISTRATIVE_CANCEL` |
+| 5 | engine-process budget | `u64be` |
+| 6 | semantic-action budget | `u64be` |
+| 7 | observed engine-process count | `u64be` |
+| 8 | observed semantic-action count | `u64be` |
+| 9 | final engine-step index | `u64be` |
+
+Fields 4 through 9 MUST exactly equal the accepted V2 `EpisodeInterrupted`
+reason, `RunControlEvidence`, and final engine-step value. `cancellation.source`,
+arbitrary run-control metadata, audit hashes, response hashes, raw response
+bytes, and raw engine state are not fields of this evidence.
+
+For an interrupted candidate, Phase 3B semantic admission replay MUST apply
+the exact budgets, reproduce the selected public action prefix, and compare the
+reason, observed process/action counts, final engine-step index, closure, and
+pending-frame semantics. Any mismatch or absent evidence rejects admission.
+Before an immutable `AdmissionReceipt` is issued, Phase 3B MUST
+cryptographically bind the exact restricted-evidence bytes to the verified
+candidate shard. This contract fixes that semantic binding requirement but not
+its physical object, hashing, packaging, or publication mechanism.
 
 Phase 3B owns and is explicitly deferred from this contract:
 
 ```text
 TrajectoryShard
 CandidateShardManifest
+RestrictedReplayEvidence storage and candidate-shard binding
 AdmissionReceipt
 DatasetManifest
 physical storage layout and compression
@@ -838,6 +941,7 @@ The handoff is fixed only at this semantic level:
 
 ```text
 canonical episode
++ RestrictedReplayEvidence when closure == INTERRUPTED
   -> candidate shard
   -> structural / schema / privacy validation
   -> semantic replay verification
@@ -846,7 +950,8 @@ canonical episode
 ```
 
 Phase 3B must preserve this contract's bytes and meanings; it must not widen
-the public projection or repurpose either identity.
+the public projection, repurpose either identity, or admit an interrupted
+candidate without its exact restricted replay evidence.
 
 ## 14. Versioning and failure rules
 
