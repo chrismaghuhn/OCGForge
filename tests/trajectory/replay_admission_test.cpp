@@ -1,4 +1,5 @@
 #include "ygo/trajectory/admission.hpp"
+#include "ygo/trajectory/dataset_manifest.hpp"
 #include "ygo/trajectory/receipt.hpp"
 #include "ygo/trajectory/recorder.hpp"
 
@@ -19,6 +20,7 @@ using namespace ygo;
 using namespace ygo::environment;
 using namespace ygo::trajectory;
 using namespace ygo::trajectory::admission;
+using namespace ygo::trajectory::dataset;
 using namespace trajectory_test;
 
 void require(const bool condition, const std::string& message) {
@@ -458,6 +460,32 @@ CandidateTrajectoryShard shard_for(const std::vector<CollectedEpisode*>& episode
     return result;
 }
 
+DatasetManifest manifest_for(const std::vector<AdmissionReceipt>& receipts) {
+    DatasetManifest result;
+    for (const auto& receipt : receipts) {
+        const auto receipt_id = admission_receipt_id(receipt);
+        for (const auto& commitment : receipt.entries) {
+            result.members.push_back(DatasetManifestMember{
+                commitment.trajectory_record_id,
+                commitment.public_gameplay_trajectory_id,
+                receipt_id,
+                receipt.candidate_shard_artifact_sha256,
+                commitment.episode_envelope_sha256});
+        }
+    }
+    std::sort(result.members.begin(), result.members.end(),
+              [](const auto& left, const auto& right) {
+                  return left.trajectory_record_id < right.trajectory_record_id;
+              });
+    std::vector<std::string> record_ids;
+    record_ids.reserve(result.members.size());
+    for (const auto& member : result.members) {
+        record_ids.push_back(member.trajectory_record_id);
+    }
+    result.dataset_semantic_id = dataset::dataset_semantic_id(record_ids);
+    return result;
+}
+
 void test_real_replay_and_admission() {
     auto engine_budget = collect_real_engine_budget_interruption();
     auto semantic_budget = collect_real_semantic_budget_interruption();
@@ -499,10 +527,12 @@ void test_real_replay_and_admission() {
     const std::vector<CollectedEpisode*> combined{&engine_budget, &administrative};
     const auto shard_a = shard_for(combined);
     const auto evidence_a = evidence_for(shard_a, combined);
-    const auto receipt_a = admit_collected(
+    const auto verification_a = admit_collected(
         shard_a, evidence_a, replay_options_for(engine_budget), &error);
-    require(receipt_a.has_value() && receipt_a->entries().size() == 2,
+    require(verification_a.has_value() && verification_a->entries().size() == 2,
             "whole-shard admission did not return both real interruption entries: " + error);
+    const auto packed_receipt = issue_admission_receipt(*verification_a, &error);
+    require(packed_receipt.has_value(), "packed admission receipt issuance failed: " + error);
 
     const std::vector<CollectedEpisode*> split_left{&engine_budget};
     const std::vector<CollectedEpisode*> split_right{&administrative};
@@ -510,15 +540,31 @@ void test_real_replay_and_admission() {
     const auto shard_b_right = shard_for(split_right);
     const auto evidence_b_left = evidence_for(shard_b_left, split_left);
     const auto evidence_b_right = evidence_for(shard_b_right, split_right);
-    const auto receipt_b_left = admit_collected(
+    const auto verification_b_left = admit_collected(
         shard_b_left, evidence_b_left, replay_options_for(engine_budget), &error);
-    const auto receipt_b_right = admit_collected(
+    const auto verification_b_right = admit_collected(
         shard_b_right, evidence_b_right, replay_options_for(administrative), &error);
-    require(receipt_b_left.has_value() && receipt_b_right.has_value(),
+    require(verification_b_left.has_value() && verification_b_right.has_value(),
             "split-shard admission failed: " + error);
+    const auto split_receipt_left = issue_admission_receipt(*verification_b_left, &error);
+    const auto split_receipt_right = issue_admission_receipt(*verification_b_right, &error);
+    require(split_receipt_left.has_value() && split_receipt_right.has_value(),
+            "split admission receipt issuance failed: " + error);
     require(candidate_shard_artifact_sha256(shard_a) !=
                 candidate_shard_artifact_sha256(shard_b_left),
             "re-sharding unexpectedly preserved the physical shard artifact hash");
+    const auto packed_manifest = manifest_for({*packed_receipt});
+    const auto split_manifest = manifest_for({*split_receipt_left, *split_receipt_right});
+    require(packed_manifest.dataset_semantic_id == split_manifest.dataset_semantic_id,
+            "dataset semantic identity changed under re-sharding");
+    require(canonical_dataset_manifest_bytes(packed_manifest) !=
+                canonical_dataset_manifest_bytes(split_manifest),
+            "re-sharding unexpectedly preserved the physical manifest bytes");
+    require(validate_dataset_manifest(packed_manifest, {*packed_receipt}, &error),
+            "packed dataset manifest validation failed: " + error);
+    require(validate_dataset_manifest(split_manifest,
+                                     {*split_receipt_left, *split_receipt_right}, &error),
+            "split dataset manifest validation failed: " + error);
 
     auto quarantined = engine_budget.envelope;
     quarantined.manifest.collection_disposition.kind =
@@ -539,10 +585,10 @@ void test_real_replay_and_admission() {
 int main() {
     try {
         test_real_replay_and_admission();
-        std::cout << "replay, admission, and receipt tests passed\n";
+        std::cout << "replay, admission, receipt, and dataset tests passed\n";
         return 0;
     } catch (const std::exception& error) {
-        std::cerr << "replay, admission, and receipt tests failed: " << error.what()
+        std::cerr << "replay, admission, receipt, and dataset tests failed: " << error.what()
                   << '\n';
         return 1;
     }
