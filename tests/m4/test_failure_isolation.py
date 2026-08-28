@@ -509,6 +509,25 @@ class FailureIsolationTests(unittest.TestCase):
             self.assertTrue(pool._states[0].reaped)
             self.assertIsNone(pool._states[0].in_flight)
 
+    def test_post_publication_worker_exit_invalidates_result(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="ocgforge-m4-task5-delayed-result-exit-") as directory:
+            with PersistentWorkerPool(
+                fake_command("result-then-delayed-exit"),
+                worker_count=1,
+                output_dir=Path(directory),
+                lifecycle_settle_timeout_seconds=0.01,
+            ) as pool:
+                results = pool.run(jobs(1))
+                metadata = pool.last_run_metadata
+
+            self.assertEqual(results[0]["status"], "failed")
+            self.assertEqual(results[0]["failure_code"], "worker_crash")
+            self.assertIsNone(results[0]["gameplay_hash"])
+            self.assertTrue(results[0]["coordinator"]["worker_crashed"])
+            self.assertEqual(metadata["worker_crashes"], 1)
+            self.assertTrue(pool._states[0].retired)
+            self.assertTrue(pool._states[0].reaped)
+
     def test_result_then_exit_never_publishes_passed_under_repeated_scheduling(self) -> None:
         workload = jobs(1)
         observed: list[dict[str, object]] = []
