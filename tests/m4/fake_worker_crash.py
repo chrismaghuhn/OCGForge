@@ -212,6 +212,11 @@ def main() -> int:
             encoded = json.dumps(result, separators=(",", ":")).encode("utf-8") + b"\n"
             os.write(sys.stdout.fileno(), encoded)
             os._exit(17)
+        if args.behavior == "result-then-delayed-exit":
+            encoded = json.dumps(result, separators=(",", ":")).encode("utf-8") + b"\n"
+            os.write(sys.stdout.fileno(), encoded)
+            time.sleep(0.10)
+            os._exit(17)
         print(json.dumps(result, separators=(",", ":")), flush=True)
     return 0
 

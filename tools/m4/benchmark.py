@@ -98,6 +98,8 @@ class _WorkerState:
     restarted_for_job: bool = False
     in_flight: _InFlight | None = None
     staged_result: dict[str, Any] | None = None
+    # Retained only until the final run barrier settles the last result.
+    published_job: _InFlight | None = None
     retired: bool = False
     reaped: bool = False
     cleanup_error: str | None = None
@@ -476,7 +478,11 @@ class PersistentWorkerPool:
             # Keep a short post-publication lifecycle barrier so a worker
             # cannot emit a delayed duplicate after the final result has
             # already been accepted, even for diagnostic/non-primary runs.
-            self._settle_completed_run()
+            try:
+                self._settle_completed_run()
+            finally:
+                for state in self._states:
+                    state.published_job = None
             ordered = [
                 self._results[key] for key in sorted(self._results, key=_job_sort_key)
             ]
@@ -532,6 +538,7 @@ class PersistentWorkerPool:
         state.ready = None
         state.in_flight = None
         state.staged_result = None
+        state.published_job = None
         state.retired = False
         state.reaped = False
         state.cleanup_error = None
@@ -699,6 +706,7 @@ class PersistentWorkerPool:
     def _dispatch(self, state: _WorkerState, job: dict[str, Any], encoded_job: str) -> None:
         if not state.alive or state.process is None or state.process.stdin is None:
             raise WorkerRuntimeError(f"worker {state.index} is not available for dispatch")
+        state.published_job = None
         state.in_flight = _InFlight(job=job, dispatched_ns=time.perf_counter_ns())
         try:
             state.process.stdin.write((encoded_job + "\n").encode("utf-8"))
@@ -817,6 +825,7 @@ class PersistentWorkerPool:
         self._results[str(state.in_flight.job["job_id"])] = state.staged_result
         if state.staged_result["status"] == "failed":
             self.last_run_metadata["failed_games"] += 1
+        state.published_job = state.in_flight
         state.staged_result = None
         state.in_flight = None
 
@@ -873,6 +882,7 @@ class PersistentWorkerPool:
                         code="worker_crash",
                         message=self._exit_message(state),
                         crashed=True,
+                        include_published_job=True,
                     )
                     continue
                 if state.events is None:
@@ -887,6 +897,7 @@ class PersistentWorkerPool:
                         code="malformed_protocol",
                         message="worker emitted a result after the final job was published",
                         malformed=True,
+                        include_published_job=True,
                     )
                 else:
                     self._worker_failed(
@@ -895,6 +906,7 @@ class PersistentWorkerPool:
                         message=payload or self._exit_message(state),
                         crashed=kind == "eof",
                         malformed=kind == "reader_error",
+                        include_published_job=True,
                     )
             time.sleep(min(0.001, max(0.0, deadline - time.perf_counter())))
 
@@ -1005,8 +1017,11 @@ class PersistentWorkerPool:
         message: str,
         crashed: bool = False,
         malformed: bool = False,
+        include_published_job: bool = False,
     ) -> None:
-        in_flight = state.in_flight
+        in_flight = state.in_flight or (
+            state.published_job if include_published_job else None
+        )
         self._run_integrity_failure = message or code
         self.last_run_metadata["integrity_failure"] = self._run_integrity_failure
         state.staged_result = None
@@ -1021,6 +1036,7 @@ class PersistentWorkerPool:
             )
             self._results[str(in_flight.job["job_id"])] = result
             state.in_flight = None
+            state.published_job = None
             self.last_run_metadata["failed_games"] += 1
         if crashed:
             self.last_run_metadata["worker_crashes"] += 1
@@ -1236,6 +1252,7 @@ class PersistentWorkerPool:
         state.retired = True
         state.in_flight = None
         state.staged_result = None
+        state.published_job = None
         if process is None:
             state.alive = False
             state.reaped = True
