@@ -28,4 +28,3 @@ Entries are strictly ordered by `trajectory_record_id`. The receipt ID is
 `admission_receipt.v1.<sha256(canonical bytes)>`; it is not encoded into its
 own bytes. Paths, filenames, hosts, PIDs, clocks, scheduling, and cloud/build
 metadata are not fields.
-

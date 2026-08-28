@@ -26,4 +26,3 @@ Entries are strictly ascending by the lowercase hexadecimal
 envelope bytes. Duplicate, unsorted, malformed, truncated, mismatched, or
 trailing data fails closed. The codec never sorts or deduplicates an input;
 the writer rejects noncanonical order.
-

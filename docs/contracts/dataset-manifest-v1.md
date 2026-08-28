@@ -26,4 +26,3 @@ Members are strictly ordered by `trajectory_record_id` and must resolve to
 verified receipt commitments. Duplicate, conflicting, unknown, malformed, or
 trailing data fails closed. Mutable URIs and absolute paths do not enter the
 manifest or logical dataset identity.
-
