@@ -408,6 +408,10 @@ void validate_continuation(const environment::EnvironmentContinuationView& value
     // unbounded sentinel; min_count is not a cardinality bound in that mode.
     const bool unbounded_greater_sum = value.continuation_kind == "sum" && value.greater_sum &&
                                       value.max_count == 0;
+    if (value.exact_sum == value.greater_sum ||
+        (value.greater_sum && value.continuation_kind != "sum")) {
+        throw std::invalid_argument("trajectory continuation has an invalid sum mode");
+    }
     if (value.min_count > value.max_count && !unbounded_greater_sum) {
         throw std::invalid_argument("trajectory continuation cardinality is inverted");
     }
@@ -461,6 +465,30 @@ void validate_continuation(const environment::EnvironmentContinuationView& value
         throw std::invalid_argument(
             "trajectory announcement continuation selects a bit outside its public mask");
     }
+    if (value.continuation_kind == "announce_mask") {
+        std::uint64_t selected_index_mask = 0;
+        for (const auto index : value.selected_indices) {
+            if (index >= 64) {
+                throw std::invalid_argument("trajectory announcement index exceeds the public mask width");
+            }
+            selected_index_mask |= std::uint64_t{1} << index;
+        }
+        if (selected_index_mask != value.selected_mask) {
+            throw std::invalid_argument(
+                "trajectory announcement selected indices disagree with the selected mask");
+        }
+        std::uint64_t remaining_index_mask = 0;
+        for (const auto index : value.remaining_indices) {
+            if (index >= 64) {
+                throw std::invalid_argument("trajectory announcement index exceeds the public mask width");
+            }
+            remaining_index_mask |= std::uint64_t{1} << index;
+        }
+        if (remaining_index_mask != (value.available_mask & ~value.selected_mask)) {
+            throw std::invalid_argument(
+                "trajectory announcement remaining indices disagree with the public mask domain");
+        }
+    }
     const auto can_finish = public_can_finish(value);
     if (can_finish.has_value() && value.can_finish != *can_finish) {
         throw std::invalid_argument("trajectory continuation can_finish disagrees with public state");
@@ -508,6 +536,7 @@ void validate_request(const environment::EnvironmentDecisionRequest& value) {
     std::size_t finish_count = 0;
     std::size_t cancel_count = 0;
     std::size_t bypass_count = 0;
+    std::vector<std::uint32_t> ordering_picks;
     const auto is_remaining_index = [&continuation](const std::uint32_t source_index) {
         return std::find(continuation.remaining_indices.begin(),
                          continuation.remaining_indices.end(), source_index) !=
@@ -525,6 +554,9 @@ void validate_request(const environment::EnvironmentDecisionRequest& value) {
                 !candidate.source_index.has_value() ||
                 !is_remaining_index(*candidate.source_index)) {
                 throw std::invalid_argument("pick continuation candidate is structurally invalid");
+            }
+            if (continuation.continuation_kind == "ordering") {
+                ordering_picks.push_back(*candidate.source_index);
             }
         } else if (candidate.continuation_operation == "amount") {
             if (candidate.action_kind != environment::EnvironmentActionKind::AssignAmount ||
@@ -557,6 +589,10 @@ void validate_request(const environment::EnvironmentDecisionRequest& value) {
         } else {
             throw std::invalid_argument("continuation candidate has an unknown operation");
         }
+    }
+    if (continuation.continuation_kind == "ordering" &&
+        (bypass_count != 1 || ordering_picks != continuation.remaining_indices)) {
+        throw std::invalid_argument("ordering continuation does not expose its complete ordered domain");
     }
     if (finish_count > 1 || cancel_count > 1 || bypass_count > 1 ||
         (finish_count != 0) != continuation.can_finish ||

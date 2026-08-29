@@ -512,9 +512,13 @@ void test_continuation_operation_validation() {
                 canonical_public_environment_decision_request_bytes(
                     continuation_request("unordered", valid_cancel, false, true)))),
             "valid cancel continuation was rejected");
+    auto valid_ordering = continuation_request(
+        "ordering", continuation_candidate(EnvironmentActionKind::Pick, "pick", false, 0));
+    valid_ordering.candidates.push_back(
+        continuation_candidate(EnvironmentActionKind::Pick, "pick", false, 1));
+    valid_ordering.candidates.push_back(valid_bypass);
     require(static_cast<bool>(decode_public_environment_decision_request(
-                canonical_public_environment_decision_request_bytes(
-                    continuation_request("ordering", valid_bypass)))),
+                canonical_public_environment_decision_request_bytes(valid_ordering))),
             "valid ordering bypass continuation was rejected");
 
     require_throw(
@@ -602,6 +606,12 @@ void test_continuation_operation_validation() {
                 continuation_request("unordered", valid_bypass));
         },
         "bypass operation was accepted outside ordering continuation");
+    require_throw(
+        [&] {
+            (void)canonical_public_environment_decision_request_bytes(
+                continuation_request("ordering", valid_bypass));
+        },
+        "ordering continuation accepted a domain without all remaining picks");
 
     require_throw(
         [&] {
@@ -688,10 +698,18 @@ void test_continuation_operation_validation() {
     greater_sum_unbounded.continuation->remaining_indices = {2};
     greater_sum_unbounded.continuation->min_count = 2;
     greater_sum_unbounded.continuation->max_count = 0;
+    greater_sum_unbounded.continuation->exact_sum = false;
     greater_sum_unbounded.continuation->greater_sum = true;
     require(static_cast<bool>(decode_public_environment_decision_request(
                 canonical_public_environment_decision_request_bytes(greater_sum_unbounded))),
             "greater_sum continuation rejected its V2 unbounded max_count sentinel");
+    auto conflicting_sum_modes = greater_sum_unbounded;
+    conflicting_sum_modes.continuation->exact_sum = true;
+    require_throw(
+        [&] {
+            (void)canonical_public_environment_decision_request_bytes(conflicting_sum_modes);
+        },
+        "continuation accepted simultaneous exact_sum and greater_sum modes");
     greater_sum_unbounded.continuation->greater_sum = false;
     require_throw(
         [&] {
@@ -743,6 +761,27 @@ void test_continuation_operation_validation() {
             (void)canonical_public_environment_decision_request_bytes(invalid_mask);
         },
         "announcement continuation accepted selected bits outside available mask");
+
+    auto inconsistent_mask_indices = continuation_request(
+        "announce_mask", continuation_candidate(EnvironmentActionKind::Pick, "pick", false, 2));
+    inconsistent_mask_indices.continuation->selected_indices = {0};
+    inconsistent_mask_indices.continuation->remaining_indices = {1, 2};
+    inconsistent_mask_indices.continuation->available_mask = 7;
+    inconsistent_mask_indices.continuation->selected_mask = 2;
+    require_throw(
+        [&] {
+            (void)canonical_public_environment_decision_request_bytes(inconsistent_mask_indices);
+        },
+        "announcement continuation accepted inconsistent selected indices and mask");
+
+    auto incomplete_mask_remaining = inconsistent_mask_indices;
+    incomplete_mask_remaining.continuation->selected_mask = 1;
+    incomplete_mask_remaining.continuation->remaining_indices = {2};
+    require_throw(
+        [&] {
+            (void)canonical_public_environment_decision_request_bytes(incomplete_mask_remaining);
+        },
+        "announcement continuation accepted an incomplete remaining mask domain");
 }
 
 void test_envelope_codec_and_identity() {
