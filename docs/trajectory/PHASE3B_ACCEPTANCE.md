@@ -12,7 +12,7 @@ and `BLOCKED` are not acceptance passes.
 | --- | --- |
 | Accepted Phase-3A base | `689710a90e751b046c062a8c0b3f56ec2cef5500` |
 | Implementation branch | `chris/phase3b-trajectory-persistence-admission` |
-| Verified executable/evidence head | `231d71767759395b9e207da4e294ac9be77f96f8` |
+| Verified executable/evidence head | `86892329533bcad256cc0c1954445c3e0e13892a` |
 | Scope | One Phase-3B PR; seven internally separated vertical slices |
 | Rules input | The pinned `third_party/rules_bundle.lock.json` and its verified local cache |
 | Matrix status | Local P3B gates recorded after exact-head execution; hosted CI remains `NOT_RUN` until the final PR head is pushed |
@@ -106,6 +106,12 @@ Atomic temporary-file handling, buffer guards, and local build orchestration
 are internal implementations. They cannot change the canonical values or
 identities.
 
+Quarantine rejection classifications are an observed sequence, not a set:
+two distinct rejected calls may legitimately carry the same rejection code and
+must remain as two entries in observed order. The duplicate/conflict gate
+rejects fabricated entries, silent deduplication or reordering, duplicate
+artifact/membership identities, and impossible disposition transitions.
+
 ## Evidence summary
 
 The final exact-head run appends the observed counts and deterministic fixture
@@ -114,17 +120,17 @@ actually completed:
 
 | Evidence | Value |
 | --- | --- |
-| Verified executable/evidence head | `231d71767759395b9e207da4e294ac9be77f96f8` |
+| Verified executable/evidence head | `86892329533bcad256cc0c1954445c3e0e13892a` |
 | Rules bundle verification | `PASS`; bundle `3adfe6b4cfe2c2805e50b389fc0eb4e70a3b0b6107436614d328fddc865e585f`; core API `11.0` |
 | Python/regression gates | `PASS`; Python `15` tests, M4 required `93` tests |
 | Decision/observation/ownership coverage | `PASS`; all three exact-head commands returned `ok`; M1 and gameplay determinism runners passed |
-| Full CTest | `PASS`; `123/123`, `0` failed; clean-checkout real time `3789.28 s` (`#122 1084.78 s`, `#123 146.70 s`) |
-| Focused trajectory CTest | `PASS`; `9/9`, `0` failed; clean-checkout real time `2308.18 s` (`trajectory_replay_admission_test` `2301.55 s`) |
+| Full CTest | `PASS`; `123/123`, `0` failed; clean-checkout real time `3781.78 s` (`#122 1019.62 s`, `#123 163.33 s`) |
+| Focused trajectory CTest | `PASS`; `9/9`, `0` failed; clean-checkout real time `2457.71 s` (`trajectory_replay_admission_test` `2451.28 s`) |
 | Candidate shard artifact SHA-256 | `247f534c950b0e572e9394dfd2cc773818c4ce8de6d59ebaed003dfb39101255` |
 | Restricted evidence artifact SHA-256 | `1bdbabe2d9905984b61f8b926ea0155a8f83dc6d125d253dd78766f3674f5eed` |
 | AdmissionReceipt ID | `admission_receipt.v1.d9cd38dfec176bf83b25c69fde4fa89b4330a3362e1c383c22483d4f79c2e6f6` |
 | Dataset semantic ID | `5ea0f9197f4993b1c57052e28cae54853e1276d3a1074526015098d772cee553` |
-| Clean-checkout report | `C:\p3b-trajectory\artifacts\trajectory\phase3b-clean-checkout-fixpass2\phase3b_clean_checkout.json` (`PASS`, exact head, clean before/after evidence) |
+| Clean-checkout report | `C:\p3b-trajectory\artifacts\trajectory\phase3b-clean-checkout-fixpass3\phase3b_clean_checkout.json` (`PASS`, exact head, clean before/after evidence) |
 | Hosted CI exact-head status | `NOT_RUN` |
 
 ## Scope stop
