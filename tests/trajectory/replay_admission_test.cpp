@@ -97,7 +97,8 @@ CollectedEpisode collect_real_engine_budget_interruption() {
     require(interruption->reason == InterruptionReason::EngineProcessBudget,
             "engine-process budget reset produced the wrong interruption reason");
 
-    TrajectoryRecorder recorder(config, spec, provenance_value);
+    TrajectoryRecorder recorder(config, spec, provenance_value,
+                                test_provenance_resolver());
     require(recorder.on_reset_accepted(*reset_accepted),
             "recorder rejected direct engine-budget interruption");
     const auto sealed = recorder.seal();
@@ -132,7 +133,8 @@ CollectedEpisode collect_real_semantic_budget_interruption() {
             "real V2 semantic-budget reset did not publish an actionable frame");
     const auto initial = std::get<DecisionFrame>(reset_accepted->next);
 
-    TrajectoryRecorder recorder(config, spec, provenance_value);
+    TrajectoryRecorder recorder(config, spec, provenance_value,
+                                test_provenance_resolver());
     require(recorder.on_reset_accepted(*reset_accepted),
             "recorder rejected real V2 semantic-budget reset");
     const auto assignment_it = std::find_if(
@@ -187,7 +189,8 @@ CollectedEpisode collect_real_administrative_interruption() {
             "real V2 administrative reset did not publish a frame");
     const auto pending = std::get<DecisionFrame>(reset_accepted->next);
 
-    TrajectoryRecorder recorder(config, spec, provenance_value);
+    TrajectoryRecorder recorder(config, spec, provenance_value,
+                                test_provenance_resolver());
     require(recorder.on_reset_accepted(*reset_accepted),
             "recorder rejected real V2 administrative reset");
     const auto interrupted = environment->interrupt(InterruptRequest{
@@ -234,7 +237,7 @@ CollectedEpisode collect_real_failure() {
                 !failure.mutation_may_have_occurred && failure.semantic_action_count == 0,
             "real V2 failure returned unexpected closure evidence");
 
-    TrajectoryRecorder recorder(config, spec, provenance());
+    TrajectoryRecorder recorder(config, spec, provenance(), test_provenance_resolver());
     require(recorder.on_reset_accepted(*reset_accepted),
             "recorder rejected the real V2 failure boundary");
     const auto sealed = recorder.seal();
@@ -295,7 +298,8 @@ CollectedEpisode collect_real_continuation_interruption() {
     require(reset_accepted != nullptr && std::holds_alternative<DecisionFrame>(reset_accepted->next),
             "real V2 continuation reset did not publish a frame");
 
-    TrajectoryRecorder recorder(config, spec, provenance_value);
+    TrajectoryRecorder recorder(config, spec, provenance_value,
+                                test_provenance_resolver());
     require(recorder.on_reset_accepted(*reset_accepted),
             "recorder rejected real V2 continuation reset");
     bool saw_intermediate = false;
@@ -388,7 +392,8 @@ CollectedEpisode collect_real_terminal() {
     const auto* reset_accepted = std::get_if<ResetAccepted>(&reset);
     require(reset_accepted != nullptr && std::holds_alternative<DecisionFrame>(reset_accepted->next),
             "real V2 terminal reset did not publish a frame");
-    TrajectoryRecorder recorder(config, spec, provenance_value);
+    TrajectoryRecorder recorder(config, spec, provenance_value,
+                                test_provenance_resolver());
     require(recorder.on_reset_accepted(*reset_accepted),
             "recorder rejected real V2 terminal reset");
 
@@ -459,11 +464,127 @@ std::optional<AdmissionVerification> admit_collected(
     const auto shard_sha256 = candidate_shard_artifact_sha256(shard);
     const auto evidence_sha256 = restricted_collection_evidence_artifact_sha256(evidence);
     const auto admitted = verify_candidate_shard_for_admission(
-        shard, evidence, shard_sha256, evidence_sha256, options, ProvenanceResolver{}, error);
+        shard, evidence, shard_sha256, evidence_sha256, options,
+        test_provenance_resolver(), error);
     if (!admitted.has_value()) {
         return std::nullopt;
     }
     return admitted;
+}
+
+std::string stochastic_stream_name(const std::uint8_t player) {
+    return "phase3b-player-" + std::to_string(player);
+}
+
+PolicyRngInitializationIdentity stochastic_initialization(
+    const std::string& stream_id) {
+    PolicyRngInitializationIdentity value;
+    value.policy_rng_contract_identity = "ocgforge.test.rng.v1";
+    value.policy_rng_stream_id = stream_id;
+    value.initialization_material = {0x11, 0x22, 0x33};
+    value.policy_rng_initialization_identity =
+        compute_policy_rng_initialization_id(value);
+    return value;
+}
+
+PolicyRngDecisionProvenance stochastic_state_attribution(
+    const PolicyArtifact& artifact,
+    const ParticipantPolicyAssignment& assignment_value,
+    const std::uint64_t decision_index) {
+    const auto initialization = stochastic_initialization(
+        stochastic_stream_name(assignment_value.player));
+    PolicyRngStreamIdentity stream;
+    stream.policy_artifact_id = artifact.policy_artifact_id;
+    stream.participant_policy_assignment_id =
+        assignment_value.participant_policy_assignment_id;
+    stream.policy_rng_contract_identity =
+        initialization.policy_rng_contract_identity;
+    stream.policy_rng_stream_id = initialization.policy_rng_stream_id;
+    stream.policy_rng_initialization_identity =
+        initialization.policy_rng_initialization_identity;
+    stream.policy_rng_identity = compute_policy_rng_stream_id(stream);
+
+    PolicyRngDecisionProvenance value;
+    value.decision_index = decision_index;
+    value.acting_policy_assignment_id =
+        assignment_value.participant_policy_assignment_id;
+    value.policy_rng_identity = stream.policy_rng_identity;
+    value.policy_rng_contract_identity = stream.policy_rng_contract_identity;
+    value.policy_rng_stream_id = stream.policy_rng_stream_id;
+    value.policy_rng_initialization_identity =
+        stream.policy_rng_initialization_identity;
+    value.mode = PolicyRngMode::State;
+    value.pre_state = std::vector<std::uint8_t>{1, 2};
+    value.post_state = std::vector<std::uint8_t>{3, 4};
+    return value;
+}
+
+void rebuild_single_entry_artifacts(CollectedEpisode& value) {
+    value.shard = {};
+    attach_single_entry_artifacts(value);
+}
+
+CollectedEpisode stochastic_terminal_for_admission(
+    const CollectedEpisode& source) {
+    CollectedEpisode result = source;
+    const auto policy = stochastic_artifact();
+    PolicyProvenanceEnvelope policy_provenance;
+    policy_provenance.policy_artifacts = {policy};
+    policy_provenance.participant_assignments = {
+        assignment(policy, 0), assignment(policy, 1)};
+    std::sort(policy_provenance.participant_assignments.begin(),
+              policy_provenance.participant_assignments.end(),
+              [](const auto& left, const auto& right) {
+                  return left.participant_policy_assignment_id <
+                         right.participant_policy_assignment_id;
+              });
+    result.envelope.manifest.policy_provenance = policy_provenance;
+
+    std::vector<std::uint8_t> active_players;
+    for (auto& record : result.envelope.records) {
+        const auto assignment_it = std::find_if(
+            policy_provenance.participant_assignments.begin(),
+            policy_provenance.participant_assignments.end(),
+            [&](const auto& value) {
+                return value.player == record.frame.acting_player;
+            });
+        require(assignment_it != policy_provenance.participant_assignments.end(),
+                "stochastic terminal record has no participant assignment");
+        record.acting_policy_assignment_id =
+            assignment_it->participant_policy_assignment_id;
+        record.policy_rng_decision_provenance =
+            stochastic_state_attribution(policy, *assignment_it,
+                                         record.frame.decision_index);
+        if (std::find(active_players.begin(), active_players.end(),
+                      record.frame.acting_player) == active_players.end()) {
+            active_players.push_back(record.frame.acting_player);
+        }
+    }
+    require(!active_players.empty(),
+            "stochastic terminal fixture has no accepted decision records");
+    require(std::find(active_players.begin(), active_players.end(), 0) !=
+                active_players.end() &&
+                std::find(active_players.begin(), active_players.end(), 1) !=
+                active_players.end(),
+            "stochastic terminal fixture did not exercise both participant assignments");
+
+    result.evidence = {};
+    rebuild_single_entry_artifacts(result);
+    for (const auto player : active_players) {
+        const auto initialization = stochastic_initialization(
+            stochastic_stream_name(player));
+        result.evidence.rng_initializations.push_back(
+            RngInitializationEvidenceEntry{
+                initialization.policy_rng_initialization_identity,
+                initialization.initialization_material});
+    }
+    std::sort(result.evidence.rng_initializations.begin(),
+              result.evidence.rng_initializations.end(),
+              [](const auto& left, const auto& right) {
+                  return left.policy_rng_initialization_identity <
+                         right.policy_rng_initialization_identity;
+              });
+    return result;
 }
 
 RestrictedCollectionEvidenceBundle evidence_for(
@@ -549,6 +670,94 @@ void test_real_replay_and_admission() {
             "replay ignored a changed terminal winner while comparing closure data");
 
     std::string error;
+    auto stochastic_terminal = stochastic_terminal_for_admission(terminal);
+    replay_collected(stochastic_terminal);
+    const auto stochastic_admission = admit_collected(
+        stochastic_terminal.shard, stochastic_terminal.evidence,
+        replay_options_for(stochastic_terminal), &error);
+    require(stochastic_admission.has_value(),
+            "registered stochastic RNG admission failed: " + error);
+    require(stochastic_admission->entries().size() == 1,
+            "registered stochastic RNG admission did not commit one entry");
+
+    auto stochastic_none = stochastic_terminal;
+    stochastic_none.evidence.rng_initializations.clear();
+    for (auto& record : stochastic_none.envelope.records) {
+        record.policy_rng_decision_provenance =
+            no_rng(record.acting_policy_assignment_id, record.frame.decision_index);
+    }
+    rebuild_single_entry_artifacts(stochastic_none);
+    require(!admit_collected(stochastic_none.shard, stochastic_none.evidence,
+                             replay_options_for(stochastic_none), &error),
+            "stochastic policy with per-decision NONE provenance was admitted");
+
+    auto wrong_rng_contract = stochastic_terminal;
+    for (auto& record : wrong_rng_contract.envelope.records) {
+        record.policy_rng_decision_provenance.policy_rng_contract_identity =
+            "ocgforge.test.unregistered_rng.v1";
+    }
+    rebuild_single_entry_artifacts(wrong_rng_contract);
+    require(!admit_collected(wrong_rng_contract.shard, wrong_rng_contract.evidence,
+                             replay_options_for(wrong_rng_contract), &error),
+            "record with an unregistered RNG contract was admitted");
+
+    auto ambiguous_cursor = stochastic_terminal;
+    for (auto& record : ambiguous_cursor.envelope.records) {
+        auto& attribution = record.policy_rng_decision_provenance;
+        attribution.mode = PolicyRngMode::Cursor;
+        attribution.pre_cursor = 0;
+        attribution.post_cursor = 1;
+        attribution.pre_state.reset();
+        attribution.post_state.reset();
+    }
+    rebuild_single_entry_artifacts(ambiguous_cursor);
+    require(!admit_collected(ambiguous_cursor.shard, ambiguous_cursor.evidence,
+                             replay_options_for(ambiguous_cursor), &error),
+            "ambiguous CURSOR provenance was admitted");
+
+    auto missing_initialization = stochastic_terminal;
+    missing_initialization.evidence.rng_initializations.clear();
+    require(!admit_collected(missing_initialization.shard,
+                             missing_initialization.evidence,
+                             replay_options_for(missing_initialization), &error),
+            "missing restricted RNG initialization was admitted");
+
+    auto extra_initialization = stochastic_terminal;
+    extra_initialization.evidence.rng_initializations.push_back(
+        RngInitializationEvidenceEntry{
+            "policy_rng_initialization.v1." + std::string(64, 'f'),
+            {0x11, 0x22, 0x33}});
+    std::sort(extra_initialization.evidence.rng_initializations.begin(),
+              extra_initialization.evidence.rng_initializations.end(),
+              [](const auto& left, const auto& right) {
+                  return left.policy_rng_initialization_identity <
+                         right.policy_rng_initialization_identity;
+              });
+    require(!admit_collected(extra_initialization.shard,
+                             extra_initialization.evidence,
+                             replay_options_for(extra_initialization), &error),
+            "extra restricted RNG initialization was admitted");
+
+    auto shared_rng_identity = stochastic_terminal;
+    const auto player_zero_record = std::find_if(
+        shared_rng_identity.envelope.records.begin(),
+        shared_rng_identity.envelope.records.end(),
+        [](const auto& record) { return record.frame.acting_player == 0; });
+    const auto player_one_record = std::find_if(
+        shared_rng_identity.envelope.records.begin(),
+        shared_rng_identity.envelope.records.end(),
+        [](const auto& record) { return record.frame.acting_player == 1; });
+    require(player_zero_record != shared_rng_identity.envelope.records.end() &&
+                player_one_record != shared_rng_identity.envelope.records.end(),
+            "stochastic terminal fixture lost one participant before shared-RNG test");
+    player_one_record->policy_rng_decision_provenance.policy_rng_identity =
+        player_zero_record->policy_rng_decision_provenance.policy_rng_identity;
+    rebuild_single_entry_artifacts(shared_rng_identity);
+    require(!admit_collected(shared_rng_identity.shard,
+                             shared_rng_identity.evidence,
+                             replay_options_for(shared_rng_identity), &error),
+            "one policy RNG identity was shared across participant assignments");
+
     const std::vector<CollectedEpisode*> continuation_only{&continuation};
     const auto continuation_shard = shard_for(continuation_only);
     const auto continuation_evidence = evidence_for(continuation_shard, continuation_only);
@@ -564,12 +773,12 @@ void test_real_replay_and_admission() {
     require(!verify_candidate_shard_for_admission(
                 continuation_shard, continuation_evidence, std::string(64, '0'),
                 continuation_evidence_sha256, replay_options_for(continuation),
-                ProvenanceResolver{}, &error),
+                test_provenance_resolver(), &error),
             "admission accepted a receipt binding to the wrong candidate shard artifact");
     require(!verify_candidate_shard_for_admission(
                 continuation_shard, continuation_evidence, continuation_shard_sha256,
-                std::string(64, '0'), replay_options_for(continuation), ProvenanceResolver{},
-                &error),
+                std::string(64, '0'), replay_options_for(continuation),
+                test_provenance_resolver(), &error),
             "admission accepted a receipt binding to the wrong restricted evidence artifact");
     const auto continuation_receipt = issue_admission_receipt(
         *continuation_verification, &error);

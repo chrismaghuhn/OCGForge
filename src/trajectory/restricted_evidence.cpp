@@ -245,6 +245,17 @@ bool validate_restricted_collection_evidence_bundle(
     const CandidateTrajectoryShard& shard,
     const std::string_view expected_shard_artifact_sha256,
     std::string* error) {
+    const ProvenanceResolver resolver;
+    return validate_restricted_collection_evidence_bundle(
+        value, shard, expected_shard_artifact_sha256, resolver, error);
+}
+
+bool validate_restricted_collection_evidence_bundle(
+    const RestrictedCollectionEvidenceBundle& value,
+    const CandidateTrajectoryShard& shard,
+    const std::string_view expected_shard_artifact_sha256,
+    const ProvenanceResolver& resolver,
+    std::string* error) {
     try {
         validate_bundle(value);
         if (expected_shard_artifact_sha256 != ygo::trajectory::candidate_shard_artifact_sha256(shard)) {
@@ -350,6 +361,7 @@ bool validate_restricted_collection_evidence_bundle(
             std::string material_error;
             if (!validate_policy_rng_initialization_material(identity,
                                                              evidence->initialization_material,
+                                                             resolver,
                                                              &material_error)) {
                 set_error(error, material_error);
                 return false;

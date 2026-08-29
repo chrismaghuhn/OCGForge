@@ -140,56 +140,69 @@ void test_bundle_codec_and_cross_references() {
 }
 
 void test_rng_material_binding() {
-    auto envelope = terminal_envelope(33);
-    const auto policy = deterministic_artifact();
-    const auto assignments = provenance().participant_assignments;
-    const auto assignment = std::find_if(assignments.begin(), assignments.end(),
-                                         [](const auto& value) { return value.player == 0; });
-    PolicyRngInitializationIdentity initialization;
-    initialization.policy_rng_contract_identity = "ocgforge.test.rng.v1";
-    initialization.policy_rng_stream_id = "main";
-    initialization.initialization_material = {0x11, 0x22, 0x33};
-    initialization.policy_rng_initialization_identity =
-        compute_policy_rng_initialization_id(initialization);
-    PolicyRngStreamIdentity stream;
-    stream.policy_artifact_id = policy.policy_artifact_id;
-    stream.participant_policy_assignment_id = assignment->participant_policy_assignment_id;
-    stream.policy_rng_contract_identity = initialization.policy_rng_contract_identity;
-    stream.policy_rng_stream_id = initialization.policy_rng_stream_id;
-    stream.policy_rng_initialization_identity = initialization.policy_rng_initialization_identity;
-    stream.policy_rng_identity = compute_policy_rng_stream_id(stream);
-    auto& attribution = envelope.records.front().policy_rng_decision_provenance;
-    attribution.policy_rng_identity = stream.policy_rng_identity;
-    attribution.policy_rng_contract_identity = stream.policy_rng_contract_identity;
-    attribution.policy_rng_stream_id = stream.policy_rng_stream_id;
-    attribution.policy_rng_initialization_identity = stream.policy_rng_initialization_identity;
-    attribution.mode = PolicyRngMode::State;
-    attribution.pre_state = std::vector<std::uint8_t>{1, 2};
-    attribution.post_state = std::vector<std::uint8_t>{3, 4};
+    const auto envelope = stochastic_terminal_envelope(33);
+    const auto& attribution = envelope.records.front().policy_rng_decision_provenance;
     const auto entry = shard_entry(envelope);
     CandidateTrajectoryShard shard;
     shard.entries = {entry};
     RestrictedCollectionEvidenceBundle bundle;
     bundle.candidate_shard_artifact_sha256 = candidate_shard_artifact_sha256(shard);
     bundle.rng_initializations.push_back(
-        RngInitializationEvidenceEntry{initialization.policy_rng_initialization_identity,
-                                       initialization.initialization_material});
+        RngInitializationEvidenceEntry{attribution.policy_rng_initialization_identity,
+                                       {0x11, 0x22, 0x33}});
+    const auto resolver = test_provenance_resolver();
     std::string error;
+    require(validate_restricted_collection_evidence_bundle(
+                bundle, shard, bundle.candidate_shard_artifact_sha256, resolver, &error),
+            "registered RNG state codec rejected valid evidence: " + error);
     require(!validate_restricted_collection_evidence_bundle(
                 bundle, shard, bundle.candidate_shard_artifact_sha256, &error),
-            "unregistered RNG state codec was accepted as trusted evidence");
-    require(error.find("registered canonical state codec") != std::string::npos,
-            "unregistered RNG state rejection was not explicit");
+            "default resolver trusted an unregistered test RNG contract");
     auto wrong_material = bundle;
     wrong_material.rng_initializations.front().initialization_material = {9, 9};
     require(!validate_restricted_collection_evidence_bundle(
-                wrong_material, shard, bundle.candidate_shard_artifact_sha256, &error),
+                wrong_material, shard, bundle.candidate_shard_artifact_sha256, resolver, &error),
             "conflicting RNG initialization material was accepted");
     auto missing = bundle;
     missing.rng_initializations.clear();
     require(!validate_restricted_collection_evidence_bundle(
-                missing, shard, bundle.candidate_shard_artifact_sha256, &error),
+                missing, shard, bundle.candidate_shard_artifact_sha256, resolver, &error),
             "missing RNG initialization material was accepted");
+
+    auto extra = bundle;
+    extra.rng_initializations.push_back(
+        RngInitializationEvidenceEntry{"policy_rng_initialization.v1." +
+                                           std::string(64, 'f'),
+                                       {0x11, 0x22, 0x33}});
+    std::sort(extra.rng_initializations.begin(), extra.rng_initializations.end(),
+              [](const auto& left, const auto& right) {
+                  return left.policy_rng_initialization_identity <
+                         right.policy_rng_initialization_identity;
+              });
+    require(!validate_restricted_collection_evidence_bundle(
+                extra, shard, bundle.candidate_shard_artifact_sha256, resolver, &error),
+            "extra RNG initialization evidence was accepted");
+
+    auto wrong_identity = bundle;
+    wrong_identity.rng_initializations.front().policy_rng_initialization_identity.back() = '0';
+    require(!validate_restricted_collection_evidence_bundle(
+                wrong_identity, shard, bundle.candidate_shard_artifact_sha256, resolver, &error),
+            "wrong RNG initialization identity was accepted");
+
+    const auto cursor = stochastic_terminal_envelope(34, "cursor-unique", PolicyRngMode::Cursor);
+    const auto cursor_entry = shard_entry(cursor);
+    CandidateTrajectoryShard cursor_shard;
+    cursor_shard.entries = {cursor_entry};
+    RestrictedCollectionEvidenceBundle cursor_bundle;
+    cursor_bundle.candidate_shard_artifact_sha256 = candidate_shard_artifact_sha256(cursor_shard);
+    cursor_bundle.rng_initializations.push_back(
+        RngInitializationEvidenceEntry{
+            cursor.records.front().policy_rng_decision_provenance.policy_rng_initialization_identity,
+            {0x11, 0x22, 0x33}});
+    require(validate_restricted_collection_evidence_bundle(
+                cursor_bundle, cursor_shard, cursor_bundle.candidate_shard_artifact_sha256,
+                resolver, &error),
+            "cursor-capable RNG contract rejected valid initialization evidence: " + error);
 }
 
 }  // namespace

@@ -313,8 +313,14 @@ const PolicyArtifact* artifact_for(const PolicyProvenanceEnvelope& provenance,
     return it == provenance.policy_artifacts.end() ? nullptr : &*it;
 }
 
+const RngInitializationEvidenceEntry* rng_initialization_entry_for(
+    const RestrictedCollectionEvidenceBundle& bundle,
+    std::string_view identity) noexcept;
+
 bool validate_record_attribution(const EpisodeEnvelope& envelope,
                                  const DecisionRecord& record,
+                                 const ProvenanceResolver& resolver,
+                                 const RestrictedCollectionEvidenceBundle& restricted_evidence,
                                  std::string& error) {
     if (record.acting_policy_assignment_id !=
             record.policy_rng_decision_provenance.acting_policy_assignment_id ||
@@ -352,8 +358,10 @@ bool validate_record_attribution(const EpisodeEnvelope& envelope,
         error = "record RNG attribution disagrees with its policy artifact";
         return false;
     }
-    if (attribution.mode == PolicyRngMode::Cursor) {
-        error = "CURSOR RNG admission lacks a proof of unique cursor state; STATE is required";
+    const auto* descriptor = resolver.policy_rng_contract_descriptor(
+        attribution.policy_rng_contract_identity);
+    if (descriptor == nullptr) {
+        error = "record RNG attribution lacks a typed contract descriptor";
         return false;
     }
     PolicyRngStreamIdentity stream;
@@ -365,6 +373,29 @@ bool validate_record_attribution(const EpisodeEnvelope& envelope,
     stream.policy_rng_identity = compute_policy_rng_stream_id(stream);
     if (stream.policy_rng_identity != attribution.policy_rng_identity) {
         error = "record RNG stream identity does not recompute from provenance";
+        return false;
+    }
+    const auto* initialization_evidence = rng_initialization_entry_for(
+        restricted_evidence, attribution.policy_rng_initialization_identity);
+    if (initialization_evidence == nullptr) {
+        error = "record RNG attribution lacks restricted initialization evidence";
+        return false;
+    }
+    PolicyRngInitializationIdentity initialization;
+    initialization.policy_rng_contract_identity = attribution.policy_rng_contract_identity;
+    initialization.policy_rng_stream_id = attribution.policy_rng_stream_id;
+    initialization.initialization_material = initialization_evidence->initialization_material;
+    initialization.policy_rng_initialization_identity =
+        attribution.policy_rng_initialization_identity;
+    if (attribution.mode == PolicyRngMode::Cursor) {
+        if (!descriptor->cursor_is_unique || !descriptor->cursor_is_unique(initialization)) {
+            error = "CURSOR RNG provenance lacks a proof of unique initialized stream state";
+            return false;
+        }
+    } else if (!descriptor->state_is_canonical ||
+               !descriptor->state_is_canonical(*attribution.pre_state) ||
+               !descriptor->state_is_canonical(*attribution.post_state)) {
+        error = "STATE RNG provenance is not canonical for its contract";
         return false;
     }
     return true;
@@ -381,6 +412,20 @@ const RestrictedReplayEvidence* restricted_entry_for(
     return it == bundle.interrupted_episodes.end() || it->episode_envelope_sha256 != envelope_sha256
                ? nullptr
                : &it->evidence;
+}
+
+const RngInitializationEvidenceEntry* rng_initialization_entry_for(
+    const RestrictedCollectionEvidenceBundle& bundle,
+    const std::string_view identity) noexcept {
+    const auto it = std::lower_bound(
+        bundle.rng_initializations.begin(), bundle.rng_initializations.end(), identity,
+        [](const RngInitializationEvidenceEntry& entry, const std::string_view key) {
+            return entry.policy_rng_initialization_identity < key;
+        });
+    return it == bundle.rng_initializations.end() ||
+                   it->policy_rng_initialization_identity != identity
+               ? nullptr
+               : &*it;
 }
 
 }  // namespace
@@ -666,13 +711,15 @@ std::optional<AdmissionVerification> verify_candidate_shard_for_admission(
         }
         std::string validation_error;
         if (!validate_restricted_collection_evidence_bundle(
-                restricted_evidence, shard, candidate_shard_artifact_sha256, &validation_error)) {
+            restricted_evidence, shard, candidate_shard_artifact_sha256, resolver,
+            &validation_error)) {
             if (error != nullptr) {
                 *error = validation_error;
             }
             return std::nullopt;
         }
         std::vector<AdmissionEntryCommitment> entries;
+        std::vector<std::pair<std::string, std::string>> rng_identity_owners;
         for (const auto& shard_entry : shard.entries) {
             const auto decoded = decode_episode_envelope(shard_entry.envelope_bytes);
             if (!decoded) {
@@ -693,8 +740,25 @@ std::optional<AdmissionVerification> verify_candidate_shard_for_admission(
                 break;
             }
             for (const auto& record : envelope.records) {
-                if (!validate_record_attribution(envelope, record, validation_error)) {
+                if (!validate_record_attribution(envelope, record, resolver, restricted_evidence,
+                                                 validation_error)) {
                     break;
+                }
+                const auto& attribution = record.policy_rng_decision_provenance;
+                if (attribution.mode != PolicyRngMode::None) {
+                    const auto owner = std::find_if(
+                        rng_identity_owners.begin(), rng_identity_owners.end(),
+                        [&](const auto& item) { return item.first == attribution.policy_rng_identity; });
+                    if (owner != rng_identity_owners.end() &&
+                        owner->second != attribution.acting_policy_assignment_id) {
+                        validation_error =
+                            "one policy RNG identity is shared by distinct participant assignments";
+                        break;
+                    }
+                    if (owner == rng_identity_owners.end()) {
+                        rng_identity_owners.emplace_back(attribution.policy_rng_identity,
+                                                         attribution.acting_policy_assignment_id);
+                    }
                 }
             }
             if (!validation_error.empty()) {

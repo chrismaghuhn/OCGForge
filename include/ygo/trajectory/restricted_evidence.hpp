@@ -8,6 +8,8 @@
 
 namespace ygo::trajectory {
 
+class ProvenanceResolver;
+
 inline constexpr std::string_view kRestrictedCollectionEvidenceBundleContractId =
     "ocgforge.restricted_collection_evidence_bundle.v1";
 
@@ -23,6 +25,13 @@ bool validate_restricted_collection_evidence_bundle(
     const RestrictedCollectionEvidenceBundle& value,
     const CandidateTrajectoryShard& shard,
     std::string_view candidate_shard_artifact_sha256,
+    std::string* error = nullptr);
+
+bool validate_restricted_collection_evidence_bundle(
+    const RestrictedCollectionEvidenceBundle& value,
+    const CandidateTrajectoryShard& shard,
+    std::string_view candidate_shard_artifact_sha256,
+    const ProvenanceResolver& resolver,
     std::string* error = nullptr);
 
 }  // namespace ygo::trajectory

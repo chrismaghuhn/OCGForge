@@ -12,87 +12,81 @@
 namespace ygo::trajectory {
 namespace {
 
-bool versioned_contract_identity(const std::string_view value) noexcept {
-    if (value.size() < 8 || value.substr(0, 8) != "ocgforge") {
-        return false;
-    }
-    const auto version = value.rfind(".v");
-    if (version == std::string_view::npos || version + 2 >= value.size()) {
-        return false;
-    }
-    return std::all_of(value.begin() + static_cast<std::ptrdiff_t>(version + 2), value.end(),
-                       [](const unsigned char character) {
-                           return character >= '0' && character <= '9';
-                       });
-}
-
-bool known_contract_identity(const std::string_view value) noexcept {
-    if (!versioned_contract_identity(value)) {
-        return false;
-    }
-    static constexpr std::array<std::string_view, 36> known = {
-        kTrustedTrajectoryContractId,
-        kPolicyProvenanceContractId,
-        kPublicGameplayIdentityDomain,
-        kTrajectoryRecordIdentityDomain,
-        kPolicyArtifactIdentityDomain,
-        kParticipantAssignmentIdentityDomain,
-        kPolicyRngInitializationIdentityDomain,
-        kPolicyRngStreamIdentityDomain,
-        kPolicyRngDecisionProvenanceDomain,
-        kNoPolicyRngContractId,
-        kRestrictedReplayEvidenceSchemaId,
-        environment::kEpisodicEnvironmentV2ContractId,
-        environment::kEnvironmentIdentityV2SchemaId,
-        environment::kEpisodeIdentitySchemaId,
-        environment::kSemanticDecisionIdentitySchemaId,
-        environment::kDecisionContractId,
-        environment::kActionIdentitySchemaId,
-        environment::kCandidateDomainSchemaId,
-        environment::kPublicCandidateDomainSchemaId,
-        environment::kPublicActionIdentitySchemaId,
-        environment::kPublicSemanticDecisionIdentitySchemaId,
-        environment::kPublicEnvironmentObservationSchemaId,
-        environment::kPublicSafeStateSchemaId,
-        environment::kSeedDerivationId,
-        environment::kScriptResolutionContractId,
-        environment::kRequiredScriptClosureSchemaId,
-        environment::kRequiredScriptClosureDomain,
-        "ocgforge.test.producer.v1",
-        "ocgforge.test.inference.v1",
-        "ocgforge.test.observation.v1",
-        "ocgforge.test.action.v1",
-        "ocgforge.test.deterministic_sampling.v1",
-        "ocgforge.test.random_sampling.v1",
-        "ocgforge.test.incomplete_sampling.v1",
-        "ocgforge.test.rng.v1",
-        "ocgforge.test.v1",
-    };
-    return std::find(known.begin(), known.end(), value) != known.end();
-}
-
-struct SamplingContractCapabilities final {
-    bool complete = false;
-    bool deterministic = false;
-};
-
-std::optional<SamplingContractCapabilities> sampling_contract_capabilities(
-    const std::string_view identity) noexcept {
-    if (identity == "ocgforge.test.deterministic_sampling.v1") {
-        return SamplingContractCapabilities{true, true};
-    }
-    if (identity == "ocgforge.test.random_sampling.v1") {
-        return SamplingContractCapabilities{true, false};
-    }
-    if (identity == "ocgforge.test.incomplete_sampling.v1") {
-        return SamplingContractCapabilities{false, false};
-    }
-    return std::nullopt;
-}
-
 void set_error(std::string* error, const std::string& message) {
     if (error != nullptr) {
         *error = message;
+    }
+}
+
+int kind_order(const ProvenanceKind kind) noexcept {
+    return static_cast<int>(kind);
+}
+
+bool valid_provenance_kind(const ProvenanceKind kind) noexcept {
+    return kind_order(kind) >= kind_order(ProvenanceKind::ProducerImplementation) &&
+           kind_order(kind) <= kind_order(ProvenanceKind::ArtifactMetadataArtifact);
+}
+
+bool registration_less(const ProvenanceRegistration& left,
+                       const ProvenanceRegistration& right) noexcept {
+    if (left.kind != right.kind) {
+        return kind_order(left.kind) < kind_order(right.kind);
+    }
+    return left.identity < right.identity;
+}
+
+ProvenanceRegistration no_policy_rng_registration() {
+    ProvenanceRegistration entry;
+    entry.kind = ProvenanceKind::PolicyRngContract;
+    entry.identity = kNoPolicyRngContractId;
+    return entry;
+}
+
+const ProvenanceRegistration* find_registration(
+    const std::vector<ProvenanceRegistration>& registrations,
+    const ProvenanceKind kind,
+    const std::string_view identity) noexcept {
+    const auto it = std::lower_bound(
+        registrations.begin(), registrations.end(),
+        ProvenanceRegistration{kind, std::string(identity), std::nullopt, std::nullopt},
+        registration_less);
+    if (it == registrations.end() || it->kind != kind || it->identity != identity) {
+        return nullptr;
+    }
+    return &*it;
+}
+
+void validate_registration(const ProvenanceRegistration& entry) {
+    if (!valid_provenance_kind(entry.kind)) {
+        throw std::invalid_argument("provenance registry contains an unknown category");
+    }
+    if (entry.identity.empty()) {
+        throw std::invalid_argument("provenance registry contains an empty identity");
+    }
+    if (entry.kind != ProvenanceKind::SamplingContract &&
+        entry.sampling_capabilities.has_value()) {
+        throw std::invalid_argument("sampling capabilities have the wrong provenance category");
+    }
+    if (entry.kind != ProvenanceKind::PolicyRngContract && entry.policy_rng_descriptor.has_value()) {
+        throw std::invalid_argument("RNG descriptor has the wrong provenance category");
+    }
+    if (entry.kind == ProvenanceKind::SamplingContract &&
+        !entry.sampling_capabilities.has_value()) {
+        throw std::invalid_argument("sampling contract lacks typed capabilities");
+    }
+    if (entry.kind == ProvenanceKind::PolicyRngContract) {
+        if (entry.identity == kNoPolicyRngContractId) {
+            if (entry.policy_rng_descriptor.has_value()) {
+                throw std::invalid_argument("no-RNG contract has an RNG descriptor");
+            }
+            return;
+        }
+        if (!entry.policy_rng_descriptor.has_value() ||
+            !entry.policy_rng_descriptor->initialization_material_is_canonical ||
+            (!entry.policy_rng_descriptor->state_is_canonical &&
+             !entry.policy_rng_descriptor->cursor_is_unique)) {
+            throw std::invalid_argument("non-NONE RNG contract lacks typed capabilities");
+        }
     }
 }
 
@@ -103,16 +97,30 @@ bool validate_policy_kind(const PolicyArtifact& artifact,
         set_error(error, message);
         return false;
     };
-    if (!resolver.can_resolve_contract(artifact.sampling_contract_identity)) {
-        return reject("sampling contract identity is not an exact known contract");
+    const auto* sampling = resolver.sampling_contract_capabilities(
+        artifact.sampling_contract_identity);
+    if (sampling == nullptr) {
+        return reject("sampling contract identity lacks typed authority");
     }
-    const auto sampling = sampling_contract_capabilities(artifact.sampling_contract_identity);
-    if (!sampling.has_value() || !sampling->complete) {
+    if (!sampling->complete) {
         return reject("sampling contract does not prove complete candidate sampling");
+    }
+    const bool artifact_uses_rng = artifact.policy_rng_contract_identity != kNoPolicyRngContractId;
+    if (!resolver.can_resolve(ProvenanceKind::PolicyRngContract,
+                              artifact.policy_rng_contract_identity)) {
+        return reject("policy RNG identity lacks typed authority");
+    }
+    if (artifact_uses_rng &&
+        resolver.policy_rng_contract_descriptor(artifact.policy_rng_contract_identity) == nullptr) {
+        return reject("non-NONE policy RNG identity lacks a typed descriptor");
+    }
+    if (sampling->deterministic == artifact_uses_rng) {
+        return reject("sampling capability and policy RNG identity disagree");
     }
     switch (artifact.policy_kind) {
         case PolicyKind::RandomLegal:
             if (artifact.policy_rng_contract_identity == kNoPolicyRngContractId ||
+                sampling->deterministic ||
                 artifact.model_checkpoint_identity.has_value() ||
                 artifact.search_contract_identity.has_value() ||
                 artifact.demonstration_source_identity.has_value()) {
@@ -151,31 +159,44 @@ bool validate_policy_kind(const PolicyArtifact& artifact,
 
 }  // namespace
 
-ProvenanceResolver::ProvenanceResolver(std::vector<std::string> immutable_content_ids)
-    : immutable_content_ids_(std::move(immutable_content_ids)) {
-    std::sort(immutable_content_ids_.begin(), immutable_content_ids_.end());
-    if (std::adjacent_find(immutable_content_ids_.begin(), immutable_content_ids_.end()) !=
-        immutable_content_ids_.end()) {
-        throw std::invalid_argument("provenance resolver has duplicate content identities");
+ProvenanceResolver::ProvenanceResolver() : registrations_{no_policy_rng_registration()} {}
+
+ProvenanceResolver::ProvenanceResolver(
+    std::vector<ProvenanceRegistration> registrations)
+    : registrations_(std::move(registrations)) {
+    for (const auto& registration : registrations_) {
+        validate_registration(registration);
+    }
+    std::sort(registrations_.begin(), registrations_.end(), registration_less);
+    for (std::size_t index = 1; index < registrations_.size(); ++index) {
+        if (registrations_[index - 1].kind == registrations_[index].kind &&
+            registrations_[index - 1].identity == registrations_[index].identity) {
+            throw std::invalid_argument("provenance registry contains a duplicate typed identity");
+        }
     }
 }
 
-bool ProvenanceResolver::can_resolve_contract(const std::string_view identity) const noexcept {
-    return known_contract_identity(identity);
+bool ProvenanceResolver::can_resolve(const ProvenanceKind kind,
+                                     const std::string_view identity) const noexcept {
+    return find_registration(registrations_, kind, identity) != nullptr;
 }
 
-bool ProvenanceResolver::can_resolve_content(const std::string_view identity) const noexcept {
-    // Contract literals remain a separate identity category even if a caller
-    // accidentally includes one in the local immutable-content registry.
-    if (versioned_contract_identity(identity)) {
-        return false;
-    }
-    return std::binary_search(immutable_content_ids_.begin(), immutable_content_ids_.end(),
-                              identity);
+const SamplingContractCapabilities* ProvenanceResolver::sampling_contract_capabilities(
+    const std::string_view identity) const noexcept {
+    const auto* registration =
+        find_registration(registrations_, ProvenanceKind::SamplingContract, identity);
+    return registration == nullptr || !registration->sampling_capabilities.has_value()
+               ? nullptr
+               : &*registration->sampling_capabilities;
 }
 
-bool ProvenanceResolver::can_resolve(const std::string_view identity) const noexcept {
-    return can_resolve_contract(identity) || can_resolve_content(identity);
+const PolicyRngContractDescriptor* ProvenanceResolver::policy_rng_contract_descriptor(
+    const std::string_view identity) const noexcept {
+    const auto* registration =
+        find_registration(registrations_, ProvenanceKind::PolicyRngContract, identity);
+    return registration == nullptr || !registration->policy_rng_descriptor.has_value()
+               ? nullptr
+               : &*registration->policy_rng_descriptor;
 }
 
 bool ProvenanceResolver::validate(const PolicyProvenanceEnvelope& value,
@@ -189,8 +210,22 @@ bool validate_policy_rng_initialization_material(
     const PolicyRngInitializationIdentity& identity,
     const std::vector<std::uint8_t>& raw_material,
     std::string* error) {
+    const ProvenanceResolver resolver;
+    return validate_policy_rng_initialization_material(identity, raw_material, resolver, error);
+}
+
+bool validate_policy_rng_initialization_material(
+    const PolicyRngInitializationIdentity& identity,
+    const std::vector<std::uint8_t>& raw_material,
+    const ProvenanceResolver& resolver,
+    std::string* error) {
     try {
         if (identity.policy_rng_contract_identity == kNoPolicyRngContractId) {
+            if (!resolver.can_resolve(ProvenanceKind::PolicyRngContract,
+                                      kNoPolicyRngContractId)) {
+                set_error(error, "NONE RNG contract lacks typed authority");
+                return false;
+            }
             if (identity.policy_rng_stream_id != kNoPolicyRngContractId ||
                 identity.policy_rng_initialization_identity != kNoPolicyRngContractId ||
                 !identity.initialization_material.empty() || !raw_material.empty()) {
@@ -203,6 +238,16 @@ bool validate_policy_rng_initialization_material(
             set_error(error, "RNG initialization material differs from declared identity");
             return false;
         }
+        const auto* descriptor =
+            resolver.policy_rng_contract_descriptor(identity.policy_rng_contract_identity);
+        if (descriptor == nullptr || !descriptor->initialization_material_is_canonical) {
+            set_error(error, "RNG contract lacks canonical initialization authority");
+            return false;
+        }
+        if (!descriptor->initialization_material_is_canonical(raw_material)) {
+            set_error(error, "RNG initialization material is not canonical for its contract");
+            return false;
+        }
         auto candidate = identity;
         candidate.initialization_material = raw_material;
         const auto encoded = canonical_policy_rng_initialization_identity_bytes(candidate);
@@ -212,14 +257,7 @@ bool validate_policy_rng_initialization_material(
             set_error(error, "RNG initialization identity cannot be recomputed");
             return false;
         }
-        // Phase 3B has no registered policy-owned RNG state codec. The
-        // accepted Phase 3A contract makes the declared contract responsible
-        // for proving canonical initialization bytes and, for CURSOR, unique
-        // stream state. Treating opaque bytes as proven would accept arbitrary
-        // producer material, so non-NONE provenance is not admission-eligible
-        // until such a codec is explicitly registered.
-        set_error(error, "non-NONE RNG initialization lacks a registered canonical state codec");
-        return false;
+        return true;
     } catch (const std::exception& exception) {
         set_error(error, exception.what());
         return false;
@@ -251,37 +289,38 @@ bool validate_policy_provenance(const PolicyProvenanceEnvelope& value,
             if (!validate_policy_kind(artifact, resolver, error)) {
                 return false;
             }
-            for (const auto* identity : {&artifact.producer_implementation_identity,
-                                         &artifact.inference_adapter_identity,
-                                         &artifact.observation_adapter_identity,
-                                         &artifact.action_adapter_identity}) {
-                if (!resolver.can_resolve(*identity)) {
-                    set_error(error, "policy artifact implementation identity cannot be resolved");
-                    return false;
-                }
-            }
-            if (!resolver.can_resolve_contract(artifact.sampling_contract_identity) ||
-                !resolver.can_resolve_contract(artifact.policy_rng_contract_identity)) {
-                set_error(error, "policy sampling or RNG identity is not an exact known contract");
+            if (!resolver.can_resolve(ProvenanceKind::ProducerImplementation,
+                                      artifact.producer_implementation_identity) ||
+                !resolver.can_resolve(ProvenanceKind::InferenceAdapter,
+                                      artifact.inference_adapter_identity) ||
+                !resolver.can_resolve(ProvenanceKind::ObservationAdapter,
+                                      artifact.observation_adapter_identity) ||
+                !resolver.can_resolve(ProvenanceKind::ActionAdapter,
+                                      artifact.action_adapter_identity)) {
+                set_error(error, "policy artifact implementation identity lacks typed authority");
                 return false;
             }
             if (artifact.model_checkpoint_identity.has_value() &&
-                !resolver.can_resolve_content(*artifact.model_checkpoint_identity)) {
+                !resolver.can_resolve(ProvenanceKind::ModelCheckpointArtifact,
+                                      *artifact.model_checkpoint_identity)) {
                 set_error(error, "model checkpoint identity is not immutable content");
                 return false;
             }
             if (artifact.search_contract_identity.has_value() &&
-                !resolver.can_resolve(*artifact.search_contract_identity)) {
-                set_error(error, "search identity cannot be resolved as contract or content");
+                !resolver.can_resolve(ProvenanceKind::SearchContract,
+                                      *artifact.search_contract_identity)) {
+                set_error(error, "search identity lacks typed authority");
                 return false;
             }
             if (artifact.demonstration_source_identity.has_value() &&
-                !resolver.can_resolve_content(*artifact.demonstration_source_identity)) {
+                !resolver.can_resolve(ProvenanceKind::DemonstrationSourceArtifact,
+                                      *artifact.demonstration_source_identity)) {
                 set_error(error, "demonstration source identity is not immutable content");
                 return false;
             }
             if (artifact.artifact_metadata_identity.has_value() &&
-                !resolver.can_resolve_content(*artifact.artifact_metadata_identity)) {
+                !resolver.can_resolve(ProvenanceKind::ArtifactMetadataArtifact,
+                                      *artifact.artifact_metadata_identity)) {
                 set_error(error, "artifact metadata identity is not immutable content");
                 return false;
             }

@@ -12,6 +12,7 @@
 #include "ygo/observation/player_observation.hpp"
 #include "ygo/trajectory/codec.hpp"
 #include "ygo/trace/sha256.hpp"
+#include "provenance_test_support.hpp"
 
 namespace trajectory_test {
 
@@ -42,6 +43,15 @@ inline PolicyArtifact deterministic_artifact() {
     value.action_adapter_identity = "ocgforge.test.action.v1";
     value.sampling_contract_identity = "ocgforge.test.deterministic_sampling.v1";
     value.policy_rng_contract_identity = kNoPolicyRngContractId;
+    value.policy_artifact_id = compute_policy_artifact_id(value);
+    return value;
+}
+
+inline PolicyArtifact stochastic_artifact() {
+    auto value = deterministic_artifact();
+    value.policy_kind = PolicyKind::RandomLegal;
+    value.sampling_contract_identity = "ocgforge.test.random_sampling.v1";
+    value.policy_rng_contract_identity = "ocgforge.test.rng.v1";
     value.policy_artifact_id = compute_policy_artifact_id(value);
     return value;
 }
@@ -177,6 +187,84 @@ inline PolicyRngDecisionProvenance no_rng(const std::string& assignment_id,
     value.policy_rng_initialization_identity = kNoPolicyRngContractId;
     value.mode = PolicyRngMode::None;
     return value;
+}
+
+inline EpisodeEnvelope stochastic_terminal_envelope(
+    const std::uint64_t root_seed,
+    const std::string& stream_id = "main",
+    const PolicyRngMode mode = PolicyRngMode::State) {
+    const auto config = CertifiedEnvironmentConfig::canonical();
+    const auto spec = episode_spec(root_seed);
+    const auto policy = stochastic_artifact();
+    auto policy_provenance = PolicyProvenanceEnvelope{};
+    policy_provenance.policy_artifacts = {policy};
+    policy_provenance.participant_assignments = {
+        assignment(policy, 0), assignment(policy, 1)};
+    std::sort(policy_provenance.participant_assignments.begin(),
+              policy_provenance.participant_assignments.end(),
+              [](const auto& left, const auto& right) {
+                  return left.participant_policy_assignment_id <
+                         right.participant_policy_assignment_id;
+              });
+    const auto assignment_it = std::find_if(
+        policy_provenance.participant_assignments.begin(),
+        policy_provenance.participant_assignments.end(),
+        [](const auto& value) { return value.player == 0; });
+    const auto yes = candidate(EnvironmentActionKind::YesNo);
+    const auto public_frame = frame(config, spec, 0, {yes});
+    EpisodeEnvelope envelope;
+    envelope.manifest.environment_semantic_id = config.environment_semantic_id;
+    envelope.manifest.environment_identity_input = canonical_environment_identity_bytes(config);
+    envelope.manifest.episode_semantic_id = episode_semantic_id(config, spec);
+    envelope.manifest.episode_identity_input = canonical_episode_identity_bytes(config, spec);
+    envelope.manifest.policy_provenance = policy_provenance;
+    DecisionRecord record;
+    record.frame = public_frame;
+    record.selected_public_action_key = yes.public_action_key;
+    record.transition_class = TransitionClass::AtomicEngineResponse;
+    record.successor.kind = SuccessorKind::Terminal;
+    record.acting_policy_assignment_id = assignment_it->participant_policy_assignment_id;
+    PolicyRngInitializationIdentity initialization;
+    initialization.policy_rng_contract_identity = policy.policy_rng_contract_identity;
+    initialization.policy_rng_stream_id = stream_id;
+    initialization.initialization_material = {0x11, 0x22, 0x33};
+    initialization.policy_rng_initialization_identity =
+        compute_policy_rng_initialization_id(initialization);
+    PolicyRngStreamIdentity stream;
+    stream.policy_artifact_id = policy.policy_artifact_id;
+    stream.participant_policy_assignment_id = assignment_it->participant_policy_assignment_id;
+    stream.policy_rng_contract_identity = initialization.policy_rng_contract_identity;
+    stream.policy_rng_stream_id = initialization.policy_rng_stream_id;
+    stream.policy_rng_initialization_identity = initialization.policy_rng_initialization_identity;
+    stream.policy_rng_identity = compute_policy_rng_stream_id(stream);
+    auto& attribution = record.policy_rng_decision_provenance;
+    attribution.decision_index = 0;
+    attribution.acting_policy_assignment_id = record.acting_policy_assignment_id;
+    attribution.policy_rng_identity = stream.policy_rng_identity;
+    attribution.policy_rng_contract_identity = stream.policy_rng_contract_identity;
+    attribution.policy_rng_stream_id = stream.policy_rng_stream_id;
+    attribution.policy_rng_initialization_identity =
+        stream.policy_rng_initialization_identity;
+    attribution.mode = mode;
+    if (mode == PolicyRngMode::Cursor) {
+        attribution.pre_cursor = 0;
+        attribution.post_cursor = 1;
+    } else {
+        attribution.pre_state = std::vector<std::uint8_t>{1, 2};
+        attribution.post_state = std::vector<std::uint8_t>{3, 4};
+    }
+    envelope.records.push_back(std::move(record));
+    TerminalClosure closure;
+    closure.winner = 0;
+    closure.win_reason = 1;
+    closure.semantic_action_count = 1;
+    closure.last_decision_index = 0;
+    closure.terminal_view_player_0 = observation(0, 1);
+    closure.terminal_view_player_0_digest = public_observation_digest(closure.terminal_view_player_0);
+    closure.terminal_view_player_1 = observation(1, 1);
+    closure.terminal_view_player_1_digest = public_observation_digest(closure.terminal_view_player_1);
+    envelope.closure = std::move(closure);
+    return envelope;
 }
 
 inline EpisodeEnvelope terminal_envelope(const std::uint64_t root_seed) {

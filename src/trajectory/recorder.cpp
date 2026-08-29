@@ -45,6 +45,13 @@ bool validate_terminal_views(const TerminalViews& views) noexcept {
 TrajectoryRecorder::TrajectoryRecorder(environment::CertifiedEnvironmentConfig config,
                                        environment::EpisodeSpec spec,
                                        PolicyProvenanceEnvelope policy_provenance)
+    : TrajectoryRecorder(std::move(config), std::move(spec), std::move(policy_provenance),
+                         ProvenanceResolver{}) {}
+
+TrajectoryRecorder::TrajectoryRecorder(environment::CertifiedEnvironmentConfig config,
+                                       environment::EpisodeSpec spec,
+                                       PolicyProvenanceEnvelope policy_provenance,
+                                       const ProvenanceResolver& resolver)
     : config_(std::move(config)), spec_(std::move(spec)) {
     if (!is_current_certified_environment(config_)) {
         throw std::invalid_argument("trajectory recorder requires the current certified environment");
@@ -60,7 +67,6 @@ TrajectoryRecorder::TrajectoryRecorder(environment::CertifiedEnvironmentConfig c
     manifest_.episode_identity_input = environment::canonical_episode_identity_bytes(config_, spec_);
     manifest_.policy_provenance = std::move(policy_provenance);
     std::string error;
-    ProvenanceResolver resolver;
     if (!resolver.validate(manifest_.policy_provenance, config_, spec_, &error)) {
         throw std::invalid_argument("trajectory recorder provenance is invalid: " + error);
     }

@@ -15,6 +15,7 @@
 #include "ygo/environment/public_environment_observation.hpp"
 #include "ygo/observation/player_observation.hpp"
 #include "ygo/trace/sha256.hpp"
+#include "provenance_test_support.hpp"
 
 namespace {
 
@@ -692,6 +693,124 @@ void test_draw_terminal_codec_and_identity() {
             "terminal closure accepted an out-of-range winner");
 }
 
+void test_typed_provenance_authority() {
+    const auto config = CertifiedEnvironmentConfig::canonical();
+    EpisodeSpec spec;
+    spec.root_seed = 17;
+    const auto envelope = envelope_fixture();
+
+    ProvenanceResolver production_resolver;
+    std::string error;
+    require(!production_resolver.validate(envelope.manifest.policy_provenance, config, spec, &error),
+            "default production resolver trusted test fixture identities");
+
+    const auto resolver = trajectory_test::test_provenance_resolver();
+    require(resolver.validate(envelope.manifest.policy_provenance, config, spec, &error),
+            "explicit test provenance registry did not validate its fixture: " + error);
+    require(resolver.can_resolve(ProvenanceKind::ProducerImplementation,
+                                 "ocgforge.test.producer.v1"),
+            "typed producer identity was not resolved");
+    require(!resolver.can_resolve(ProvenanceKind::ProducerImplementation,
+                                  "ocgforge.test.deterministic_sampling.v1"),
+            "sampling identity crossed into producer authority");
+    require(!resolver.can_resolve(ProvenanceKind::ActionAdapter,
+                                  "ocgforge.test.rng.v1"),
+            "RNG identity crossed into action-adapter authority");
+    require(!resolver.can_resolve(ProvenanceKind::InferenceAdapter,
+                                  "ocgforge.test.action.v1"),
+            "action identity crossed into inference authority");
+    require(!production_resolver.can_resolve(ProvenanceKind::ProducerImplementation,
+                                             "ocgforge.test.producer.v1"),
+            "default resolver exposes test producer authority");
+}
+
+void test_policy_kind_sampling_rng_consistency() {
+    const auto config = CertifiedEnvironmentConfig::canonical();
+    EpisodeSpec spec;
+    spec.root_seed = 17;
+    const auto resolver = trajectory_test::test_provenance_resolver();
+
+    const auto rebind = [](PolicyProvenanceEnvelope value, PolicyArtifact artifact) {
+        value.policy_artifacts = {std::move(artifact)};
+        for (auto& assignment_value : value.participant_assignments) {
+            assignment_value.policy_artifact_id = value.policy_artifacts.front().policy_artifact_id;
+            assignment_value.participant_policy_assignment_id =
+                compute_participant_policy_assignment_id(assignment_value);
+        }
+        std::sort(value.participant_assignments.begin(), value.participant_assignments.end(),
+                  [](const auto& left, const auto& right) {
+                      return left.participant_policy_assignment_id <
+                             right.participant_policy_assignment_id;
+                  });
+        return value;
+    };
+    const auto validate = [&](const PolicyArtifact& artifact) {
+        return resolver.validate(
+            rebind(envelope_fixture().manifest.policy_provenance, artifact), config, spec);
+    };
+
+    auto neural = deterministic_artifact();
+    neural.policy_kind = PolicyKind::NeuralCheckpoint;
+    neural.model_checkpoint_identity = "model.v1." + std::string(64, 'm');
+    neural.policy_artifact_id = compute_policy_artifact_id(neural);
+    require(validate(neural), "deterministic neural artifact was rejected");
+
+    auto search = deterministic_artifact();
+    search.policy_kind = PolicyKind::SearchAssisted;
+    search.search_contract_identity = "ocgforge.test.search.v1";
+    search.policy_artifact_id = compute_policy_artifact_id(search);
+    require(validate(search), "deterministic search artifact was rejected");
+
+    auto demonstration = deterministic_artifact();
+    demonstration.policy_kind = PolicyKind::ImportedDemonstration;
+    demonstration.demonstration_source_identity =
+        "demonstration.v1." + std::string(64, 'd');
+    demonstration.policy_artifact_id = compute_policy_artifact_id(demonstration);
+    require(validate(demonstration), "deterministic demonstration artifact was rejected");
+
+    for (const auto kind : {PolicyKind::NeuralCheckpoint, PolicyKind::SearchAssisted,
+                            PolicyKind::ImportedDemonstration}) {
+        auto stochastic = deterministic_artifact();
+        stochastic.policy_kind = kind;
+        stochastic.sampling_contract_identity = "ocgforge.test.random_sampling.v1";
+        stochastic.policy_rng_contract_identity = "ocgforge.test.rng.v1";
+        if (kind == PolicyKind::NeuralCheckpoint) {
+            stochastic.model_checkpoint_identity = "model.v1." + std::string(64, 'm');
+        } else if (kind == PolicyKind::SearchAssisted) {
+            stochastic.search_contract_identity = "ocgforge.test.search.v1";
+        } else {
+            stochastic.demonstration_source_identity =
+                "demonstration.v1." + std::string(64, 'd');
+        }
+        stochastic.policy_artifact_id = compute_policy_artifact_id(stochastic);
+        require(validate(stochastic), "stochastic policy artifact was rejected");
+
+        auto missing_rng = stochastic;
+        missing_rng.policy_rng_contract_identity = kNoPolicyRngContractId;
+        missing_rng.policy_artifact_id = compute_policy_artifact_id(missing_rng);
+        require(!validate(missing_rng),
+                "stochastic policy artifact with NONE RNG was admitted");
+    }
+
+    auto deterministic_with_rng = deterministic_artifact();
+    deterministic_with_rng.policy_rng_contract_identity = "ocgforge.test.rng.v1";
+    deterministic_with_rng.policy_artifact_id = compute_policy_artifact_id(deterministic_with_rng);
+    require(!validate(deterministic_with_rng),
+            "deterministic sampling artifact with stochastic RNG was admitted");
+
+    auto sampling_in_action = deterministic_artifact();
+    sampling_in_action.action_adapter_identity = "ocgforge.test.deterministic_sampling.v1";
+    sampling_in_action.policy_artifact_id = compute_policy_artifact_id(sampling_in_action);
+    require(!validate(sampling_in_action),
+            "sampling contract was accepted as an action adapter in a policy artifact");
+
+    auto rng_in_observation = deterministic_artifact();
+    rng_in_observation.observation_adapter_identity = "ocgforge.test.rng.v1";
+    rng_in_observation.policy_artifact_id = compute_policy_artifact_id(rng_in_observation);
+    require(!validate(rng_in_observation),
+            "RNG contract was accepted as an observation adapter in a policy artifact");
+}
+
 void test_identity_input_codecs() {
     const auto config = CertifiedEnvironmentConfig::canonical();
     const auto environment_bytes = canonical_environment_identity_bytes(config);
@@ -728,7 +847,7 @@ void test_provenance_resolution() {
         envelope.participant_assignments[0].participant_policy_assignment_id) {
         std::swap(envelope.participant_assignments[0], envelope.participant_assignments[1]);
     }
-    ProvenanceResolver resolver;
+    ProvenanceResolver resolver = trajectory_test::test_provenance_resolver();
     std::string error;
     require(resolver.validate(envelope, config, spec, &error),
             "explicit contract provenance did not resolve: " + error);
@@ -835,22 +954,38 @@ void test_provenance_resolution() {
                                config, spec),
             "non-deterministic sampling contract was admitted for deterministic policy");
 
-    require(!resolver.can_resolve("ocgforge.unknown_contract.v1"),
+    require(!resolver.can_resolve(ProvenanceKind::ProducerImplementation,
+                                  "ocgforge.unknown_contract.v1"),
             "unknown versioned contract identity was resolved as trusted");
-    require(resolver.can_resolve_contract("ocgforge.test.v1") &&
-                !resolver.can_resolve_content("ocgforge.test.v1"),
-            "contract identity was not kept distinct from content identity");
+    require(!resolver.can_resolve(ProvenanceKind::ProducerImplementation,
+                                  "ocgforge.test.v1"),
+            "unregistered contract identity crossed into producer authority");
     const auto immutable_content = std::string("content.v1.") + std::string(64, 'c');
-    ProvenanceResolver content_resolver({immutable_content});
-    require(content_resolver.can_resolve_content(immutable_content) &&
-                !content_resolver.can_resolve_contract(immutable_content),
-            "explicit content identity was not kept distinct from contract identity");
-    ProvenanceResolver mixed_registry({"ocgforge.test.v1", immutable_content});
-    require(!mixed_registry.can_resolve_content("ocgforge.test.v1"),
-            "a contract literal in the content registry crossed identity categories");
-    ProvenanceResolver unknown_contract_registry({"ocgforge.unknown_content.v1"});
-    require(!unknown_contract_registry.can_resolve_content("ocgforge.unknown_content.v1"),
-            "an unknown versioned contract-shaped identity crossed into content");
+    ProvenanceResolver content_resolver({
+        trajectory_test::registry_entry(ProvenanceKind::ImmutableContentArtifact,
+                                        immutable_content)});
+    require(content_resolver.can_resolve(ProvenanceKind::ImmutableContentArtifact,
+                                          immutable_content) &&
+                !content_resolver.can_resolve(ProvenanceKind::ProducerImplementation,
+                                              immutable_content),
+            "explicit content identity was not kept distinct from typed implementation authority");
+    ProvenanceResolver mixed_registry({
+        trajectory_test::registry_entry(ProvenanceKind::ImmutableContentArtifact,
+                                        immutable_content)});
+    require(mixed_registry.can_resolve(ProvenanceKind::ImmutableContentArtifact,
+                                       immutable_content) &&
+                !mixed_registry.can_resolve(ProvenanceKind::ProducerImplementation,
+                                            immutable_content),
+            "content identity crossed into typed implementation authority");
+    ProvenanceResolver unknown_contract_registry({
+        trajectory_test::registry_entry(ProvenanceKind::ImmutableContentArtifact,
+                                        "content.v1." + std::string(64, 'd'))});
+    require(unknown_contract_registry.can_resolve(ProvenanceKind::ImmutableContentArtifact,
+                                                  "content.v1." + std::string(64, 'd')),
+            "explicit immutable content registration was not preserved");
+    require(!unknown_contract_registry.can_resolve(ProvenanceKind::SamplingContract,
+                                                   "content.v1." + std::string(64, 'd')),
+            "immutable content identity crossed into sampling authority");
     auto unknown_identity = envelope;
     unknown_identity.policy_artifacts.front().producer_implementation_identity =
         "ocgforge.unknown_producer.v1";
@@ -943,6 +1078,8 @@ int main() {
         test_identity_input_codecs();
         test_closure_variants();
         test_draw_terminal_codec_and_identity();
+        test_typed_provenance_authority();
+        test_policy_kind_sampling_rng_consistency();
         test_provenance_resolution();
         std::cout << "trajectory_codec_tests=passed\n";
         return 0;

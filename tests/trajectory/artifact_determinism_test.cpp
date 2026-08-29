@@ -100,7 +100,7 @@ void run_fixture(const std::filesystem::path* output_directory) {
                 interruption->reason == InterruptionReason::EngineProcessBudget,
             "determinism fixture did not produce the expected budget interruption");
 
-    TrajectoryRecorder recorder(config, spec, provenance());
+    TrajectoryRecorder recorder(config, spec, provenance(), test_provenance_resolver());
     require(recorder.on_reset_accepted(*accepted_reset),
             "determinism fixture recorder rejected reset");
     const auto envelope = recorder.seal();
@@ -124,7 +124,8 @@ void run_fixture(const std::filesystem::path* output_directory) {
     options.cancellation_source = control.cancellation.source;
     std::string error;
     const auto verification = verify_candidate_shard_for_admission(
-        shard, evidence, shard_sha256, evidence_sha256, options, ProvenanceResolver{}, &error);
+        shard, evidence, shard_sha256, evidence_sha256, options,
+        test_provenance_resolver(), &error);
     require(verification.has_value(), "determinism fixture admission failed: " + error);
     const auto receipt = receipt_from(*verification);
     const auto receipt_bytes = canonical_admission_receipt_bytes(receipt.receipt());

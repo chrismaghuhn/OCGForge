@@ -10,6 +10,8 @@
 
 namespace ygo::trajectory {
 
+class ProvenanceResolver;
+
 struct TerminalViews final {
     environment::PublicEnvironmentObservation player_0;
     environment::PublicEnvironmentObservation player_1;
@@ -30,6 +32,10 @@ public:
     TrajectoryRecorder(environment::CertifiedEnvironmentConfig config,
                        environment::EpisodeSpec spec,
                        PolicyProvenanceEnvelope policy_provenance);
+    TrajectoryRecorder(environment::CertifiedEnvironmentConfig config,
+                       environment::EpisodeSpec spec,
+                       PolicyProvenanceEnvelope policy_provenance,
+                       const ProvenanceResolver& resolver);
 
     TrajectoryRecorder(const TrajectoryRecorder&) = delete;
     TrajectoryRecorder& operator=(const TrajectoryRecorder&) = delete;

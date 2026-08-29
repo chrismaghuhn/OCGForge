@@ -9,12 +9,14 @@
 #include "ygo/environment/public_action_identity.hpp"
 #include "ygo/environment/public_environment_observation.hpp"
 #include "ygo/observation/player_observation.hpp"
+#include "provenance_test_support.hpp"
 
 namespace {
 
 using namespace ygo;
 using namespace ygo::environment;
 using namespace ygo::trajectory;
+using namespace trajectory_test;
 
 void require(const bool condition, const std::string& message) {
     if (!condition) {
@@ -218,7 +220,8 @@ void test_atomic_record_and_rejection() {
     const auto config = CertifiedEnvironmentConfig::canonical();
     const auto spec = episode_spec();
     const auto policy_provenance = provenance();
-    TrajectoryRecorder recorder(config, spec, policy_provenance);
+    TrajectoryRecorder recorder(config, spec, policy_provenance,
+                                test_provenance_resolver());
     const auto policy_assignment = std::find_if(
         policy_provenance.participant_assignments.begin(),
         policy_provenance.participant_assignments.end(),
@@ -241,7 +244,8 @@ void test_atomic_record_and_rejection() {
     rejected.submitted_submission_token.episode_incarnation = 99;
     rejected.submitted_submission_token.frame_generation = 99;
 
-    TrajectoryRecorder invalid_rejection(config, spec, policy_provenance);
+    TrajectoryRecorder invalid_rejection(config, spec, policy_provenance,
+                                         test_provenance_resolver());
     require(invalid_rejection.on_reset_accepted(ResetAccepted{v2_frame(initial, 7)}),
             "recorder rejected reset for invalid rejection invariant test");
     auto changed_state = rejected;
@@ -296,7 +300,8 @@ void test_continuation_and_terminal() {
     const auto config = CertifiedEnvironmentConfig::canonical();
     const auto spec = episode_spec();
     const auto policy_provenance = provenance();
-    TrajectoryRecorder recorder(config, spec, policy_provenance);
+    TrajectoryRecorder recorder(config, spec, policy_provenance,
+                                test_provenance_resolver());
     const auto policy_assignment = std::find_if(
         policy_provenance.participant_assignments.begin(),
         policy_provenance.participant_assignments.end(),
@@ -345,7 +350,8 @@ void test_draw_terminal_is_retained() {
     const auto config = CertifiedEnvironmentConfig::canonical();
     const auto spec = episode_spec();
     const auto policy_provenance = provenance();
-    TrajectoryRecorder recorder(config, spec, policy_provenance);
+    TrajectoryRecorder recorder(config, spec, policy_provenance,
+                                test_provenance_resolver());
     const auto policy_assignment = std::find_if(
         policy_provenance.participant_assignments.begin(),
         policy_provenance.participant_assignments.end(),
@@ -377,7 +383,8 @@ void test_administrative_pending_frame_and_failure() {
     const auto policy_provenance = provenance();
     const auto initial = frame(config, spec, 0, candidate(EnvironmentActionKind::YesNo, "", true),
                                false);
-    TrajectoryRecorder recorder(config, spec, policy_provenance);
+    TrajectoryRecorder recorder(config, spec, policy_provenance,
+                                test_provenance_resolver());
     require(recorder.on_reset_accepted(ResetAccepted{v2_frame(initial, 7)}),
             "administrative reset was rejected");
     const auto episode_id = episode_semantic_id(config, spec);
@@ -391,7 +398,8 @@ void test_administrative_pending_frame_and_failure() {
                 std::get<InterruptedClosure>(sealed->closure).pending_unacted_frame.has_value(),
             "administrative interruption fabricated an action");
 
-    TrajectoryRecorder mismatched_pending(config, spec, policy_provenance);
+    TrajectoryRecorder mismatched_pending(config, spec, policy_provenance,
+                                          test_provenance_resolver());
     require(mismatched_pending.on_reset_accepted(ResetAccepted{v2_frame(initial, 7)}),
             "mismatched-pending reset was rejected");
     auto changed_pending = v2_frame(initial, 7);
@@ -403,7 +411,8 @@ void test_administrative_pending_frame_and_failure() {
     require(mismatched_pending.lifecycle() == RecorderLifecycle::Closed,
             "mismatched pending frame did not fail closed");
 
-    TrajectoryRecorder failed(config, spec, policy_provenance);
+    TrajectoryRecorder failed(config, spec, policy_provenance,
+                              test_provenance_resolver());
     require(failed.on_reset_accepted(ResetAccepted{v2_frame(initial, 7)}),
             "failure reset was rejected");
     EpisodeFailure failure;
