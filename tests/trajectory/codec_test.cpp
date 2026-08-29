@@ -684,6 +684,24 @@ void test_draw_terminal_codec_and_identity() {
     require(draw_identity != public_gameplay_trajectory_id(envelope_fixture()),
             "draw terminal did not change the public gameplay identity");
 
+    observation::PlayerObservation public_draw;
+    public_draw.perspective_player = 0;
+    public_draw.globals.terminal = true;
+    public_draw.globals.winner = std::uint8_t{2};
+    public_draw.globals.win_reason = std::uint8_t{0};
+    public_draw.match_context.perspective_player = 0;
+    public_draw.match_context.own_deck.known = true;
+    public_draw.match_context.opponent_deck.known = false;
+    observation::VisibleGameEvent draw_event;
+    draw_event.event_index = 0;
+    draw_event.kind = observation::VisibleEventKind::Win;
+    draw_event.winner = std::uint8_t{2};
+    draw_event.win_reason = std::uint8_t{0};
+    public_draw.visible_events.push_back(draw_event);
+    const auto draw_view = project_public_observation(public_draw);
+    require(!canonical_public_environment_observation_bytes(draw_view).empty(),
+            "public terminal projection rejected a legitimate draw winner");
+
     auto invalid_bytes = bytes;
     const auto winner_offset = sizeof(std::uint32_t) +
                                std::string(kTrustedTrajectoryContractId).size() + 1;
