@@ -686,7 +686,7 @@ void test_continuation_operation_validation() {
         "sum", continuation_candidate(EnvironmentActionKind::Pick, "pick", false, 2));
     greater_sum_unbounded.continuation->selected_indices = {0, 1};
     greater_sum_unbounded.continuation->remaining_indices = {2};
-    greater_sum_unbounded.continuation->min_count = 0;
+    greater_sum_unbounded.continuation->min_count = 2;
     greater_sum_unbounded.continuation->max_count = 0;
     greater_sum_unbounded.continuation->greater_sum = true;
     require(static_cast<bool>(decode_public_environment_decision_request(

@@ -404,7 +404,11 @@ void validate_continuation(const environment::EnvironmentContinuationView& value
     if (std::find(std::begin(valid), std::end(valid), value.continuation_kind) == std::end(valid)) {
         throw std::invalid_argument("trajectory continuation kind is unknown");
     }
-    if (value.min_count > value.max_count) {
+    // V2 encodes greater-sum selection with max_count == 0 as its explicit
+    // unbounded sentinel; min_count is not a cardinality bound in that mode.
+    const bool unbounded_greater_sum = value.continuation_kind == "sum" && value.greater_sum &&
+                                      value.max_count == 0;
+    if (value.min_count > value.max_count && !unbounded_greater_sum) {
         throw std::invalid_argument("trajectory continuation cardinality is inverted");
     }
     if (value.continuation_steps != value.continuation_step) {
@@ -423,10 +427,7 @@ void validate_continuation(const environment::EnvironmentContinuationView& value
     const auto selected_count = value.continuation_kind == "announce_mask"
                                     ? static_cast<std::size_t>(bit_count(value.selected_mask))
                                     : value.selected_indices.size();
-    // V2 encodes greater-sum selection with max_count == 0 as its explicit
-    // unbounded sentinel. Exact-sum selection remains cardinality-bounded.
-    const bool unbounded_greater_sum = value.continuation_kind == "sum" && value.greater_sum &&
-                                      value.max_count == 0;
+    // Exact-sum selection remains cardinality-bounded.
     if (uses_public_cardinality(value.continuation_kind) && !unbounded_greater_sum &&
         selected_count > value.max_count) {
         throw std::invalid_argument("trajectory continuation exceeds public max_count");
