@@ -121,15 +121,6 @@ void validate_optional_player(const std::optional<std::uint8_t>& value,
     }
 }
 
-void validate_optional_winner(const std::optional<std::uint8_t>& value,
-                              const char* field_name) {
-    // ocgcore uses PLAYER_NONE=2 for a legitimate draw. This is distinct
-    // from player-valued fields, which remain restricted to 0 and 1.
-    if (value.has_value() && *value > 2) {
-        throw std::invalid_argument(std::string("public observation has invalid ") + field_name);
-    }
-}
-
 std::uint8_t semantic_zone_code(const SemanticZone value) {
     switch (value) {
     case SemanticZone::Unknown:
@@ -337,7 +328,7 @@ void validate_observation(const PlayerObservation& observation) {
     if (observation.globals.turn_player.has_value() && *observation.globals.turn_player > 1) {
         throw std::invalid_argument("public observation turn_player is invalid");
     }
-    validate_optional_winner(observation.globals.winner, "winner");
+    validate_optional_player(observation.globals.winner, "winner");
     for (const auto& link : observation.chain.links) {
         validate_optional_player(link.activating_player, "chain activating player");
         if (link.source.has_value()) {
@@ -356,7 +347,7 @@ void validate_observation(const PlayerObservation& observation) {
     for (const auto& event : observation.visible_events) {
         (void)visible_event_kind_code(event.kind);
         validate_optional_player(event.player, "visible event player");
-        validate_optional_winner(event.winner, "visible event winner");
+        validate_optional_player(event.winner, "visible event winner");
         if (event.entity.has_value()) {
             validate_locator(*event.entity);
         }

@@ -145,14 +145,13 @@ const ProvenanceRegistration* find_registration(
     const std::vector<ProvenanceRegistration>& registrations,
     const ProvenanceKind kind,
     const std::string_view identity) noexcept {
-    const auto it = std::lower_bound(
-        registrations.begin(), registrations.end(),
-        ProvenanceRegistration{kind, std::string(identity), std::nullopt, std::nullopt},
-        registration_less);
-    if (it == registrations.end() || it->kind != kind || it->identity != identity) {
-        return nullptr;
+    for (const auto& entry : registrations) {
+        if (entry.kind == kind && entry.identity.size() == identity.size() &&
+            std::equal(entry.identity.begin(), entry.identity.end(), identity.begin())) {
+            return &entry;
+        }
     }
-    return &*it;
+    return nullptr;
 }
 
 void validate_registration(const ProvenanceRegistration& entry) {

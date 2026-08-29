@@ -267,10 +267,6 @@ Unknown enum values, invalid player values, duplicate entity locators, and
 duplicate event indices are rejected rather than assigned incidental bytes.
 The serializer does not use unordered-container iteration.
 
-Player-valued fields use `0` and `1`. The `winner` field is the terminal
-`MSG_WIN` value and additionally permits `2` (`PLAYER_NONE`) for a legitimate
-draw; values greater than `2` remain invalid.
-
 ## 4. Attached decision-context rule
 
 `attach_decision_context(PlayerObservation&, DecisionRequest&)` may continue to
