@@ -203,6 +203,30 @@ void test_rng_material_binding() {
                 cursor_bundle, cursor_shard, cursor_bundle.candidate_shard_artifact_sha256,
                 resolver, &error),
             "cursor-capable RNG contract rejected valid initialization evidence: " + error);
+    const auto cursor_initialization = PolicyRngInitializationIdentity{
+        "ocgforge.test.rng.v1", "cursor-unique", {0x11, 0x22, 0x33},
+        cursor.records.front().policy_rng_decision_provenance
+            .policy_rng_initialization_identity};
+    const auto* rng_descriptor = resolver.policy_rng_contract_descriptor(
+        "ocgforge.test.rng.v1");
+    require(rng_descriptor != nullptr && rng_descriptor->cursor_is_unique &&
+                rng_descriptor->cursor_is_unique(cursor_initialization),
+            "valid CURSOR provenance did not carry an explicit uniqueness proof");
+    auto ambiguous_cursor_initialization = cursor_initialization;
+    ambiguous_cursor_initialization.policy_rng_stream_id = "ambiguous";
+    require(!rng_descriptor->cursor_is_unique(ambiguous_cursor_initialization),
+            "ambiguous CURSOR provenance unexpectedly carried a uniqueness proof");
+
+    const auto different_root = stochastic_terminal_envelope(35);
+    require(different_root.records.front().policy_rng_decision_provenance
+                    .policy_rng_initialization_identity ==
+                envelope.records.front().policy_rng_decision_provenance
+                    .policy_rng_initialization_identity &&
+                different_root.records.front().policy_rng_decision_provenance
+                        .policy_rng_contract_identity ==
+                    envelope.records.front().policy_rng_decision_provenance
+                        .policy_rng_contract_identity,
+            "policy RNG initialization identity depended on the V2 root seed");
 }
 
 }  // namespace
