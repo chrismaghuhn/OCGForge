@@ -519,13 +519,44 @@ PolicyRngDecisionProvenance stochastic_state_attribution(
     return value;
 }
 
+PolicyRngDecisionProvenance stochastic_cursor_attribution(
+    const PolicyArtifact& artifact,
+    const ParticipantPolicyAssignment& assignment_value,
+    const std::uint64_t decision_index) {
+    const auto initialization = stochastic_initialization("cursor-unique");
+    PolicyRngStreamIdentity stream;
+    stream.policy_artifact_id = artifact.policy_artifact_id;
+    stream.participant_policy_assignment_id =
+        assignment_value.participant_policy_assignment_id;
+    stream.policy_rng_contract_identity =
+        initialization.policy_rng_contract_identity;
+    stream.policy_rng_stream_id = initialization.policy_rng_stream_id;
+    stream.policy_rng_initialization_identity =
+        initialization.policy_rng_initialization_identity;
+    stream.policy_rng_identity = compute_policy_rng_stream_id(stream);
+
+    PolicyRngDecisionProvenance value;
+    value.decision_index = decision_index;
+    value.acting_policy_assignment_id =
+        assignment_value.participant_policy_assignment_id;
+    value.policy_rng_identity = stream.policy_rng_identity;
+    value.policy_rng_contract_identity = stream.policy_rng_contract_identity;
+    value.policy_rng_stream_id = stream.policy_rng_stream_id;
+    value.policy_rng_initialization_identity =
+        stream.policy_rng_initialization_identity;
+    value.mode = PolicyRngMode::Cursor;
+    value.pre_cursor = 0;
+    value.post_cursor = 1;
+    return value;
+}
+
 void rebuild_single_entry_artifacts(CollectedEpisode& value) {
     value.shard = {};
     attach_single_entry_artifacts(value);
 }
 
 CollectedEpisode stochastic_terminal_for_admission(
-    const CollectedEpisode& source) {
+    const CollectedEpisode& source, const bool use_cursor = false) {
     CollectedEpisode result = source;
     const auto policy = stochastic_artifact();
     PolicyProvenanceEnvelope policy_provenance;
@@ -552,9 +583,11 @@ CollectedEpisode stochastic_terminal_for_admission(
                 "stochastic terminal record has no participant assignment");
         record.acting_policy_assignment_id =
             assignment_it->participant_policy_assignment_id;
-        record.policy_rng_decision_provenance =
-            stochastic_state_attribution(policy, *assignment_it,
-                                         record.frame.decision_index);
+        record.policy_rng_decision_provenance = use_cursor
+            ? stochastic_cursor_attribution(policy, *assignment_it,
+                                            record.frame.decision_index)
+            : stochastic_state_attribution(policy, *assignment_it,
+                                           record.frame.decision_index);
         if (std::find(active_players.begin(), active_players.end(),
                       record.frame.acting_player) == active_players.end()) {
             active_players.push_back(record.frame.acting_player);
@@ -572,11 +605,20 @@ CollectedEpisode stochastic_terminal_for_admission(
     rebuild_single_entry_artifacts(result);
     for (const auto player : active_players) {
         const auto initialization = stochastic_initialization(
-            stochastic_stream_name(player));
-        result.evidence.rng_initializations.push_back(
-            RngInitializationEvidenceEntry{
-                initialization.policy_rng_initialization_identity,
-                initialization.initialization_material});
+            use_cursor ? "cursor-unique" : stochastic_stream_name(player));
+        const auto already_present = std::find_if(
+            result.evidence.rng_initializations.begin(),
+            result.evidence.rng_initializations.end(),
+            [&](const auto& entry) {
+                return entry.policy_rng_initialization_identity ==
+                       initialization.policy_rng_initialization_identity;
+            });
+        if (already_present == result.evidence.rng_initializations.end()) {
+            result.evidence.rng_initializations.push_back(
+                RngInitializationEvidenceEntry{
+                    initialization.policy_rng_initialization_identity,
+                    initialization.initialization_material});
+        }
     }
     std::sort(result.evidence.rng_initializations.begin(),
               result.evidence.rng_initializations.end(),
@@ -679,6 +721,16 @@ void test_real_replay_and_admission() {
             "registered stochastic RNG admission failed: " + error);
     require(stochastic_admission->entries().size() == 1,
             "registered stochastic RNG admission did not commit one entry");
+
+    auto cursor_stochastic = stochastic_terminal_for_admission(terminal, true);
+    replay_collected(cursor_stochastic);
+    const auto cursor_admission = admit_collected(
+        cursor_stochastic.shard, cursor_stochastic.evidence,
+        replay_options_for(cursor_stochastic), &error);
+    require(cursor_admission.has_value(),
+            "registered unique CURSOR RNG admission failed: " + error);
+    require(cursor_admission->entries().size() == 1,
+            "registered unique CURSOR RNG admission did not commit one entry");
 
     auto stochastic_none = stochastic_terminal;
     stochastic_none.evidence.rng_initializations.clear();

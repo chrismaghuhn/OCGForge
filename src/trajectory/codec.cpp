@@ -12,6 +12,7 @@
 #include "ygo/environment/public_action_identity.hpp"
 #include "ygo/environment/public_environment_observation.hpp"
 #include "ygo/trajectory/identity_resolver.hpp"
+#include "ygo/trajectory/policy_provenance.hpp"
 #include "ygo/trace/sha256.hpp"
 
 namespace ygo::trajectory {
@@ -64,6 +65,21 @@ void require_digest(const std::string& value, const char* field) {
 void require_identity(const std::string& value, const std::string_view prefix, const char* field) {
     if (!is_canonical_identity(value, prefix)) {
         throw std::invalid_argument(std::string("trajectory ") + field + " has invalid identity");
+    }
+}
+
+void require_provenance_identity(const std::string& value, const ProvenanceKind kind,
+                                 const char* field) {
+    if (!is_canonical_provenance_identity(kind, value)) {
+        throw std::invalid_argument(std::string("trajectory ") + field +
+                                    " has invalid provenance identity");
+    }
+}
+
+void require_policy_rng_stream_token(const std::string& value, const char* field) {
+    if (!is_canonical_policy_rng_stream_token(value)) {
+        throw std::invalid_argument(std::string("trajectory ") + field +
+                                    " is not a canonical policy RNG stream token");
     }
 }
 
@@ -133,12 +149,20 @@ void validate_policy_artifact(const PolicyArtifact& value) {
     if (!valid_policy_kind(enum_value(value.policy_kind))) {
         throw std::invalid_argument("trajectory policy kind is unknown");
     }
-    require_nonempty(value.producer_implementation_identity, "producer identity");
-    require_nonempty(value.inference_adapter_identity, "inference adapter identity");
-    require_nonempty(value.observation_adapter_identity, "observation adapter identity");
-    require_nonempty(value.action_adapter_identity, "action adapter identity");
-    require_nonempty(value.sampling_contract_identity, "sampling contract identity");
-    require_nonempty(value.policy_rng_contract_identity, "policy RNG contract identity");
+    require_provenance_identity(value.producer_implementation_identity,
+                                ProvenanceKind::ProducerImplementation, "producer identity");
+    require_provenance_identity(value.inference_adapter_identity,
+                                ProvenanceKind::InferenceAdapter, "inference adapter identity");
+    require_provenance_identity(value.observation_adapter_identity,
+                                ProvenanceKind::ObservationAdapter,
+                                "observation adapter identity");
+    require_provenance_identity(value.action_adapter_identity,
+                                ProvenanceKind::ActionAdapter, "action adapter identity");
+    require_provenance_identity(value.sampling_contract_identity,
+                                ProvenanceKind::SamplingContract, "sampling contract identity");
+    require_provenance_identity(value.policy_rng_contract_identity,
+                                ProvenanceKind::PolicyRngContract,
+                                "policy RNG contract identity");
     if (value.policy_kind == PolicyKind::DeterministicHeuristic &&
         value.policy_rng_contract_identity != kNoPolicyRngContractId) {
         throw std::invalid_argument("deterministic policy must use the no-RNG contract");
@@ -161,7 +185,15 @@ void validate_policy_artifact(const PolicyArtifact& value) {
          {&value.model_checkpoint_identity, &value.search_contract_identity,
           &value.demonstration_source_identity, &value.artifact_metadata_identity}) {
         if (optional_identity->has_value()) {
-            require_nonempty(**optional_identity, "optional provenance identity");
+            const auto kind = optional_identity == &value.model_checkpoint_identity
+                                  ? ProvenanceKind::ModelCheckpointArtifact
+                                  : optional_identity == &value.search_contract_identity
+                                        ? ProvenanceKind::SearchContract
+                                        : optional_identity == &value.demonstration_source_identity
+                                              ? ProvenanceKind::DemonstrationSourceArtifact
+                                              : ProvenanceKind::ArtifactMetadataArtifact;
+            require_provenance_identity(**optional_identity, kind,
+                                        "optional provenance identity");
         }
     }
     if ((value.policy_kind == PolicyKind::NeuralCheckpoint &&
@@ -211,8 +243,9 @@ void validate_assignment(const ParticipantPolicyAssignment& value) {
 }
 
 void validate_initialization(const PolicyRngInitializationIdentity& value) {
-    require_nonempty(value.policy_rng_contract_identity, "policy RNG contract identity");
-    require_nonempty(value.policy_rng_stream_id, "policy RNG stream ID");
+    require_provenance_identity(value.policy_rng_contract_identity,
+                                ProvenanceKind::PolicyRngContract,
+                                "policy RNG contract identity");
     if (value.policy_rng_contract_identity == kNoPolicyRngContractId) {
         if (value.policy_rng_stream_id != kNoPolicyRngContractId ||
             !value.initialization_material.empty() ||
@@ -221,6 +254,7 @@ void validate_initialization(const PolicyRngInitializationIdentity& value) {
         }
         return;
     }
+    require_policy_rng_stream_token(value.policy_rng_stream_id, "policy RNG stream ID");
     require_identity(value.policy_rng_initialization_identity,
                      "policy_rng_initialization.v1.", "policy RNG initialization");
     const auto expected = rng_initialization_id_for(value);
@@ -233,9 +267,11 @@ void validate_stream(const PolicyRngStreamIdentity& value) {
     require_identity(value.policy_artifact_id, "policy_artifact.v1.", "stream artifact");
     require_identity(value.participant_policy_assignment_id,
                      "participant_policy_assignment.v1.", "stream assignment");
-    require_nonempty(value.policy_rng_contract_identity, "stream RNG contract");
-    require_nonempty(value.policy_rng_stream_id, "stream ID");
-    require_nonempty(value.policy_rng_initialization_identity, "stream initialization");
+    require_provenance_identity(value.policy_rng_contract_identity,
+                                ProvenanceKind::PolicyRngContract, "stream RNG contract");
+    require_policy_rng_stream_token(value.policy_rng_stream_id, "stream ID");
+    require_identity(value.policy_rng_initialization_identity,
+                     "policy_rng_initialization.v1.", "stream initialization");
     const auto expected = rng_stream_id_for(value);
     require_identity(value.policy_rng_identity, "policy_rng.v1.", "policy RNG stream");
     if (value.policy_rng_identity != expected) {
@@ -260,9 +296,11 @@ void validate_rng_decision(const PolicyRngDecisionProvenance& value) {
         return;
     }
     require_identity(value.policy_rng_identity, "policy_rng.v1.", "decision RNG identity");
-    require_nonempty(value.policy_rng_contract_identity, "decision RNG contract");
-    require_nonempty(value.policy_rng_stream_id, "decision RNG stream");
-    require_nonempty(value.policy_rng_initialization_identity, "decision RNG initialization");
+    require_provenance_identity(value.policy_rng_contract_identity,
+                                ProvenanceKind::PolicyRngContract, "decision RNG contract");
+    require_policy_rng_stream_token(value.policy_rng_stream_id, "decision RNG stream");
+    require_identity(value.policy_rng_initialization_identity,
+                     "policy_rng_initialization.v1.", "decision RNG initialization");
     if (value.mode == PolicyRngMode::Cursor) {
         if (!value.pre_cursor.has_value() || !value.post_cursor.has_value() ||
             value.pre_state.has_value() || value.post_state.has_value() ||

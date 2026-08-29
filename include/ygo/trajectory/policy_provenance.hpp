@@ -50,6 +50,12 @@ struct ProvenanceRegistration final {
     std::optional<PolicyRngContractDescriptor> policy_rng_descriptor;
 };
 
+// Codecs reject malformed aliases lexically before registry membership is
+// consulted; the resolver still proves exact typed authority.
+bool is_canonical_provenance_identity(ProvenanceKind kind,
+                                       std::string_view identity) noexcept;
+bool is_canonical_policy_rng_stream_token(std::string_view value) noexcept;
+
 // Validates identities and cross-references against an immutable, explicitly
 // typed authority registry. The default instance contains only the accepted
 // no-RNG contract; it intentionally contains no policy implementation or test

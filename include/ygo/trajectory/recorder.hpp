@@ -7,10 +7,9 @@
 #include <vector>
 
 #include "ygo/trajectory/codec.hpp"
+#include "ygo/trajectory/policy_provenance.hpp"
 
 namespace ygo::trajectory {
-
-class ProvenanceResolver;
 
 struct TerminalViews final {
     environment::PublicEnvironmentObservation player_0;
@@ -90,6 +89,7 @@ private:
 
     environment::CertifiedEnvironmentConfig config_;
     environment::EpisodeSpec spec_;
+    ProvenanceResolver resolver_;
     EpisodeManifest manifest_;
     RecorderLifecycle lifecycle_ = RecorderLifecycle::Empty;
     std::optional<PublicFrameSnapshot> current_frame_;

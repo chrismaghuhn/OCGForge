@@ -391,6 +391,45 @@ void test_policy_codecs() {
     require(unknown_kind_rejected, "policy artifact writer accepted an unknown enum");
 }
 
+void test_provenance_codec_lexical_strictness() {
+    auto artifact = deterministic_artifact();
+    artifact.producer_implementation_identity = "latest";
+    artifact.policy_artifact_id = compute_policy_artifact_id(artifact);
+    require_throw([&] { (void)canonical_policy_artifact_bytes(artifact); },
+                  "policy artifact codec accepted a mutable producer alias");
+
+    artifact = deterministic_artifact();
+    artifact.producer_implementation_identity = "ocgforge..v1";
+    artifact.policy_artifact_id = compute_policy_artifact_id(artifact);
+    require_throw([&] { (void)canonical_policy_artifact_bytes(artifact); },
+                  "policy artifact codec accepted an empty identity segment");
+
+    PolicyRngInitializationIdentity initialization;
+    initialization.policy_rng_contract_identity = "ocgforge.test.rng.v1";
+    initialization.policy_rng_stream_id = "../stream";
+    initialization.initialization_material = {0x01, 0x02};
+    initialization.policy_rng_initialization_identity =
+        compute_policy_rng_initialization_id(initialization);
+    require_throw(
+        [&] { (void)canonical_policy_rng_initialization_identity_bytes(initialization); },
+        "RNG initialization codec accepted a path-like stream token");
+
+    const auto valid_artifact = deterministic_artifact();
+    const auto valid_assignment = assignment(valid_artifact, 0, DeckRole::FirstLockedDeck,
+                                             SeatRole::StartingPlayer);
+    PolicyRngStreamIdentity stream;
+    stream.policy_artifact_id = valid_artifact.policy_artifact_id;
+    stream.participant_policy_assignment_id = valid_assignment.participant_policy_assignment_id;
+    stream.policy_rng_contract_identity = "ocgforge.test.rng.v1";
+    stream.policy_rng_stream_id = "main";
+    stream.policy_rng_initialization_identity =
+        "policy_rng_initialization.v1." + std::string(64, '0');
+    stream.policy_rng_identity = compute_policy_rng_stream_id(stream);
+    stream.policy_rng_stream_id = "stream/with/slash";
+    require_throw([&] { (void)canonical_policy_rng_stream_identity_bytes(stream); },
+                  "RNG stream codec accepted a path-like stream token");
+}
+
 void test_public_codecs() {
     const auto config = CertifiedEnvironmentConfig::canonical();
     EpisodeSpec spec;
@@ -836,11 +875,15 @@ void test_policy_kind_sampling_rng_consistency() {
                 "stochastic policy artifact with NONE RNG was admitted");
     }
 
-    auto deterministic_with_rng = deterministic_artifact();
-    deterministic_with_rng.policy_rng_contract_identity = "ocgforge.test.rng.v1";
-    deterministic_with_rng.policy_artifact_id = compute_policy_artifact_id(deterministic_with_rng);
-    require(!validate(deterministic_with_rng),
-            "deterministic sampling artifact with stochastic RNG was admitted");
+    auto deterministic_neural_with_rng = deterministic_artifact();
+    deterministic_neural_with_rng.policy_kind = PolicyKind::NeuralCheckpoint;
+    deterministic_neural_with_rng.model_checkpoint_identity =
+        "model.v1." + std::string(64, 'b');
+    deterministic_neural_with_rng.policy_rng_contract_identity = "ocgforge.test.rng.v1";
+    deterministic_neural_with_rng.policy_artifact_id =
+        compute_policy_artifact_id(deterministic_neural_with_rng);
+    require(validate(deterministic_neural_with_rng),
+            "deterministic neural sampling with explicit policy RNG was rejected");
 
     auto sampling_in_action = deterministic_artifact();
     sampling_in_action.action_adapter_identity = "ocgforge.test.deterministic_sampling.v1";
@@ -1116,6 +1159,7 @@ int main() {
     try {
         test_primitive_strictness();
         test_policy_codecs();
+        test_provenance_codec_lexical_strictness();
         test_public_codecs();
         test_continuation_operation_validation();
         test_envelope_codec_and_identity();

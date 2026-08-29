@@ -27,13 +27,38 @@ bool valid_provenance_kind(const ProvenanceKind kind) noexcept {
 }
 
 bool canonical_identity_token(const std::string_view value) noexcept {
+    if (value.empty() || value.front() == '.' || value.back() == '.') {
+        return false;
+    }
+    for (std::size_t index = 0; index < value.size(); ++index) {
+        const auto character = static_cast<unsigned char>(value[index]);
+        if (character == '.' && (index == 0 || value[index - 1] == '.')) {
+            return false;
+        }
+        if (!((character >= 'a' && character <= 'z') ||
+              (character >= '0' && character <= '9') || character == '.' ||
+              character == '_' || character == '-')) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool canonical_policy_rng_stream_token(const std::string_view value) noexcept {
     if (value.empty()) {
+        return false;
+    }
+    const auto is_alphanumeric = [](const unsigned char character) {
+        return (character >= 'a' && character <= 'z') ||
+               (character >= '0' && character <= '9');
+    };
+    if (!is_alphanumeric(static_cast<unsigned char>(value.front())) ||
+        !is_alphanumeric(static_cast<unsigned char>(value.back()))) {
         return false;
     }
     return std::all_of(value.begin(), value.end(), [](const unsigned char character) {
         return (character >= 'a' && character <= 'z') ||
-               (character >= '0' && character <= '9') || character == '.' || character == '_' ||
-               character == '-';
+               (character >= '0' && character <= '9') || character == '_' || character == '-';
     });
 }
 
@@ -191,8 +216,8 @@ bool validate_policy_kind(const PolicyArtifact& artifact,
         resolver.policy_rng_contract_descriptor(artifact.policy_rng_contract_identity) == nullptr) {
         return reject("non-NONE policy RNG identity lacks a typed descriptor");
     }
-    if (sampling->deterministic == artifact_uses_rng) {
-        return reject("sampling capability and policy RNG identity disagree");
+    if (!sampling->deterministic && !artifact_uses_rng) {
+        return reject("stochastic sampling requires a non-NONE policy RNG contract");
     }
     switch (artifact.policy_kind) {
         case PolicyKind::RandomLegal:
@@ -235,6 +260,15 @@ bool validate_policy_kind(const PolicyArtifact& artifact,
 }
 
 }  // namespace
+
+bool is_canonical_provenance_identity(const ProvenanceKind kind,
+                                      const std::string_view identity) noexcept {
+    return valid_identity_for_kind(kind, identity);
+}
+
+bool is_canonical_policy_rng_stream_token(const std::string_view value) noexcept {
+    return canonical_policy_rng_stream_token(value);
+}
 
 ProvenanceResolver::ProvenanceResolver() : registrations_{no_policy_rng_registration()} {}
 

@@ -36,6 +36,95 @@ std::optional<std::string> assignment_for(
     return (*result)->participant_policy_assignment_id;
 }
 
+const ParticipantPolicyAssignment* assignment_by_id(
+    const PolicyProvenanceEnvelope& provenance, const std::string_view assignment_id) noexcept {
+    const auto it = std::find_if(
+        provenance.participant_assignments.begin(), provenance.participant_assignments.end(),
+        [assignment_id](const ParticipantPolicyAssignment& assignment) {
+            return assignment.participant_policy_assignment_id == assignment_id;
+        });
+    return it == provenance.participant_assignments.end() ? nullptr : &*it;
+}
+
+const PolicyArtifact* artifact_by_id(const PolicyProvenanceEnvelope& provenance,
+                                     const std::string_view artifact_id) noexcept {
+    const auto it = std::find_if(
+        provenance.policy_artifacts.begin(), provenance.policy_artifacts.end(),
+        [artifact_id](const PolicyArtifact& artifact) {
+            return artifact.policy_artifact_id == artifact_id;
+        });
+    return it == provenance.policy_artifacts.end() ? nullptr : &*it;
+}
+
+bool validate_record_rng_attribution(const PolicyProvenanceEnvelope& provenance,
+                                     const ProvenanceResolver& resolver,
+                                     const std::string_view assignment_id,
+                                     const PolicyRngDecisionProvenance& attribution,
+                                     std::string& error) {
+    try {
+        const auto* assignment = assignment_by_id(provenance, assignment_id);
+        if (assignment == nullptr) {
+            error = "policy attribution references an unknown participant assignment";
+            return false;
+        }
+        const auto* artifact = artifact_by_id(provenance, assignment->policy_artifact_id);
+        if (artifact == nullptr) {
+            error = "policy attribution references an unknown policy artifact";
+            return false;
+        }
+        const bool artifact_uses_rng =
+            artifact->policy_rng_contract_identity != kNoPolicyRngContractId;
+        if (attribution.mode == PolicyRngMode::None) {
+            if (artifact_uses_rng) {
+                error = "stochastic policy record has NONE RNG attribution";
+                return false;
+            }
+            return true;
+        }
+        if (!artifact_uses_rng || attribution.policy_rng_contract_identity !=
+                                      artifact->policy_rng_contract_identity) {
+            error = "record RNG attribution disagrees with its policy artifact";
+            return false;
+        }
+        const auto* descriptor = resolver.policy_rng_contract_descriptor(
+            attribution.policy_rng_contract_identity);
+        if (descriptor == nullptr) {
+            error = "record RNG attribution lacks a typed contract descriptor";
+            return false;
+        }
+        PolicyRngStreamIdentity stream;
+        stream.policy_artifact_id = artifact->policy_artifact_id;
+        stream.participant_policy_assignment_id = assignment->participant_policy_assignment_id;
+        stream.policy_rng_contract_identity = attribution.policy_rng_contract_identity;
+        stream.policy_rng_stream_id = attribution.policy_rng_stream_id;
+        stream.policy_rng_initialization_identity =
+            attribution.policy_rng_initialization_identity;
+        if (compute_policy_rng_stream_id(stream) != attribution.policy_rng_identity) {
+            error = "record RNG stream identity does not recompute from provenance";
+            return false;
+        }
+        if (attribution.mode == PolicyRngMode::Cursor) {
+            if (!descriptor->cursor_is_unique) {
+                error = "CURSOR RNG provenance lacks a typed uniqueness authority";
+                return false;
+            }
+        } else if (!descriptor->state_is_canonical || !attribution.pre_state.has_value() ||
+                   !attribution.post_state.has_value() ||
+                   !descriptor->state_is_canonical(*attribution.pre_state) ||
+                   !descriptor->state_is_canonical(*attribution.post_state)) {
+            error = "STATE RNG provenance is not canonical for its contract";
+            return false;
+        }
+        return true;
+    } catch (const std::exception& exception) {
+        error = exception.what();
+        return false;
+    } catch (...) {
+        error = "policy RNG attribution validation threw";
+        return false;
+    }
+}
+
 bool validate_terminal_views(const TerminalViews& views) noexcept {
     return views.player_0.perspective_player == 0 && views.player_1.perspective_player == 1;
 }
@@ -52,7 +141,7 @@ TrajectoryRecorder::TrajectoryRecorder(environment::CertifiedEnvironmentConfig c
                                        environment::EpisodeSpec spec,
                                        PolicyProvenanceEnvelope policy_provenance,
                                        const ProvenanceResolver& resolver)
-    : config_(std::move(config)), spec_(std::move(spec)) {
+    : config_(std::move(config)), spec_(std::move(spec)), resolver_(resolver) {
     if (!is_current_certified_environment(config_)) {
         throw std::invalid_argument("trajectory recorder requires the current certified environment");
     }
@@ -322,6 +411,14 @@ bool TrajectoryRecorder::on_step_accepted(
         return fail_closed(environment::FailureCode::PublicFrameInvariant,
                            environment::FailureStage::Action, true, error,
                            "policy attribution does not resolve to the acting assignment");
+    }
+    std::string attribution_error;
+    if (!validate_record_rng_attribution(manifest_.policy_provenance, resolver_,
+                                         *expected_assignment, attribution,
+                                         attribution_error)) {
+        return fail_closed(environment::FailureCode::PublicFrameInvariant,
+                           environment::FailureStage::Action, true, error,
+                           std::move(attribution_error));
     }
     try {
         (void)canonical_policy_rng_decision_provenance_bytes(attribution);
