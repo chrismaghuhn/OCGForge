@@ -341,6 +341,36 @@ void test_continuation_and_terminal() {
             "continuation terminal count is wrong");
 }
 
+void test_draw_terminal_is_retained() {
+    const auto config = CertifiedEnvironmentConfig::canonical();
+    const auto spec = episode_spec();
+    const auto policy_provenance = provenance();
+    TrajectoryRecorder recorder(config, spec, policy_provenance);
+    const auto policy_assignment = std::find_if(
+        policy_provenance.participant_assignments.begin(),
+        policy_provenance.participant_assignments.end(),
+        [](const auto& value) { return value.player == 0; });
+    const auto yes = candidate(EnvironmentActionKind::YesNo, "", true);
+    const auto initial = frame(config, spec, 0, yes, false);
+    require(recorder.on_reset_accepted(ResetAccepted{v2_frame(initial, 7)}),
+            "draw recorder reset was rejected");
+
+    StepAccepted accepted;
+    accepted.transition = AcceptedActionTransition{
+        initial.episode_semantic_id, initial.public_semantic_decision_id, 0,
+        yes.public_action_key, true, std::nullopt};
+    accepted.next = terminal(initial.episode_semantic_id, 1);
+    std::get<EpisodeTerminal>(accepted.next).winner = 2;
+    require(recorder.on_step_accepted(
+                accepted, no_rng(policy_assignment->participant_policy_assignment_id, 0),
+                terminal_views(1)),
+            "recorder rejected an accepted V2 draw terminal");
+    const auto sealed = recorder.seal();
+    require(sealed.has_value() && std::holds_alternative<TerminalClosure>(sealed->closure) &&
+                std::get<TerminalClosure>(sealed->closure).winner == 2,
+            "accepted V2 draw terminal was not retained in the closure");
+}
+
 void test_administrative_pending_frame_and_failure() {
     const auto config = CertifiedEnvironmentConfig::canonical();
     const auto spec = episode_spec();
@@ -401,6 +431,7 @@ int main() {
     try {
         test_atomic_record_and_rejection();
         test_continuation_and_terminal();
+        test_draw_terminal_is_retained();
         test_administrative_pending_frame_and_failure();
         std::cout << "trajectory recorder tests passed\n";
         return 0;

@@ -540,6 +540,13 @@ void test_real_replay_and_admission() {
     require(!replay_episode(terminal.envelope, std::nullopt, ReplayOptions{}).accepted,
             "terminal replay accepted without explicit run-control input");
     replay_collected(terminal);
+    auto draw_expectation = terminal;
+    std::get<TerminalClosure>(draw_expectation.envelope.closure).winner = 2;
+    require(!replay_episode(draw_expectation.envelope,
+                            interruption_evidence(draw_expectation),
+                            replay_options_for(draw_expectation))
+                 .accepted,
+            "replay ignored a changed terminal winner while comparing closure data");
 
     std::string error;
     const std::vector<CollectedEpisode*> continuation_only{&continuation};

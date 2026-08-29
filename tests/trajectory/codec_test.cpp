@@ -659,6 +659,39 @@ void test_closure_variants() {
     (void)episode_id;
 }
 
+void test_draw_terminal_codec_and_identity() {
+    auto envelope = envelope_fixture();
+    auto draw = std::get<TerminalClosure>(envelope.closure);
+    draw.winner = 2;
+    const EpisodeClosure draw_closure = draw;
+    const auto bytes = canonical_episode_closure_bytes(draw_closure);
+    require_golden(bytes,
+                   "26e01fa7ada3aeaa5c19a15acc9348eda9815b41cf70fb0970ca3db4913d6b5b",
+                   "draw terminal closure golden");
+    const auto decoded = decode_episode_closure(bytes);
+    require(decoded && std::get<TerminalClosure>(*decoded.value).winner == 2 &&
+                canonical_episode_closure_bytes(*decoded.value) == bytes,
+            "draw terminal closure did not strictly round-trip");
+
+    envelope.closure = draw_closure;
+    const auto draw_identity = public_gameplay_trajectory_id(envelope);
+    require(draw_identity ==
+                "public_gameplay_trajectory.v1.c01f9ff5c1bd7928371578e0459c6cc10600fb8b04aae5724868153a3fa90fe2",
+            "draw terminal public gameplay identity golden");
+    require(is_canonical_identity(draw_identity, "public_gameplay_trajectory.v1."),
+            "draw terminal did not receive a canonical public gameplay identity");
+    require(draw_identity != public_gameplay_trajectory_id(envelope_fixture()),
+            "draw terminal did not change the public gameplay identity");
+
+    auto invalid_bytes = bytes;
+    const auto winner_offset = sizeof(std::uint32_t) +
+                               std::string(kTrustedTrajectoryContractId).size() + 1;
+    require(winner_offset < invalid_bytes.size(), "draw closure winner offset is invalid");
+    invalid_bytes[winner_offset] = 3;
+    require(!decode_episode_closure(invalid_bytes),
+            "terminal closure accepted an out-of-range winner");
+}
+
 void test_identity_input_codecs() {
     const auto config = CertifiedEnvironmentConfig::canonical();
     const auto environment_bytes = canonical_environment_identity_bytes(config);
@@ -909,6 +942,7 @@ int main() {
         test_envelope_codec_and_identity();
         test_identity_input_codecs();
         test_closure_variants();
+        test_draw_terminal_codec_and_identity();
         test_provenance_resolution();
         std::cout << "trajectory_codec_tests=passed\n";
         return 0;

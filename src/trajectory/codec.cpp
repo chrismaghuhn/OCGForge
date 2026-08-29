@@ -2220,7 +2220,7 @@ DecodeResult<DecisionRecord> decode_public_decision_record(
 }
 
 void validate_terminal_closure(const TerminalClosure& value) {
-    if (value.winner > 1 || value.win_reason == 255 ||
+    if (value.winner > 2 || value.win_reason == 255 ||
         value.terminal_view_player_0.perspective_player != 0 ||
         value.terminal_view_player_1.perspective_player != 1 ||
         environment::public_observation_digest(value.terminal_view_player_0) !=
@@ -2327,7 +2327,7 @@ DecodeResult<EpisodeClosure> decode_episode_closure(
         EpisodeClosure value;
         if (kind == 0) {
             TerminalClosure terminal;
-            if (!reader.u8(terminal.winner) || terminal.winner > 1 ||
+            if (!reader.u8(terminal.winner) || terminal.winner > 2 ||
                 !reader.u8(terminal.win_reason) || !reader.u64be(terminal.semantic_action_count) ||
                 !read_optional_u64(reader, terminal.last_decision_index) ||
                 !read_public_observation_direct(reader, terminal.terminal_view_player_0) ||
@@ -2558,7 +2558,7 @@ bool read_closure_from_reader(ByteReader& reader, EpisodeClosure& value) noexcep
     }
     if (kind == 0) {
         TerminalClosure terminal;
-        if (!reader.u8(terminal.winner) || terminal.winner > 1 ||
+        if (!reader.u8(terminal.winner) || terminal.winner > 2 ||
             !reader.u8(terminal.win_reason) || !reader.u64be(terminal.semantic_action_count) ||
             !read_optional_u64(reader, terminal.last_decision_index) ||
             !read_public_observation_direct(reader, terminal.terminal_view_player_0) ||
