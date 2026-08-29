@@ -12,7 +12,7 @@ and `BLOCKED` are not acceptance passes.
 | --- | --- |
 | Accepted Phase-3A base | `689710a90e751b046c062a8c0b3f56ec2cef5500` |
 | Implementation branch | `chris/phase3b-trajectory-persistence-admission` |
-| Verified implementation head | `1520ee87aabf05267be915a2fb6be903b8ab2e38` |
+| Verified executable/evidence head | `231d71767759395b9e207da4e294ac9be77f96f8` |
 | Scope | One Phase-3B PR; seven internally separated vertical slices |
 | Rules input | The pinned `third_party/rules_bundle.lock.json` and its verified local cache |
 | Matrix status | Local P3B gates recorded after exact-head execution; hosted CI remains `NOT_RUN` until the final PR head is pushed |
@@ -96,6 +96,12 @@ The following are new Phase-3B semantic contracts:
 - `ocgforge.dataset_identity.v1`; and
 - `ocgforge.dataset_manifest.v1`.
 
+The typed provenance resolver/registry is a Phase-3B verifier-authority
+boundary over the accepted Phase-3A provenance fields. It constrains which
+registered implementation or content identities may satisfy each Phase-3A
+role, but does not add, reorder, remove, or reinterpret any Phase-3A field,
+codec, version, or semantic.
+
 Atomic temporary-file handling, buffer guards, and local build orchestration
 are internal implementations. They cannot change the canonical values or
 identities.
@@ -108,17 +114,17 @@ actually completed:
 
 | Evidence | Value |
 | --- | --- |
-| Verified implementation head | `1520ee87aabf05267be915a2fb6be903b8ab2e38` |
+| Verified executable/evidence head | `231d71767759395b9e207da4e294ac9be77f96f8` |
 | Rules bundle verification | `PASS`; bundle `3adfe6b4cfe2c2805e50b389fc0eb4e70a3b0b6107436614d328fddc865e585f`; core API `11.0` |
 | Python/regression gates | `PASS`; Python `15` tests, M4 required `93` tests |
 | Decision/observation/ownership coverage | `PASS`; all three exact-head commands returned `ok`; M1 and gameplay determinism runners passed |
-| Full CTest | `PASS`; `123/123`, `0` failed; clean-checkout real time `3346.54 s` (`#122 1020.20 s`, `#123 154.24 s`) |
-| Focused trajectory CTest | `PASS`; `9/9`, `0` failed; clean-checkout real time `1808.86 s` |
+| Full CTest | `PASS`; `123/123`, `0` failed; clean-checkout real time `3789.28 s` (`#122 1084.78 s`, `#123 146.70 s`) |
+| Focused trajectory CTest | `PASS`; `9/9`, `0` failed; clean-checkout real time `2308.18 s` (`trajectory_replay_admission_test` `2301.55 s`) |
 | Candidate shard artifact SHA-256 | `247f534c950b0e572e9394dfd2cc773818c4ce8de6d59ebaed003dfb39101255` |
 | Restricted evidence artifact SHA-256 | `1bdbabe2d9905984b61f8b926ea0155a8f83dc6d125d253dd78766f3674f5eed` |
 | AdmissionReceipt ID | `admission_receipt.v1.d9cd38dfec176bf83b25c69fde4fa89b4330a3362e1c383c22483d4f79c2e6f6` |
 | Dataset semantic ID | `5ea0f9197f4993b1c57052e28cae54853e1276d3a1074526015098d772cee553` |
-| Clean-checkout report | `C:\p3b-trajectory\artifacts\trajectory\phase3b-clean-checkout-fixpass\phase3b_clean_checkout.json` (`PASS`, exact head, clean before/after evidence) |
+| Clean-checkout report | `C:\p3b-trajectory\artifacts\trajectory\phase3b-clean-checkout-fixpass2\phase3b_clean_checkout.json` (`PASS`, exact head, clean before/after evidence) |
 | Hosted CI exact-head status | `NOT_RUN` |
 
 ## Scope stop
