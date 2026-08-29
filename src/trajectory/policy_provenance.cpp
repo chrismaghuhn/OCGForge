@@ -1,7 +1,6 @@
 #include "ygo/trajectory/policy_provenance.hpp"
 
 #include <algorithm>
-#include <array>
 #include <cstddef>
 #include <optional>
 #include <stdexcept>
@@ -25,6 +24,81 @@ int kind_order(const ProvenanceKind kind) noexcept {
 bool valid_provenance_kind(const ProvenanceKind kind) noexcept {
     return kind_order(kind) >= kind_order(ProvenanceKind::ProducerImplementation) &&
            kind_order(kind) <= kind_order(ProvenanceKind::ArtifactMetadataArtifact);
+}
+
+bool canonical_identity_token(const std::string_view value) noexcept {
+    if (value.empty()) {
+        return false;
+    }
+    return std::all_of(value.begin(), value.end(), [](const unsigned char character) {
+        return (character >= 'a' && character <= 'z') ||
+               (character >= '0' && character <= '9') || character == '.' || character == '_' ||
+               character == '-';
+    });
+}
+
+bool canonical_version_suffix(const std::string_view value,
+                              const std::size_t marker) noexcept {
+    if (marker == std::string_view::npos || marker + 2 >= value.size() ||
+        marker == 0 || value[marker] != '.' || value[marker + 1] != 'v') {
+        return false;
+    }
+    if (value[marker + 2] == '0' && marker + 3 < value.size()) {
+        return false;
+    }
+    return std::all_of(value.begin() + static_cast<std::ptrdiff_t>(marker + 2), value.end(),
+                       [](const unsigned char character) {
+                           return character >= '0' && character <= '9';
+                       });
+}
+
+bool versioned_contract_identity(const std::string_view value) noexcept {
+    constexpr std::string_view prefix = "ocgforge.";
+    if (value.size() <= prefix.size() || value.substr(0, prefix.size()) != prefix ||
+        !canonical_identity_token(value)) {
+        return false;
+    }
+    const auto marker = value.rfind(".v");
+    return marker >= prefix.size() && canonical_version_suffix(value, marker) &&
+           value.find(".v", prefix.size()) == marker;
+}
+
+bool content_address_identity(const std::string_view value) noexcept {
+    constexpr std::size_t digest_size = 64;
+    if (value.size() <= digest_size + 1 || value[value.size() - digest_size - 1] != '.') {
+        return false;
+    }
+    const auto digest = value.substr(value.size() - digest_size);
+    if (!is_lower_hex_digest(digest)) {
+        return false;
+    }
+    const auto namespace_and_version = value.substr(0, value.size() - digest_size - 1);
+    if (!canonical_identity_token(namespace_and_version)) {
+        return false;
+    }
+    const auto marker = namespace_and_version.rfind(".v");
+    return canonical_version_suffix(namespace_and_version, marker) &&
+           namespace_and_version.find(".v") == marker;
+}
+
+bool valid_identity_for_kind(const ProvenanceKind kind, const std::string_view identity) noexcept {
+    switch (kind) {
+    case ProvenanceKind::SamplingContract:
+    case ProvenanceKind::PolicyRngContract:
+        return versioned_contract_identity(identity);
+    case ProvenanceKind::ImmutableContentArtifact:
+    case ProvenanceKind::ModelCheckpointArtifact:
+    case ProvenanceKind::DemonstrationSourceArtifact:
+    case ProvenanceKind::ArtifactMetadataArtifact:
+        return content_address_identity(identity);
+    case ProvenanceKind::ProducerImplementation:
+    case ProvenanceKind::InferenceAdapter:
+    case ProvenanceKind::ObservationAdapter:
+    case ProvenanceKind::ActionAdapter:
+    case ProvenanceKind::SearchContract:
+        return versioned_contract_identity(identity) || content_address_identity(identity);
+    }
+    return false;
 }
 
 bool registration_less(const ProvenanceRegistration& left,
@@ -62,6 +136,9 @@ void validate_registration(const ProvenanceRegistration& entry) {
     }
     if (entry.identity.empty()) {
         throw std::invalid_argument("provenance registry contains an empty identity");
+    }
+    if (!valid_identity_for_kind(entry.kind, entry.identity)) {
+        throw std::invalid_argument("provenance registry contains a noncanonical identity");
     }
     if (entry.kind != ProvenanceKind::SamplingContract &&
         entry.sampling_capabilities.has_value()) {

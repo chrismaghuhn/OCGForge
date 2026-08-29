@@ -30,7 +30,7 @@ inline ProvenanceResolver test_provenance_resolver() {
                                       "ocgforge.test.action.v1"));
     entries.push_back(registry_entry(
         ProvenanceKind::ModelCheckpointArtifact,
-        "model.v1." + std::string(64, 'm')));
+        "model.v1." + std::string(64, 'b')));
     entries.push_back(registry_entry(ProvenanceKind::SearchContract,
                                      "ocgforge.test.search.v1"));
     entries.push_back(registry_entry(

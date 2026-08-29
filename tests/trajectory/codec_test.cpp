@@ -740,6 +740,32 @@ void test_typed_provenance_authority() {
     require(!production_resolver.can_resolve(ProvenanceKind::ProducerImplementation,
                                              "ocgforge.test.producer.v1"),
             "default resolver exposes test producer authority");
+
+    const auto require_invalid_registration = [](const ProvenanceKind kind,
+                                                 const std::string& identity,
+                                                 const std::string& message) {
+        require_throw(
+            [&] {
+                std::vector<ProvenanceRegistration> entries = {
+                    trajectory_test::registry_entry(kind, identity)};
+                (void)ProvenanceResolver(std::move(entries));
+            },
+            message);
+    };
+    require_invalid_registration(ProvenanceKind::ProducerImplementation, "latest",
+                                 "mutable alias was accepted as a producer identity");
+    require_invalid_registration(ProvenanceKind::ProducerImplementation,
+                                 "ocgforge.test.producer",
+                                 "unversioned contract was accepted as a producer identity");
+    require_invalid_registration(ProvenanceKind::ProducerImplementation,
+                                 "C:\\models\\producer.v1.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                                 "host-local path was accepted as a producer identity");
+    require_invalid_registration(ProvenanceKind::ModelCheckpointArtifact,
+                                 "model.v1." + std::string(63, 'b'),
+                                 "truncated content address was accepted");
+    require_invalid_registration(ProvenanceKind::ModelCheckpointArtifact,
+                                 "model.v1." + std::string(64, 'A'),
+                                 "noncanonical content address was accepted");
 }
 
 void test_policy_kind_sampling_rng_consistency() {
@@ -769,7 +795,7 @@ void test_policy_kind_sampling_rng_consistency() {
 
     auto neural = deterministic_artifact();
     neural.policy_kind = PolicyKind::NeuralCheckpoint;
-    neural.model_checkpoint_identity = "model.v1." + std::string(64, 'm');
+    neural.model_checkpoint_identity = "model.v1." + std::string(64, 'b');
     neural.policy_artifact_id = compute_policy_artifact_id(neural);
     require(validate(neural), "deterministic neural artifact was rejected");
 
@@ -793,7 +819,7 @@ void test_policy_kind_sampling_rng_consistency() {
         stochastic.sampling_contract_identity = "ocgforge.test.random_sampling.v1";
         stochastic.policy_rng_contract_identity = "ocgforge.test.rng.v1";
         if (kind == PolicyKind::NeuralCheckpoint) {
-            stochastic.model_checkpoint_identity = "model.v1." + std::string(64, 'm');
+            stochastic.model_checkpoint_identity = "model.v1." + std::string(64, 'b');
         } else if (kind == PolicyKind::SearchAssisted) {
             stochastic.search_contract_identity = "ocgforge.test.search.v1";
         } else {
