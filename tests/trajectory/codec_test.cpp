@@ -682,6 +682,23 @@ void test_continuation_operation_validation() {
         },
         "continuation accepted monotonic selection indices outside V2 order");
 
+    auto greater_sum_unbounded = continuation_request(
+        "sum", continuation_candidate(EnvironmentActionKind::Pick, "pick", false, 2));
+    greater_sum_unbounded.continuation->selected_indices = {0, 1};
+    greater_sum_unbounded.continuation->remaining_indices = {2};
+    greater_sum_unbounded.continuation->min_count = 0;
+    greater_sum_unbounded.continuation->max_count = 0;
+    greater_sum_unbounded.continuation->greater_sum = true;
+    require(static_cast<bool>(decode_public_environment_decision_request(
+                canonical_public_environment_decision_request_bytes(greater_sum_unbounded))),
+            "greater_sum continuation rejected its V2 unbounded max_count sentinel");
+    greater_sum_unbounded.continuation->greater_sum = false;
+    require_throw(
+        [&] {
+            (void)canonical_public_environment_decision_request_bytes(greater_sum_unbounded);
+        },
+        "exact-sum continuation accepted the greater_sum unbounded sentinel");
+
     auto non_counter_amounts = continuation_request("unordered", valid_pick);
     non_counter_amounts.continuation->assigned_amounts = {1};
     require_throw(
