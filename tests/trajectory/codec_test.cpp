@@ -117,11 +117,16 @@ EnvironmentDecisionRequest continuation_request(
     value.player = 0;
     EnvironmentContinuationView continuation;
     continuation.continuation_kind = kind;
+    continuation.continuation_step = 0;
     continuation.remaining_indices = {0, 1};
     continuation.available_mask = 3;
     continuation.min_count = 1;
     continuation.max_count = 1;
-    continuation.continuation_steps = 2;
+    continuation.continuation_steps = continuation.continuation_step;
+    if (can_finish) {
+        continuation.selected_indices = {0};
+        continuation.remaining_indices = {1};
+    }
     continuation.can_finish = can_finish;
     continuation.can_cancel = can_cancel;
     value.continuation = continuation;
@@ -598,6 +603,14 @@ void test_continuation_operation_validation() {
         },
         "bypass operation was accepted outside ordering continuation");
 
+    require_throw(
+        [&] {
+            (void)canonical_public_environment_decision_request_bytes(
+                continuation_request("unordered",
+                                     continuation_candidate(EnvironmentActionKind::Pick, "unknown", false, 0)));
+        },
+        "unknown continuation operation was accepted");
+
     auto duplicate_remaining = continuation_request("unordered", valid_pick);
     duplicate_remaining.continuation->remaining_indices = {0, 0};
     require_throw(
@@ -632,6 +645,43 @@ void test_continuation_operation_validation() {
         },
         "continuation accepted inverted public cardinality");
 
+    auto selected_over_max = continuation_request(
+        "unordered", continuation_candidate(EnvironmentActionKind::Pick, "pick", false, 2));
+    selected_over_max.continuation->selected_indices = {0, 1};
+    selected_over_max.continuation->remaining_indices = {2};
+    selected_over_max.continuation->max_count = 1;
+    require_throw(
+        [&] {
+            (void)canonical_public_environment_decision_request_bytes(selected_over_max);
+        },
+        "continuation accepted more selected indices than public max_count");
+
+    auto step_metric_mismatch = continuation_request("unordered", valid_pick);
+    step_metric_mismatch.continuation->continuation_step = 1;
+    require_throw(
+        [&] {
+            (void)canonical_public_environment_decision_request_bytes(step_metric_mismatch);
+        },
+        "continuation accepted a mismatched public step metric");
+
+    auto unsorted_remaining = continuation_request("unordered", valid_pick);
+    unsorted_remaining.continuation->remaining_indices = {1, 0};
+    require_throw(
+        [&] {
+            (void)canonical_public_environment_decision_request_bytes(unsorted_remaining);
+        },
+        "continuation accepted remaining indices outside V2 order");
+
+    auto unsorted_selected = continuation_request("unordered", valid_pick);
+    unsorted_selected.continuation->selected_indices = {1, 0};
+    unsorted_selected.continuation->remaining_indices = {2};
+    unsorted_selected.continuation->max_count = 2;
+    require_throw(
+        [&] {
+            (void)canonical_public_environment_decision_request_bytes(unsorted_selected);
+        },
+        "continuation accepted monotonic selection indices outside V2 order");
+
     auto non_counter_amounts = continuation_request("unordered", valid_pick);
     non_counter_amounts.continuation->assigned_amounts = {1};
     require_throw(
@@ -648,6 +698,23 @@ void test_continuation_operation_validation() {
                                                             "amount", false, 1, 2)));
         },
         "counter continuation accepted an amount for a non-current remaining item");
+
+    auto finish_missing_from_domain = continuation_request("unordered", valid_pick, true);
+    finish_missing_from_domain.continuation->selected_indices.clear();
+    finish_missing_from_domain.continuation->remaining_indices = {0, 1};
+    require_throw(
+        [&] {
+            (void)canonical_public_environment_decision_request_bytes(finish_missing_from_domain);
+        },
+        "continuation accepted can_finish without the corresponding finish candidate");
+
+    auto finish_flag_without_public_state = continuation_request("unordered", valid_pick);
+    finish_flag_without_public_state.continuation->can_finish = true;
+    require_throw(
+        [&] {
+            (void)canonical_public_environment_decision_request_bytes(finish_flag_without_public_state);
+        },
+        "continuation accepted can_finish inconsistent with public cardinality");
 
     auto invalid_mask = continuation_request("announce_mask", valid_pick);
     invalid_mask.continuation->selected_indices = {1};

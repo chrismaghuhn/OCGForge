@@ -343,6 +343,61 @@ void validate_public_candidate(const environment::EnvironmentActionCandidate& va
     }
 }
 
+bool strictly_increasing(const std::vector<std::uint32_t>& values) noexcept {
+    for (std::size_t index = 1; index < values.size(); ++index) {
+        if (values[index - 1] >= values[index]) {
+            return false;
+        }
+    }
+    return true;
+}
+
+std::uint32_t bit_count(const std::uint64_t value) noexcept {
+    std::uint32_t count = 0;
+    std::uint64_t remaining = value;
+    while (remaining != 0) {
+        remaining &= remaining - 1;
+        ++count;
+    }
+    return count;
+}
+
+bool uses_public_cardinality(std::string_view continuation_kind) noexcept {
+    return continuation_kind == "unordered" || continuation_kind == "tribute" ||
+           continuation_kind == "sum" || continuation_kind == "zone" ||
+           continuation_kind == "announce_mask";
+}
+
+bool uses_monotonic_selection(std::string_view continuation_kind) noexcept {
+    return continuation_kind == "unordered" || continuation_kind == "tribute" ||
+           continuation_kind == "sum" || continuation_kind == "zone" ||
+           continuation_kind == "announce_mask";
+}
+
+std::optional<bool> public_can_finish(const environment::EnvironmentContinuationView& value) {
+    if (value.continuation_kind == "unordered" || value.continuation_kind == "zone") {
+        const auto count = value.selected_indices.size();
+        return count >= value.min_count && count <= value.max_count;
+    }
+    if (value.continuation_kind == "ordering") {
+        return value.remaining_indices.empty();
+    }
+    if (value.continuation_kind == "counter") {
+        std::uint64_t assigned_total = 0;
+        for (const auto amount : value.assigned_amounts) {
+            assigned_total += amount;
+        }
+        return value.remaining_indices.empty() && assigned_total == value.required_amount;
+    }
+    if (value.continuation_kind == "announce_mask") {
+        return bit_count(value.selected_mask) == value.min_count;
+    }
+    // Tribute and sum completion depends on public item values that are not
+    // part of the Phase-3A public continuation view. Replay verifies those
+    // kinds against the regenerated V2 domain instead of guessing here.
+    return std::nullopt;
+}
+
 void validate_continuation(const environment::EnvironmentContinuationView& value) {
     static constexpr std::string_view valid[] = {
         "unordered", "tribute", "sum", "zone", "counter", "ordering", "announce_mask"};
@@ -351,6 +406,25 @@ void validate_continuation(const environment::EnvironmentContinuationView& value
     }
     if (value.min_count > value.max_count) {
         throw std::invalid_argument("trajectory continuation cardinality is inverted");
+    }
+    if (value.continuation_steps != value.continuation_step) {
+        throw std::invalid_argument("trajectory continuation step metrics disagree");
+    }
+    if (!strictly_increasing(value.remaining_indices)) {
+        throw std::invalid_argument("trajectory continuation remaining indices are not in V2 order");
+    }
+    if (uses_monotonic_selection(value.continuation_kind) &&
+        !strictly_increasing(value.selected_indices)) {
+        throw std::invalid_argument("trajectory continuation selected indices are not in V2 order");
+    }
+    if (value.continuation_kind == "counter" && !value.selected_indices.empty()) {
+        throw std::invalid_argument("counter continuation has selected indices");
+    }
+    const auto selected_count = value.continuation_kind == "announce_mask"
+                                    ? static_cast<std::size_t>(bit_count(value.selected_mask))
+                                    : value.selected_indices.size();
+    if (uses_public_cardinality(value.continuation_kind) && selected_count > value.max_count) {
+        throw std::invalid_argument("trajectory continuation exceeds public max_count");
     }
     for (std::size_t left = 0; left < value.selected_indices.size(); ++left) {
         for (std::size_t right = 0; right < left; ++right) {
@@ -380,6 +454,10 @@ void validate_continuation(const environment::EnvironmentContinuationView& value
         (value.selected_mask & ~value.available_mask) != 0) {
         throw std::invalid_argument(
             "trajectory announcement continuation selects a bit outside its public mask");
+    }
+    const auto can_finish = public_can_finish(value);
+    if (can_finish.has_value() && value.can_finish != *can_finish) {
+        throw std::invalid_argument("trajectory continuation can_finish disagrees with public state");
     }
 }
 
@@ -421,6 +499,9 @@ void validate_request(const environment::EnvironmentDecisionRequest& value) {
 
     const auto& continuation = *value.continuation;
     validate_continuation(continuation);
+    std::size_t finish_count = 0;
+    std::size_t cancel_count = 0;
+    std::size_t bypass_count = 0;
     const auto is_remaining_index = [&continuation](const std::uint32_t source_index) {
         return std::find(continuation.remaining_indices.begin(),
                          continuation.remaining_indices.end(), source_index) !=
@@ -450,21 +531,31 @@ void validate_request(const environment::EnvironmentDecisionRequest& value) {
                     "amount continuation candidate is structurally invalid");
             }
         } else if (candidate.continuation_operation == "finish") {
+            ++finish_count;
             if (candidate.action_kind != environment::EnvironmentActionKind::Finish ||
                 !candidate.submits_engine_response || !continuation.can_finish) {
                 throw std::invalid_argument("finish continuation candidate is structurally invalid");
             }
         } else if (candidate.continuation_operation == "cancel") {
+            ++cancel_count;
             if (candidate.action_kind != environment::EnvironmentActionKind::Cancel ||
                 !candidate.submits_engine_response || !continuation.can_cancel) {
                 throw std::invalid_argument("cancel continuation candidate is structurally invalid");
             }
         } else if (candidate.continuation_operation == "bypass") {
+            ++bypass_count;
             if (candidate.action_kind != environment::EnvironmentActionKind::Cancel ||
                 !candidate.submits_engine_response || continuation.continuation_kind != "ordering") {
                 throw std::invalid_argument("bypass continuation candidate is structurally invalid");
             }
+        } else {
+            throw std::invalid_argument("continuation candidate has an unknown operation");
         }
+    }
+    if (finish_count > 1 || cancel_count > 1 || bypass_count > 1 ||
+        (finish_count != 0) != continuation.can_finish ||
+        (cancel_count != 0) != continuation.can_cancel) {
+        throw std::invalid_argument("continuation terminal candidates disagree with public state");
     }
 }
 

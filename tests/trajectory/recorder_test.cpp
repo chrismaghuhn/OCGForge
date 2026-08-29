@@ -130,12 +130,14 @@ PublicFrameSnapshot frame(const CertifiedEnvironmentConfig& config, const Episod
         EnvironmentContinuationView view;
         view.continuation_kind = "unordered";
         view.continuation_step = static_cast<std::uint32_t>(decision_index);
-        view.remaining_indices = {0, 1};
+        const bool finish = selected.continuation_operation == "finish";
+        view.selected_indices = finish ? std::vector<std::uint32_t>{0} : std::vector<std::uint32_t>{};
+        view.remaining_indices = finish ? std::vector<std::uint32_t>{1} : std::vector<std::uint32_t>{0, 1};
         view.min_count = 1;
         view.max_count = 1;
         view.available_mask = 3;
-        view.continuation_steps = 2;
-        view.can_finish = selected.continuation_operation == "finish";
+        view.continuation_steps = view.continuation_step;
+        view.can_finish = finish;
         value.request.continuation = view;
     }
     value.request.candidates.push_back(selected);

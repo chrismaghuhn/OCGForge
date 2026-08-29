@@ -134,13 +134,14 @@ inline PublicFrameSnapshot frame(const CertifiedEnvironmentConfig& config,
         EnvironmentContinuationView continuation_view;
         continuation_view.continuation_kind = "unordered";
         continuation_view.continuation_step = static_cast<std::uint32_t>(decision_index);
-        continuation_view.remaining_indices = {0, 1};
+        const bool finish = !candidates.empty() && candidates.front().continuation_operation == "finish";
+        continuation_view.selected_indices = finish ? std::vector<std::uint32_t>{0} : std::vector<std::uint32_t>{};
+        continuation_view.remaining_indices = finish ? std::vector<std::uint32_t>{1} : std::vector<std::uint32_t>{0, 1};
         continuation_view.min_count = 1;
         continuation_view.max_count = 1;
         continuation_view.available_mask = 3;
-        continuation_view.continuation_steps = 2;
-        continuation_view.can_finish = !candidates.empty() &&
-                                       candidates.front().continuation_operation == "finish";
+        continuation_view.continuation_steps = continuation_view.continuation_step;
+        continuation_view.can_finish = finish;
         value.request.continuation = continuation_view;
     }
     value.request.candidates = candidates;
