@@ -597,6 +597,68 @@ void test_continuation_operation_validation() {
                 continuation_request("unordered", valid_bypass));
         },
         "bypass operation was accepted outside ordering continuation");
+
+    auto duplicate_remaining = continuation_request("unordered", valid_pick);
+    duplicate_remaining.continuation->remaining_indices = {0, 0};
+    require_throw(
+        [&] {
+            (void)canonical_public_environment_decision_request_bytes(duplicate_remaining);
+        },
+        "continuation accepted duplicate remaining indices");
+
+    auto duplicate_selected = continuation_request("unordered", valid_pick);
+    duplicate_selected.continuation->selected_indices = {0, 0};
+    duplicate_selected.continuation->remaining_indices = {1};
+    require_throw(
+        [&] {
+            (void)canonical_public_environment_decision_request_bytes(duplicate_selected);
+        },
+        "continuation accepted duplicate selected indices");
+
+    auto overlapping_indices = continuation_request("unordered", valid_pick);
+    overlapping_indices.continuation->selected_indices = {0};
+    require_throw(
+        [&] {
+            (void)canonical_public_environment_decision_request_bytes(overlapping_indices);
+        },
+        "continuation accepted selected and remaining index overlap");
+
+    auto inverted_cardinality = continuation_request("unordered", valid_pick);
+    inverted_cardinality.continuation->min_count = 2;
+    inverted_cardinality.continuation->max_count = 1;
+    require_throw(
+        [&] {
+            (void)canonical_public_environment_decision_request_bytes(inverted_cardinality);
+        },
+        "continuation accepted inverted public cardinality");
+
+    auto non_counter_amounts = continuation_request("unordered", valid_pick);
+    non_counter_amounts.continuation->assigned_amounts = {1};
+    require_throw(
+        [&] {
+            (void)canonical_public_environment_decision_request_bytes(non_counter_amounts);
+        },
+        "continuation accepted assigned amounts outside counter allocation");
+
+    require_throw(
+        [&] {
+            (void)canonical_public_environment_decision_request_bytes(
+                continuation_request("counter",
+                                     continuation_candidate(EnvironmentActionKind::AssignAmount,
+                                                            "amount", false, 1, 2)));
+        },
+        "counter continuation accepted an amount for a non-current remaining item");
+
+    auto invalid_mask = continuation_request("announce_mask", valid_pick);
+    invalid_mask.continuation->selected_indices = {1};
+    invalid_mask.continuation->remaining_indices = {0};
+    invalid_mask.continuation->available_mask = 1;
+    invalid_mask.continuation->selected_mask = 2;
+    require_throw(
+        [&] {
+            (void)canonical_public_environment_decision_request_bytes(invalid_mask);
+        },
+        "announcement continuation accepted selected bits outside available mask");
 }
 
 void test_envelope_codec_and_identity() {

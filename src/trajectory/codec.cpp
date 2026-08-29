@@ -349,6 +349,38 @@ void validate_continuation(const environment::EnvironmentContinuationView& value
     if (std::find(std::begin(valid), std::end(valid), value.continuation_kind) == std::end(valid)) {
         throw std::invalid_argument("trajectory continuation kind is unknown");
     }
+    if (value.min_count > value.max_count) {
+        throw std::invalid_argument("trajectory continuation cardinality is inverted");
+    }
+    for (std::size_t left = 0; left < value.selected_indices.size(); ++left) {
+        for (std::size_t right = 0; right < left; ++right) {
+            if (value.selected_indices[left] == value.selected_indices[right]) {
+                throw std::invalid_argument("trajectory continuation has duplicate selected indices");
+            }
+        }
+        for (const auto remaining : value.remaining_indices) {
+            if (value.selected_indices[left] == remaining) {
+                throw std::invalid_argument(
+                    "trajectory continuation selected and remaining indices overlap");
+            }
+        }
+    }
+    for (std::size_t left = 0; left < value.remaining_indices.size(); ++left) {
+        for (std::size_t right = 0; right < left; ++right) {
+            if (value.remaining_indices[left] == value.remaining_indices[right]) {
+                throw std::invalid_argument("trajectory continuation has duplicate remaining indices");
+            }
+        }
+    }
+    if (value.continuation_kind != "counter" && !value.assigned_amounts.empty()) {
+        throw std::invalid_argument(
+            "trajectory continuation has assigned amounts outside counter allocation");
+    }
+    if (value.continuation_kind == "announce_mask" &&
+        (value.selected_mask & ~value.available_mask) != 0) {
+        throw std::invalid_argument(
+            "trajectory announcement continuation selects a bit outside its public mask");
+    }
 }
 
 void validate_request(const environment::EnvironmentDecisionRequest& value) {
@@ -411,7 +443,9 @@ void validate_request(const environment::EnvironmentDecisionRequest& value) {
             if (candidate.action_kind != environment::EnvironmentActionKind::AssignAmount ||
                 candidate.submits_engine_response || continuation.continuation_kind != "counter" ||
                 !candidate.source_index.has_value() || !candidate.amount.has_value() ||
-                *candidate.amount < 0 || !is_remaining_index(*candidate.source_index)) {
+                *candidate.amount < 0 || !is_remaining_index(*candidate.source_index) ||
+                continuation.remaining_indices.empty() ||
+                *candidate.source_index != continuation.remaining_indices.front()) {
                 throw std::invalid_argument(
                     "amount continuation candidate is structurally invalid");
             }
