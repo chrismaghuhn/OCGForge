@@ -1,6 +1,7 @@
 #include "ygo/trajectory/policy_provenance.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <optional>
 #include <stdexcept>
