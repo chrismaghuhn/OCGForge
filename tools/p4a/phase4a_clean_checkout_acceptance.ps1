@@ -7,7 +7,8 @@ param(
     [string]$ArtifactDirectory,
     [string]$FinalizeFrom,
     [switch]$SkipHeavy,
-    [string]$HeavyEvidenceFrom
+    [string]$HeavyEvidenceFrom,
+    [switch]$SyntheticSemanticDigestTest
 )
 
 $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..')).Path
@@ -102,6 +103,19 @@ function Get-OutputCounts {
     }
     return $null
 }
+
+$script:CanonicalTraceLeafNames = [System.Collections.Generic.List[string]]::new()
+foreach ($seed in 1..4) {
+    foreach ($seatPartition in @('normal', 'mirror')) {
+        foreach ($startingPlayer in @(0, 1)) {
+            [void]$script:CanonicalTraceLeafNames.Add("seed-$seed-$seatPartition-start-$startingPlayer.jsonl")
+        }
+    }
+}
+$script:CanonicalTraceLeafNames.Sort([System.StringComparer]::Ordinal)
+
+$script:AcceptanceReportSchemaVersion = 'ocgforge.phase4a_acceptance.v2'
+$script:CanonicalFullGameSemanticDomain = 'ocgforge.phase4a.canonical_full_game_semantic.v1'
 
 $script:Runs = [ordered]@{}
 $script:RunOutputs = @{}
@@ -332,19 +346,118 @@ function Get-ArtifactRecords {
     return $records
 }
 
+function Get-CanonicalTraceRecords {
+    param([Parameter(Mandatory = $true)][object[]]$Artifacts)
+    $recordsByLeaf = @{}
+    foreach ($artifact in @($Artifacts)) {
+        $normalizedPath = ([string]$artifact.path).Replace('\', '/')
+        if ($normalizedPath -notmatch '(^|/)m4/full_game/([^/]+\.jsonl)$') {
+            continue
+        }
+        $leaf = $Matches[2]
+        if ($recordsByLeaf.ContainsKey($leaf)) {
+            throw "canonical full-game trace leaf is duplicated: $leaf"
+        }
+        if ([string]$artifact.sha256 -notmatch '^[0-9a-fA-F]{64}$') {
+            throw "canonical full-game trace has an invalid SHA-256: $leaf"
+        }
+        if ([int64]$artifact.bytes -lt 0) {
+            throw "canonical full-game trace has an invalid byte count: $leaf"
+        }
+        $recordsByLeaf[$leaf] = [pscustomobject][ordered]@{
+            leaf_name = $leaf
+            bytes = [int64]$artifact.bytes
+            sha256 = ([string]$artifact.sha256).ToLowerInvariant()
+        }
+    }
+
+    $expectedNames = @($script:CanonicalTraceLeafNames)
+    $unexpectedNames = @($recordsByLeaf.Keys | Where-Object { $_ -notin $expectedNames })
+    if ($unexpectedNames.Count -ne 0) {
+        throw "canonical full-game trace set contains unexpected leaf name(s): $($unexpectedNames -join ', ')"
+    }
+    $missingNames = @($expectedNames | Where-Object { -not $recordsByLeaf.ContainsKey($_) })
+    if ($missingNames.Count -ne 0) {
+        throw "canonical full-game trace set is missing leaf name(s): $($missingNames -join ', ')"
+    }
+    if ($recordsByLeaf.Count -ne $expectedNames.Count) {
+        throw "canonical full-game trace set must contain exactly $($expectedNames.Count) traces"
+    }
+    $orderedRecords = [System.Collections.Generic.List[object]]::new()
+    foreach ($expectedName in $expectedNames) {
+        [void]$orderedRecords.Add($recordsByLeaf[$expectedName])
+    }
+    return $orderedRecords.ToArray()
+}
+
+function Get-CanonicalTraceSemanticMaterial {
+    param([Parameter(Mandatory = $true)][object[]]$TraceRecords)
+    if (@($TraceRecords).Count -ne $script:CanonicalTraceLeafNames.Count) {
+        throw 'canonical full-game semantic material requires exactly 16 traces'
+    }
+    $lines = [System.Collections.Generic.List[string]]::new()
+    $lines.Add($script:CanonicalFullGameSemanticDomain)
+    $lines.Add('trace_count=16')
+    $recordsByLeaf = @{}
+    foreach ($trace in @($TraceRecords)) {
+        $recordsByLeaf[[string]$trace.leaf_name] = $trace
+    }
+    foreach ($leaf in @($script:CanonicalTraceLeafNames)) {
+        $trace = $recordsByLeaf[$leaf]
+        $bytes = ([int64]$trace.bytes).ToString([System.Globalization.CultureInfo]::InvariantCulture)
+        $lines.Add("leaf_name=$($trace.leaf_name)")
+        $lines.Add("bytes=$bytes")
+        $lines.Add("sha256=$(([string]$trace.sha256).ToLowerInvariant())")
+    }
+    return (($lines -join "`n") + "`n")
+}
+
+function Get-CanonicalTraceSemanticDigest {
+    param([Parameter(Mandatory = $true)][object[]]$TraceRecords)
+    return Get-TextSha256 (Get-CanonicalTraceSemanticMaterial $TraceRecords)
+}
+
+function Assert-CanonicalFullGameSemanticBinding {
+    param([Parameter(Mandatory = $true)][object]$Report)
+    $traceRecords = @(Get-CanonicalTraceRecords @($Report.artifacts))
+    $summaryRecords = @($Report.artifacts | Where-Object {
+            $_.path -like '*/m4/full_game/full_fixed_deck_results.json'
+        })
+    if ($summaryRecords.Count -ne 1) {
+        throw 'exact acceptance report must retain exactly one physical full-game summary artifact'
+    }
+    $semanticRecords = @($Report.semantic_fingerprint.semantic_artifacts | Where-Object {
+            $_.role -eq 'canonical-full-game'
+        })
+    if ($semanticRecords.Count -ne 1) {
+        throw 'exact acceptance report must contain exactly one canonical-full-game semantic artifact'
+    }
+    $semantic = $semanticRecords[0]
+    $expectedDigest = Get-CanonicalTraceSemanticDigest $traceRecords
+    $expectedNames = @($traceRecords | ForEach-Object { $_.leaf_name })
+    $actualNames = @($semantic.trace_leaf_names)
+    if ([string]$semantic.semantic_digest -ne $expectedDigest -or
+        [int]$semantic.trace_count -ne $traceRecords.Count -or
+        ($actualNames -join ',') -ne ($expectedNames -join ',')) {
+        throw 'canonical-full-game semantic artifact does not match its exact trace set'
+    }
+}
+
 function Get-SemanticArtifactRecords {
     param([Parameter(Mandatory = $true)][object[]]$Artifacts)
     $records = @()
+    $traceRecords = @(Get-CanonicalTraceRecords $Artifacts)
+    $records += [ordered]@{
+        role = 'canonical-full-game'
+        semantic_digest = Get-CanonicalTraceSemanticDigest $traceRecords
+        trace_count = $traceRecords.Count
+        trace_leaf_names = @($traceRecords | ForEach-Object { $_.leaf_name })
+    }
+
     foreach ($artifact in @($Artifacts)) {
-        $role = $null
-        if ($artifact.path -like '*/m4/full_game/full_fixed_deck_results.json') {
-            $role = 'canonical-full-game'
-        } elseif ($artifact.path -like '*/m4/lifecycle_stress.json') {
-            $role = 'lifecycle-stress'
-        }
-        if ($null -ne $role) {
+        if ($artifact.path -like '*/m4/lifecycle_stress.json') {
             $records += [ordered]@{
-                role = $role
+                role = 'lifecycle-stress'
                 sha256 = $artifact.sha256
                 bytes = $artifact.bytes
             }
@@ -569,7 +682,7 @@ function Assert-LifecycleArtifactBinding {
 
 function Assert-HExecAcceptanceReport {
     param([Parameter(Mandatory = $true)][object]$Report)
-    if ($Report.schema_version -ne 'ocgforge.phase4a_acceptance.v1' -or
+    if ($Report.schema_version -ne $script:AcceptanceReportSchemaVersion -or
         $Report.acceptance_profile -ne 'h-exec-fast-normal-plus-heavy' -or
         $Report.heavy_evidence_mode -ne 'executed-at-h-exec' -or
         $Report.status -ne 'INCOMPLETE' -or
@@ -601,6 +714,7 @@ function Assert-HExecAcceptanceReport {
         $Report.heavy_evidence.source_head.ToLowerInvariant() -ne $expected) {
         throw 'H_exec report is missing exact heavy evidence provenance'
     }
+    Assert-CanonicalFullGameSemanticBinding $Report
     $replayRun = Assert-HeavyRunDescriptor $Report $Report.heavy_evidence.replay 'heavy-replay-release'
     $replayCounts = $Report.heavy_evidence.replay.test_counts
     if ($null -eq $replayCounts -or
@@ -618,7 +732,7 @@ function Assert-HExecAcceptanceReport {
 
 function Assert-CleanAcceptanceReport {
     param([Parameter(Mandatory = $true)][object]$Report)
-    if ($Report.schema_version -ne 'ocgforge.phase4a_acceptance.v1' -or
+    if ($Report.schema_version -ne $script:AcceptanceReportSchemaVersion -or
         $Report.acceptance_profile -ne 'clean-checkout-fast-normal' -or
         $Report.heavy_evidence_mode -ne 'inherited-exact-h-exec' -or
         $Report.status -ne 'INCOMPLETE' -or
@@ -638,6 +752,7 @@ function Assert-CleanAcceptanceReport {
     if ($null -eq $Report.heavy_evidence) {
         throw 'clean report is missing inherited heavy evidence'
     }
+    Assert-CanonicalFullGameSemanticBinding $Report
 }
 
 function New-HeavyEvidenceFromRuns {
@@ -694,6 +809,56 @@ function Get-SemanticFingerprint {
         heavy_evidence = $script:HeavyEvidence
         semantic_artifacts = $semanticArtifacts
     }
+}
+
+function Invoke-SyntheticSemanticDigestTest {
+    $prefixA = @()
+    $prefixB = @()
+    $index = 0
+    foreach ($leaf in @($script:CanonicalTraceLeafNames)) {
+        $hash = Get-TextSha256 $leaf
+        $bytes = [int64](1000 + $index)
+        $prefixA += [ordered]@{
+            path = "prefix-a/m4/full_game/$leaf"
+            sha256 = $hash
+            bytes = $bytes
+        }
+        $prefixB += [ordered]@{
+            path = "prefix-b/m4/full_game/$leaf"
+            sha256 = $hash
+            bytes = $bytes
+        }
+        $index++
+    }
+    $recordsA = @(Get-CanonicalTraceRecords $prefixA)
+    $recordsB = @(Get-CanonicalTraceRecords $prefixB)
+    $digestA = Get-CanonicalTraceSemanticDigest $recordsA
+    $digestB = Get-CanonicalTraceSemanticDigest $recordsB
+    if ($digestA -ne $digestB) {
+        throw 'synthetic prefix variation changed the canonical full-game semantic digest'
+    }
+
+    $mutated = @()
+    $index = 0
+    foreach ($record in $prefixA) {
+        $hash = [string]$record.sha256
+        if ($index -eq 0) {
+            $zeroHash = ('0' * 64) -join ''
+            $oneHash = ('1' * 64) -join ''
+            $hash = if ($hash -eq $zeroHash) { $oneHash } else { $zeroHash }
+        }
+        $mutated += [ordered]@{
+            path = $record.path
+            sha256 = $hash
+            bytes = $record.bytes
+        }
+        $index++
+    }
+    $mutatedDigest = Get-CanonicalTraceSemanticDigest @(Get-CanonicalTraceRecords $mutated)
+    if ($digestA -eq $mutatedDigest) {
+        throw 'synthetic trace SHA mutation did not change the canonical full-game semantic digest'
+    }
+    Write-Output "synthetic semantic digest PASS: prefix_equal=true; trace_sha_mutation_changes=true; digest=$digestA"
 }
 
 function Get-RuntimeBudget {
@@ -796,6 +961,11 @@ function Write-Reports {
         (Join-Path $outputDirectory 'P4A_ACCEPTANCE.md'),
         ($lines -join "`n") + "`n",
         [System.Text.UTF8Encoding]::new($false))
+}
+
+if ($SyntheticSemanticDigestTest) {
+    Invoke-SyntheticSemanticDigestTest
+    exit 0
 }
 
 $resolvedHead = Get-GitValue @('rev-parse', '--verify', "$expected`^{commit}")
@@ -980,7 +1150,7 @@ if ([string]::IsNullOrWhiteSpace($FinalizeFrom)) {
     Assert-GateIds $gates
     $sourceBase = Get-GitValue @('merge-base', $resolvedHead, 'origin/main')
     $report = [ordered]@{
-        schema_version = 'ocgforge.phase4a_acceptance.v1'
+        schema_version = $script:AcceptanceReportSchemaVersion
         status = if (@($gates | Where-Object { $_.status -eq 'FAIL' }).Count -eq 0) { 'INCOMPLETE' } else { 'FAIL' }
         acceptance_profile = if ($SkipHeavy) { 'clean-checkout-fast-normal' } else { 'h-exec-fast-normal-plus-heavy' }
         heavy_evidence_mode = if ($SkipHeavy) { 'inherited-exact-h-exec' } else { 'executed-at-h-exec' }
@@ -1068,11 +1238,13 @@ $artifactHashMatch = $false
 $semanticFingerprintMatch = $false
 if ($profileMatch) {
     $baseArtifacts = @($baseReport.semantic_fingerprint.semantic_artifacts | ForEach-Object {
-            if ($null -ne $_.role) { "$($_.role)|$($_.bytes)|$($_.sha256)" }
+            if ($_.role -eq 'canonical-full-game') { "$($_.role)|$($_.trace_count)|$($_.semantic_digest)|$($_.trace_leaf_names -join ',')" }
+            elseif ($null -ne $_.role) { "$($_.role)|$($_.bytes)|$($_.sha256)" }
             else { "$($_.path)|$($_.bytes)|$($_.sha256)" }
         } | Sort-Object)
     $referenceArtifacts = @($referenceReport.semantic_fingerprint.semantic_artifacts | ForEach-Object {
-            if ($null -ne $_.role) { "$($_.role)|$($_.bytes)|$($_.sha256)" }
+            if ($_.role -eq 'canonical-full-game') { "$($_.role)|$($_.trace_count)|$($_.semantic_digest)|$($_.trace_leaf_names -join ',')" }
+            elseif ($null -ne $_.role) { "$($_.role)|$($_.bytes)|$($_.sha256)" }
             else { "$($_.path)|$($_.bytes)|$($_.sha256)" }
         } | Sort-Object)
     $artifactHashMatch = (($baseArtifacts -join "`n") -eq ($referenceArtifacts -join "`n"))
