@@ -333,7 +333,9 @@ The n == 1 path consumes zero words. Every rejection consumes one word.
 
 - [ ] Step 5: Test exhaustion and stream separation.
 
-Use a test-only friend to set a valid initialized RNG at UINT64_MAX; do not add a public reseed path. Assert no wrap, exact cursor spans, unchanged cursor for n == 1, and changed identities/first blocks for changed root, episode, assignment, or stream.
+Use a test-only friend to set a valid initialized RNG at UINT64_MAX; do not add a public reseed path. Assert no wrap, exact cursor spans, unchanged cursor for n == 1, and changed identities/first blocks for changed policy-owned root, participant assignment, or stream.
+
+Changing only episode_semantic_id / EpisodeSpec.root_seed must not change initialization identity, stream output, or raw words.
 
 - [ ] Step 6: Document, verify, and commit.
 
