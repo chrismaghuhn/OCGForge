@@ -337,6 +337,10 @@ $resolvedHead = Get-GitValue @('rev-parse', '--verify', "$expected`^{commit}")
 if ($resolvedHead.ToLowerInvariant() -ne $expected) {
     throw "expected head does not resolve exactly: requested $expected, resolved $resolvedHead"
 }
+$currentHead = Get-GitValue @('rev-parse', '--verify', 'HEAD^{commit}')
+if ($currentHead.ToLowerInvariant() -ne $expected) {
+    throw "acceptance checkout is not exact H_exec: expected $expected, actual $currentHead"
+}
 
 if ([string]::IsNullOrWhiteSpace($FinalizeFrom)) {
     $statusOutput = @(& git -C $repoRoot status --porcelain 2>$null)
