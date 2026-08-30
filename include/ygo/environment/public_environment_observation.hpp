@@ -6,7 +6,11 @@
 #include <string_view>
 #include <vector>
 
-#include "ygo/observation/player_observation.hpp"
+#include "ygo/observation/observed_zone.hpp"
+
+namespace ygo::observation {
+struct PlayerObservation;
+}
 
 namespace ygo::environment {
 

@@ -172,6 +172,7 @@ add_library(ygo_m4 STATIC
     src/environment/identity_contract.cpp
     src/environment/candidate_domain_evidence.cpp
     src/environment/public_action_identity.cpp
+    src/environment/public_safe_state.cpp
     src/environment/public_environment_observation.cpp
     src/environment/public_environment_observation_decoder.cpp
     src/simulation/canonical_simulation.cpp
@@ -410,6 +411,13 @@ add_test(NAME episodic_reset_after_failure_test COMMAND episodic_reset_after_fai
 add_executable(public_action_identity_test tests/episodic/public_action_identity_test.cpp)
 target_link_libraries(public_action_identity_test PRIVATE ygo_m4)
 add_test(NAME public_action_identity_test COMMAND public_action_identity_test)
+
+add_executable(public_safe_state_test tests/environment/public_safe_state_test.cpp)
+target_link_libraries(public_safe_state_test PRIVATE ygo_m4)
+target_compile_definitions(public_safe_state_test PRIVATE
+    YGO_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+)
+add_test(NAME public_safe_state_test COMMAND public_safe_state_test)
 
 if(DEFINED ENV{OCGFORGE_PHASE1_RAW_ROOT} AND
    DEFINED ENV{OCGFORGE_PHASE1_POST_RAW_ROOT} AND
