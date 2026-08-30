@@ -42,6 +42,15 @@ struct PolicyRngInitializationResult final {
     }
 };
 
+struct PolicyRngInitializationMaterialDecodeResult final {
+    std::optional<PolicyRngInitializationInput> value;
+    std::optional<PolicyError> error;
+
+    explicit operator bool() const noexcept {
+        return value.has_value() && !error.has_value();
+    }
+};
+
 struct PolicyRngWordResult final {
     std::optional<std::uint64_t> value;
     std::optional<PolicyError> error;
@@ -93,6 +102,10 @@ struct PolicyRngCreateResult final {
 
 PolicyRngInitializationResult make_policy_rng_initialization(
     const PolicyRngInitializationInput& input) noexcept;
+
+PolicyRngInitializationMaterialDecodeResult
+decode_canonical_policy_rng_initialization_material(
+    const std::vector<std::uint8_t>& raw_material) noexcept;
 
 PolicyRngCreateResult create_sha256_counter_rng(
     const PolicyRngInitializationInput& input) noexcept;

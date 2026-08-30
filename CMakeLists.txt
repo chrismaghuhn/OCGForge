@@ -207,6 +207,9 @@ endif()
 
 add_library(ygo_policy STATIC
     src/policy/rng.cpp
+    src/policy/production_provenance.cpp
+    src/policy/production.cpp
+    src/policy/random_legal.cpp
 )
 target_include_directories(ygo_policy PUBLIC "${CMAKE_SOURCE_DIR}/include")
 target_link_libraries(ygo_policy PUBLIC ygo_trajectory)
@@ -440,6 +443,10 @@ add_test(NAME policy_boundary_compile_test COMMAND policy_boundary_compile_test)
 add_executable(policy_rng_test tests/policy/rng_test.cpp)
 target_link_libraries(policy_rng_test PRIVATE ygo_policy)
 add_test(NAME policy_rng_test COMMAND policy_rng_test)
+
+add_executable(random_legal_test tests/policy/random_legal_test.cpp)
+target_link_libraries(random_legal_test PRIVATE ygo_policy)
+add_test(NAME random_legal_test COMMAND random_legal_test)
 
 if(DEFINED ENV{OCGFORGE_PHASE1_RAW_ROOT} AND
    DEFINED ENV{OCGFORGE_PHASE1_POST_RAW_ROOT} AND

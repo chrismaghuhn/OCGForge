@@ -111,6 +111,47 @@ std::vector<std::uint8_t> canonical_policy_rng_initialization_material(
     return build_initialization_material(input);
 }
 
+PolicyRngInitializationMaterialDecodeResult
+decode_canonical_policy_rng_initialization_material(
+    const std::vector<std::uint8_t>& raw_material) noexcept {
+    try {
+        ygo::trajectory::ByteReader reader(raw_material);
+        std::string initialization_domain;
+        std::string contract_identity;
+        std::string participant_assignment_id;
+        std::string stream_id;
+        std::uint64_t root_seed = 0;
+        if (!reader.string(initialization_domain) ||
+            initialization_domain != kPolicyRngInitializationDomain ||
+            !reader.string(contract_identity) || contract_identity != kPolicyRngContractIdentity ||
+            !reader.u64be(root_seed) || !reader.string(participant_assignment_id) ||
+            !reader.string(stream_id) || !reader.at_end()) {
+            return {std::nullopt,
+                    make_error(PolicyErrorCode::InvalidConfiguration,
+                               "policy RNG initialization material is malformed")};
+        }
+
+        PolicyRngInitializationInput input;
+        input.policy_rng_root_seed = root_seed;
+        input.participant_policy_assignment_id = std::move(participant_assignment_id);
+        input.policy_rng_stream_id = std::move(stream_id);
+        if (!valid_initialization_input(input) ||
+            build_initialization_material(input) != raw_material) {
+            return {std::nullopt,
+                    make_error(PolicyErrorCode::InvalidConfiguration,
+                               "policy RNG initialization material is noncanonical")};
+        }
+        return {std::move(input), std::nullopt};
+    } catch (const std::exception& error) {
+        return {std::nullopt,
+                PolicyError{PolicyErrorCode::InvalidConfiguration, error.what()}};
+    } catch (...) {
+        return {std::nullopt,
+                make_error(PolicyErrorCode::InvalidConfiguration,
+                           "policy RNG initialization material decode failed")};
+    }
+}
+
 std::vector<std::uint8_t> canonical_policy_rng_block_bytes(
     const std::string_view policy_rng_initialization_identity,
     const std::uint64_t block_index) {

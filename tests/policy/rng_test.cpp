@@ -88,6 +88,16 @@ void test_canonical_initialization_and_blocks() {
                 "6262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626200000007"
                 "706c6179657230"),
             "canonical initialization material changed");
+    const auto decoded_material =
+        ygo::policy::decode_canonical_policy_rng_initialization_material(
+            identity.initialization_material);
+    require(static_cast<bool>(decoded_material),
+            "canonical initialization material did not strictly decode");
+    require(decoded_material.value->policy_rng_root_seed == input.policy_rng_root_seed &&
+                decoded_material.value->participant_policy_assignment_id ==
+                    input.participant_policy_assignment_id &&
+                decoded_material.value->policy_rng_stream_id == input.policy_rng_stream_id,
+            "decoded initialization material changed a policy-owned input");
     require(identity.policy_rng_initialization_identity ==
                 "policy_rng_initialization.v1.5415d852e1fcafb64b67ddfe49a01413fca17d37f4b043cab67b9dc2b907cfa1",
             "initialization identity golden vector failed");
