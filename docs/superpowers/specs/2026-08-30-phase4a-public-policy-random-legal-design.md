@@ -68,7 +68,7 @@ Add a read-only `PublicSafeStateView` representing exactly the fields encoded by
 - public visible events without `engine_step_index`;
 - match knowledge and known static deck lists.
 
-The view will expose const accessors and will not expose or construct a `PlayerObservation`. Its only construction path is the strict safe-state codec. The existing serializer and the decoder will share the same field model and grammar. A typed decode followed by the typed canonical encoder must reproduce the input bytes exactly.
+The view will expose const accessors and will not expose or construct a `PlayerObservation`. `ObservedPlayerGlobals` is factored into a narrow observation header so this view and `public_environment_observation.hpp` do not pull in the private observation aggregate. Its only construction path is the strict safe-state codec. The existing serializer and the decoder will share the same field model and grammar. A typed decode followed by the typed canonical encoder must reproduce the input bytes exactly.
 
 The outer `PublicEnvironmentObservation` codec will call the same typed decoder when validating nested safe-state bytes. No canonical field, ordering rule, digest input, or visibility rule changes.
 
@@ -76,7 +76,7 @@ The outer `PublicEnvironmentObservation` codec will call the same typed decoder 
 
 Create a public-only Environment header containing the existing public decision enums, `EnvironmentActionCandidate`, `EnvironmentContinuationView`, and `EnvironmentDecisionRequest`. `episodic_environment.hpp` includes this header and retains the existing names and meanings.
 
-`ygo::policy` includes the public DTO header and `public_environment_observation.hpp`; it does not include `episodic_environment.hpp`. The policy selector interface contains no `DecisionFrame`, `SubmissionToken`, `engine_step_index`, internal semantic key, raw response, `CoreHost`, or private observation.
+`ygo::policy` includes the public DTO header and `public_environment_observation.hpp`; it does not include `episodic_environment.hpp`. `public_environment_observation.hpp` itself does not include `player_observation.hpp`: it forward-declares `PlayerObservation` for the private projection function and includes only the narrow locator/public observation dependencies. `ObservedPlayerGlobals` is defined in its own observation header. The policy selector interface contains no `DecisionFrame`, `SubmissionToken`, `engine_step_index`, internal semantic key, raw response, `CoreHost`, or private observation, including through transitive public-header dependencies.
 
 ### `ygo::policy`
 
@@ -92,13 +92,29 @@ struct PolicyInput {
 The selector returns:
 
 ```cpp
+struct PolicyRngCursorTransition {
+    std::uint64_t pre_cursor = 0;
+    std::uint64_t post_cursor = 0;
+};
+
 struct PolicySelectionResult {
     std::string public_action_key;
-    PolicyRngCursorSpan rng;
+    std::optional<PolicyRngCursorTransition> rng_cursor;
 };
 ```
 
-`PolicyRngCursorSpan` carries only policy-owned stream identification and `pre_cursor`/`post_cursor`. It does not carry the sampled vector position. The selector never receives a `DecisionFrame`.
+The generic selector result is usable by both stochastic and deterministic policies. It carries only an optional cursor transition and never carries RNG identities or the sampled vector position. An immutable `PolicyExecutionBinding` held by the runner/session carries `policy_artifact_id`, participant assignment, RNG contract, stream, initialization, and stream identity. The selector never receives a `DecisionFrame` and does not claim provenance identities.
+
+The binding is lifecycle configuration, not selector output:
+
+```text
+policy_artifact_id
+participant_policy_assignment_id
+policy_rng_contract_identity
+policy_rng_stream_id
+policy_rng_initialization_identity
+policy_rng_identity
+```
 
 `RandomLegalPolicy` validates its construction configuration, rejects an empty or malformed public domain, samples the entire const vector, and returns exactly the selected candidate's existing `public_action_key`. It never filters, sorts, deduplicates, truncates, repairs, retries, or substitutes a first candidate.
 
@@ -106,7 +122,7 @@ The policy runner is a separate implementation behind the selector seam. It may 
 
 ### `ygo::trajectory`
 
-The existing Phase-3A/3B types and codecs remain authoritative and unchanged. Add only an explicit production provenance resolver factory. The runner converts `PolicyRngCursorSpan` into the existing `PolicyRngDecisionProvenance` by adding the current decision index and acting participant assignment outside the selector.
+The existing Phase-3A/3B types and codecs remain authoritative and unchanged. Add no production-specific resolver implementation to `ygo::trajectory`; its `ProvenanceResolver` remains generic. `ygo::policy` owns the production registry factory because it owns the concrete RNG contract. The runner converts the optional `PolicyRngCursorTransition` and its immutable `PolicyExecutionBinding` into the existing `PolicyRngDecisionProvenance` by adding the current decision index and acting participant assignment outside the selector. A deterministic future Teacher returns `rng_cursor = nullopt`, which the runner maps to `PolicyRngMode::None` and `ocgforge.no_policy_rng.v1`.
 
 ## Production provenance registrations
 
@@ -132,17 +148,16 @@ This is a policy-owned RNG contract, separate from engine seed derivation and pu
 The canonical initialization material contains, in order:
 
 ```text
-string RNG contract identity
-string RNG contract identity as schema/domain separator
+string initialization domain `ocgforge.policy_rng.sha256_counter.init.v1`
+string RNG contract identity `ocgforge.policy_rng.sha256_counter.v1`
 u64be explicit policy RNG root seed
-string episode semantic ID
 string participant policy assignment ID
 string policy RNG stream ID
 ```
 
-The stream ID is a canonical policy stream token. The episode ID, participant assignment ID, and stream ID are explicit semantic inputs. The policy RNG root seed is supplied separately and is never implicitly copied from `EpisodeSpec::root_seed`. No host, process, PID, thread, provider, wall-clock, scheduling, pointer, or hidden-state value is permitted.
+The stream ID is a canonical policy stream token. The participant assignment ID and stream ID are explicit policy/collection inputs. The policy RNG root seed is supplied separately and is never implicitly copied from `EpisodeSpec::root_seed`. `episode_semantic_id` is deliberately absent because it is derived from the environment root seed. Independent episodes receive independent policy-owned roots or explicitly distinct policy streams. No host, process, PID, thread, provider, wall-clock, scheduling, pointer, environment seed, or hidden-state value is permitted.
 
-The existing trajectory `PolicyRngInitializationIdentity` stores the contract identity, stream ID, canonical initialization material, and its content identity. The existing `PolicyRngStreamIdentity` then binds that initialization to the immutable policy artifact and participant assignment.
+The existing trajectory `PolicyRngInitializationIdentity` stores the contract identity, stream ID, canonical initialization material, and its content identity. The existing `PolicyRngStreamIdentity` then binds that initialization to the immutable policy artifact and participant assignment. The initialization identity does not contain `episode_semantic_id`, `EpisodeSpec::root_seed`, or any value derived from environment seed. Independent episodes receive independent policy-owned roots or explicitly distinct policy streams.
 
 ### Raw words
 
@@ -203,7 +218,7 @@ DatasetManifest
 
 An accepted selection produces a `CURSOR` provenance record with the exact decision index, acting assignment, stream identity, initialization identity, and pre/post cursor. The runner adds those collection fields after selection.
 
-A policy-origin `StepRejected` is not recoverable. The runner records no `DecisionRecord` for the rejected submission, marks the recorder disposition as quarantined, terminates collection without retrying or choosing another candidate, and does not admit the episode as clean trusted data.
+A policy-origin `StepRejected` is not recoverable. The runner records no `DecisionRecord` for the rejected submission, marks the recorder disposition as quarantined, terminates collection without retrying or choosing another candidate, and does not admit the episode as clean trusted data. The runner handles every `ResetResult`, `StepResult`, and `InterruptResult` variant: an `InterruptRejected` or interrupt `EpisodeFailure` is a structured fail-closed runner result, never an assumed closure.
 
 An RNG or policy-state failure returns a structured policy failure and never submits a guessed action. The runner does not rewind RNG state to continue a trusted episode.
 
@@ -240,7 +255,7 @@ Phase 4A tests will prove:
 - policy reset/isolation and paired-world privacy;
 - trusted recorder, shard, restricted evidence, replay admission, receipt, and dataset integration.
 
-The existing Phase-3A/3B canonical trajectory codecs, rules inputs, deck identities, and gameplay semantics are not rewritten. Generated acceptance evidence is produced by its generator and is never hand-edited.
+The executable implementation commit `H_exec` contains all production code, tests, the public-fact matrix, the RNG contract, the CMake registration, and the acceptance generator. The acceptance generator runs at that exact head and from a clean checkout. It then writes JSON and derives Markdown in a separate evidence commit `H_evidence`. The only files in `H_evidence` minus `H_exec` are `docs/p4a/p4a_acceptance.json` and `docs/p4a/P4A_ACCEPTANCE.md`; the generator itself is already present at `H_exec`. The existing Phase-3A/3B canonical trajectory codecs, rules inputs, deck identities, and gameplay semantics are not rewritten. Generated acceptance evidence is produced by its generator and is never hand-edited.
 
 ## Explicit stop conditions
 
