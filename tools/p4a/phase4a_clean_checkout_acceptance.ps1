@@ -270,29 +270,31 @@ function Get-SemanticFingerprint {
 }
 
 function Write-Reports {
-    param([Parameter(Mandatory = $true)][System.Collections.IDictionary]$Report)
+    param([Parameter(Mandatory = $true)][object]$Report)
     New-Item -ItemType Directory -Force -Path $outputDirectory | Out-Null
+    $jsonPath = Join-Path $outputDirectory 'p4a_acceptance.json'
     $json = $Report | ConvertTo-Json -Depth 30
     [System.IO.File]::WriteAllText(
-        (Join-Path $outputDirectory 'p4a_acceptance.json'),
+        $jsonPath,
         $json + "`n",
         [System.Text.UTF8Encoding]::new($false))
+    $renderReport = Get-Content -LiteralPath $jsonPath -Raw | ConvertFrom-Json
 
     $lines = [System.Collections.Generic.List[string]]::new()
     $lines.Add('# Phase 4A Acceptance')
     $lines.Add('')
     $lines.Add('| Field | Value |')
     $lines.Add('|---|---|')
-    $lines.Add("| Status | ``$($Report.status)`` |")
-    $lines.Add("| Source HEAD | ``$($Report.source_head)`` |")
-    $lines.Add("| H_exec | ``$($Report.h_exec)`` |")
-    $lines.Add("| Rules bundle | ``$($Report.environment.rules_bundle_id)`` |")
+    $lines.Add("| Status | ``$($renderReport.status)`` |")
+    $lines.Add("| Source HEAD | ``$($renderReport.source_head)`` |")
+    $lines.Add("| H_exec | ``$($renderReport.h_exec)`` |")
+    $lines.Add("| Rules bundle | ``$($renderReport.environment.rules_bundle_id)`` |")
     $lines.Add('')
     $lines.Add('## Gate matrix')
     $lines.Add('')
     $lines.Add('| Gate | Status | Exact evidence |')
     $lines.Add('|---|---|---|')
-    foreach ($gate in $Report.gates) {
+    foreach ($gate in $renderReport.gates) {
         $evidence = ($gate.exact_evidence -join ', ').Replace('|', '\|')
         $lines.Add("| $($gate.gate) | ``$($gate.status)`` | $evidence |")
     }
@@ -301,7 +303,7 @@ function Write-Reports {
     $lines.Add('')
     $lines.Add('| Label | Result | Exit | Counts | Output SHA-256 |')
     $lines.Add('|---|---|---:|---|---|')
-    foreach ($run in $Report.runs) {
+    foreach ($run in $renderReport.runs) {
         $counts = if ($null -ne $run.test_counts) {
             "$($run.test_counts.passed)/$($run.test_counts.total)"
         } else { '-' }
@@ -310,12 +312,12 @@ function Write-Reports {
     $lines.Add('')
     $lines.Add('## Generated artifact hashes')
     $lines.Add('')
-    if ($Report.artifacts.Count -eq 0) {
+    if ($renderReport.artifacts.Count -eq 0) {
         $lines.Add('No auxiliary artifacts were produced.')
     } else {
         $lines.Add('| Path | Bytes | SHA-256 |')
         $lines.Add('|---|---:|---|')
-        foreach ($artifact in $Report.artifacts) {
+        foreach ($artifact in $renderReport.artifacts) {
             $lines.Add("| ``$($artifact.path)`` | $($artifact.bytes) | ``$($artifact.sha256)`` |")
         }
     }
@@ -324,7 +326,7 @@ function Write-Reports {
     $lines.Add('')
     $lines.Add('- This report records executable evidence only; it does not implement TeacherCore or either StrategyProfile.')
     $lines.Add('- `BLOCKED` facts in the public-fact matrix remain blocked and are not replaced with private-state access.')
-    if ($Report.status -ne 'PASS') {
+    if ($renderReport.status -ne 'PASS') {
         $lines.Add('- H_evidence is not complete until the clean-checkout reproduction changes P4A-G29 to `PASS`.')
     }
     [System.IO.File]::WriteAllText(
@@ -412,9 +414,9 @@ if ([string]::IsNullOrWhiteSpace($FinalizeFrom)) {
 
     $gates = @(
         (New-Gate 'P4A-G00' 'Public-fact sufficiency matrix is complete for the planned Teacher scope' 'All frozen rows have exact sources, executable evidence, availability, and explicit BLOCKED reasons.' @('public-fact-matrix') $(if (Test-RunPass 'public-fact-matrix') { 'PASS' } else { 'FAIL' })),
-        (New-Gate 'P4A-G01' 'Existing full CTest remains green' 'All currently registered Debug CTest tests pass.' @('debug-full-ctest') $(if (Test-RunPass 'debug-full-ctest') { 'PASS' } else { 'FAIL' })),
+        (New-Gate 'P4A-G01' 'Existing full CTest remains green' 'Debug configure, Debug build, and all currently registered Debug CTest tests pass.' @('debug-configure', 'debug-build', 'debug-full-ctest') $(if (Test-AllRunsPass @('debug-configure', 'debug-build', 'debug-full-ctest')) { 'PASS' } else { 'FAIL' })),
         (New-Gate 'P4A-G02' 'Existing Python verification remains green' 'Repository, M3, and M4 Python suites all pass.' @('repository-python', 'm3-python', 'm4-python') $(if (Test-AllRunsPass @('repository-python', 'm3-python', 'm4-python')) { 'PASS' } else { 'FAIL' })),
-        (New-Gate 'P4A-G03' 'Required M4 acceptance remains green' 'Release CTest, fixed-game, lifecycle, and recommended-concurrency soak all pass.' @('release-full-ctest', 'm4-canonical-full-game', 'm4-lifecycle-stress', 'm4-recommended-concurrency-soak') $(if (Test-AllRunsPass @('release-full-ctest', 'm4-canonical-full-game', 'm4-lifecycle-stress', 'm4-recommended-concurrency-soak')) { 'PASS' } else { 'FAIL' })),
+        (New-Gate 'P4A-G03' 'Required M4 acceptance remains green' 'Release configure, Release build, Release CTest, fixed-game, lifecycle, and recommended-concurrency soak all pass.' @('release-configure', 'release-build', 'release-full-ctest', 'm4-canonical-full-game', 'm4-lifecycle-stress', 'm4-recommended-concurrency-soak') $(if (Test-AllRunsPass @('release-configure', 'release-build', 'release-full-ctest', 'm4-canonical-full-game', 'm4-lifecycle-stress', 'm4-recommended-concurrency-soak')) { 'PASS' } else { 'FAIL' })),
         (New-Gate 'P4A-G04' 'Rules bundle and locked deck identities are unchanged' 'The frozen rules/deck identity test passes.' @('rules-deck-identity', 'rules-bundle-verification') $(if (Test-AllRunsPass @('rules-deck-identity', 'rules-bundle-verification')) { 'PASS' } else { 'FAIL' })),
         (New-Gate 'P4A-G05' 'PublicSafeState strict typed decode succeeds' 'The safe-state regression test passes.' @('focused-policy-ctest') $(if (Test-RunPass 'focused-policy-ctest') { 'PASS' } else { 'FAIL' })),
         (New-Gate 'P4A-G06' 'Typed safe-state round-trip is byte-identical' 'The focused public-safe/action identity tests pass.' @('focused-policy-ctest') $(if (Test-RunPass 'focused-policy-ctest') { 'PASS' } else { 'FAIL' })),
@@ -437,14 +439,14 @@ if ([string]::IsNullOrWhiteSpace($FinalizeFrom)) {
         (New-Gate 'P4A-G23' 'Policy state resets and isolates episodes/participants' 'The policy determinism probe proves fresh cursor and interleaving isolation.' @('policy-determinism') $(if (Test-RunPass 'policy-determinism') { 'PASS' } else { 'FAIL' })),
         (New-Gate 'P4A-G24' 'Policy-origin StepRejected creates zero record and quarantine' 'The Runner integration test proves no retry and quarantine.' @('focused-policy-ctest') $(if (Test-RunPass 'focused-policy-ctest') { 'PASS' } else { 'FAIL' })),
         (New-Gate 'P4A-G25' 'RandomLegal accepted actions record trusted provenance' 'The Runner integration test proves exact accepted attribution.' @('focused-policy-ctest') $(if (Test-RunPass 'focused-policy-ctest') { 'PASS' } else { 'FAIL' })),
-        (New-Gate 'P4A-G26' 'V2 semantic replay admission remains strict' 'Full CTest passes and includes trajectory_replay_admission_test.' @('debug-full-ctest', 'release-full-ctest') $(if ((Test-RunPass 'debug-full-ctest') -and ($script:RunOutputs['debug-full-ctest'] -match 'trajectory_replay_admission_test')) { 'PASS' } else { 'FAIL' })),
+        (New-Gate 'P4A-G26' 'V2 semantic replay admission remains strict' 'Both full CTest runs pass and both outputs include trajectory_replay_admission_test.' @('debug-full-ctest', 'release-full-ctest') $(if ((Test-RunPass 'debug-full-ctest') -and (Test-RunPass 'release-full-ctest') -and ($script:RunOutputs['debug-full-ctest'] -match 'trajectory_replay_admission_test') -and ($script:RunOutputs['release-full-ctest'] -match 'trajectory_replay_admission_test')) { 'PASS' } else { 'FAIL' })),
         (New-Gate 'P4A-G27' 'Candidate shard, restricted evidence, receipt, and DatasetManifest integrate' 'The Runner integration test proves all persistence artifacts.' @('focused-policy-ctest') $(if (Test-RunPass 'focused-policy-ctest') { 'PASS' } else { 'FAIL' })),
         (New-Gate 'P4A-G28' 'Public-fact matrix is complete and executable' 'The matrix validator passes at the frozen source head.' @('public-fact-matrix') $(if (Test-RunPass 'public-fact-matrix') { 'PASS' } else { 'FAIL' })),
         (New-Gate 'P4A-G29' 'Evidence is reproducible from a clean checkout' 'A separate exact-head report must match all local semantic gates, semantic fingerprints, and stable artifact hashes.' @('clean-checkout-reproduction') 'NOT_RUN')
     )
     Assert-GateIds $gates
     $artifacts = @(Get-ArtifactRecords)
-    $sourceBase = Get-GitValue @('rev-parse', '--verify', 'origin/main^{commit}')
+    $sourceBase = Get-GitValue @('merge-base', $resolvedHead, 'origin/main')
     $report = [ordered]@{
         schema_version = 'ocgforge.phase4a_acceptance.v1'
         status = if (@($gates | Where-Object { $_.status -eq 'FAIL' }).Count -eq 0) { 'INCOMPLETE' } else { 'FAIL' }
@@ -479,8 +481,8 @@ $referencePath = Resolve-RepoPath $FinalizeFrom 'artifacts\p4a\clean-checkout\p4
 if (-not (Test-Path -LiteralPath $referencePath)) {
     throw "clean-checkout acceptance report is missing: $referencePath"
 }
-$baseReport = Get-Content -LiteralPath $existingReportPath -Raw | ConvertFrom-Json -AsHashtable
-$referenceReport = Get-Content -LiteralPath $referencePath -Raw | ConvertFrom-Json -AsHashtable
+$baseReport = Get-Content -LiteralPath $existingReportPath -Raw | ConvertFrom-Json
+$referenceReport = Get-Content -LiteralPath $referencePath -Raw | ConvertFrom-Json
 if ($baseReport.source_head.ToLowerInvariant() -ne $expected -or
     $referenceReport.source_head.ToLowerInvariant() -ne $expected) {
     throw 'clean-checkout comparison is not bound to the requested H_exec'
@@ -520,7 +522,6 @@ $baseReport.reproduction = [ordered]@{
     artifact_hash_match = $artifactHashMatch
     compared_head = $expected
 }
-$baseReport.semantic_fingerprint = Get-SemanticFingerprint $baseReport.gates $baseReport.artifacts
 $baseReport.limitations = @(
     'This report is bound to the immutable H_exec source head.',
     'TeacherCore and both StrategyProfiles are outside Phase 4A.'
