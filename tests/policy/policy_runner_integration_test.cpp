@@ -14,6 +14,7 @@
 #include "ygo/policy/production.hpp"
 #include "ygo/policy/random_legal.hpp"
 #include "ygo/policy/runner.hpp"
+#include "policy/runner_test_support.hpp"
 #include "ygo/trajectory/admission.hpp"
 #include "ygo/trajectory/dataset_manifest.hpp"
 #include "ygo/trajectory/receipt.hpp"
@@ -31,7 +32,6 @@ void require(const bool condition, const std::string& message) {
 
 struct RunnerFixture final {
     ygo::policy::PolicyRunnerConfig config;
-    std::array<ygo::policy::RandomLegalExecutionBinding, 2> bindings;
 };
 
 RunnerFixture make_fixture() {
@@ -65,23 +65,10 @@ RunnerFixture make_fixture() {
         require(assignment != assignments.end(), "runner fixture lacks a participant assignment");
         const auto stream_id = player == 0 ? std::string("player0") : std::string("player1");
         const auto root = player == 0 ? 0x1111111111111111ULL : 0x2222222222222222ULL;
-        fixture.bindings[player] = ygo::policy::make_random_legal_execution_binding(
+        auto session = ygo::policy::create_random_legal_policy_session(
             artifact, *assignment, root, stream_id);
-        fixture.config.execution_bindings[player] = fixture.bindings[player];
-
-        ygo::policy::PolicyRngInitializationInput rng_input;
-        rng_input.policy_rng_root_seed = root;
-        rng_input.participant_policy_assignment_id =
-            assignment->participant_policy_assignment_id;
-        rng_input.policy_rng_stream_id = stream_id;
-        const auto policy = ygo::policy::create_random_legal_policy(rng_input);
-        require(static_cast<bool>(policy), "runner fixture RandomLegal construction failed");
-        auto shared_policy = std::make_shared<ygo::policy::RandomLegalPolicy>(
-            std::move(*policy.value));
-        fixture.config.selectors[player] =
-            [shared_policy](const ygo::policy::PolicyInput& input) {
-                return shared_policy->select(input);
-            };
+        require(static_cast<bool>(session), "runner fixture RandomLegal session construction failed");
+        fixture.config.sessions[player] = std::move(*session.value);
     }
     return fixture;
 }
@@ -90,8 +77,7 @@ void test_clean_random_legal_runner_records_and_admits() {
     auto fixture = make_fixture();
     auto created = ygo::policy::PolicyRunner::create(std::move(fixture.config));
     require(static_cast<bool>(created), "clean policy runner construction failed");
-    auto runner = std::move(*created.value);
-    const auto result = runner.run();
+    auto result = created.value->run();
     require(result.disposition == ygo::policy::PolicyRunnerDisposition::CleanAdmitted,
             "clean RandomLegal runner was not admitted");
     require(result.envelope.has_value() && result.candidate_shard.has_value() &&
@@ -144,21 +130,38 @@ void test_clean_random_legal_runner_records_and_admits() {
             "dataset manifest rejected the admitted runner receipt: " + manifest_error);
 }
 
+void test_mismatched_random_legal_policy_binding_is_rejected() {
+    auto fixture = make_fixture();
+    const auto& artifact = fixture.config.policy_provenance.policy_artifacts.front();
+    const auto assignment = std::find_if(
+        fixture.config.policy_provenance.participant_assignments.begin(),
+        fixture.config.policy_provenance.participant_assignments.end(),
+        [](const auto& value) { return value.player == 0; });
+    require(assignment != fixture.config.policy_provenance.participant_assignments.end(),
+            "binding mismatch fixture lacks player zero assignment");
+
+    fixture.config.sessions[0]->binding = ygo::policy::make_random_legal_execution_binding(
+        artifact, *assignment, 0x3333333333333333ULL, "player0");
+    const auto created = ygo::policy::PolicyRunner::create(std::move(fixture.config));
+    require(!created && created.error.has_value(),
+            "RandomLegal policy with a forged RNG binding was constructible");
+
+    auto stream_fixture = make_fixture();
+    stream_fixture.config.sessions[0]->binding.initialization.policy_rng_stream_id = "player1";
+    const auto stream_created =
+        ygo::policy::PolicyRunner::create(std::move(stream_fixture.config));
+    require(!stream_created && stream_created.error.has_value(),
+            "RNG initialization with a mismatched stream identity was constructible");
+}
+
 void test_policy_step_rejection_quarantines_without_retry_or_admission() {
     auto fixture = make_fixture();
     const auto selector_calls = std::make_shared<std::size_t>(0);
-    fixture.config.selectors[0] =
-        [selector_calls](const ygo::policy::PolicyInput&) {
-            ++*selector_calls;
-            ygo::policy::PolicySelection result;
-            result.value = ygo::policy::PolicySelectionResult{
-                "not-a-public-action-key", ygo::policy::PolicyRngCursorTransition{0, 0}};
-            return result;
-        };
     auto created = ygo::policy::PolicyRunner::create(std::move(fixture.config));
     require(static_cast<bool>(created), "rejection policy runner construction failed");
-    auto runner = std::move(*created.value);
-    const auto result = runner.run();
+    const auto result = ygo::policy::detail::run_with_test_selector(
+        *created.value, 0, ygo::policy::detail::TestSelectorBehavior::InvalidPublicAction,
+        selector_calls);
     require(result.disposition == ygo::policy::PolicyRunnerDisposition::Quarantined,
             "policy-origin StepRejected did not quarantine the collection");
     require(*selector_calls == 1, "policy-origin StepRejected caused a selector retry");
@@ -182,16 +185,10 @@ void test_policy_step_rejection_quarantines_without_retry_or_admission() {
 
 void test_policy_failure_is_structured_without_submitting_a_key() {
     auto fixture = make_fixture();
-    fixture.config.selectors[0] = [](const ygo::policy::PolicyInput&) {
-        ygo::policy::PolicySelection result;
-        result.error = ygo::policy::PolicyError{
-            ygo::policy::PolicyErrorCode::InvalidConfiguration, "test policy failure"};
-        return result;
-    };
     auto created = ygo::policy::PolicyRunner::create(std::move(fixture.config));
     require(static_cast<bool>(created), "policy-failure runner construction failed");
-    auto runner = std::move(*created.value);
-    const auto result = runner.run();
+    const auto result = ygo::policy::detail::run_with_test_selector(
+        *created.value, 0, ygo::policy::detail::TestSelectorBehavior::PolicyFailure);
     require(result.disposition == ygo::policy::PolicyRunnerDisposition::Failed,
             "policy failure did not fail the runner closed");
     require(result.policy_error.has_value() &&
@@ -206,6 +203,7 @@ void test_policy_failure_is_structured_without_submitting_a_key() {
 int main() {
     try {
         test_clean_random_legal_runner_records_and_admits();
+        test_mismatched_random_legal_policy_binding_is_rejected();
         test_policy_step_rejection_quarantines_without_retry_or_admission();
         test_policy_failure_is_structured_without_submitting_a_key();
         std::cout << "policy_runner_integration_tests=passed\n";

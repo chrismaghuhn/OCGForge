@@ -13,6 +13,20 @@
 
 namespace ygo::policy {
 
+namespace {
+
+bool same_initialization(
+    const PolicyRngInitialization& actual,
+    const trajectory::PolicyRngInitializationIdentity& expected) noexcept {
+    return actual.policy_rng_contract_identity == expected.policy_rng_contract_identity &&
+           actual.policy_rng_stream_id == expected.policy_rng_stream_id &&
+           actual.initialization_material == expected.initialization_material &&
+           actual.policy_rng_initialization_identity ==
+               expected.policy_rng_initialization_identity;
+}
+
+}  // namespace
+
 trajectory::PolicyArtifact make_random_legal_policy_artifact() {
     trajectory::PolicyArtifact artifact;
     artifact.policy_kind = trajectory::PolicyKind::RandomLegal;
@@ -146,6 +160,41 @@ RandomLegalExecutionBinding make_random_legal_execution_binding(
         result.stream.policy_rng_initialization_identity;
     result.execution_binding.policy_rng_identity = result.stream.policy_rng_identity;
     return result;
+}
+
+RandomLegalPolicySessionCreateResult create_random_legal_policy_session(
+    const trajectory::PolicyArtifact& artifact,
+    const trajectory::ParticipantPolicyAssignment& assignment,
+    const std::uint64_t explicit_policy_rng_root_seed,
+    std::string policy_rng_stream_id) noexcept {
+    try {
+        auto binding = make_random_legal_execution_binding(
+            artifact, assignment, explicit_policy_rng_root_seed, std::move(policy_rng_stream_id));
+        const auto input = decode_canonical_policy_rng_initialization_material(
+            binding.initialization.initialization_material);
+        if (!input) {
+            return {std::nullopt, input.error};
+        }
+        auto policy = create_random_legal_policy(*input.value);
+        if (!policy) {
+            return {std::nullopt, policy.error};
+        }
+        if (policy.value->rng().cursor() != 0 ||
+            !same_initialization(policy.value->rng().initialization(), binding.initialization)) {
+            return {std::nullopt,
+                    PolicyError{PolicyErrorCode::InvalidConfiguration,
+                                "RandomLegal policy state does not match its execution binding"}};
+        }
+        RandomLegalPolicySession session{std::move(*policy.value), std::move(binding)};
+        return {std::optional<RandomLegalPolicySession>(std::move(session)), std::nullopt};
+    } catch (const std::exception& error) {
+        return {std::nullopt,
+                PolicyError{PolicyErrorCode::InvalidConfiguration, error.what()}};
+    } catch (...) {
+        return {std::nullopt,
+                PolicyError{PolicyErrorCode::InvalidConfiguration,
+                            "RandomLegal session construction failed"}};
+    }
 }
 
 }  // namespace ygo::policy

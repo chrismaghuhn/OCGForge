@@ -2,7 +2,6 @@
 
 #include <array>
 #include <cstdint>
-#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
@@ -19,17 +18,19 @@
 
 namespace ygo::policy {
 
-using PolicySelector = std::function<PolicySelection(const PolicyInput&)>;
+namespace detail {
+struct PolicyRunnerTestOverride;
+struct PolicyRunnerTestAccess;
+}  // namespace detail
 
 struct PolicyRunnerConfig final {
     environment::CertifiedEnvironmentConfig environment_config;
     environment::EpisodeSpec episode_spec;
     environment::RunControl run_control;
     trajectory::PolicyProvenanceEnvelope policy_provenance;
-    std::array<PolicySelector, 2> selectors;
-    // Each element is indexed by acting player; its typed identities are
-    // checked against the corresponding participant assignment.
-    std::array<RandomLegalExecutionBinding, 2> execution_bindings;
+    // Each element is indexed by acting player. A concrete policy and its
+    // typed identities are checked against the corresponding assignment.
+    std::array<std::optional<RandomLegalPolicySession>, 2> sessions;
 };
 
 enum class PolicyRunnerDisposition : std::uint8_t {
@@ -64,6 +65,10 @@ public:
     PolicyRunnerResult run() noexcept;
 
 private:
+    friend struct detail::PolicyRunnerTestAccess;
+
+    PolicyRunnerResult run_impl(const detail::PolicyRunnerTestOverride* test_override) noexcept;
+
     PolicyRunner(PolicyRunnerConfig config,
                  std::unique_ptr<environment::EpisodicEnvironment> environment,
                  std::unique_ptr<trajectory::TrajectoryRecorder> recorder,

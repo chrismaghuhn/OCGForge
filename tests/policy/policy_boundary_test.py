@@ -13,6 +13,7 @@ EPISODIC_ENVIRONMENT = INCLUDE_ROOT / "ygo" / "environment" / "episodic_environm
 PLAYER_OBSERVATION = INCLUDE_ROOT / "ygo" / "observation" / "player_observation.hpp"
 POLICY_HEADERS = [INCLUDE_ROOT / "ygo" / "policy" / "policy.hpp"]
 SELECTOR_HEADERS = [PUBLIC_DECISION, *POLICY_HEADERS]
+POLICY_RUNNER = INCLUDE_ROOT / "ygo" / "policy" / "runner.hpp"
 
 FORBIDDEN_SELECTOR_SYMBOLS = (
     "DecisionFrame",
@@ -158,10 +159,24 @@ def check_extracted_dtos() -> None:
     )
 
 
+def check_forged_selector_is_not_a_production_input() -> None:
+    source = strip_comments(read(POLICY_RUNNER))
+    require(
+        "RandomLegalPolicySession" in source and "sessions" in source,
+        "production runner does not own concrete RandomLegal sessions",
+    )
+    for forbidden in ("PolicySelector", "std::function", "selectors", "execution_bindings"):
+        require(
+            forbidden not in source,
+            f"production runner exposes an arbitrary selector/binding seam: {forbidden}",
+        )
+
+
 def main() -> None:
     check_selector_headers()
     check_public_observation_boundary()
     check_extracted_dtos()
+    check_forged_selector_is_not_a_production_input()
     print("policy_boundary=ok")
 
 

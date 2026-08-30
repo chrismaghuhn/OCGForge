@@ -15,6 +15,7 @@
 
 #include "ygo/trace/sha256.hpp"
 #include "ygo/trajectory/codec.hpp"
+#include "runner_test_support.hpp"
 
 namespace ygo::policy {
 namespace {
@@ -73,6 +74,17 @@ bool execution_binding_fields_match(const PolicyExecutionBinding& execution,
            execution.policy_rng_identity == stream.policy_rng_identity;
 }
 
+bool policy_initialization_matches(
+    const RandomLegalPolicy& policy,
+    const trajectory::PolicyRngInitializationIdentity& expected) noexcept {
+    const auto& actual = policy.rng().initialization();
+    return actual.policy_rng_contract_identity == expected.policy_rng_contract_identity &&
+           actual.policy_rng_stream_id == expected.policy_rng_stream_id &&
+           actual.initialization_material == expected.initialization_material &&
+           actual.policy_rng_initialization_identity ==
+               expected.policy_rng_initialization_identity;
+}
+
 bool validate_execution_binding(const RandomLegalExecutionBinding& binding,
                                 const std::uint8_t player,
                                 const PolicyRunnerConfig& config,
@@ -97,6 +109,7 @@ bool validate_execution_binding(const RandomLegalExecutionBinding& binding,
     }
     if (binding.initialization.policy_rng_contract_identity !=
             artifact->policy_rng_contract_identity ||
+        binding.initialization.policy_rng_stream_id != binding.stream.policy_rng_stream_id ||
         binding.stream.policy_artifact_id != artifact->policy_artifact_id ||
         binding.stream.participant_policy_assignment_id !=
             assignment->participant_policy_assignment_id ||
@@ -203,7 +216,12 @@ bool add_rng_initialization_evidence(
         error = "record has an invalid acting player for RNG evidence";
         return false;
     }
-    const auto& binding = config.execution_bindings[record.frame.acting_player];
+    const auto& session = config.sessions[record.frame.acting_player];
+    if (!session.has_value()) {
+        error = "record references a missing execution session";
+        return false;
+    }
+    const auto& binding = session->binding;
     if (attribution.policy_rng_initialization_identity !=
             binding.initialization.policy_rng_initialization_identity ||
         attribution.policy_rng_identity != binding.stream.policy_rng_identity) {
@@ -369,21 +387,28 @@ PolicyRunnerCreateResult PolicyRunner::create(PolicyRunnerConfig config) noexcep
     try {
         const auto resolver = make_production_policy_provenance_resolver();
         for (std::uint8_t player = 0; player < 2; ++player) {
-            if (!config.selectors[player]) {
+            if (!config.sessions[player].has_value()) {
                 return {std::nullopt,
                         PolicyError{PolicyErrorCode::InvalidConfiguration,
-                                    "runner lacks a selector for a player"}};
+                                    "runner lacks a RandomLegal session for a player"}};
             }
+            const auto& session = *config.sessions[player];
             std::string error;
-            if (!validate_execution_binding(config.execution_bindings[player], player, config,
+            if (!validate_execution_binding(session.binding, player, config,
                                             resolver, error)) {
                 return {std::nullopt,
                         PolicyError{PolicyErrorCode::InvalidConfiguration,
-                                    std::move(error)}};
+                                     std::move(error)}};
+            }
+            if (session.policy.rng().cursor() != 0 ||
+                !policy_initialization_matches(session.policy, session.binding.initialization)) {
+                return {std::nullopt,
+                        PolicyError{PolicyErrorCode::InvalidConfiguration,
+                                    "runner RandomLegal policy state does not match its binding"}};
             }
         }
-        if (config.execution_bindings[0].stream.policy_rng_identity ==
-            config.execution_bindings[1].stream.policy_rng_identity) {
+        if (config.sessions[0]->binding.stream.policy_rng_identity ==
+            config.sessions[1]->binding.stream.policy_rng_identity) {
             return {std::nullopt,
                     PolicyError{PolicyErrorCode::InvalidConfiguration,
                                 "runner reuses one policy RNG identity for two players"}};
@@ -421,6 +446,11 @@ PolicyRunnerCreateResult PolicyRunner::create(PolicyRunnerConfig config) noexcep
 }
 
 PolicyRunnerResult PolicyRunner::run() noexcept {
+    return run_impl(nullptr);
+}
+
+PolicyRunnerResult PolicyRunner::run_impl(
+    const detail::PolicyRunnerTestOverride* test_override) noexcept {
     if (has_run_) {
         return failed_result("policy runner can only execute one collection run");
     }
@@ -464,20 +494,27 @@ PolicyRunnerResult PolicyRunner::run() noexcept {
             if (frame == nullptr || frame->acting_player > 1) {
                 return failed_result("runner reached a non-actionable or invalid V2 frame");
             }
-            const auto& binding = config_.execution_bindings[frame->acting_player];
+            auto& session = *config_.sessions[frame->acting_player];
+            const auto& binding = session.binding;
             const PolicyInput input{frame->public_observation, frame->request.candidates};
             PolicySelection selection;
-            try {
-                selection = config_.selectors[frame->acting_player](input);
-            } catch (const std::exception& exception) {
-                return failed_result(
-                    "policy selector threw: " + std::string(exception.what()),
-                    PolicyError{PolicyErrorCode::InvalidConfiguration, exception.what()});
-            } catch (...) {
-                return failed_result(
-                    "policy selector threw",
-                    PolicyError{PolicyErrorCode::InvalidConfiguration,
-                                "policy selector threw"});
+            if (test_override != nullptr &&
+                test_override->player == frame->acting_player) {
+                if (test_override->selection_calls != nullptr) {
+                    ++*test_override->selection_calls;
+                }
+                switch (test_override->behavior) {
+                    case detail::TestSelectorBehavior::InvalidPublicAction:
+                        selection.value = PolicySelectionResult{
+                            "not-a-public-action-key", PolicyRngCursorTransition{0, 0}};
+                        break;
+                    case detail::TestSelectorBehavior::PolicyFailure:
+                        selection.error = PolicyError{PolicyErrorCode::InvalidConfiguration,
+                                                      "test policy failure"};
+                        break;
+                }
+            } else {
+                selection = session.policy.select(input);
             }
             if (!selection) {
                 return failed_result(
