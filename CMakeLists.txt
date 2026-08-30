@@ -205,6 +205,17 @@ else()
     target_compile_options(ygo_trajectory PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
+add_library(ygo_policy STATIC
+    src/policy/rng.cpp
+)
+target_include_directories(ygo_policy PUBLIC "${CMAKE_SOURCE_DIR}/include")
+target_link_libraries(ygo_policy PUBLIC ygo_trajectory)
+if(MSVC)
+    target_compile_options(ygo_policy PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(ygo_policy PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
 add_executable(trajectory_codec_test tests/trajectory/codec_test.cpp)
 target_link_libraries(trajectory_codec_test PRIVATE ygo_trajectory)
 add_test(NAME trajectory_codec_test COMMAND trajectory_codec_test)
@@ -425,6 +436,10 @@ add_executable(policy_boundary_compile_test tests/policy/policy_boundary_compile
 target_include_directories(policy_boundary_compile_test PRIVATE
                            "${CMAKE_SOURCE_DIR}/include")
 add_test(NAME policy_boundary_compile_test COMMAND policy_boundary_compile_test)
+
+add_executable(policy_rng_test tests/policy/rng_test.cpp)
+target_link_libraries(policy_rng_test PRIVATE ygo_policy)
+add_test(NAME policy_rng_test COMMAND policy_rng_test)
 
 if(DEFINED ENV{OCGFORGE_PHASE1_RAW_ROOT} AND
    DEFINED ENV{OCGFORGE_PHASE1_POST_RAW_ROOT} AND
