@@ -16,6 +16,7 @@
 #include "ygo/policy/random_legal.hpp"
 #include "ygo/policy/rng.hpp"
 #include "ygo/observation/player_observation.hpp"
+#include "ygo/observation/serialization.hpp"
 #include "ygo/trajectory/codec.hpp"
 #include "ygo/trajectory/policy_provenance.hpp"
 
@@ -445,11 +446,88 @@ void test_random_legal_selects_only_from_the_supplied_domain() {
             "RandomLegal accepted an invalid public action key");
 }
 
+ygo::observation::PlayerObservation paired_private_observation(const std::string& marker) {
+    ygo::observation::PlayerObservation observation;
+    observation.perspective_player = 0;
+    observation.decision_index = 7;
+    observation.engine_step_index = marker == "private-a" ? 11 : 991;
+    observation.globals.life_points = {8000, 8000};
+    observation.match_context.perspective_player = 0;
+    observation.match_context.opponent_deck.known = false;
+    observation.decision_context.kind = "yes_no";
+    observation.decision_context.player = 0;
+    observation.decision_context.decision_id = marker;
+    observation.decision_context.engine_step_index = observation.engine_step_index;
+    observation.decision_context.engine_message_name = "private-message-" + marker;
+    observation.observation_hash = "private-observation-hash-" + marker;
+    return observation;
+}
+
+void test_paired_hidden_worlds_have_identical_random_legal_output() {
+    const auto private_a = paired_private_observation("private-a");
+    const auto private_b = paired_private_observation("private-b");
+    require(ygo::observation::canonical_serialize(private_a) !=
+                ygo::observation::canonical_serialize(private_b),
+            "paired privacy worlds did not differ in hidden/private state");
+
+    const auto public_a = ygo::environment::project_public_observation(private_a);
+    const auto public_b = ygo::environment::project_public_observation(private_b);
+    require(public_a.canonical_safe_state_bytes() == public_b.canonical_safe_state_bytes(),
+            "paired hidden worlds produced different public-safe state bytes");
+    require(ygo::environment::canonical_public_environment_observation_bytes(public_a) ==
+                ygo::environment::canonical_public_environment_observation_bytes(public_b),
+            "paired hidden worlds produced different public observations");
+    require(ygo::environment::public_observation_digest(public_a) ==
+                ygo::environment::public_observation_digest(public_b),
+            "paired hidden worlds produced different public observation digests");
+
+    auto policy_a_result = ygo::policy::create_random_legal_policy(rng_input());
+    auto policy_b_result = ygo::policy::create_random_legal_policy(rng_input());
+    require(static_cast<bool>(policy_a_result) && static_cast<bool>(policy_b_result),
+            "paired privacy policies could not be constructed");
+    auto policy_a = std::move(*policy_a_result.value);
+    auto policy_b = std::move(*policy_b_result.value);
+    auto candidates_a = candidates();
+    auto candidates_b = candidates();
+    const ygo::policy::PolicyInput input_a{public_a, candidates_a};
+    const ygo::policy::PolicyInput input_b{public_b, candidates_b};
+    const auto selection_a = policy_a.select(input_a);
+    const auto selection_b = policy_b.select(input_b);
+    require(static_cast<bool>(selection_a) && static_cast<bool>(selection_b),
+            "paired privacy RandomLegal selection failed");
+    require(selection_a.value->public_action_key == selection_b.value->public_action_key,
+            "paired hidden worlds changed the selected public action key");
+    require(selection_a.value->rng_cursor.has_value() && selection_b.value->rng_cursor.has_value() &&
+                selection_a.value->rng_cursor->pre_cursor ==
+                    selection_b.value->rng_cursor->pre_cursor &&
+                selection_a.value->rng_cursor->post_cursor ==
+                    selection_b.value->rng_cursor->post_cursor,
+            "paired hidden worlds changed the policy RNG cursor trace");
+    require(candidates_a.size() == candidates_b.size(),
+            "paired hidden worlds changed the supplied candidate count");
+    for (std::size_t index = 0; index < candidates_a.size(); ++index) {
+        require(candidates_a[index].public_action_key == candidates_b[index].public_action_key,
+                "paired hidden worlds changed candidate ordering or membership");
+    }
+    std::vector<std::string> keys_a;
+    std::vector<std::string> keys_b;
+    for (const auto& candidate : candidates_a) {
+        keys_a.push_back(candidate.public_action_key);
+    }
+    for (const auto& candidate : candidates_b) {
+        keys_b.push_back(candidate.public_action_key);
+    }
+    require(ygo::environment::public_candidate_domain_digest("yes_no", keys_a) ==
+                ygo::environment::public_candidate_domain_digest("yes_no", keys_b),
+            "paired hidden worlds changed the public candidate-domain digest");
+}
+
 int run() {
     test_random_legal_execution_binding_composition();
     test_production_registrations_and_composition();
     test_strict_rng_callbacks_and_incompatible_provenance();
     test_random_legal_selects_only_from_the_supplied_domain();
+    test_paired_hidden_worlds_have_identical_random_legal_output();
     return EXIT_SUCCESS;
 }
 

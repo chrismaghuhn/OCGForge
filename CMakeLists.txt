@@ -449,6 +449,9 @@ add_executable(random_legal_test tests/policy/random_legal_test.cpp)
 target_link_libraries(random_legal_test PRIVATE ygo_policy)
 add_test(NAME random_legal_test COMMAND random_legal_test)
 
+add_executable(policy_random_legal_probe tools/policy_random_legal_probe/main.cpp)
+target_link_libraries(policy_random_legal_probe PRIVATE ygo_policy)
+
 add_executable(policy_runner_integration_test tests/policy/policy_runner_integration_test.cpp)
 target_include_directories(policy_runner_integration_test PRIVATE "${CMAKE_SOURCE_DIR}/src")
 target_link_libraries(policy_runner_integration_test PRIVATE ygo_policy)
