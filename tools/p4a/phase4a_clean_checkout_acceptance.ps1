@@ -90,13 +90,13 @@ function Get-OutputCounts {
             total = [int]$match.Groups[3].Value
         }
     }
-    $unittest = [regex]::Matches($Output, '(?m)^Ran\s+(\d+)\s+tests?\s*$')
+    $unittest = [regex]::Matches($Output, '(?m)^Ran\s+(\d+)\s+tests?(?:\s+in\s+[^\r\n]+)?\s*$')
     if ($unittest.Count -gt 0) {
         $total = [int]$unittest[$unittest.Count - 1].Groups[1].Value
         return [ordered]@{
             kind = 'unittest'
-            passed = if ($Output -match '(?m)^OK\s*$') { $total } else { 0 }
-            failed = if ($Output -match '(?m)^OK\s*$') { 0 } else { $total }
+            passed = if ($Output -match '(?m)^OK(?:\s+\([^\r\n]+\))?\s*$') { $total } else { 0 }
+            failed = if ($Output -match '(?m)^OK(?:\s+\([^\r\n]+\))?\s*$') { 0 } else { $total }
             total = $total
         }
     }
@@ -107,6 +107,51 @@ $script:Runs = [ordered]@{}
 $script:RunOutputs = @{}
 $script:HeavyEvidence = $null
 $script:ImportedHeavyReport = $null
+$script:ExpectedCtestCounts = @{
+    'focused-policy-ctest' = @{ kind = 'CTest'; passed = 12; failed = 0; total = 12 }
+    'debug-normal-ctest' = @{ kind = 'CTest'; passed = 127; failed = 0; total = 127 }
+    'release-normal-ctest' = @{ kind = 'CTest'; passed = 127; failed = 0; total = 127 }
+    'heavy-replay-release' = @{ kind = 'CTest'; passed = 1; failed = 0; total = 1 }
+}
+$script:PythonSuiteLabels = @('repository-python', 'm3-python', 'm4-python')
+
+function Get-RunValidationError {
+    param(
+        [Parameter(Mandatory = $true)][string]$Label,
+        [Parameter(Mandatory = $true)][string]$Command,
+        [Parameter(Mandatory = $true)][int]$ExitCode,
+        [Parameter(Mandatory = $false)][object]$Counts
+    )
+    if ($ExitCode -ne 0) {
+        return $null
+    }
+    if ($Command -ieq 'ctest') {
+        if ($null -eq $Counts -or [int]$Counts.total -le 0) {
+            return 'CTest exited 0 without a parseable non-empty test summary'
+        }
+        if ([int]$Counts.failed -ne 0) {
+            return 'CTest reported failed tests despite exit code 0'
+        }
+        if ($script:ExpectedCtestCounts.ContainsKey($Label)) {
+            $expected = $script:ExpectedCtestCounts[$Label]
+            if ([string]$Counts.kind -ne [string]$expected.kind -or
+                [int]$Counts.passed -ne [int]$expected.passed -or
+                [int]$Counts.failed -ne [int]$expected.failed -or
+                [int]$Counts.total -ne [int]$expected.total) {
+                return "CTest count mismatch: expected $($expected.passed)/$($expected.total), observed $($Counts.passed)/$($Counts.total)"
+            }
+        }
+    }
+    if ($script:PythonSuiteLabels -contains $Label) {
+        if ($null -eq $Counts -or
+            [string]$Counts.kind -ne 'unittest' -or
+            [int]$Counts.total -le 0 -or
+            [int]$Counts.failed -ne 0) {
+            return 'Python unittest exited 0 without a valid non-empty passing suite summary'
+        }
+    }
+    return $null
+}
 
 function Invoke-Recorded {
     param(
@@ -137,11 +182,13 @@ function Invoke-Recorded {
     $stopwatch.Stop()
     $output = [string]::Join("`n", [string[]]$lines)
     $outputLines = if ($output.Length -eq 0) { @() } else { $output -split "`n" }
+    $counts = Get-OutputCounts $output
+    $validationError = Get-RunValidationError $Label $Command $exitCode $counts
     $record = [ordered]@{
         label = $Label
         command = $DisplayCommand
         exit_code = $exitCode
-        result = if ($exitCode -eq 0) { 'PASS' } else { 'FAIL' }
+        result = if ($exitCode -eq 0 -and $null -eq $validationError) { 'PASS' } else { 'FAIL' }
         elapsed_seconds = [math]::Round($stopwatch.Elapsed.TotalSeconds, 3)
         output_summary = [ordered]@{
             sha256 = Get-TextSha256 $output
@@ -151,9 +198,38 @@ function Invoke-Recorded {
             last_line = if ($outputLines.Count -gt 0) { $outputLines[$outputLines.Count - 1] } else { '' }
         }
     }
-    $counts = Get-OutputCounts $output
     if ($null -ne $counts) {
         $record.test_counts = $counts
+    }
+    if ($null -ne $validationError) {
+        $record.validation_error = $validationError
+    }
+    $script:Runs[$Label] = $record
+    $script:RunOutputs[$Label] = $output
+    return $record
+}
+
+function Invoke-Skipped {
+    param(
+        [Parameter(Mandatory = $true)][string]$Label,
+        [Parameter(Mandatory = $true)][string]$DisplayCommand,
+        [Parameter(Mandatory = $true)][string]$Reason
+    )
+    $output = "SKIPPED: $Reason"
+    $record = [ordered]@{
+        label = $Label
+        command = $DisplayCommand
+        exit_code = $null
+        result = 'SKIPPED'
+        elapsed_seconds = [double]0
+        output_summary = [ordered]@{
+            sha256 = Get-TextSha256 $output
+            utf8_bytes = [System.Text.UTF8Encoding]::new($false).GetByteCount($output)
+            line_count = 1
+            first_line = $output
+            last_line = $output
+        }
+        validation_error = $Reason
     }
     $script:Runs[$Label] = $record
     $script:RunOutputs[$Label] = $output
@@ -204,6 +280,17 @@ function Test-AllRunsPass {
         if (-not (Test-RunPass $label)) { return $false }
     }
     return $true
+}
+
+function Assert-ToolchainPrerequisites {
+    $required = @(
+        (Join-Path $repoRoot '.cache\toolchain\ninja\ninja.exe'),
+        (Join-Path $repoRoot '.cache\toolchain\zig-x86_64-windows-0.14.1\zig.exe')
+    )
+    $missing = @($required | Where-Object { -not (Test-Path -LiteralPath $_ -PathType Leaf) })
+    if ($missing.Count -ne 0) {
+        throw "P4A acceptance BLOCKED: missing required local toolchain input(s): $($missing -join ', ')"
+    }
 }
 
 function New-Gate {
@@ -749,21 +836,39 @@ if ([string]::IsNullOrWhiteSpace($FinalizeFrom)) {
             throw "acceptance artifact directory must be empty before execution: $artifactDirectory"
         }
     }
+    Assert-ToolchainPrerequisites
     New-Item -ItemType Directory -Force -Path $artifactDirectory | Out-Null
     $focusedRegex = '^(trajectory_codec_test|trajectory_recorder_test|trajectory_shard_test|trajectory_restricted_evidence_test|trajectory_receipt_test|trajectory_dataset_manifest_test|public_action_identity_test|public_safe_state_test|policy_boundary_compile_test|policy_rng_test|random_legal_test|policy_runner_integration_test)$'
     $nonHeavyCTestExclusion = '^(trajectory_replay_admission_test|m4_failure_isolation_test)$'
 
     $null = Invoke-Recorded 'debug-configure' 'cmake' @('--preset', 'dev-windows-zig') 'cmake --preset dev-windows-zig'
     $null = Invoke-Recorded 'debug-build' 'cmake' @('--build', '--preset', 'dev-windows-zig', '--parallel') 'cmake --build --preset dev-windows-zig --parallel'
-    $null = Invoke-Recorded 'focused-policy-ctest' 'ctest' @('--preset', 'dev-windows-zig', '-R', $focusedRegex, '--output-on-failure') "ctest --preset dev-windows-zig -R $focusedRegex --output-on-failure"
-    $null = Invoke-Recorded 'debug-normal-ctest' 'ctest' @('--preset', 'dev-windows-zig', '-E', $nonHeavyCTestExclusion, '--output-on-failure') "ctest --preset dev-windows-zig -E $nonHeavyCTestExclusion --output-on-failure"
+    $debugReady = Test-AllRunsPass @('debug-configure', 'debug-build')
+    if ($debugReady) {
+        $null = Invoke-Recorded 'focused-policy-ctest' 'ctest' @('--preset', 'dev-windows-zig', '-R', $focusedRegex, '--output-on-failure') "ctest --preset dev-windows-zig -R $focusedRegex --output-on-failure"
+        $null = Invoke-Recorded 'debug-normal-ctest' 'ctest' @('--preset', 'dev-windows-zig', '-E', $nonHeavyCTestExclusion, '--output-on-failure') "ctest --preset dev-windows-zig -E $nonHeavyCTestExclusion --output-on-failure"
+    } else {
+        $debugSkipReason = 'debug configure/build did not both pass; dependent Debug CTest commands were not run'
+        $null = Invoke-Skipped 'focused-policy-ctest' "ctest --preset dev-windows-zig -R $focusedRegex --output-on-failure" $debugSkipReason
+        $null = Invoke-Skipped 'debug-normal-ctest' "ctest --preset dev-windows-zig -E $nonHeavyCTestExclusion --output-on-failure" $debugSkipReason
+    }
 
     $null = Invoke-Recorded 'release-configure' 'cmake' @('--preset', 'release-windows-zig') 'cmake --preset release-windows-zig'
     $null = Invoke-Recorded 'release-build' 'cmake' @('--build', '--preset', 'release-windows-zig', '--parallel') 'cmake --build --preset release-windows-zig --parallel'
-    $null = Invoke-Recorded 'release-normal-ctest' 'ctest' @('--preset', 'release-windows-zig', '-E', $nonHeavyCTestExclusion, '--output-on-failure') "ctest --preset release-windows-zig -E $nonHeavyCTestExclusion --output-on-failure"
+    $releaseReady = Test-AllRunsPass @('release-configure', 'release-build')
+    if ($releaseReady) {
+        $null = Invoke-Recorded 'release-normal-ctest' 'ctest' @('--preset', 'release-windows-zig', '-E', $nonHeavyCTestExclusion, '--output-on-failure') "ctest --preset release-windows-zig -E $nonHeavyCTestExclusion --output-on-failure"
+    } else {
+        $releaseSkipReason = 'release configure/build did not both pass; dependent Release CTest commands were not run'
+        $null = Invoke-Skipped 'release-normal-ctest' "ctest --preset release-windows-zig -E $nonHeavyCTestExclusion --output-on-failure" $releaseSkipReason
+    }
 
     if (-not $SkipHeavy) {
-        $null = Invoke-Recorded 'heavy-replay-release' 'ctest' @('--preset', 'release-windows-zig', '-R', '^trajectory_replay_admission_test$', '--output-on-failure') 'ctest --preset release-windows-zig -R ^trajectory_replay_admission_test$ --output-on-failure'
+        if ($releaseReady) {
+            $null = Invoke-Recorded 'heavy-replay-release' 'ctest' @('--preset', 'release-windows-zig', '-R', '^trajectory_replay_admission_test$', '--output-on-failure') 'ctest --preset release-windows-zig -R ^trajectory_replay_admission_test$ --output-on-failure'
+        } else {
+            $null = Invoke-Skipped 'heavy-replay-release' 'ctest --preset release-windows-zig -R ^trajectory_replay_admission_test$ --output-on-failure' $releaseSkipReason
+        }
     }
 
     $null = Invoke-Recorded 'repository-python' 'python' @('-B', '-m', 'unittest', 'discover', '-s', 'tests/python', '-v') 'python -B -m unittest discover -s tests/python -v'
@@ -772,7 +877,11 @@ if ([string]::IsNullOrWhiteSpace($FinalizeFrom)) {
     $previousWorker = $env:YGO_M4_WORKER
     $env:YGO_M4_WORKER = 'build/windows-zig/ygo_m4_worker.exe'
     try {
-        $null = Invoke-Recorded 'm4-python' 'python' @('-B', 'tools/m4/run_fast_suite.py', '-v') 'YGO_M4_WORKER=build/windows-zig/ygo_m4_worker.exe python -B tools/m4/run_fast_suite.py -v'
+        if ($debugReady) {
+            $null = Invoke-Recorded 'm4-python' 'python' @('-B', 'tools/m4/run_fast_suite.py', '-v') 'YGO_M4_WORKER=build/windows-zig/ygo_m4_worker.exe python -B tools/m4/run_fast_suite.py -v'
+        } else {
+            $null = Invoke-Skipped 'm4-python' 'YGO_M4_WORKER=build/windows-zig/ygo_m4_worker.exe python -B tools/m4/run_fast_suite.py -v' 'debug configure/build did not both pass; dependent M4 worker tests were not run'
+        }
     } finally {
         if ($null -eq $previousWorker) {
             Remove-Item Env:YGO_M4_WORKER -ErrorAction SilentlyContinue
@@ -783,13 +892,21 @@ if ([string]::IsNullOrWhiteSpace($FinalizeFrom)) {
 
     $null = Invoke-Recorded 'public-fact-matrix' 'python' @('-B', 'tests/policy/public_fact_matrix_test.py') 'python -B tests/policy/public_fact_matrix_test.py'
     $null = Invoke-Recorded 'rules-deck-identity' 'python' @('-B', 'tests/policy/rules_deck_identity_test.py') 'python -B tests/policy/rules_deck_identity_test.py'
-    $null = Invoke-Recorded 'policy-determinism' 'python' @('-B', 'tests/policy/policy_determinism_test.py') 'python -B tests/policy/policy_determinism_test.py'
+    if ($debugReady) {
+        $null = Invoke-Recorded 'policy-determinism' 'python' @('-B', 'tests/policy/policy_determinism_test.py') 'python -B tests/policy/policy_determinism_test.py'
+    } else {
+        $null = Invoke-Skipped 'policy-determinism' 'python -B tests/policy/policy_determinism_test.py' 'debug configure/build did not both pass; dependent policy probe was not run'
+    }
     $null = Invoke-Recorded 'policy-boundary' 'python' @('-B', 'tests/policy/policy_boundary_test.py') 'python -B tests/policy/policy_boundary_test.py'
     $null = Invoke-Recorded 'rules-bundle-verification' 'python' @('-B', 'tools/verify_rules_bundle.py', '--lock', 'third_party/rules_bundle.lock.json', '--cache', '.cache/rules_bundle') 'python -B tools/verify_rules_bundle.py --lock third_party/rules_bundle.lock.json --cache .cache/rules_bundle'
     $null = Invoke-IdentitySourceScan
 
     $fullGameOutput = Get-RepoRelativePath (Join-Path $artifactDirectory 'm4\full_game')
-    $null = Invoke-Recorded 'm4-canonical-full-game' 'python' @('-B', 'tests/m3/full_game/full_fixed_deck_test.py', '--probe', 'build/release-windows-zig/ygo_core_probe.exe', '--games', '16', '--max-steps', '2200', '--timeout', '300', '--output', $fullGameOutput) "python -B tests/m3/full_game/full_fixed_deck_test.py --probe build/release-windows-zig/ygo_core_probe.exe --games 16 --max-steps 2200 --timeout 300 --output $fullGameOutput"
+    if ($releaseReady) {
+        $null = Invoke-Recorded 'm4-canonical-full-game' 'python' @('-B', 'tests/m3/full_game/full_fixed_deck_test.py', '--probe', 'build/release-windows-zig/ygo_core_probe.exe', '--games', '16', '--max-steps', '2200', '--timeout', '300', '--output', $fullGameOutput) "python -B tests/m3/full_game/full_fixed_deck_test.py --probe build/release-windows-zig/ygo_core_probe.exe --games 16 --max-steps 2200 --timeout 300 --output $fullGameOutput"
+    } else {
+        $null = Invoke-Skipped 'm4-canonical-full-game' "python -B tests/m3/full_game/full_fixed_deck_test.py --probe build/release-windows-zig/ygo_core_probe.exe --games 16 --max-steps 2200 --timeout 300 --output $fullGameOutput" 'release configure/build did not both pass; dependent full-game probe was not run'
+    }
 
     if (-not $SkipHeavy) {
         $lifecycleOutput = Get-RepoRelativePath (Join-Path $artifactDirectory 'm4\lifecycle_stress.json')
@@ -797,7 +914,11 @@ if ([string]::IsNullOrWhiteSpace($FinalizeFrom)) {
     }
 
     $soakOutput = Get-RepoRelativePath (Join-Path $artifactDirectory 'm4\soak.json')
-    $null = Invoke-Recorded 'm4-recommended-concurrency-soak' 'python' @('-B', '-m', 'tools.m4.benchmark', '--worker-executable', 'build/release-windows-zig/ygo_m4_worker.exe', '--games', '128', '--workers', '16', '--master-seed', '20260815', '--mode', 'throughput', '--warmup-games', '4', '--observation-mode', 'full', '--output', $soakOutput) "python -B -m tools.m4.benchmark --worker-executable build/release-windows-zig/ygo_m4_worker.exe --games 128 --workers 16 --master-seed 20260815 --mode throughput --warmup-games 4 --observation-mode full --output $soakOutput"
+    if ($releaseReady) {
+        $null = Invoke-Recorded 'm4-recommended-concurrency-soak' 'python' @('-B', '-m', 'tools.m4.benchmark', '--worker-executable', 'build/release-windows-zig/ygo_m4_worker.exe', '--games', '128', '--workers', '16', '--master-seed', '20260815', '--mode', 'throughput', '--warmup-games', '4', '--observation-mode', 'full', '--output', $soakOutput) "python -B -m tools.m4.benchmark --worker-executable build/release-windows-zig/ygo_m4_worker.exe --games 128 --workers 16 --master-seed 20260815 --mode throughput --warmup-games 4 --observation-mode full --output $soakOutput"
+    } else {
+        $null = Invoke-Skipped 'm4-recommended-concurrency-soak' "python -B -m tools.m4.benchmark --worker-executable build/release-windows-zig/ygo_m4_worker.exe --games 128 --workers 16 --master-seed 20260815 --mode throughput --warmup-games 4 --observation-mode full --output $soakOutput" 'release configure/build did not both pass; dependent concurrency soak was not run'
+    }
 
     $lock = Get-Content -LiteralPath (Join-Path $repoRoot 'third_party\rules_bundle.lock.json') -Raw | ConvertFrom-Json
     $matchup = Get-Content -LiteralPath (Join-Path $repoRoot 'fixtures\decks\ocgforge.matchup.swordsoul_salamangreat.v1.json') -Raw | ConvertFrom-Json
