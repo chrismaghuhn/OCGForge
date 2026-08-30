@@ -10,6 +10,7 @@
 
 #include "ygo/environment/candidate_domain_evidence.hpp"
 #include "ygo/environment/identity_contract.hpp"
+#include "ygo/environment/public_decision.hpp"
 #include "ygo/environment/public_action_identity.hpp"
 #include "ygo/environment/public_environment_observation.hpp"
 
@@ -24,8 +25,6 @@ inline constexpr std::string_view kEpisodeIdentitySchemaId =
 inline constexpr std::string_view kSemanticDecisionIdentitySchemaId =
     "ocgforge.semantic_decision_identity.v1";
 inline constexpr std::string_view kObservationContractId = "ygo.player_observation.v1";
-
-using PublicEnvironmentObservation = PublicEnvironmentObservationInput;
 
 struct CertifiedDeckIdentity final {
     std::string id;
@@ -81,81 +80,6 @@ struct EpisodeSpec final {
     std::uint64_t root_seed = 0;
     SeatAssignment seat_assignment = SeatAssignment::Normal;
     std::uint8_t starting_player = 0;
-};
-
-enum class EnvironmentDecisionKind : std::uint8_t {
-    IdleCommand,
-    BattleCommand,
-    Chain,
-    Option,
-    CardSelection,
-    Tribute,
-    Sum,
-    Place,
-    Counter,
-    Ordering,
-    Announcement,
-    UnselectCard,
-    Position,
-    YesNo,
-    Unsupported,
-};
-
-enum class EnvironmentActionKind : std::uint8_t {
-    IdleCommand,
-    BattleCommand,
-    Chain,
-    Option,
-    CardSelection,
-    Announcement,
-    Place,
-    Position,
-    YesNo,
-    Pick,
-    Finish,
-    Cancel,
-    AssignAmount,
-    Unsupported,
-};
-
-struct EnvironmentActionCandidate final {
-    EnvironmentActionKind action_kind = EnvironmentActionKind::Unsupported;
-    std::string public_action_key;
-    std::optional<PublicChoice> choice;
-    std::optional<PublicCardReference> source_reference;
-    std::optional<PublicCardReference> target_reference;
-    std::optional<std::uint32_t> phase;
-    std::optional<std::uint8_t> position;
-    std::optional<std::uint32_t> source_index;
-    std::optional<std::int32_t> amount;
-    std::string continuation_operation;
-    bool submits_engine_response = true;
-};
-
-struct EnvironmentContinuationView final {
-    std::string continuation_kind;
-    std::uint32_t continuation_step = 0;
-    std::vector<std::uint32_t> selected_indices;
-    std::vector<std::uint32_t> remaining_indices;
-    std::vector<std::uint16_t> assigned_amounts;
-    std::uint32_t min_count = 0;
-    std::uint32_t max_count = 0;
-    std::uint32_t target_sum = 0;
-    std::uint32_t required_amount = 0;
-    std::uint64_t available_mask = 0;
-    std::uint64_t selected_mask = 0;
-    std::uint32_t continuation_steps = 0;
-    bool exact_sum = true;
-    bool greater_sum = false;
-    bool can_finish = false;
-    bool can_cancel = false;
-};
-
-struct EnvironmentDecisionRequest final {
-    EnvironmentDecisionKind kind = EnvironmentDecisionKind::Unsupported;
-    std::uint8_t player = 0;
-    std::vector<EnvironmentActionCandidate> candidates;
-    std::optional<EnvironmentContinuationView> continuation;
 };
 
 struct SubmissionToken final {

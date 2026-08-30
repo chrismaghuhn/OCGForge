@@ -419,6 +419,11 @@ target_compile_definitions(public_safe_state_test PRIVATE
 )
 add_test(NAME public_safe_state_test COMMAND public_safe_state_test)
 
+add_executable(policy_boundary_compile_test tests/policy/policy_boundary_compile_test.cpp)
+target_include_directories(policy_boundary_compile_test PRIVATE
+                           "${CMAKE_SOURCE_DIR}/include")
+add_test(NAME policy_boundary_compile_test COMMAND policy_boundary_compile_test)
+
 if(DEFINED ENV{OCGFORGE_PHASE1_RAW_ROOT} AND
    DEFINED ENV{OCGFORGE_PHASE1_POST_RAW_ROOT} AND
    DEFINED ENV{OCGFORGE_PHASE1_EXPECTED_HEAD} AND

@@ -52,6 +52,8 @@ private:
         PublicEnvironmentObservationInput& output) noexcept;
 };
 
+using PublicEnvironmentObservation = PublicEnvironmentObservationInput;
+
 // Serializes exactly the perspective-safe state owned by PlayerObservation.
 // Internal observation metadata and attached decision identity are excluded.
 std::vector<std::uint8_t> canonical_public_safe_state_bytes(
