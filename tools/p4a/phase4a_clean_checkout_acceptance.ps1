@@ -285,8 +285,12 @@ function Get-SemanticArtifactRecords {
 
 function Get-NormalRunLabels {
     return @(
+        'debug-configure',
+        'debug-build',
         'focused-policy-ctest',
         'debug-normal-ctest',
+        'release-configure',
+        'release-build',
         'release-normal-ctest',
         'repository-python',
         'm3-python',
@@ -305,7 +309,8 @@ function Get-NormalRunLabels {
 function Get-HeavyRunDescriptor {
     param(
         [Parameter(Mandatory = $false)][object]$Run,
-        [Parameter(Mandatory = $true)][string]$RequiredText
+        [Parameter(Mandatory = $true)][string]$RequiredText,
+        [Parameter(Mandatory = $false)][object]$SemanticArtifact
     )
     if ($null -eq $Run) {
         return $null
@@ -335,6 +340,13 @@ function Get-HeavyRunDescriptor {
         output_sha256 = $outputSha256
         output_contains_required_text = [bool]$containsRequiredText
         test_counts = $counts
+        semantic_artifact = if ($null -eq $SemanticArtifact) { $null } else {
+            [ordered]@{
+                role = [string]$SemanticArtifact.role
+                sha256 = [string]$SemanticArtifact.sha256
+                bytes = [int64]$SemanticArtifact.bytes
+            }
+        }
     }
 }
 
@@ -343,15 +355,214 @@ function Test-HeavyEvidenceRunPass {
     return $null -ne $Run -and
         [string]$Run.result -eq 'PASS' -and
         [int]$Run.exit_code -eq 0 -and
-        [bool]$Run.output_contains_required_text
+        [bool]$Run.output_contains_required_text -and
+        ($Run.label -ne 'heavy-lifecycle-stress' -or $null -ne $Run.semantic_artifact)
+}
+
+function Get-LifecycleSemanticArtifact {
+    param([Parameter(Mandatory = $true)][object[]]$Artifacts)
+    $matches = @($Artifacts | Where-Object {
+            $_.path -like '*/m4/lifecycle_stress.json'
+        })
+    if ($matches.Count -ne 1) {
+        return $null
+    }
+    return [ordered]@{
+        role = 'lifecycle-stress'
+        sha256 = [string]$matches[0].sha256
+        bytes = [int64]$matches[0].bytes
+    }
+}
+
+function Get-ReportRunsByLabel {
+    param(
+        [Parameter(Mandatory = $true)][object]$Report,
+        [Parameter(Mandatory = $true)][string]$Label
+    )
+    return @($Report.runs | Where-Object { $_.label -eq $Label })
+}
+
+function Get-TestCountsFingerprint {
+    param([Parameter(Mandatory = $false)][object]$Counts)
+    if ($null -eq $Counts) {
+        return '<null>'
+    }
+    return ([string]$Counts.kind) + '|' +
+        ([string]$Counts.passed) + '|' +
+        ([string]$Counts.failed) + '|' +
+        ([string]$Counts.total)
+}
+
+function Assert-ExpectedGateStatuses {
+    param([Parameter(Mandatory = $true)][object]$Report)
+    Assert-GateIds @($Report.gates)
+    foreach ($number in 0..28) {
+        $gateId = 'P4A-G{0:D2}' -f $number
+        $gate = @($Report.gates | Where-Object { $_.gate -eq $gateId })[0]
+        if ($gate.status -ne 'PASS') {
+            throw "$gateId must be PASS in an exact acceptance report"
+        }
+    }
+    $g29 = @($Report.gates | Where-Object { $_.gate -eq 'P4A-G29' })[0]
+    if ($g29.status -ne 'NOT_RUN') {
+        throw 'P4A-G29 must be NOT_RUN before finalization'
+    }
+}
+
+function Assert-HeavyRunDescriptor {
+    param(
+        [Parameter(Mandatory = $true)][object]$Report,
+        [Parameter(Mandatory = $false)][object]$Descriptor,
+        [Parameter(Mandatory = $true)][string]$Label
+    )
+    $runs = @(Get-ReportRunsByLabel $Report $Label)
+    if ($runs.Count -ne 1) {
+        throw "exact acceptance report must contain exactly one run labeled $Label"
+    }
+    if ($null -eq $Descriptor) {
+        throw "heavy evidence descriptor is missing for $Label"
+    }
+    $run = $runs[0]
+    if ([string]$Descriptor.label -ne $Label -or [string]$run.label -ne $Label) {
+        throw "heavy evidence label mismatch for $Label"
+    }
+    if ([string]$Descriptor.result -ne 'PASS' -or [string]$run.result -ne 'PASS') {
+        throw "heavy evidence run must be PASS for $Label"
+    }
+    if ([int]$Descriptor.exit_code -ne 0 -or [int]$run.exit_code -ne 0) {
+        throw "heavy evidence run must have exit code 0 for $Label"
+    }
+    if ($null -eq $run.output_summary -or
+        [string]::IsNullOrWhiteSpace([string]$run.output_summary.sha256) -or
+        [string]$Descriptor.output_sha256 -ne [string]$run.output_summary.sha256) {
+        throw "heavy evidence output SHA mismatch for $Label"
+    }
+    if ([bool]$Descriptor.output_contains_required_text -ne $true) {
+        throw "heavy evidence required output text is absent for $Label"
+    }
+    if ((Get-TestCountsFingerprint $Descriptor.test_counts) -ne
+        (Get-TestCountsFingerprint $run.test_counts)) {
+        throw "heavy evidence test-count mismatch for $Label"
+    }
+    return $run
+}
+
+function Assert-LifecycleArtifactBinding {
+    param(
+        [Parameter(Mandatory = $true)][object]$Report,
+        [Parameter(Mandatory = $true)][object]$LifecycleDescriptor
+    )
+    $artifactRecords = @($Report.artifacts | Where-Object {
+            $_.path -like '*/m4/lifecycle_stress.json'
+        })
+    if ($artifactRecords.Count -ne 1) {
+        throw 'exact acceptance report must contain exactly one lifecycle-stress artifact record'
+    }
+    $semanticRecords = @($Report.semantic_fingerprint.semantic_artifacts | Where-Object {
+            ($null -ne $_.role -and $_.role -eq 'lifecycle-stress') -or
+            ($null -ne $_.path -and $_.path -like '*/m4/lifecycle_stress.json')
+        })
+    if ($semanticRecords.Count -ne 1) {
+        throw 'exact acceptance report must contain exactly one lifecycle-stress semantic artifact'
+    }
+    $descriptorArtifact = $LifecycleDescriptor.semantic_artifact
+    if ($null -eq $descriptorArtifact -or
+        [string]$descriptorArtifact.role -ne 'lifecycle-stress') {
+        throw 'lifecycle heavy evidence is missing its semantic artifact binding'
+    }
+    $artifact = $artifactRecords[0]
+    $semantic = $semanticRecords[0]
+    foreach ($candidate in @($artifact, $semantic)) {
+        if ([string]$candidate.sha256 -ne [string]$descriptorArtifact.sha256 -or
+            [int64]$candidate.bytes -ne [int64]$descriptorArtifact.bytes) {
+            throw 'lifecycle heavy evidence does not match its artifact record'
+        }
+    }
+}
+
+function Assert-HExecAcceptanceReport {
+    param([Parameter(Mandatory = $true)][object]$Report)
+    if ($Report.schema_version -ne 'ocgforge.phase4a_acceptance.v1' -or
+        $Report.acceptance_profile -ne 'h-exec-fast-normal-plus-heavy' -or
+        $Report.heavy_evidence_mode -ne 'executed-at-h-exec' -or
+        $Report.status -ne 'INCOMPLETE' -or
+        $Report.source_head.ToLowerInvariant() -ne $expected -or
+        $Report.h_exec.ToLowerInvariant() -ne $expected) {
+        throw 'heavy evidence report has the wrong exact H_exec profile or source binding'
+    }
+    Assert-ExpectedGateStatuses $Report
+    if ($null -eq $Report.runtime_budget -or
+        $Report.runtime_budget.heavy_inherited -ne $false) {
+        throw 'H_exec runtime budget must state heavy_inherited=false'
+    }
+    foreach ($runtimeField in @('normal_seconds', 'heavy_seconds', 'measured_seconds', 'combined_acceptance_seconds')) {
+        $runtimeValue = $Report.runtime_budget.$runtimeField
+        if ($null -eq $runtimeValue -or [double]$runtimeValue -lt 0) {
+            throw "H_exec runtime budget is missing a valid $runtimeField value"
+        }
+    }
+    $heavyLabels = @('heavy-replay-release', 'heavy-lifecycle-stress')
+    $heavyRuns = @($Report.runs | Where-Object { $_.label -in $heavyLabels })
+    if ($heavyRuns.Count -ne 2) {
+        throw 'H_exec report must contain exactly two Heavy runs'
+    }
+    $forbiddenOldHeavyLabels = @('debug-full-ctest', 'release-full-ctest', 'm4-lifecycle-stress')
+    if (@($Report.runs | Where-Object { $_.label -in $forbiddenOldHeavyLabels }).Count -ne 0) {
+        throw 'H_exec report contains an obsolete or duplicate Heavy run label'
+    }
+    if ($null -eq $Report.heavy_evidence -or
+        $Report.heavy_evidence.source_head.ToLowerInvariant() -ne $expected) {
+        throw 'H_exec report is missing exact heavy evidence provenance'
+    }
+    $replayRun = Assert-HeavyRunDescriptor $Report $Report.heavy_evidence.replay 'heavy-replay-release'
+    $replayCounts = $Report.heavy_evidence.replay.test_counts
+    if ($null -eq $replayCounts -or
+        $replayCounts.kind -ne 'CTest' -or
+        [int]$replayCounts.passed -ne 1 -or
+        [int]$replayCounts.failed -ne 0 -or
+        [int]$replayCounts.total -ne 1) {
+        throw 'Heavy Replay evidence must be exactly CTest 1/1'
+    }
+    $null = $replayRun
+    $null = Assert-HeavyRunDescriptor $Report $Report.heavy_evidence.lifecycle 'heavy-lifecycle-stress'
+    Assert-LifecycleArtifactBinding $Report $Report.heavy_evidence.lifecycle
+    return $Report.heavy_evidence
+}
+
+function Assert-CleanAcceptanceReport {
+    param([Parameter(Mandatory = $true)][object]$Report)
+    if ($Report.schema_version -ne 'ocgforge.phase4a_acceptance.v1' -or
+        $Report.acceptance_profile -ne 'clean-checkout-fast-normal' -or
+        $Report.heavy_evidence_mode -ne 'inherited-exact-h-exec' -or
+        $Report.status -ne 'INCOMPLETE' -or
+        $Report.source_head.ToLowerInvariant() -ne $expected -or
+        $Report.h_exec.ToLowerInvariant() -ne $expected) {
+        throw 'clean report has the wrong exact source or acceptance profile'
+    }
+    Assert-ExpectedGateStatuses $Report
+    if ($null -eq $Report.runtime_budget -or
+        $Report.runtime_budget.heavy_inherited -ne $true) {
+        throw 'clean report runtime budget must state heavy_inherited=true'
+    }
+    $heavyLabels = @('heavy-replay-release', 'heavy-lifecycle-stress', 'debug-full-ctest', 'release-full-ctest', 'm4-lifecycle-stress')
+    if (@($Report.runs | Where-Object { $_.label -in $heavyLabels }).Count -ne 0) {
+        throw 'clean report must contain zero Heavy runs'
+    }
+    if ($null -eq $Report.heavy_evidence) {
+        throw 'clean report is missing inherited heavy evidence'
+    }
 }
 
 function New-HeavyEvidenceFromRuns {
-    param([Parameter(Mandatory = $true)][string]$SourceHead)
+    param(
+        [Parameter(Mandatory = $true)][string]$SourceHead,
+        [Parameter(Mandatory = $true)][object[]]$Artifacts
+    )
+    $lifecycleArtifact = Get-LifecycleSemanticArtifact $Artifacts
     return [ordered]@{
         source_head = $SourceHead
         replay = Get-HeavyRunDescriptor $script:Runs['heavy-replay-release'] 'trajectory_replay_admission_test'
-        lifecycle = Get-HeavyRunDescriptor $script:Runs['heavy-lifecycle-stress'] 'test_result_then_exit_never_publishes_passed_under_repeated_scheduling'
+        lifecycle = Get-HeavyRunDescriptor $script:Runs['heavy-lifecycle-stress'] 'test_result_then_exit_never_publishes_passed_under_repeated_scheduling' $lifecycleArtifact
     }
 }
 
@@ -361,29 +572,7 @@ function Import-HeavyEvidence {
         throw "exact H_exec heavy evidence report is missing: $PathValue"
     }
     $report = Get-Content -LiteralPath $PathValue -Raw | ConvertFrom-Json
-    if ($report.schema_version -ne 'ocgforge.phase4a_acceptance.v1' -or
-        $report.source_head.ToLowerInvariant() -ne $expected -or
-        $report.h_exec.ToLowerInvariant() -ne $expected) {
-        throw 'heavy evidence report is not bound to the requested exact H_exec'
-    }
-    Assert-GateIds @($report.gates)
-    $gateMap = @{}
-    foreach ($gate in @($report.gates)) {
-        $gateMap[$gate.gate] = $gate.status
-    }
-    if ($gateMap['P4A-G03'] -ne 'PASS' -or $gateMap['P4A-G26'] -ne 'PASS') {
-        throw 'exact H_exec heavy evidence requires passing P4A-G03 and P4A-G26'
-    }
-    if ($null -eq $report.runtime_budget -or $null -eq $report.runtime_budget.heavy_seconds) {
-        throw 'exact H_exec heavy evidence must include measured runtime budget evidence'
-    }
-    $evidence = $report.heavy_evidence
-    if ($null -eq $evidence -or
-        $evidence.source_head.ToLowerInvariant() -ne $expected -or
-        -not (Test-HeavyEvidenceRunPass $evidence.replay) -or
-        -not (Test-HeavyEvidenceRunPass $evidence.lifecycle)) {
-        throw 'exact H_exec heavy evidence is incomplete or failed'
-    }
+    $evidence = Assert-HExecAcceptanceReport $report
     $script:ImportedHeavyReport = $report
     return $evidence
 }
@@ -624,8 +813,9 @@ if ([string]::IsNullOrWhiteSpace($FinalizeFrom)) {
         core_patchset_id = $lock.rule_affecting_inputs.core.patchset.id
         core_patchset_sha256 = $lock.rule_affecting_inputs.core.patchset.sha256
     }
+    $artifacts = @(Get-ArtifactRecords)
     if (-not $SkipHeavy) {
-        $script:HeavyEvidence = New-HeavyEvidenceFromRuns $resolvedHead
+        $script:HeavyEvidence = New-HeavyEvidenceFromRuns $resolvedHead $artifacts
     }
     $heavyReplayPass = Test-HeavyEvidenceRunPass $script:HeavyEvidence.replay
     $heavyLifecyclePass = Test-HeavyEvidenceRunPass $script:HeavyEvidence.lifecycle
@@ -667,7 +857,6 @@ if ([string]::IsNullOrWhiteSpace($FinalizeFrom)) {
         (New-Gate 'P4A-G29' 'Evidence is reproducible from a clean checkout' 'A separate exact-head report must match all local semantic gates, semantic fingerprints, and stable artifact hashes.' @('clean-checkout-reproduction') 'NOT_RUN')
     )
     Assert-GateIds $gates
-    $artifacts = @(Get-ArtifactRecords)
     $sourceBase = Get-GitValue @('merge-base', $resolvedHead, 'origin/main')
     $report = [ordered]@{
         schema_version = 'ocgforge.phase4a_acceptance.v1'
@@ -714,41 +903,79 @@ if ($baseReport.source_head.ToLowerInvariant() -ne $expected -or
     throw 'clean-checkout comparison is not bound to the requested H_exec'
 }
 
+try {
+    $null = Assert-HExecAcceptanceReport $baseReport
+    $baseProfileValid = $true
+    $baseProfileError = $null
+} catch {
+    $baseProfileValid = $false
+    $baseProfileError = $_.Exception.Message
+}
+try {
+    $null = Assert-CleanAcceptanceReport $referenceReport
+    $cleanProfileValid = $true
+    $cleanProfileError = $null
+} catch {
+    $cleanProfileValid = $false
+    $cleanProfileError = $_.Exception.Message
+}
+
+$profileMatch = $baseProfileValid -and $cleanProfileValid
+$heavyEvidenceMatch = $false
+if ($profileMatch) {
+    $baseHeavyEvidenceJson = $baseReport.heavy_evidence | ConvertTo-Json -Depth 30 -Compress
+    $referenceHeavyEvidenceJson = $referenceReport.heavy_evidence | ConvertTo-Json -Depth 30 -Compress
+    $heavyEvidenceMatch = $baseHeavyEvidenceJson -eq $referenceHeavyEvidenceJson
+}
+
 $baseGateMap = @{}
 $referenceGateMap = @{}
-foreach ($gate in $baseReport.gates) { $baseGateMap[$gate.gate] = $gate.status }
-foreach ($gate in $referenceReport.gates) { $referenceGateMap[$gate.gate] = $gate.status }
-Assert-GateIds $baseReport.gates
-Assert-GateIds $referenceReport.gates
-$semanticGateMatch = $true
-foreach ($gateId in $baseGateMap.Keys) {
-    if ($gateId -eq 'P4A-G29') { continue }
-    if ($baseGateMap[$gateId] -ne 'PASS' -or $referenceGateMap[$gateId] -ne $baseGateMap[$gateId]) {
-        $semanticGateMatch = $false
+$semanticGateMatch = $false
+if ($profileMatch) {
+    foreach ($gate in $baseReport.gates) { $baseGateMap[$gate.gate] = $gate.status }
+    foreach ($gate in $referenceReport.gates) { $referenceGateMap[$gate.gate] = $gate.status }
+    $semanticGateMatch = $true
+    foreach ($gateId in $baseGateMap.Keys) {
+        if ($gateId -eq 'P4A-G29') { continue }
+        if ($baseGateMap[$gateId] -ne 'PASS' -or $referenceGateMap[$gateId] -ne $baseGateMap[$gateId]) {
+            $semanticGateMatch = $false
+        }
     }
 }
-$baseArtifacts = @($baseReport.semantic_fingerprint.semantic_artifacts | ForEach-Object {
-        if ($null -ne $_.role) { "$($_.role)|$($_.bytes)|$($_.sha256)" }
-        else { "$($_.path)|$($_.bytes)|$($_.sha256)" }
-    } | Sort-Object)
-$referenceArtifacts = @($referenceReport.semantic_fingerprint.semantic_artifacts | ForEach-Object {
-        if ($null -ne $_.role) { "$($_.role)|$($_.bytes)|$($_.sha256)" }
-        else { "$($_.path)|$($_.bytes)|$($_.sha256)" }
-    } | Sort-Object)
-$artifactHashMatch = (($baseArtifacts -join "`n") -eq ($referenceArtifacts -join "`n"))
-$baseSemanticFingerprint = $baseReport.semantic_fingerprint | ConvertTo-Json -Depth 30 -Compress
-$referenceSemanticFingerprint = $referenceReport.semantic_fingerprint | ConvertTo-Json -Depth 30 -Compress
-$semanticFingerprintMatch = $baseSemanticFingerprint -eq $referenceSemanticFingerprint
 
-$finalGate = New-Gate 'P4A-G29' 'Evidence is reproducible from a clean checkout' 'The exact H_exec clean-checkout report matches all local semantic gate results, semantic fingerprints, and stable artifact hashes.' @('clean-checkout-reproduction') $(if ($semanticGateMatch -and $semanticFingerprintMatch -and $artifactHashMatch) { 'PASS' } else { 'FAIL' })
+$artifactHashMatch = $false
+$semanticFingerprintMatch = $false
+if ($profileMatch) {
+    $baseArtifacts = @($baseReport.semantic_fingerprint.semantic_artifacts | ForEach-Object {
+            if ($null -ne $_.role) { "$($_.role)|$($_.bytes)|$($_.sha256)" }
+            else { "$($_.path)|$($_.bytes)|$($_.sha256)" }
+        } | Sort-Object)
+    $referenceArtifacts = @($referenceReport.semantic_fingerprint.semantic_artifacts | ForEach-Object {
+            if ($null -ne $_.role) { "$($_.role)|$($_.bytes)|$($_.sha256)" }
+            else { "$($_.path)|$($_.bytes)|$($_.sha256)" }
+        } | Sort-Object)
+    $artifactHashMatch = (($baseArtifacts -join "`n") -eq ($referenceArtifacts -join "`n"))
+    $baseSemanticFingerprint = $baseReport.semantic_fingerprint | ConvertTo-Json -Depth 30 -Compress
+    $referenceSemanticFingerprint = $referenceReport.semantic_fingerprint | ConvertTo-Json -Depth 30 -Compress
+    $semanticFingerprintMatch = $baseSemanticFingerprint -eq $referenceSemanticFingerprint
+}
+
+$finalizationMatch = $profileMatch -and $heavyEvidenceMatch -and $semanticGateMatch -and $semanticFingerprintMatch -and $artifactHashMatch
+$finalGate = New-Gate 'P4A-G29' 'Evidence is reproducible from a clean checkout' 'The exact H_exec and clean-checkout profiles, Heavy-run cardinalities, inherited Heavy evidence, semantic fingerprints, and stable artifact hashes all match.' @('clean-checkout-reproduction') $(if ($finalizationMatch) { 'PASS' } else { 'FAIL' })
 $finalGates = @($baseReport.gates | Where-Object { $_.gate -ne 'P4A-G29' })
 $finalGates += $finalGate
 $baseReport.gates = $finalGates
-$baseReport.status = if ($semanticGateMatch -and $semanticFingerprintMatch -and $artifactHashMatch -and (@($finalGates | Where-Object { $_.status -eq 'FAIL' }).Count -eq 0)) { 'PASS' } else { 'FAIL' }
+$baseReport.status = if ($finalizationMatch -and (@($finalGates | Where-Object { $_.status -eq 'FAIL' }).Count -eq 0)) { 'PASS' } else { 'FAIL' }
 $baseReport.reproduction = [ordered]@{
-    status = if ($semanticGateMatch -and $semanticFingerprintMatch -and $artifactHashMatch) { 'PASS' } else { 'FAIL' }
+    status = if ($finalizationMatch) { 'PASS' } else { 'FAIL' }
     clean_checkout_report = Get-RepoRelativePath $referencePath
     clean_checkout_report_sha256 = Get-FileSha256 $referencePath
+    profile_match = $profileMatch
+    base_profile_valid = $baseProfileValid
+    clean_profile_valid = $cleanProfileValid
+    base_profile_error = $baseProfileError
+    clean_profile_error = $cleanProfileError
+    heavy_evidence_match = $heavyEvidenceMatch
     semantic_gate_match = $semanticGateMatch
     semantic_fingerprint_match = $semanticFingerprintMatch
     artifact_hash_match = $artifactHashMatch
