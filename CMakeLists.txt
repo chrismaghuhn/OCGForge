@@ -241,6 +241,9 @@ target_include_directories(trajectory_replay_admission_test PRIVATE
                            "${CMAKE_SOURCE_DIR}/src/environment")
 target_link_libraries(trajectory_replay_admission_test PRIVATE ygo_trajectory)
 add_test(NAME trajectory_replay_admission_test COMMAND trajectory_replay_admission_test)
+set_tests_properties(trajectory_replay_admission_test PROPERTIES
+    LABELS "P4A_HEAVY_REPLAY"
+)
 
 add_executable(trajectory_receipt_test tests/trajectory/receipt_test.cpp)
 target_link_libraries(trajectory_receipt_test PRIVATE ygo_trajectory)
@@ -855,6 +858,17 @@ add_test(NAME m4_failure_isolation_test
 )
 set_tests_properties(m4_failure_isolation_test PROPERTIES
     WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    LABELS "M4_HEAVY_LIFECYCLE"
+)
+
+add_test(NAME m4_failure_isolation_fast_test
+    COMMAND "${Python3_EXECUTABLE}" -m unittest
+            tests.m4.test_failure_isolation.FailureIsolationTests.test_result_then_exit_is_not_published_as_primary_evidence
+            -v
+)
+set_tests_properties(m4_failure_isolation_fast_test PROPERTIES
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    LABELS "M4_FAST"
 )
 
 add_test(NAME m4_worker_integration_test

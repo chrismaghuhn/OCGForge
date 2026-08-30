@@ -5,7 +5,9 @@ param(
     [string]$ExpectedHead,
     [string]$OutputDirectory,
     [string]$ArtifactDirectory,
-    [string]$FinalizeFrom
+    [string]$FinalizeFrom,
+    [switch]$SkipHeavy,
+    [string]$HeavyEvidenceFrom
 )
 
 $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..')).Path
@@ -103,6 +105,8 @@ function Get-OutputCounts {
 
 $script:Runs = [ordered]@{}
 $script:RunOutputs = @{}
+$script:HeavyEvidence = $null
+$script:ImportedHeavyReport = $null
 
 function Invoke-Recorded {
     param(
@@ -241,6 +245,149 @@ function Get-ArtifactRecords {
     return $records
 }
 
+function Get-SemanticArtifactRecords {
+    param([Parameter(Mandatory = $true)][object[]]$Artifacts)
+    $records = @()
+    foreach ($artifact in @($Artifacts)) {
+        $role = $null
+        if ($artifact.path -like '*/m4/full_game/full_fixed_deck_results.json') {
+            $role = 'canonical-full-game'
+        } elseif ($artifact.path -like '*/m4/lifecycle_stress.json') {
+            $role = 'lifecycle-stress'
+        }
+        if ($null -ne $role) {
+            $records += [ordered]@{
+                role = $role
+                sha256 = $artifact.sha256
+                bytes = $artifact.bytes
+            }
+        }
+    }
+
+    if ($SkipHeavy -and $null -ne $script:ImportedHeavyReport) {
+        $importedLifecycle = @($script:ImportedHeavyReport.semantic_fingerprint.semantic_artifacts | Where-Object {
+                ($null -ne $_.role -and $_.role -eq 'lifecycle-stress') -or
+                ($null -ne $_.path -and $_.path -like '*/m4/lifecycle_stress.json')
+            })
+        if ($importedLifecycle.Count -ne 1) {
+            throw 'exact H_exec heavy evidence must contain exactly one lifecycle-stress artifact'
+        }
+        $lifecycle = $importedLifecycle[0]
+        $records = @($records | Where-Object { $_.role -ne 'lifecycle-stress' })
+        $records += [ordered]@{
+            role = 'lifecycle-stress'
+            sha256 = $lifecycle.sha256
+            bytes = $lifecycle.bytes
+        }
+    }
+    return @($records | Sort-Object role)
+}
+
+function Get-NormalRunLabels {
+    return @(
+        'focused-policy-ctest',
+        'debug-normal-ctest',
+        'release-normal-ctest',
+        'repository-python',
+        'm3-python',
+        'm4-python',
+        'public-fact-matrix',
+        'rules-deck-identity',
+        'policy-determinism',
+        'policy-boundary',
+        'rules-bundle-verification',
+        'production-identity-source-scan',
+        'm4-canonical-full-game',
+        'm4-recommended-concurrency-soak'
+    )
+}
+
+function Get-HeavyRunDescriptor {
+    param(
+        [Parameter(Mandatory = $false)][object]$Run,
+        [Parameter(Mandatory = $true)][string]$RequiredText
+    )
+    if ($null -eq $Run) {
+        return $null
+    }
+    $outputSha256 = ''
+    if ($null -ne $Run.output_summary) {
+        $outputSha256 = [string]$Run.output_summary.sha256
+    }
+    $containsRequiredText = $false
+    $runLabel = [string]$Run.label
+    if ($script:RunOutputs.ContainsKey($runLabel)) {
+        $containsRequiredText = $script:RunOutputs[$runLabel] -match [regex]::Escape($RequiredText)
+    }
+    $counts = $null
+    if ($null -ne $Run.test_counts) {
+        $counts = [ordered]@{
+            kind = [string]$Run.test_counts.kind
+            passed = [int]$Run.test_counts.passed
+            failed = [int]$Run.test_counts.failed
+            total = [int]$Run.test_counts.total
+        }
+    }
+    return [ordered]@{
+        label = $runLabel
+        result = [string]$Run.result
+        exit_code = [int]$Run.exit_code
+        output_sha256 = $outputSha256
+        output_contains_required_text = [bool]$containsRequiredText
+        test_counts = $counts
+    }
+}
+
+function Test-HeavyEvidenceRunPass {
+    param([Parameter(Mandatory = $false)][object]$Run)
+    return $null -ne $Run -and
+        [string]$Run.result -eq 'PASS' -and
+        [int]$Run.exit_code -eq 0 -and
+        [bool]$Run.output_contains_required_text
+}
+
+function New-HeavyEvidenceFromRuns {
+    param([Parameter(Mandatory = $true)][string]$SourceHead)
+    return [ordered]@{
+        source_head = $SourceHead
+        replay = Get-HeavyRunDescriptor $script:Runs['heavy-replay-release'] 'trajectory_replay_admission_test'
+        lifecycle = Get-HeavyRunDescriptor $script:Runs['heavy-lifecycle-stress'] 'test_result_then_exit_never_publishes_passed_under_repeated_scheduling'
+    }
+}
+
+function Import-HeavyEvidence {
+    param([Parameter(Mandatory = $true)][string]$PathValue)
+    if (-not (Test-Path -LiteralPath $PathValue -PathType Leaf)) {
+        throw "exact H_exec heavy evidence report is missing: $PathValue"
+    }
+    $report = Get-Content -LiteralPath $PathValue -Raw | ConvertFrom-Json
+    if ($report.schema_version -ne 'ocgforge.phase4a_acceptance.v1' -or
+        $report.source_head.ToLowerInvariant() -ne $expected -or
+        $report.h_exec.ToLowerInvariant() -ne $expected) {
+        throw 'heavy evidence report is not bound to the requested exact H_exec'
+    }
+    Assert-GateIds @($report.gates)
+    $gateMap = @{}
+    foreach ($gate in @($report.gates)) {
+        $gateMap[$gate.gate] = $gate.status
+    }
+    if ($gateMap['P4A-G03'] -ne 'PASS' -or $gateMap['P4A-G26'] -ne 'PASS') {
+        throw 'exact H_exec heavy evidence requires passing P4A-G03 and P4A-G26'
+    }
+    if ($null -eq $report.runtime_budget -or $null -eq $report.runtime_budget.heavy_seconds) {
+        throw 'exact H_exec heavy evidence must include measured runtime budget evidence'
+    }
+    $evidence = $report.heavy_evidence
+    if ($null -eq $evidence -or
+        $evidence.source_head.ToLowerInvariant() -ne $expected -or
+        -not (Test-HeavyEvidenceRunPass $evidence.replay) -or
+        -not (Test-HeavyEvidenceRunPass $evidence.lifecycle)) {
+        throw 'exact H_exec heavy evidence is incomplete or failed'
+    }
+    $script:ImportedHeavyReport = $report
+    return $evidence
+}
+
 function Get-SemanticFingerprint {
     param([Parameter(Mandatory = $true)][object[]]$Gates, [Parameter(Mandatory = $true)][object[]]$Artifacts)
     $gateResults = [ordered]@{}
@@ -249,23 +396,55 @@ function Get-SemanticFingerprint {
             $gateResults[$gate.gate] = $gate.status
         }
     }
+    $normalLabels = @(Get-NormalRunLabels)
+    $normalResults = [ordered]@{}
     $counts = [ordered]@{}
-    foreach ($label in @('focused-policy-ctest', 'debug-full-ctest', 'release-full-ctest',
-                         'repository-python', 'm3-python', 'm4-python')) {
+    foreach ($label in $normalLabels) {
+        if ($script:Runs.Contains($label)) {
+            $normalResults[$label] = $script:Runs[$label].result
+        } else {
+            $normalResults[$label] = 'NOT_RUN'
+        }
         if ($script:Runs.Contains($label) -and $null -ne $script:Runs[$label].test_counts) {
             $counts[$label] = $script:Runs[$label].test_counts
         }
     }
-    $semanticArtifacts = @($Artifacts | Where-Object {
-            $_.path -like '*/m4/full_game/full_fixed_deck_results.json' -or
-            $_.path -like '*/m4/lifecycle_stress.json'
-        } | ForEach-Object {
-            [ordered]@{ path = $_.path; sha256 = $_.sha256; bytes = $_.bytes }
-        })
+    $semanticArtifacts = @(Get-SemanticArtifactRecords $Artifacts)
     return [ordered]@{
         gate_results = $gateResults
+        normal_run_results = $normalResults
+        normal_command_counts = $counts
         command_counts = $counts
+        heavy_evidence = $script:HeavyEvidence
         semantic_artifacts = $semanticArtifacts
+    }
+}
+
+function Get-RuntimeBudget {
+    $normalSeconds = [double]0
+    foreach ($label in @(Get-NormalRunLabels)) {
+        if ($script:Runs.Contains($label)) {
+            $normalSeconds += [double]$script:Runs[$label].elapsed_seconds
+        }
+    }
+    $measuredHeavySeconds = [double]0
+    foreach ($label in @('heavy-replay-release', 'heavy-lifecycle-stress')) {
+        if ($script:Runs.Contains($label)) {
+            $measuredHeavySeconds += [double]$script:Runs[$label].elapsed_seconds
+        }
+    }
+    $heavySeconds = $measuredHeavySeconds
+    $heavyInherited = $false
+    if ($SkipHeavy -and $null -ne $script:ImportedHeavyReport) {
+        $heavySeconds = [double]$script:ImportedHeavyReport.runtime_budget.heavy_seconds
+        $heavyInherited = $true
+    }
+    return [ordered]@{
+        normal_seconds = [math]::Round($normalSeconds, 3)
+        heavy_seconds = [math]::Round($heavySeconds, 3)
+        measured_seconds = [math]::Round($normalSeconds + $measuredHeavySeconds, 3)
+        combined_acceptance_seconds = [math]::Round($normalSeconds + $heavySeconds, 3)
+        heavy_inherited = $heavyInherited
     }
 }
 
@@ -288,6 +467,8 @@ function Write-Reports {
     $lines.Add("| Status | ``$($renderReport.status)`` |")
     $lines.Add("| Source HEAD | ``$($renderReport.source_head)`` |")
     $lines.Add("| H_exec | ``$($renderReport.h_exec)`` |")
+    $lines.Add("| Acceptance profile | ``$($renderReport.acceptance_profile)`` |")
+    $lines.Add("| Heavy evidence | ``$($renderReport.heavy_evidence_mode)`` |")
     $lines.Add("| Rules bundle | ``$($renderReport.environment.rules_bundle_id)`` |")
     $lines.Add('')
     $lines.Add('## Gate matrix')
@@ -322,6 +503,12 @@ function Write-Reports {
         }
     }
     $lines.Add('')
+    $lines.Add('## Runtime budget')
+    $lines.Add('')
+    $lines.Add('| Normal seconds | Heavy seconds | Measured seconds | Combined acceptance seconds | Heavy inherited |')
+    $lines.Add('|---:|---:|---:|---:|---|')
+    $lines.Add("| $($renderReport.runtime_budget.normal_seconds) | $($renderReport.runtime_budget.heavy_seconds) | $($renderReport.runtime_budget.measured_seconds) | $($renderReport.runtime_budget.combined_acceptance_seconds) | $($renderReport.runtime_budget.heavy_inherited) |")
+    $lines.Add('')
     $lines.Add('## Scope and limitations')
     $lines.Add('')
     $lines.Add('- This report records executable evidence only; it does not implement TeacherCore or either StrategyProfile.')
@@ -344,6 +531,19 @@ if ($currentHead.ToLowerInvariant() -ne $expected) {
     throw "acceptance checkout is not exact H_exec: expected $expected, actual $currentHead"
 }
 
+if (-not [string]::IsNullOrWhiteSpace($FinalizeFrom)) {
+    if ($SkipHeavy -or -not [string]::IsNullOrWhiteSpace($HeavyEvidenceFrom)) {
+        throw '-SkipHeavy and -HeavyEvidenceFrom are only valid for a clean-checkout report'
+    }
+} elseif ($SkipHeavy) {
+    if ([string]::IsNullOrWhiteSpace($HeavyEvidenceFrom)) {
+        throw '-SkipHeavy requires -HeavyEvidenceFrom bound to the same H_exec'
+    }
+    $script:HeavyEvidence = Import-HeavyEvidence (Resolve-RepoPath $HeavyEvidenceFrom 'docs\p4a\p4a_acceptance.json')
+} elseif (-not [string]::IsNullOrWhiteSpace($HeavyEvidenceFrom)) {
+    throw '-HeavyEvidenceFrom requires -SkipHeavy'
+}
+
 if ([string]::IsNullOrWhiteSpace($FinalizeFrom)) {
     $statusOutput = @(& git -C $repoRoot status --porcelain 2>$null)
     if ($LASTEXITCODE -ne 0) {
@@ -354,17 +554,28 @@ if ([string]::IsNullOrWhiteSpace($FinalizeFrom)) {
         throw 'H_exec acceptance must start from a clean worktree'
     }
 
+    if (Test-Path -LiteralPath $artifactDirectory) {
+        $existingArtifacts = @(Get-ChildItem -LiteralPath $artifactDirectory -Recurse -File)
+        if ($existingArtifacts.Count -ne 0) {
+            throw "acceptance artifact directory must be empty before execution: $artifactDirectory"
+        }
+    }
     New-Item -ItemType Directory -Force -Path $artifactDirectory | Out-Null
     $focusedRegex = '^(trajectory_codec_test|trajectory_recorder_test|trajectory_shard_test|trajectory_restricted_evidence_test|trajectory_receipt_test|trajectory_dataset_manifest_test|public_action_identity_test|public_safe_state_test|policy_boundary_compile_test|policy_rng_test|random_legal_test|policy_runner_integration_test)$'
+    $nonHeavyCTestExclusion = '^(trajectory_replay_admission_test|m4_failure_isolation_test)$'
 
     $null = Invoke-Recorded 'debug-configure' 'cmake' @('--preset', 'dev-windows-zig') 'cmake --preset dev-windows-zig'
     $null = Invoke-Recorded 'debug-build' 'cmake' @('--build', '--preset', 'dev-windows-zig', '--parallel') 'cmake --build --preset dev-windows-zig --parallel'
     $null = Invoke-Recorded 'focused-policy-ctest' 'ctest' @('--preset', 'dev-windows-zig', '-R', $focusedRegex, '--output-on-failure') "ctest --preset dev-windows-zig -R $focusedRegex --output-on-failure"
-    $null = Invoke-Recorded 'debug-full-ctest' 'ctest' @('--preset', 'dev-windows-zig', '--output-on-failure') 'ctest --preset dev-windows-zig --output-on-failure'
+    $null = Invoke-Recorded 'debug-normal-ctest' 'ctest' @('--preset', 'dev-windows-zig', '-E', $nonHeavyCTestExclusion, '--output-on-failure') "ctest --preset dev-windows-zig -E $nonHeavyCTestExclusion --output-on-failure"
 
     $null = Invoke-Recorded 'release-configure' 'cmake' @('--preset', 'release-windows-zig') 'cmake --preset release-windows-zig'
     $null = Invoke-Recorded 'release-build' 'cmake' @('--build', '--preset', 'release-windows-zig', '--parallel') 'cmake --build --preset release-windows-zig --parallel'
-    $null = Invoke-Recorded 'release-full-ctest' 'ctest' @('--preset', 'release-windows-zig', '--output-on-failure') 'ctest --preset release-windows-zig --output-on-failure'
+    $null = Invoke-Recorded 'release-normal-ctest' 'ctest' @('--preset', 'release-windows-zig', '-E', $nonHeavyCTestExclusion, '--output-on-failure') "ctest --preset release-windows-zig -E $nonHeavyCTestExclusion --output-on-failure"
+
+    if (-not $SkipHeavy) {
+        $null = Invoke-Recorded 'heavy-replay-release' 'ctest' @('--preset', 'release-windows-zig', '-R', '^trajectory_replay_admission_test$', '--output-on-failure') 'ctest --preset release-windows-zig -R ^trajectory_replay_admission_test$ --output-on-failure'
+    }
 
     $null = Invoke-Recorded 'repository-python' 'python' @('-B', '-m', 'unittest', 'discover', '-s', 'tests/python', '-v') 'python -B -m unittest discover -s tests/python -v'
     $null = Invoke-Recorded 'm3-python' 'python' @('-B', '-m', 'unittest', 'discover', '-s', 'tests/m3', '-v') 'python -B -m unittest discover -s tests/m3 -v'
@@ -372,7 +583,7 @@ if ([string]::IsNullOrWhiteSpace($FinalizeFrom)) {
     $previousWorker = $env:YGO_M4_WORKER
     $env:YGO_M4_WORKER = 'build/windows-zig/ygo_m4_worker.exe'
     try {
-        $null = Invoke-Recorded 'm4-python' 'python' @('-B', '-m', 'unittest', 'discover', '-s', 'tests/m4', '-v') 'YGO_M4_WORKER=build/windows-zig/ygo_m4_worker.exe python -B -m unittest discover -s tests/m4 -v'
+        $null = Invoke-Recorded 'm4-python' 'python' @('-B', 'tools/m4/run_fast_suite.py', '-v') 'YGO_M4_WORKER=build/windows-zig/ygo_m4_worker.exe python -B tools/m4/run_fast_suite.py -v'
     } finally {
         if ($null -eq $previousWorker) {
             Remove-Item Env:YGO_M4_WORKER -ErrorAction SilentlyContinue
@@ -391,8 +602,10 @@ if ([string]::IsNullOrWhiteSpace($FinalizeFrom)) {
     $fullGameOutput = Get-RepoRelativePath (Join-Path $artifactDirectory 'm4\full_game')
     $null = Invoke-Recorded 'm4-canonical-full-game' 'python' @('-B', 'tests/m3/full_game/full_fixed_deck_test.py', '--probe', 'build/release-windows-zig/ygo_core_probe.exe', '--games', '16', '--max-steps', '2200', '--timeout', '300', '--output', $fullGameOutput) "python -B tests/m3/full_game/full_fixed_deck_test.py --probe build/release-windows-zig/ygo_core_probe.exe --games 16 --max-steps 2200 --timeout 300 --output $fullGameOutput"
 
-    $lifecycleOutput = Get-RepoRelativePath (Join-Path $artifactDirectory 'm4\lifecycle_stress.json')
-    $null = Invoke-Recorded 'm4-lifecycle-stress' 'python' @('-B', 'tools/m4/record_lifecycle_stress_evidence.py', '--repetitions', '5', '--internal-repetitions', '100', '--output', $lifecycleOutput) "python -B tools/m4/record_lifecycle_stress_evidence.py --repetitions 5 --internal-repetitions 100 --output $lifecycleOutput"
+    if (-not $SkipHeavy) {
+        $lifecycleOutput = Get-RepoRelativePath (Join-Path $artifactDirectory 'm4\lifecycle_stress.json')
+        $null = Invoke-Recorded 'heavy-lifecycle-stress' 'python' @('-B', 'tools/m4/record_lifecycle_stress_evidence.py', '--repetitions', '5', '--output', $lifecycleOutput) "python -B tools/m4/record_lifecycle_stress_evidence.py --repetitions 5 --output $lifecycleOutput"
+    }
 
     $soakOutput = Get-RepoRelativePath (Join-Path $artifactDirectory 'm4\soak.json')
     $null = Invoke-Recorded 'm4-recommended-concurrency-soak' 'python' @('-B', '-m', 'tools.m4.benchmark', '--worker-executable', 'build/release-windows-zig/ygo_m4_worker.exe', '--games', '128', '--workers', '16', '--master-seed', '20260815', '--mode', 'throughput', '--warmup-games', '4', '--observation-mode', 'full', '--output', $soakOutput) "python -B -m tools.m4.benchmark --worker-executable build/release-windows-zig/ygo_m4_worker.exe --games 128 --workers 16 --master-seed 20260815 --mode throughput --warmup-games 4 --observation-mode full --output $soakOutput"
@@ -411,12 +624,21 @@ if ([string]::IsNullOrWhiteSpace($FinalizeFrom)) {
         core_patchset_id = $lock.rule_affecting_inputs.core.patchset.id
         core_patchset_sha256 = $lock.rule_affecting_inputs.core.patchset.sha256
     }
+    if (-not $SkipHeavy) {
+        $script:HeavyEvidence = New-HeavyEvidenceFromRuns $resolvedHead
+    }
+    $heavyReplayPass = Test-HeavyEvidenceRunPass $script:HeavyEvidence.replay
+    $heavyLifecyclePass = Test-HeavyEvidenceRunPass $script:HeavyEvidence.lifecycle
+    $heavyReplayEvidence = if ($SkipHeavy) { "heavy-replay-release@$expected" } else { 'heavy-replay-release' }
+    $heavyLifecycleEvidence = if ($SkipHeavy) { "heavy-lifecycle-stress@$expected" } else { 'heavy-lifecycle-stress' }
+    $g03Pass = (Test-AllRunsPass @('release-configure', 'release-build', 'release-normal-ctest', 'm4-canonical-full-game', 'm4-recommended-concurrency-soak')) -and $heavyReplayPass -and $heavyLifecyclePass
+    $g26Pass = $heavyReplayPass
 
     $gates = @(
         (New-Gate 'P4A-G00' 'Public-fact sufficiency matrix is complete for the planned Teacher scope' 'All frozen rows have exact sources, executable evidence, availability, and explicit BLOCKED reasons.' @('public-fact-matrix') $(if (Test-RunPass 'public-fact-matrix') { 'PASS' } else { 'FAIL' })),
-        (New-Gate 'P4A-G01' 'Existing full CTest remains green' 'Debug configure, Debug build, and all currently registered Debug CTest tests pass.' @('debug-configure', 'debug-build', 'debug-full-ctest') $(if (Test-AllRunsPass @('debug-configure', 'debug-build', 'debug-full-ctest')) { 'PASS' } else { 'FAIL' })),
+        (New-Gate 'P4A-G01' 'Existing full CTest remains green' 'Debug configure, Debug build, and every non-heavy registered Debug CTest test pass; heavy tests are covered by their dedicated H_exec evidence.' @('debug-configure', 'debug-build', 'debug-normal-ctest') $(if (Test-AllRunsPass @('debug-configure', 'debug-build', 'debug-normal-ctest')) { 'PASS' } else { 'FAIL' })),
         (New-Gate 'P4A-G02' 'Existing Python verification remains green' 'Repository, M3, and M4 Python suites all pass.' @('repository-python', 'm3-python', 'm4-python') $(if (Test-AllRunsPass @('repository-python', 'm3-python', 'm4-python')) { 'PASS' } else { 'FAIL' })),
-        (New-Gate 'P4A-G03' 'Required M4 acceptance remains green' 'Release configure, Release build, Release CTest, fixed-game, lifecycle, and recommended-concurrency soak all pass.' @('release-configure', 'release-build', 'release-full-ctest', 'm4-canonical-full-game', 'm4-lifecycle-stress', 'm4-recommended-concurrency-soak') $(if (Test-AllRunsPass @('release-configure', 'release-build', 'release-full-ctest', 'm4-canonical-full-game', 'm4-lifecycle-stress', 'm4-recommended-concurrency-soak')) { 'PASS' } else { 'FAIL' })),
+        (New-Gate 'P4A-G03' 'Required M4 acceptance remains green' 'Release configure, Release build, non-heavy Release CTest, Heavy Replay, lifecycle stress, fixed-game, and recommended-concurrency soak all pass; clean checkouts inherit only the exact H_exec heavy evidence.' @('release-configure', 'release-build', 'release-normal-ctest', $heavyReplayEvidence, $heavyLifecycleEvidence, 'm4-canonical-full-game', 'm4-recommended-concurrency-soak') $(if ($g03Pass) { 'PASS' } else { 'FAIL' })),
         (New-Gate 'P4A-G04' 'Rules bundle and locked deck identities are unchanged' 'The frozen rules/deck identity test passes.' @('rules-deck-identity', 'rules-bundle-verification') $(if (Test-AllRunsPass @('rules-deck-identity', 'rules-bundle-verification')) { 'PASS' } else { 'FAIL' })),
         (New-Gate 'P4A-G05' 'PublicSafeState strict typed decode succeeds' 'The safe-state regression test passes.' @('focused-policy-ctest') $(if (Test-RunPass 'focused-policy-ctest') { 'PASS' } else { 'FAIL' })),
         (New-Gate 'P4A-G06' 'Typed safe-state round-trip is byte-identical' 'The focused public-safe/action identity tests pass.' @('focused-policy-ctest') $(if (Test-RunPass 'focused-policy-ctest') { 'PASS' } else { 'FAIL' })),
@@ -439,7 +661,7 @@ if ([string]::IsNullOrWhiteSpace($FinalizeFrom)) {
         (New-Gate 'P4A-G23' 'Policy state resets and isolates episodes/participants' 'The policy determinism probe proves fresh cursor and interleaving isolation.' @('policy-determinism') $(if (Test-RunPass 'policy-determinism') { 'PASS' } else { 'FAIL' })),
         (New-Gate 'P4A-G24' 'Policy-origin StepRejected creates zero record and quarantine' 'The Runner integration test proves no retry and quarantine.' @('focused-policy-ctest') $(if (Test-RunPass 'focused-policy-ctest') { 'PASS' } else { 'FAIL' })),
         (New-Gate 'P4A-G25' 'RandomLegal accepted actions record trusted provenance' 'The Runner integration test proves exact accepted attribution.' @('focused-policy-ctest') $(if (Test-RunPass 'focused-policy-ctest') { 'PASS' } else { 'FAIL' })),
-        (New-Gate 'P4A-G26' 'V2 semantic replay admission remains strict' 'Both full CTest runs pass and both outputs include trajectory_replay_admission_test.' @('debug-full-ctest', 'release-full-ctest') $(if ((Test-RunPass 'debug-full-ctest') -and (Test-RunPass 'release-full-ctest') -and ($script:RunOutputs['debug-full-ctest'] -match 'trajectory_replay_admission_test') -and ($script:RunOutputs['release-full-ctest'] -match 'trajectory_replay_admission_test')) { 'PASS' } else { 'FAIL' })),
+        (New-Gate 'P4A-G26' 'V2 semantic replay admission remains strict' 'The dedicated Release Heavy Replay command exits zero and runs trajectory_replay_admission_test; clean checkouts use the exact H_exec result without rerunning it.' @($heavyReplayEvidence) $(if ($g26Pass) { 'PASS' } else { 'FAIL' })),
         (New-Gate 'P4A-G27' 'Candidate shard, restricted evidence, receipt, and DatasetManifest integrate' 'The Runner integration test proves all persistence artifacts.' @('focused-policy-ctest') $(if (Test-RunPass 'focused-policy-ctest') { 'PASS' } else { 'FAIL' })),
         (New-Gate 'P4A-G28' 'Public-fact matrix is complete and executable' 'The matrix validator passes at the frozen source head.' @('public-fact-matrix') $(if (Test-RunPass 'public-fact-matrix') { 'PASS' } else { 'FAIL' })),
         (New-Gate 'P4A-G29' 'Evidence is reproducible from a clean checkout' 'A separate exact-head report must match all local semantic gates, semantic fingerprints, and stable artifact hashes.' @('clean-checkout-reproduction') 'NOT_RUN')
@@ -450,6 +672,8 @@ if ([string]::IsNullOrWhiteSpace($FinalizeFrom)) {
     $report = [ordered]@{
         schema_version = 'ocgforge.phase4a_acceptance.v1'
         status = if (@($gates | Where-Object { $_.status -eq 'FAIL' }).Count -eq 0) { 'INCOMPLETE' } else { 'FAIL' }
+        acceptance_profile = if ($SkipHeavy) { 'clean-checkout-fast-normal' } else { 'h-exec-fast-normal-plus-heavy' }
+        heavy_evidence_mode = if ($SkipHeavy) { 'inherited-exact-h-exec' } else { 'executed-at-h-exec' }
         source_head = $resolvedHead
         source_base = $sourceBase
         h_exec = $resolvedHead
@@ -457,6 +681,8 @@ if ([string]::IsNullOrWhiteSpace($FinalizeFrom)) {
         gates = $gates
         runs = @($script:Runs.Values)
         artifacts = $artifacts
+        heavy_evidence = $script:HeavyEvidence
+        runtime_budget = Get-RuntimeBudget
         reproduction = [ordered]@{
             status = 'NOT_RUN'
             clean_checkout_report = $null
@@ -501,8 +727,14 @@ foreach ($gateId in $baseGateMap.Keys) {
         $semanticGateMatch = $false
     }
 }
-$baseArtifacts = @($baseReport.semantic_fingerprint.semantic_artifacts | ForEach-Object { "$($_.path)|$($_.bytes)|$($_.sha256)" } | Sort-Object)
-$referenceArtifacts = @($referenceReport.semantic_fingerprint.semantic_artifacts | ForEach-Object { "$($_.path)|$($_.bytes)|$($_.sha256)" } | Sort-Object)
+$baseArtifacts = @($baseReport.semantic_fingerprint.semantic_artifacts | ForEach-Object {
+        if ($null -ne $_.role) { "$($_.role)|$($_.bytes)|$($_.sha256)" }
+        else { "$($_.path)|$($_.bytes)|$($_.sha256)" }
+    } | Sort-Object)
+$referenceArtifacts = @($referenceReport.semantic_fingerprint.semantic_artifacts | ForEach-Object {
+        if ($null -ne $_.role) { "$($_.role)|$($_.bytes)|$($_.sha256)" }
+        else { "$($_.path)|$($_.bytes)|$($_.sha256)" }
+    } | Sort-Object)
 $artifactHashMatch = (($baseArtifacts -join "`n") -eq ($referenceArtifacts -join "`n"))
 $baseSemanticFingerprint = $baseReport.semantic_fingerprint | ConvertTo-Json -Depth 30 -Compress
 $referenceSemanticFingerprint = $referenceReport.semantic_fingerprint | ConvertTo-Json -Depth 30 -Compress

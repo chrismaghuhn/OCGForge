@@ -15,6 +15,12 @@ import sys
 
 
 ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from tests.m4.test_failure_isolation import SCHEDULING_STRESS_REPETITIONS
+
+
 TEST = (
     "tests.m4.test_failure_isolation.FailureIsolationTests."
     "test_result_then_exit_never_publishes_passed_under_repeated_scheduling"
@@ -24,15 +30,14 @@ TEST = (
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--repetitions", type=int, default=5)
-    parser.add_argument("--internal-repetitions", type=int, default=100)
     parser.add_argument(
         "--output",
         type=Path,
         default=ROOT / "artifacts" / "m4" / "final" / "lifecycle_stress.json",
     )
     args = parser.parse_args()
-    if args.repetitions <= 0 or args.internal_repetitions <= 0:
-        parser.error("repetition counts must be positive")
+    if args.repetitions <= 0:
+        parser.error("repetitions must be positive")
 
     command = [
         sys.executable,
@@ -70,8 +75,8 @@ def main() -> int:
         "schema_version": "ocgforge.m4.lifecycle_stress_evidence.v1",
         "command": ["python", "-B", "-m", "unittest", TEST, "-v"],
         "independent_process_repetitions": args.repetitions,
-        "internal_repetitions_per_process": args.internal_repetitions,
-        "total_cases": args.repetitions * args.internal_repetitions,
+        "internal_repetitions_per_process": SCHEDULING_STRESS_REPETITIONS,
+        "total_cases": args.repetitions * SCHEDULING_STRESS_REPETITIONS,
         "runs": runs,
         "all_passed": all(bool(run["passed"]) for run in runs),
         "retries": 0,

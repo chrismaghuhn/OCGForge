@@ -36,6 +36,7 @@ from tests.m4.test_worker_integration import write_pool_failure_diagnostics
 
 ROOT = Path(__file__).resolve().parents[2]
 FAKE_WORKER = Path(__file__).with_name("fake_worker_crash.py")
+SCHEDULING_STRESS_REPETITIONS = 100
 
 
 def jobs(count: int = 3) -> list[dict[str, object]]:
@@ -531,7 +532,7 @@ class FailureIsolationTests(unittest.TestCase):
     def test_result_then_exit_never_publishes_passed_under_repeated_scheduling(self) -> None:
         workload = jobs(1)
         observed: list[dict[str, object]] = []
-        repetitions = 100
+        repetitions = SCHEDULING_STRESS_REPETITIONS
         with tempfile.TemporaryDirectory(prefix="ocgforge-m4-task5-result-exit-stress-") as directory:
             root = Path(directory)
             for repetition in range(repetitions):
