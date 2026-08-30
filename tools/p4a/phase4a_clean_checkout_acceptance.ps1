@@ -339,7 +339,11 @@ if ($resolvedHead.ToLowerInvariant() -ne $expected) {
 }
 
 if ([string]::IsNullOrWhiteSpace($FinalizeFrom)) {
-    $status = Get-GitValue @('status', '--porcelain')
+    $statusOutput = @(& git -C $repoRoot status --porcelain 2>$null)
+    if ($LASTEXITCODE -ne 0) {
+        throw 'git command failed: status --porcelain'
+    }
+    $status = ($statusOutput -join "`n").Trim()
     if (-not [string]::IsNullOrWhiteSpace($status)) {
         throw 'H_exec acceptance must start from a clean worktree'
     }
