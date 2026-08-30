@@ -1,5 +1,6 @@
 #include "ygo/environment/public_action_identity.hpp"
 #include "ygo/environment/public_environment_observation.hpp"
+#include "public_action_identity_internal.hpp"
 #include "ygo/observation/decision_integration.hpp"
 #include "ygo/observation/serialization.hpp"
 #include "ygo/protocol/continuation.hpp"

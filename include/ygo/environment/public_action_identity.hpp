@@ -86,19 +86,4 @@ std::vector<std::uint8_t> canonical_public_semantic_decision_identity_bytes(
     const PublicSemanticDecisionIdentityInput& input);
 std::string public_semantic_decision_id(const PublicSemanticDecisionIdentityInput& input);
 
-namespace detail {
-
-struct PublicActionBinding final {
-    std::string public_action_key;
-    std::string internal_semantic_key;
-};
-
-// Returns no value for an unknown or ambiguous public key. This is an
-// internal projection helper; the internal semantic key never crosses the
-// public policy boundary.
-std::optional<std::string> resolve_public_action_key(
-    const std::vector<PublicActionBinding>& bindings, std::string_view public_key);
-
-}  // namespace detail
-
 }  // namespace ygo::environment

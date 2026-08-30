@@ -24,6 +24,9 @@ FORBIDDEN_SELECTOR_SYMBOLS = (
     "raw_message",
     "response_bytes",
 )
+TRANSITIVE_FORBIDDEN_SYMBOLS = tuple(
+    symbol for symbol in FORBIDDEN_SELECTOR_SYMBOLS if symbol != "PlayerObservation"
+)
 
 
 def fail(message: str) -> None:
@@ -89,6 +92,14 @@ def check_selector_headers() -> None:
         )
 
         transitive = transitive_local_headers(header)
+        for transitive_header in transitive:
+            transitive_source = strip_comments(read(transitive_header))
+            for symbol in TRANSITIVE_FORBIDDEN_SYMBOLS:
+                require(
+                    symbol not in transitive_source,
+                    f"transitive selector header exposes forbidden symbol {symbol}: "
+                    f"{transitive_header.relative_to(ROOT)} (from {header.relative_to(ROOT)})",
+                )
         require(
             PLAYER_OBSERVATION.resolve() not in transitive,
             f"PlayerObservation is transitively reachable from selector header: "

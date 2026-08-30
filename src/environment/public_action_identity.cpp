@@ -1,5 +1,7 @@
 #include "ygo/environment/public_action_identity.hpp"
 
+#include "public_action_identity_internal.hpp"
+
 #include <algorithm>
 #include <cstddef>
 #include <iomanip>
