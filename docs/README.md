@@ -29,7 +29,7 @@ This index keeps those layers separate.
 - [ADR-0002 — Shared semantic EpisodeDriver for episodic environment](adr/ADR-0002-episodic-environment.md) — **Accepted**
 - [ADR-0003 — Episodic V1 prerequisite identities](adr/ADR-0003-episodic-v1-normative-prerequisites.md) — **Accepted**
 - [ADR-0004 — Perspective-safe public episodic action identity](adr/ADR-0004-perspective-safe-episodic-action-identity.md) — **Accepted**
-- [ADR-0005 — Trusted trajectory core above EpisodicEnvironment V2](adr/ADR-0005-trusted-trajectory-core.md) — **Proposed Phase 3A**
+- [ADR-0005 — Trusted trajectory core above EpisodicEnvironment V2](adr/ADR-0005-trusted-trajectory-core.md) — **Accepted Phase 3A**
 - [ADR index and policy](adr/README.md)
 
 ## Versioned contracts
@@ -43,8 +43,13 @@ This index keeps those layers separate.
 - [Episodic environment v1](contracts/episodic-environment-v1.md) — **Accepted semantics; implementation evidence pending**
 - [Perspective-safe public action identity v1](contracts/public-action-identity-v1.md) — **Accepted prerequisite; implementation pending**
 - [Episodic environment v2](contracts/episodic-environment-v2.md) — **Accepted public-identity successor; implementation pending**
-- [Trusted trajectory core v1](contracts/trusted-trajectory-v1.md) — **Proposed Phase-3A logical trajectory contract; no runtime or persistence implementation**
-- [Policy provenance v1](contracts/policy-provenance-v1.md) — **Proposed Phase-3A collection-provenance contract; not learner-visible data**
+- [Trusted trajectory core v1](contracts/trusted-trajectory-v1.md) — **Accepted Phase-3A logical trajectory contract; Phase-3B runtime/persistence is implemented in the current PR**
+- [Policy provenance v1](contracts/policy-provenance-v1.md) — **Accepted Phase-3A collection-provenance contract; not learner-visible data**
+- [Candidate trajectory shard v1](contracts/trajectory-shard-v1.md) — **Phase-3B physical contract; review pending**
+- [Restricted collection evidence bundle v1](contracts/restricted-collection-evidence-bundle-v1.md) — **Phase-3B physical contract; review pending**
+- [Admission receipt v1](contracts/admission-receipt-v1.md) — **Phase-3B admission contract; review pending**
+- [Dataset identity v1](contracts/dataset-identity-v1.md) — **Phase-3B identity contract; review pending**
+- [Dataset manifest v1](contracts/dataset-manifest-v1.md) — **Phase-3B physical contract; review pending**
 
 A contract is not a milestone completion claim. It defines semantics for the surface that uses that version. Accepted contract semantics do not imply that an implementation or acceptance milestone has passed.
 
@@ -58,10 +63,12 @@ These documents define accepted post-M4 architecture and the evidence required t
 ## Trusted trajectory design and acceptance
 
 - [Phase-3A trusted trajectory acceptance matrix](trajectory/PHASE3A_ACCEPTANCE.md) — **Contract review only; not a trusted-trajectory runtime or final Phase-3 acceptance claim**
+- [Phase-3B persistence and replay-admission acceptance matrix](trajectory/PHASE3B_ACCEPTANCE.md) — **Exact-head implementation evidence; review pending**
 
 The PR #17 research record is design provenance only. The proposed
-Phase-3A ADR and contracts above are the review surface; neither authorizes
-Phase-3B persistence, Teacher, model, or ML implementation.
+Phase-3A ADR and contracts above are the accepted logical review surface.
+Phase-3B owns the physical persistence and admission implementation listed
+above. Teacher, model, and ML implementation remain out of scope.
 
 ## Decision-protocol evidence
 

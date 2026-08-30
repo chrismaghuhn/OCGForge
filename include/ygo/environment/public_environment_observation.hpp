@@ -43,6 +43,9 @@ private:
 
     friend PublicEnvironmentObservationInput project_public_observation(
         const ygo::observation::PlayerObservation& observation);
+    friend bool decode_canonical_public_environment_observation(
+        const std::vector<std::uint8_t>& bytes,
+        PublicEnvironmentObservationInput& output) noexcept;
 };
 
 // Serializes exactly the perspective-safe state owned by PlayerObservation.
@@ -58,5 +61,13 @@ PublicEnvironmentObservationInput project_public_observation(
 std::vector<std::uint8_t> canonical_public_environment_observation_bytes(
     const PublicEnvironmentObservationInput& input);
 std::string public_observation_digest(const PublicEnvironmentObservationInput& input);
+
+// Strictly decodes the V1 public-observation container. The safe-state bytes
+// remain opaque and are accepted only when they are a canonical V1 safe-state
+// serialization; this helper never constructs or exposes a private
+// PlayerObservation.
+bool decode_canonical_public_environment_observation(
+    const std::vector<std::uint8_t>& bytes,
+    PublicEnvironmentObservationInput& output) noexcept;
 
 }  // namespace ygo::environment

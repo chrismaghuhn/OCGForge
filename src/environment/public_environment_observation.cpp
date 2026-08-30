@@ -328,9 +328,7 @@ void validate_observation(const PlayerObservation& observation) {
     if (observation.globals.turn_player.has_value() && *observation.globals.turn_player > 1) {
         throw std::invalid_argument("public observation turn_player is invalid");
     }
-    if (observation.globals.winner.has_value() && *observation.globals.winner > 1) {
-        throw std::invalid_argument("public observation winner is invalid");
-    }
+    validate_optional_player(observation.globals.winner, "winner");
     for (const auto& link : observation.chain.links) {
         validate_optional_player(link.activating_player, "chain activating player");
         if (link.source.has_value()) {
