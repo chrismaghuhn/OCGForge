@@ -536,6 +536,39 @@ void require_rejected(const std::vector<std::uint8_t>& bytes, const char* messag
     require(!decoded && !decoded.value.has_value() && decoded.diagnostic.has_value(), message);
 }
 
+void require_explicit_enum_switch(const std::string& source,
+                                  const std::string& function_signature,
+                                  const std::string& implicit_cast) {
+    const auto function_begin = source.find(function_signature);
+    require(function_begin != std::string::npos,
+            "safe-state decoder mapping function was not found");
+    const auto function_end = source.find("\n}\n", function_begin);
+    require(function_end != std::string::npos,
+            "safe-state decoder mapping function had no complete body");
+    const auto body = source.substr(function_begin, function_end - function_begin);
+    require(body.find("switch (code)") != std::string::npos,
+            "safe-state enum decoder did not use an explicit code switch");
+    require(body.find(implicit_cast) == std::string::npos,
+            "safe-state enum decoder used an implicit enum cast");
+}
+
+void test_decoder_enum_mappings_are_explicit() {
+    const auto source_path = std::filesystem::path(YGO_SOURCE_DIR) /
+                             "src/environment/public_safe_state.cpp";
+    std::ifstream source_file(source_path, std::ios::binary);
+    require(source_file.good(), "public safe-state source could not be read");
+    const std::string source((std::istreambuf_iterator<char>(source_file)),
+                             std::istreambuf_iterator<char>());
+    require_explicit_enum_switch(source, "bool decode_zone(",
+                                 "static_cast<SemanticZone>(code)");
+    require_explicit_enum_switch(source, "bool decode_link_marker(",
+                                 "static_cast<LinkMarker>(code)");
+    require_explicit_enum_switch(source, "bool decode_relationship_kind(",
+                                 "static_cast<RelationshipKind>(code)");
+    require_explicit_enum_switch(source, "bool decode_visible_event_kind(",
+                                 "static_cast<VisibleEventKind>(code)");
+}
+
 void test_strict_negative_inputs() {
     const auto canonical = ygo::environment::canonical_public_safe_state_bytes(source_observation());
     SafeStateWireLocations locations;
@@ -554,6 +587,10 @@ void test_strict_negative_inputs() {
     auto invalid_presence = canonical;
     invalid_presence[locations.player_to_act_presence] = 2;
     require_rejected(invalid_presence, "invalid optional presence byte was accepted");
+
+    auto invalid_boolean = canonical;
+    invalid_boolean[locations.entity_face_up_flags.front()] = 2;
+    require_rejected(invalid_boolean, "invalid mandatory boolean byte was accepted");
 
     auto invalid_enum = canonical;
     invalid_enum[locations.entity_zone_codes.front()] = 0xff;
@@ -669,6 +706,7 @@ void test_typed_public_safe_state_round_trip() {
 
 int run() {
     test_public_header_has_no_private_event_step_or_observation_include();
+    test_decoder_enum_mappings_are_explicit();
     test_typed_public_safe_state_round_trip();
     test_strict_negative_inputs();
     return EXIT_SUCCESS;

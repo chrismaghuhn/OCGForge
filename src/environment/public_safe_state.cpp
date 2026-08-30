@@ -745,11 +745,43 @@ private:
 };
 
 bool decode_zone(const std::uint8_t code, SemanticZone& value) noexcept {
-    if (code > 10) {
+    switch (code) {
+    case 0:
+        value = SemanticZone::Unknown;
+        return true;
+    case 1:
+        value = SemanticZone::MainDeck;
+        return true;
+    case 2:
+        value = SemanticZone::Hand;
+        return true;
+    case 3:
+        value = SemanticZone::MonsterZone;
+        return true;
+    case 4:
+        value = SemanticZone::SpellTrapZone;
+        return true;
+    case 5:
+        value = SemanticZone::Graveyard;
+        return true;
+    case 6:
+        value = SemanticZone::Banished;
+        return true;
+    case 7:
+        value = SemanticZone::ExtraDeck;
+        return true;
+    case 8:
+        value = SemanticZone::FieldZone;
+        return true;
+    case 9:
+        value = SemanticZone::PendulumRelevant;
+        return true;
+    case 10:
+        value = SemanticZone::Overlay;
+        return true;
+    default:
         return false;
     }
-    value = static_cast<SemanticZone>(code);
-    return true;
 }
 
 bool decode_position(const std::uint8_t code, ygo::observation::Position& value) noexcept {
@@ -775,27 +807,126 @@ bool decode_position(const std::uint8_t code, ygo::observation::Position& value)
 }
 
 bool decode_link_marker(const std::uint8_t code, LinkMarker& value) noexcept {
-    if (code > 7) {
+    switch (code) {
+    case 0:
+        value = LinkMarker::BottomLeft;
+        return true;
+    case 1:
+        value = LinkMarker::Bottom;
+        return true;
+    case 2:
+        value = LinkMarker::BottomRight;
+        return true;
+    case 3:
+        value = LinkMarker::Left;
+        return true;
+    case 4:
+        value = LinkMarker::Right;
+        return true;
+    case 5:
+        value = LinkMarker::TopLeft;
+        return true;
+    case 6:
+        value = LinkMarker::Top;
+        return true;
+    case 7:
+        value = LinkMarker::TopRight;
+        return true;
+    default:
         return false;
     }
-    value = static_cast<LinkMarker>(code);
-    return true;
 }
 
 bool decode_relationship_kind(const std::uint8_t code, RelationshipKind& value) noexcept {
-    if (code > 2) {
+    switch (code) {
+    case 0:
+        value = RelationshipKind::XyzMaterial;
+        return true;
+    case 1:
+        value = RelationshipKind::Equip;
+        return true;
+    case 2:
+        value = RelationshipKind::Target;
+        return true;
+    default:
         return false;
     }
-    value = static_cast<RelationshipKind>(code);
-    return true;
 }
 
 bool decode_visible_event_kind(const std::uint8_t code, VisibleEventKind& value) noexcept {
-    if (code > 22) {
+    switch (code) {
+    case 0:
+        value = VisibleEventKind::Unknown;
+        return true;
+    case 1:
+        value = VisibleEventKind::TurnStarted;
+        return true;
+    case 2:
+        value = VisibleEventKind::PhaseChanged;
+        return true;
+    case 3:
+        value = VisibleEventKind::CardMoved;
+        return true;
+    case 4:
+        value = VisibleEventKind::CardRevealed;
+        return true;
+    case 5:
+        value = VisibleEventKind::Summoned;
+        return true;
+    case 6:
+        value = VisibleEventKind::Set;
+        return true;
+    case 7:
+        value = VisibleEventKind::Draw;
+        return true;
+    case 8:
+        value = VisibleEventKind::Shuffle;
+        return true;
+    case 9:
+        value = VisibleEventKind::RandomizationBoundary;
+        return true;
+    case 10:
+        value = VisibleEventKind::LifePointsChanged;
+        return true;
+    case 11:
+        value = VisibleEventKind::ChainActivated;
+        return true;
+    case 12:
+        value = VisibleEventKind::ChainResolved;
+        return true;
+    case 13:
+        value = VisibleEventKind::ChainEnded;
+        return true;
+    case 14:
+        value = VisibleEventKind::CardDestroyed;
+        return true;
+    case 15:
+        value = VisibleEventKind::CardBanished;
+        return true;
+    case 16:
+        value = VisibleEventKind::CardReturned;
+        return true;
+    case 17:
+        value = VisibleEventKind::PositionChanged;
+        return true;
+    case 18:
+        value = VisibleEventKind::CounterChanged;
+        return true;
+    case 19:
+        value = VisibleEventKind::Equipped;
+        return true;
+    case 20:
+        value = VisibleEventKind::Unequipped;
+        return true;
+    case 21:
+        value = VisibleEventKind::Targeted;
+        return true;
+    case 22:
+        value = VisibleEventKind::Win;
+        return true;
+    default:
         return false;
     }
-    value = static_cast<VisibleEventKind>(code);
-    return true;
 }
 
 bool read_optional_player(Cursor& cursor, std::optional<std::uint8_t>& value) noexcept {
