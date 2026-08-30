@@ -21,16 +21,7 @@ def require(condition: bool, message: str) -> None:
 
 
 def default_probe() -> Path:
-    candidates = (
-        ROOT / "build" / "windows-zig" / "policy_random_legal_probe.exe",
-        ROOT / "build" / "dev-windows-zig" / "policy_random_legal_probe.exe",
-        ROOT / "build" / "windows-zig-clean2" / "policy_random_legal_probe.exe",
-        ROOT / "build" / "release-windows-zig" / "policy_random_legal_probe.exe",
-    )
-    for candidate in candidates:
-        if candidate.is_file():
-            return candidate
-    fail("policy_random_legal_probe executable is missing")
+    return ROOT / "build" / "windows-zig" / "policy_random_legal_probe.exe"
 
 
 def run_probe(probe: Path, *, stream: str = "player0", episode_id: str = "0" * 64,

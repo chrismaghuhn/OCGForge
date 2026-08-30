@@ -97,24 +97,38 @@ def check_research_basis() -> None:
     require(expected <= actual, "one or more required Teacher research artifacts are missing")
 
 
-def check_source_reference(source: str) -> None:
-    path_text, separator, symbol = source.partition(":")
-    path_text = path_text.strip("`")
-    symbol = symbol.strip("`")
-    require(separator and symbol, f"matrix source is not an exact path/symbol reference: {source}")
-    path = ROOT / path_text
-    require(path.is_file(), f"matrix source file is missing: {path_text}")
-    leaf = symbol.rsplit(".", 1)[-1].replace("()", "")
-    require(leaf in path.read_text(encoding="utf-8"),
-            f"matrix source symbol is not present in {path_text}: {symbol}")
+def check_source_references(source: str) -> None:
+    references = [item.strip() for item in source.split(";") if item.strip()]
+    require(references, "matrix row has no exact public source reference")
+    for reference in references:
+        reference = reference.strip("`")
+        path_text, separator, symbol = reference.partition(":")
+        require(separator and symbol,
+                f"matrix source is not an exact path/symbol reference: {reference}")
+        path = ROOT / path_text
+        require(path.is_file(), f"matrix source file is missing: {path_text}")
+        leaf = symbol.rsplit(".", 1)[-1].replace("()", "")
+        require(leaf in path.read_text(encoding="utf-8"),
+                f"matrix source symbol is not present in {path_text}: {symbol}")
 
 
 def check_evidence_reference(evidence: str) -> None:
     references = [item.strip() for item in evidence.split(";") if item.strip()]
     require(references, "matrix row has no executable evidence")
     for reference in references:
-        path_text = reference.split("::", 1)[0].strip("`")
-        require((ROOT / path_text).is_file(), f"matrix evidence file is missing: {path_text}")
+        reference = reference.strip("`")
+        path_text, separator, symbol = reference.partition("::")
+        require(separator and symbol,
+                f"matrix evidence is not an exact path/symbol reference: {reference}")
+        path = ROOT / path_text
+        require(path.is_file(), f"matrix evidence file is missing: {path_text}")
+        require(symbol in path.read_text(encoding="utf-8"),
+                f"matrix evidence symbol is not present in {path_text}: {symbol}")
+
+
+def check_blocked_reason(row: dict[str, str]) -> None:
+    require(len(row["blocked"]) >= 20 and row["blocked"] != "-",
+            f"blocked matrix row lacks an explicit missing-source reason: {row['id']}")
 
 
 def main() -> None:
@@ -124,6 +138,8 @@ def main() -> None:
     require(len(by_id) == len(rows), "public-fact matrix contains duplicate row IDs")
     missing = [row_id for row_id in REQUIRED_ROWS if row_id not in by_id]
     require(not missing, "public-fact matrix is missing rows: " + ", ".join(missing))
+    require(set(by_id) == set(REQUIRED_ROWS),
+            "public-fact matrix contains rows outside the frozen G00 row set")
     actual_blocked = {row["id"] for row in rows if row["availability"] == "BLOCKED"}
     require(actual_blocked == EXPECTED_BLOCKED_ROWS,
             "public-fact matrix blocked scope changed unexpectedly")
@@ -132,11 +148,10 @@ def main() -> None:
         require(row["requirement"], f"matrix row lacks a Teacher requirement: {row['id']}")
         require(row["availability"] in ALLOWED_AVAILABILITY,
                 f"matrix row has an invalid availability: {row['id']}")
-        check_source_reference(row["source"])
+        check_source_references(row["source"])
         check_evidence_reference(row["evidence"])
         if row["availability"] == "BLOCKED":
-            require(len(row["blocked"]) >= 20 and row["blocked"] != "-",
-                    f"blocked matrix row lacks an explicit missing-source reason: {row['id']}")
+            check_blocked_reason(row)
         else:
             require(row["blocked"] == "-",
                     f"non-blocked matrix row has a blocked reason: {row['id']}")
