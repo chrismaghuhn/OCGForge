@@ -113,6 +113,93 @@ ygo::trajectory::PolicyProvenanceEnvelope rebound_provenance_for(
     return result;
 }
 
+void test_random_legal_execution_binding_composition() {
+    const auto artifact = ygo::policy::make_random_legal_policy_artifact();
+    const auto config = ygo::environment::CertifiedEnvironmentConfig::canonical();
+    const std::array<ygo::trajectory::PolicyRole, 2> roles = {
+        ygo::trajectory::PolicyRole::Behavior, ygo::trajectory::PolicyRole::Opponent};
+    const auto assignments = ygo::policy::make_random_legal_participant_assignments(
+        artifact, config, ygo::environment::SeatAssignment::Normal, 0, roles);
+    constexpr std::uint64_t root = 0x0123456789abcdefULL;
+    std::vector<std::string> stream_identities;
+
+    for (const auto& assignment : assignments) {
+        const auto stream_id = assignment.player == 0 ? std::string("player0")
+                                                      : std::string("player1");
+        const auto binding = ygo::policy::make_random_legal_execution_binding(
+            artifact, assignment, root, stream_id);
+
+        require(binding.initialization.policy_rng_contract_identity ==
+                    artifact.policy_rng_contract_identity,
+                "execution binding initialization used the wrong RNG contract");
+        require(binding.initialization.policy_rng_stream_id == stream_id,
+                "execution binding initialization used the wrong stream");
+        require(!binding.initialization.initialization_material.empty(),
+                "execution binding discarded raw initialization material");
+
+        const auto decoded_material =
+            ygo::policy::decode_canonical_policy_rng_initialization_material(
+                binding.initialization.initialization_material);
+        require(static_cast<bool>(decoded_material),
+                "execution binding raw initialization material did not decode");
+        require(decoded_material.value->policy_rng_root_seed.value() == root &&
+                    decoded_material.value->participant_policy_assignment_id ==
+                        assignment.participant_policy_assignment_id &&
+                    decoded_material.value->policy_rng_stream_id == stream_id,
+                "execution binding raw initialization material changed its inputs");
+
+        const auto initialization_bytes =
+            ygo::trajectory::canonical_policy_rng_initialization_identity_bytes(
+                binding.initialization);
+        const auto decoded_initialization =
+            ygo::trajectory::decode_policy_rng_initialization_identity(initialization_bytes);
+        require(static_cast<bool>(decoded_initialization),
+                "execution binding initialization identity codec rejected the value");
+        require(decoded_initialization.value->policy_rng_initialization_identity ==
+                    binding.initialization.policy_rng_initialization_identity,
+                "execution binding initialization identity did not recompute");
+        require(ygo::trajectory::compute_policy_rng_initialization_id(binding.initialization) ==
+                    binding.initialization.policy_rng_initialization_identity,
+                "execution binding initialization authority disagreed with the identity");
+
+        const auto stream_bytes =
+            ygo::trajectory::canonical_policy_rng_stream_identity_bytes(binding.stream);
+        const auto decoded_stream =
+            ygo::trajectory::decode_policy_rng_stream_identity(stream_bytes);
+        require(static_cast<bool>(decoded_stream),
+                "execution binding stream identity codec rejected the value");
+        require(ygo::trajectory::compute_policy_rng_stream_id(binding.stream) ==
+                    binding.stream.policy_rng_identity,
+                "execution binding stream authority disagreed with the identity");
+        require(binding.stream.policy_artifact_id == artifact.policy_artifact_id &&
+                    binding.stream.participant_policy_assignment_id ==
+                        assignment.participant_policy_assignment_id &&
+                    binding.stream.policy_rng_contract_identity ==
+                        artifact.policy_rng_contract_identity &&
+                    binding.stream.policy_rng_stream_id == stream_id &&
+                    binding.stream.policy_rng_initialization_identity ==
+                        binding.initialization.policy_rng_initialization_identity,
+                "execution binding stream fields were not copied from the inputs");
+
+        require(binding.execution_binding.policy_artifact_id ==
+                        binding.stream.policy_artifact_id &&
+                    binding.execution_binding.participant_policy_assignment_id ==
+                        binding.stream.participant_policy_assignment_id &&
+                    binding.execution_binding.policy_rng_contract_identity ==
+                        binding.stream.policy_rng_contract_identity &&
+                    binding.execution_binding.policy_rng_stream_id ==
+                        binding.stream.policy_rng_stream_id &&
+                    binding.execution_binding.policy_rng_initialization_identity ==
+                        binding.stream.policy_rng_initialization_identity &&
+                    binding.execution_binding.policy_rng_identity ==
+                        binding.stream.policy_rng_identity,
+                "immutable execution binding diverged from stream identity");
+        stream_identities.push_back(binding.stream.policy_rng_identity);
+    }
+    require(stream_identities.size() == 2 && stream_identities[0] != stream_identities[1],
+            "different participants received the same policy RNG identity");
+}
+
 void test_production_registrations_and_composition() {
     using ygo::trajectory::ProvenanceKind;
 
@@ -359,6 +446,7 @@ void test_random_legal_selects_only_from_the_supplied_domain() {
 }
 
 int run() {
+    test_random_legal_execution_binding_composition();
     test_production_registrations_and_composition();
     test_strict_rng_callbacks_and_incompatible_provenance();
     test_random_legal_selects_only_from_the_supplied_domain();

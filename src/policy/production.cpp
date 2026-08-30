@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "ygo/trajectory/codec.hpp"
+#include "ygo/policy/rng.hpp"
 
 namespace ygo::policy {
 
@@ -86,6 +87,65 @@ make_random_legal_participant_assignments(
                          right.participant_policy_assignment_id;
               });
     return assignments;
+}
+
+RandomLegalExecutionBinding make_random_legal_execution_binding(
+    const trajectory::PolicyArtifact& artifact,
+    const trajectory::ParticipantPolicyAssignment& assignment,
+    const std::uint64_t explicit_policy_rng_root_seed,
+    std::string policy_rng_stream_id) {
+    if (artifact.policy_kind != trajectory::PolicyKind::RandomLegal ||
+        artifact.policy_rng_contract_identity != kSha256CounterPolicyRngContractIdentity) {
+        throw std::invalid_argument("execution binding requires the production RandomLegal artifact");
+    }
+    (void)trajectory::canonical_policy_artifact_bytes(artifact);
+    (void)trajectory::canonical_participant_policy_assignment_bytes(assignment);
+    if (assignment.policy_artifact_id != artifact.policy_artifact_id) {
+        throw std::invalid_argument("execution binding assignment references another policy artifact");
+    }
+
+    PolicyRngInitializationInput input;
+    input.policy_rng_root_seed = explicit_policy_rng_root_seed;
+    input.participant_policy_assignment_id = assignment.participant_policy_assignment_id;
+    input.policy_rng_stream_id = std::move(policy_rng_stream_id);
+    const auto policy_initialization = make_policy_rng_initialization(input);
+    if (!policy_initialization) {
+        throw std::invalid_argument(policy_initialization.error->message);
+    }
+
+    RandomLegalExecutionBinding result;
+    result.initialization.policy_rng_contract_identity =
+        policy_initialization.value->policy_rng_contract_identity;
+    result.initialization.policy_rng_stream_id =
+        policy_initialization.value->policy_rng_stream_id;
+    result.initialization.initialization_material =
+        policy_initialization.value->initialization_material;
+    result.initialization.policy_rng_initialization_identity =
+        policy_initialization.value->policy_rng_initialization_identity;
+    (void)trajectory::canonical_policy_rng_initialization_identity_bytes(
+        result.initialization);
+
+    result.stream.policy_artifact_id = artifact.policy_artifact_id;
+    result.stream.participant_policy_assignment_id =
+        assignment.participant_policy_assignment_id;
+    result.stream.policy_rng_contract_identity =
+        result.initialization.policy_rng_contract_identity;
+    result.stream.policy_rng_stream_id = result.initialization.policy_rng_stream_id;
+    result.stream.policy_rng_initialization_identity =
+        result.initialization.policy_rng_initialization_identity;
+    result.stream.policy_rng_identity = trajectory::compute_policy_rng_stream_id(result.stream);
+    (void)trajectory::canonical_policy_rng_stream_identity_bytes(result.stream);
+
+    result.execution_binding.policy_artifact_id = result.stream.policy_artifact_id;
+    result.execution_binding.participant_policy_assignment_id =
+        result.stream.participant_policy_assignment_id;
+    result.execution_binding.policy_rng_contract_identity =
+        result.stream.policy_rng_contract_identity;
+    result.execution_binding.policy_rng_stream_id = result.stream.policy_rng_stream_id;
+    result.execution_binding.policy_rng_initialization_identity =
+        result.stream.policy_rng_initialization_identity;
+    result.execution_binding.policy_rng_identity = result.stream.policy_rng_identity;
+    return result;
 }
 
 }  // namespace ygo::policy
