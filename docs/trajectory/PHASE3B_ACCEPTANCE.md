@@ -5,17 +5,51 @@
 This matrix is the acceptance record for the Phase-3B implementation PR. It
 does not upgrade the repository's fixed-deck M3/M3.5 claims into general
 Yu-Gi-Oh! support or ML readiness. A gate is `PASS` only after the named
-command or review has run at the exact final PR head. `NOT_RUN`, `SKIPPED`,
-and `BLOCKED` are not acceptance passes.
+command or review has run at its declared evidence anchor. The heavy
+executable acceptance is anchored to `H_exec` below. Later commits may be
+documentation-only attestations; they are accepted only when the lineage
+check below proves that they touch declared evidence/attestation files.
+Final-tip Hosted CI is an external live status gate and is checked
+independently of this document. `NOT_RUN`, `SKIPPED`, and `BLOCKED` are not
+acceptance passes.
 
 | Field | Value |
 | --- | --- |
 | Accepted Phase-3A base | `689710a90e751b046c062a8c0b3f56ec2cef5500` |
 | Implementation branch | `chris/phase3b-trajectory-persistence-admission` |
-| Verified executable/evidence head | `616697ce384892f3057e5f19d2d7c08464e12634` |
+| Executable acceptance anchor (`H_exec`) | `616697ce384892f3057e5f19d2d7c08464e12634` |
 | Scope | One Phase-3B PR; seven internally separated vertical slices |
 | Rules input | The pinned `third_party/rules_bundle.lock.json` and its verified local cache |
-| Matrix status | Local P3B gates recorded after exact-head execution; fresh hosted CI is `PASS` on the pushed executable/evidence head; this commit records that result |
+| Matrix status | Heavy local P3B gates are `PASS` at `H_exec`; the `H_exec..PR_HEAD` lineage is documentation-only; final-tip Hosted CI is an external live gate checked independently |
+
+## Evidence lineage
+
+`H_exec` is the exact detached commit at which the heavy local acceptance was
+executed: rules, Python/regression, focused trajectory, full CTest,
+determinism, coverage, and clean-checkout evidence all use this anchor. It is
+intentionally not required to equal the final PR tip.
+
+The final PR tip is an attestation descendant of `H_exec`. The following
+lineage check is required at the final tip:
+
+```powershell
+git diff --name-status 616697ce384892f3057e5f19d2d7c08464e12634 HEAD
+```
+
+For this PR, that range contains only:
+
+```text
+docs/superpowers/specs/2026-08-28-phase3b-trajectory-persistence-admission-design.md
+docs/trajectory/PHASE3B_ACCEPTANCE.md
+```
+
+Thus no executable, rules-bundle, fixture, or canonical artifact input changes
+after `H_exec`; the later commits only record acceptance/Hosted attestations.
+Hosted CI for the final tip is intentionally treated as an external live gate:
+its status is read from GitHub after the tip is pushed and is not rewritten
+into the same commit whose push creates the next Hosted run. The evidence
+summary records the last independently verified tip/run pair, while the
+current tip status is verified live with the PR checks.
 
 The terminal replay boundary is deliberate. Accepted Phase 3A excludes
 `RunControl` from the terminal identity and forbids arbitrary run-control
@@ -53,16 +87,17 @@ explicit safe cancellation source for the public V2 interrupt call.
 | P3B-G22 Duplicate/conflict fail-closed behavior | Duplicate envelope/record/evidence/RNG membership, conflicting bytes, unknown receipt, wrong artifact binding, and missing evidence never use first-wins or silent deduplication. | All persistence/admission layers | Negative tests in shard/evidence/receipt/manifest/admission suites | BLOCKER | `PASS` |
 | P3B-G23 Privacy / hidden-information boundary | Paired worlds have equal permitted public projection despite private/internal differences; no internal key/domain digest/protocol ID/raw hash/response/token/private observation/seed/restricted material crosses into public or learner-facing values. | V2 public projection / trajectory | `trajectory_privacy_test`; existing paired-world and terminal privacy tests; structural audit | BLOCKER | `PASS` |
 | P3B-G24 Cross-process byte determinism | Two independent processes with identical semantic inputs emit byte-identical envelope, shard, restricted bundle, receipt, manifest, and identical semantic/artifact IDs. | All canonical outputs | `trajectory_artifact_determinism_test` run twice; captured output and artifact comparison in clean checkout | BLOCKER | `PASS` |
-| P3B-G25 Existing V2 determinism/replay/privacy regression | Existing V2 determinism, replay, paired-world, observation, decision, and ownership tests pass at the exact final head. | Existing V2 | Python regression commands plus relevant CTest targets | BLOCKER | `PASS` |
+| P3B-G25 Existing V2 determinism/replay/privacy regression | Existing V2 determinism, replay, paired-world, observation, decision, and ownership tests pass at the declared executable evidence anchor. | Existing V2 | Python regression commands plus relevant CTest targets | BLOCKER | `PASS` |
 | P3B-G26 M4 failure-isolation regression | Existing M4 integrity, worker protocol, failure-isolation, process metrics, job-generation, and available integration tests pass without M4 semantic changes. | M4 | Existing M4 Python tests and full CTest | BLOCKER | `PASS` |
 | P3B-G27 Rules/decks/lock inputs unchanged | Exact rules bundle verifies; locked decks and rules inputs are unchanged; no generated lock/evidence artifact is hand-edited to pass. | Rules / repository | `verify_rules_bundle.py`; diff audit; clean-checkout evidence | BLOCKER | `PASS` |
 | P3B-G28 No Teacher/model/ML/remote scope creep | The PR adds no Teacher, model, tensor, framework export, remote actor, cloud, RPC, or Phase-4 behavior. | Scope governance | Dependency/source/diff audit; non-scope declaration | BLOCKER | `PASS` |
-| P3B-G29 Clean-checkout reproducibility | A fresh detached checkout at the exact final head verifies rules, configures/builds, runs targeted trajectory and existing regression/determinism gates, compares independent artifact outputs, passes `git diff --check`, and remains clean after evidence generation. | Acceptance | `tools/trajectory/phase3b_clean_checkout_acceptance.ps1`; report is `PASS`, exact-head, `9/9` targeted and `123/123` full CTest | BLOCKER | `PASS` |
+| P3B-G29 Clean-checkout reproducibility | A fresh detached checkout at `H_exec` verifies rules, configures/builds, runs targeted trajectory and existing regression/determinism gates, compares independent artifact outputs, passes `git diff --check`, and remains clean after evidence generation; the final PR tip differs from `H_exec` only in declared evidence/attestation files. | Acceptance | `tools/trajectory/phase3b_clean_checkout_acceptance.ps1`; report is `PASS` at `H_exec`, with `9/9` targeted and `123/123` full CTest; `git diff --name-status 616697ce384892f3057e5f19d2d7c08464e12634 HEAD` contains only the two documentation files listed above | BLOCKER | `PASS` |
 
-## Required exact-head commands
+## Required evidence-anchor commands
 
-The final report records the actual result of each command; historical or
-focused evidence is not promoted to a full-suite pass.
+The final report records the actual result of each command at its declared
+anchor. Heavy local commands below run at `H_exec`; historical or focused
+evidence is not promoted to a full-suite pass.
 
 ```powershell
 python tools/verify_rules_bundle.py --lock third_party/rules_bundle.lock.json --cache C:\yogiohML\.cache\rules_bundle
@@ -82,9 +117,11 @@ The trajectory-focused command is:
 ctest --test-dir build/p3b-windows-zig --tests-regex '^(trajectory_codec_test|trajectory_recorder_test|trajectory_shard_test|trajectory_restricted_evidence_test|trajectory_replay_admission_test|trajectory_receipt_test|trajectory_dataset_manifest_test|trajectory_artifact_determinism_test|trajectory_privacy_test)$' --output-on-failure
 ```
 
-The clean-checkout path is the source of the `P3B-G29` evidence. Use the
-default mode for full CTest; `-SkipFullCTest` records `full_ctest=NOT_RUN` and
-cannot close the full clean-checkout gate.
+The clean-checkout path is the source of the `P3B-G29` evidence and checks out
+`H_exec` exactly. Use the default mode for full CTest; `-SkipFullCTest` records
+`full_ctest=NOT_RUN` and cannot close the full clean-checkout gate. The
+additional final-tip lineage check is separate and must remain documentation-
+only.
 
 ## Semantic versus implementation changes
 
@@ -114,24 +151,24 @@ artifact/membership identities, and impossible disposition transitions.
 
 ## Evidence summary
 
-The final exact-head run appends the observed counts and deterministic fixture
-identities here. Values below must remain `NOT_RUN` until the commands have
-actually completed:
+The acceptance-anchor run appends the observed counts and deterministic fixture
+identities here. Values below must remain `NOT_RUN` until the declared
+commands have actually completed:
 
 | Evidence | Value |
 | --- | --- |
-| Verified executable/evidence head | `616697ce384892f3057e5f19d2d7c08464e12634` |
+| Executable acceptance anchor (`H_exec`) | `616697ce384892f3057e5f19d2d7c08464e12634` |
 | Rules bundle verification | `PASS`; bundle `3adfe6b4cfe2c2805e50b389fc0eb4e70a3b0b6107436614d328fddc865e585f`; core API `11.0` |
 | Python/regression gates | `PASS`; Python `15` tests, M4 required `93` tests |
-| Decision/observation/ownership coverage | `PASS`; all three exact-head commands returned `ok`; M1 and gameplay determinism runners passed |
+| Decision/observation/ownership coverage | `PASS`; all three commands at `H_exec` returned `ok`; M1 and gameplay determinism runners passed |
 | Full CTest | `PASS`; `123/123`, `0` failed; clean-checkout real time `3362.24 s` (`#122 919.34 s`, `#123 136.54 s`) |
 | Focused trajectory CTest | `PASS`; `9/9`, `0` failed; clean-checkout real time `1981.69 s` (`trajectory_replay_admission_test` `1975.64 s`) |
 | Candidate shard artifact SHA-256 | `247f534c950b0e572e9394dfd2cc773818c4ce8de6d59ebaed003dfb39101255` |
 | Restricted evidence artifact SHA-256 | `1bdbabe2d9905984b61f8b926ea0155a8f83dc6d125d253dd78766f3674f5eed` |
 | AdmissionReceipt ID | `admission_receipt.v1.d9cd38dfec176bf83b25c69fde4fa89b4330a3362e1c383c22483d4f79c2e6f6` |
 | Dataset semantic ID | `5ea0f9197f4993b1c57052e28cae54853e1276d3a1074526015098d772cee553` |
-| Clean-checkout report | `C:\p3b-trajectory\artifacts\trajectory\phase3b-clean-checkout-fixpass4\phase3b_clean_checkout.json` (`PASS`, exact head, clean before/after evidence) |
-| Hosted CI exact-head status | `PASS`; fresh exact-head runs `33274936493` and `33274937580` on `9ae773136d74d8ef8880479cf832ac886e48ab5c`; hosted-fast path, all steps green; only Node.js 20 deprecation annotations |
+| Clean-checkout report | `C:\p3b-trajectory\artifacts\trajectory\phase3b-clean-checkout-fixpass4\phase3b_clean_checkout.json` (`PASS`, detached at `H_exec`, clean before/after evidence) |
+| Hosted CI final-tip attestation | External live gate; last independently verified tip `26849b164d1e5f459cc701c295591d39087f9f21` is `PASS` in runs `33276693588` and `33276694989`; hosted-fast path, all steps green, with only Node.js 20 deprecation annotations. The current post-attestation tip is checked live and is intentionally not self-recorded here. |
 
 ## Scope stop
 

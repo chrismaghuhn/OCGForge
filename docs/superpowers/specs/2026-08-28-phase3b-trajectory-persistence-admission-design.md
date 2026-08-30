@@ -199,10 +199,13 @@ material must recompute the declared initialization identity and pass a
 registered contract-specific state codec. `CURSOR` is accepted only when its
 declared contract and initialization identity prove a unique stream state;
 otherwise the producer must use `STATE`. This Phase-3B V1 implementation has
-no registered policy-owned state codec, so non-`NONE` initialization and
-decision provenance fail closed during admission. `NONE` uses the accepted
-no-RNG contract and exact IDs. RNG raw material remains restricted evidence
-and is excluded from gameplay and record identities.
+no production policy-owned RNG contract by default. Non-`NONE` policy RNG
+provenance is admission-eligible only through an explicit immutable typed
+registry entry whose descriptor proves canonical initialization material and
+the supported `STATE`/`CURSOR` semantics. Acceptance tests use test-only
+injected descriptors. `NONE` uses the accepted no-RNG contract and exact IDs.
+RNG raw material remains restricted evidence and is excluded from gameplay and
+record identities.
 
 ## 7. Replay and whole-shard admission
 
