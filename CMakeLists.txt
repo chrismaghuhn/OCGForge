@@ -210,6 +210,7 @@ add_library(ygo_policy STATIC
     src/policy/production_provenance.cpp
     src/policy/production.cpp
     src/policy/random_legal.cpp
+    src/policy/runner.cpp
 )
 target_include_directories(ygo_policy PUBLIC "${CMAKE_SOURCE_DIR}/include")
 target_link_libraries(ygo_policy PUBLIC ygo_trajectory)
@@ -447,6 +448,10 @@ add_test(NAME policy_rng_test COMMAND policy_rng_test)
 add_executable(random_legal_test tests/policy/random_legal_test.cpp)
 target_link_libraries(random_legal_test PRIVATE ygo_policy)
 add_test(NAME random_legal_test COMMAND random_legal_test)
+
+add_executable(policy_runner_integration_test tests/policy/policy_runner_integration_test.cpp)
+target_link_libraries(policy_runner_integration_test PRIVATE ygo_policy)
+add_test(NAME policy_runner_integration_test COMMAND policy_runner_integration_test)
 
 if(DEFINED ENV{OCGFORGE_PHASE1_RAW_ROOT} AND
    DEFINED ENV{OCGFORGE_PHASE1_POST_RAW_ROOT} AND
