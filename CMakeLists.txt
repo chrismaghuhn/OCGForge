@@ -242,9 +242,12 @@ add_library(ygo_policy STATIC
     src/policy/production.cpp
     src/policy/random_legal.cpp
     src/policy/runner.cpp
+    src/policy/runner_shared.cpp
+    src/policy/teacher.cpp
+    src/policy/teacher_runner.cpp
 )
 target_include_directories(ygo_policy PUBLIC "${CMAKE_SOURCE_DIR}/include")
-target_link_libraries(ygo_policy PUBLIC ygo_trajectory)
+target_link_libraries(ygo_policy PUBLIC ygo_teacher)
 if(MSVC)
     target_compile_options(ygo_policy PRIVATE /W4 /permissive-)
 else()
@@ -377,6 +380,15 @@ add_executable(salamangreat_teacher_scenarios_test
 target_link_libraries(salamangreat_teacher_scenarios_test PRIVATE ygo_teacher)
 add_test(NAME salamangreat_teacher_scenarios_test
          COMMAND salamangreat_teacher_scenarios_test)
+
+add_executable(teacher_provenance_test tests/teacher/teacher_provenance_test.cpp)
+target_link_libraries(teacher_provenance_test PRIVATE ygo_policy)
+add_test(NAME teacher_provenance_test COMMAND teacher_provenance_test)
+
+add_executable(teacher_runner_trajectory_test
+               tests/teacher/teacher_runner_trajectory_test.cpp)
+target_link_libraries(teacher_runner_trajectory_test PRIVATE ygo_policy)
+add_test(NAME teacher_runner_trajectory_test COMMAND teacher_runner_trajectory_test)
 
 add_executable(ygo_core_probe tools/ygo_core_probe/main.cpp)
 target_link_libraries(ygo_core_probe PRIVATE ygo_m4)

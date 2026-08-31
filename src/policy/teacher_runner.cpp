@@ -1,4 +1,4 @@
-#include "ygo/policy/runner.hpp"
+#include "ygo/policy/teacher_runner.hpp"
 
 #include <algorithm>
 #include <array>
@@ -6,17 +6,17 @@
 #include <exception>
 #include <memory>
 #include <optional>
-#include <stdexcept>
 #include <string>
-#include <string_view>
 #include <utility>
 #include <variant>
 #include <vector>
 
+#include "runner_shared.hpp"
 #include "ygo/trace/sha256.hpp"
 #include "ygo/trajectory/codec.hpp"
-#include "runner_shared.hpp"
-#include "runner_test_support.hpp"
+#include "ygo/trajectory/dataset_manifest.hpp"
+#include "ygo/trajectory/receipt.hpp"
+#include "ygo/trajectory/shard.hpp"
 
 namespace ygo::policy {
 namespace {
@@ -43,151 +43,29 @@ const trajectory::ParticipantPolicyAssignment* assignment_for_player(
             continue;
         }
         if (result != nullptr) {
-            error = "runner requires one epoch-zero assignment per player";
+            error = "Teacher runner requires one assignment per player";
             return nullptr;
         }
         result = &assignment;
     }
     if (result == nullptr) {
-        error = "runner lacks a participant assignment for a player";
+        error = "Teacher runner lacks a participant assignment for a player";
     }
     return result;
 }
 
-const trajectory::PolicyArtifact* artifact_for(
-    const trajectory::PolicyProvenanceEnvelope& provenance,
-    const std::string_view artifact_id) noexcept {
-    const auto it = std::find_if(
-        provenance.policy_artifacts.begin(), provenance.policy_artifacts.end(),
-        [artifact_id](const auto& artifact) { return artifact.policy_artifact_id == artifact_id; });
-    return it == provenance.policy_artifacts.end() ? nullptr : &*it;
-}
-
-bool execution_binding_fields_match(const PolicyExecutionBinding& execution,
-                                    const trajectory::PolicyRngStreamIdentity& stream) noexcept {
-    return execution.policy_artifact_id == stream.policy_artifact_id &&
-           execution.participant_policy_assignment_id ==
-               stream.participant_policy_assignment_id &&
-           execution.policy_rng_contract_identity == stream.policy_rng_contract_identity &&
-           execution.policy_rng_stream_id == stream.policy_rng_stream_id &&
-           execution.policy_rng_initialization_identity ==
-               stream.policy_rng_initialization_identity &&
-           execution.policy_rng_identity == stream.policy_rng_identity;
-}
-
-bool policy_initialization_matches(
-    const RandomLegalPolicy& policy,
-    const trajectory::PolicyRngInitializationIdentity& expected) noexcept {
-    const auto& actual = policy.rng().initialization();
-    return actual.policy_rng_contract_identity == expected.policy_rng_contract_identity &&
-           actual.policy_rng_stream_id == expected.policy_rng_stream_id &&
-           actual.initialization_material == expected.initialization_material &&
-           actual.policy_rng_initialization_identity ==
-               expected.policy_rng_initialization_identity;
-}
-
-bool validate_execution_binding(const RandomLegalExecutionBinding& binding,
-                                const std::uint8_t player,
-                                const PolicyRunnerConfig& config,
-                                const trajectory::ProvenanceResolver& resolver,
-                                std::string& error) {
-    const auto* assignment = assignment_for_player(config.policy_provenance, player, error);
-    if (assignment == nullptr) {
-        return false;
-    }
-    const auto* artifact = artifact_for(
-        config.policy_provenance, binding.execution_binding.policy_artifact_id);
-    if (artifact == nullptr || artifact->policy_kind != trajectory::PolicyKind::RandomLegal) {
-        error = "runner binding references a non-RandomLegal artifact";
-        return false;
-    }
-    if (assignment->participant_policy_assignment_id !=
-            binding.execution_binding.participant_policy_assignment_id ||
-        assignment->policy_artifact_id != binding.execution_binding.policy_artifact_id ||
-        assignment->player != player) {
-        error = "runner binding does not match the player assignment";
-        return false;
-    }
-    if (binding.initialization.policy_rng_contract_identity !=
-            artifact->policy_rng_contract_identity ||
-        binding.initialization.policy_rng_stream_id != binding.stream.policy_rng_stream_id ||
-        binding.stream.policy_artifact_id != artifact->policy_artifact_id ||
-        binding.stream.participant_policy_assignment_id !=
-            assignment->participant_policy_assignment_id ||
-        binding.stream.policy_rng_contract_identity !=
-            artifact->policy_rng_contract_identity ||
-        binding.stream.policy_rng_initialization_identity !=
-            binding.initialization.policy_rng_initialization_identity ||
-        !execution_binding_fields_match(binding.execution_binding, binding.stream)) {
-        error = "runner binding identity fields are inconsistent";
-        return false;
-    }
-    if (trajectory::compute_policy_rng_stream_id(binding.stream) !=
-        binding.stream.policy_rng_identity) {
-        error = "runner binding stream identity does not recompute";
-        return false;
-    }
-    try {
-        (void)trajectory::canonical_policy_rng_initialization_identity_bytes(
-            binding.initialization);
-        (void)trajectory::canonical_policy_rng_stream_identity_bytes(binding.stream);
-    } catch (const std::exception& exception) {
-        error = exception.what();
-        return false;
-    }
-    if (!trajectory::validate_policy_rng_initialization_material(
-            binding.initialization, binding.initialization.initialization_material, resolver,
-            &error)) {
-        return false;
-    }
-    const auto* descriptor = resolver.policy_rng_contract_descriptor(
-        binding.initialization.policy_rng_contract_identity);
-    if (descriptor == nullptr || !descriptor->cursor_is_unique ||
-        !descriptor->cursor_is_unique(binding.initialization)) {
-        error = "runner binding lacks a unique typed RNG initialization";
-        return false;
-    }
-    return true;
-}
-
-bool add_rng_initialization_evidence(
-    const PolicyRunnerConfig& config,
+bool add_teacher_rng_evidence(
     const trajectory::DecisionRecord& record,
-    trajectory::RestrictedCollectionEvidenceBundle& evidence,
     std::string& error) {
     const auto& attribution = record.policy_rng_decision_provenance;
-    if (attribution.mode == trajectory::PolicyRngMode::None) {
-        return true;
-    }
-    if (record.frame.acting_player > 1) {
-        error = "record has an invalid acting player for RNG evidence";
-        return false;
-    }
-    const auto& session = config.sessions[record.frame.acting_player];
-    if (!session.has_value()) {
-        error = "record references a missing execution session";
-        return false;
-    }
-    const auto& binding = session->binding;
-    if (attribution.policy_rng_initialization_identity !=
-            binding.initialization.policy_rng_initialization_identity ||
-        attribution.policy_rng_identity != binding.stream.policy_rng_identity) {
-        error = "record RNG attribution does not match its execution binding";
-        return false;
-    }
-    const auto existing = std::find_if(
-        evidence.rng_initializations.begin(), evidence.rng_initializations.end(),
-        [&](const auto& item) {
-            return item.policy_rng_initialization_identity ==
-                   binding.initialization.policy_rng_initialization_identity;
-        });
-    if (existing == evidence.rng_initializations.end()) {
-        evidence.rng_initializations.push_back(
-            {binding.initialization.policy_rng_initialization_identity,
-             binding.initialization.initialization_material});
-    } else if (existing->initialization_material !=
-               binding.initialization.initialization_material) {
-        error = "one RNG initialization identity has conflicting raw material";
+    if (attribution.mode != trajectory::PolicyRngMode::None ||
+        attribution.policy_rng_identity != trajectory::kNoPolicyRngContractId ||
+        attribution.policy_rng_contract_identity != trajectory::kNoPolicyRngContractId ||
+        attribution.policy_rng_stream_id != trajectory::kNoPolicyRngContractId ||
+        attribution.policy_rng_initialization_identity != trajectory::kNoPolicyRngContractId ||
+        attribution.pre_cursor.has_value() || attribution.post_cursor.has_value() ||
+        attribution.pre_state.has_value() || attribution.post_state.has_value()) {
+        error = "Teacher record contains non-NONE RNG attribution";
         return false;
     }
     return true;
@@ -217,22 +95,19 @@ bool build_dataset_manifest(const trajectory::VerifiedAdmissionReceipt& receipt,
         }
         output.dataset_semantic_id = trajectory::dataset::dataset_semantic_id(record_ids);
         (void)trajectory::dataset::canonical_dataset_manifest_bytes(output);
-        if (!trajectory::dataset::validate_dataset_manifest(
-                output, std::vector<trajectory::VerifiedAdmissionReceipt>{receipt}, &error)) {
-            return false;
-        }
-        return true;
+        return trajectory::dataset::validate_dataset_manifest(
+            output, std::vector<trajectory::VerifiedAdmissionReceipt>{receipt}, &error);
     } catch (const std::exception& exception) {
         error = exception.what();
         return false;
     } catch (...) {
-        error = "dataset manifest construction threw";
+        error = "Teacher dataset manifest construction threw";
         return false;
     }
 }
 
-PolicyRunnerResult finalize_run(
-    const PolicyRunnerConfig& config,
+PolicyRunnerResult finalize_teacher_run(
+    const TeacherRunnerConfig& config,
     trajectory::TrajectoryRecorder& recorder,
     const trajectory::ProvenanceResolver& resolver,
     const std::optional<environment::EpisodeInterrupted>& interruption,
@@ -241,11 +116,10 @@ PolicyRunnerResult finalize_run(
         std::string error;
         const auto sealed = recorder.seal(&error);
         if (!sealed.has_value()) {
-            return failed_result("runner could not seal trajectory: " + error);
+            return failed_result("Teacher runner could not seal trajectory: " + error);
         }
         PolicyRunnerResult result;
         result.envelope = *sealed;
-
         const auto envelope_bytes = trajectory::canonical_episode_envelope_bytes(*result.envelope);
         trajectory::CandidateTrajectoryShard shard;
         shard.entries.push_back({ygo::trace::sha256_bytes(envelope_bytes), envelope_bytes});
@@ -254,25 +128,19 @@ PolicyRunnerResult finalize_run(
         trajectory::RestrictedCollectionEvidenceBundle evidence;
         evidence.candidate_shard_artifact_sha256 = shard_artifact;
         for (const auto& record : result.envelope->records) {
-            if (!add_rng_initialization_evidence(config, record, evidence, error)) {
-                return failed_result("runner could not build RNG evidence: " + error);
+            if (!add_teacher_rng_evidence(record, error)) {
+                return failed_result("Teacher runner could not build RNG evidence: " + error);
             }
         }
-        std::sort(evidence.rng_initializations.begin(), evidence.rng_initializations.end(),
-                  [](const auto& left, const auto& right) {
-                      return left.policy_rng_initialization_identity <
-                             right.policy_rng_initialization_identity;
-                  });
-
         if (interruption.has_value()) {
             if (!std::holds_alternative<trajectory::InterruptedClosure>(result.envelope->closure)) {
-                return failed_result("runner received interruption evidence for a non-interrupted closure");
+                return failed_result("Teacher runner interruption evidence has the wrong closure");
             }
             evidence.interrupted_episodes.push_back(
                 {shard.entries.front().episode_envelope_sha256,
                  detail::restricted_replay_evidence_for_interruption(*interruption)});
         } else if (std::holds_alternative<trajectory::InterruptedClosure>(result.envelope->closure)) {
-            return failed_result("runner sealed an interrupted closure without V2 evidence");
+            return failed_result("Teacher runner sealed interruption without V2 evidence");
         }
         (void)trajectory::canonical_restricted_collection_evidence_bundle_bytes(evidence);
         const auto evidence_artifact =
@@ -281,9 +149,8 @@ PolicyRunnerResult finalize_run(
         result.restricted_evidence = evidence;
 
         if (std::holds_alternative<trajectory::FailedClosure>(result.envelope->closure)) {
-            return failed_result("V2 run closed with an EpisodeFailure");
+            return failed_result("Teacher V2 run closed with an EpisodeFailure");
         }
-
         trajectory::admission::ReplayOptions options;
         options.cancellation_source = config.run_control.cancellation.source;
         if (std::holds_alternative<trajectory::TerminalClosure>(result.envelope->closure)) {
@@ -291,32 +158,32 @@ PolicyRunnerResult finalize_run(
         }
         std::string admission_error;
         auto verification = trajectory::admission::verify_candidate_shard_for_admission(
-            *result.candidate_shard, *result.restricted_evidence, shard_artifact, evidence_artifact,
-            options, resolver, &admission_error);
+            *result.candidate_shard, *result.restricted_evidence, shard_artifact,
+            evidence_artifact, options, resolver, &admission_error);
         if (quarantined) {
             if (verification.has_value()) {
-                return failed_result("quarantined trajectory unexpectedly passed admission");
+                return failed_result("quarantined Teacher trajectory passed admission");
             }
             result.disposition = PolicyRunnerDisposition::Quarantined;
-            result.diagnostic = "quarantined trajectory was rejected by clean admission";
+            result.diagnostic = "quarantined Teacher trajectory was rejected by clean admission";
             if (!admission_error.empty()) {
                 result.diagnostic += ": " + admission_error;
             }
             return result;
         }
         if (!verification.has_value()) {
-            return failed_result("clean trajectory failed admission: " + admission_error);
+            return failed_result("clean Teacher trajectory failed admission: " + admission_error);
         }
         result.admission_verification = std::move(*verification);
         auto receipt = trajectory::issue_admission_receipt(
             *result.admission_verification, &error);
         if (!receipt.has_value()) {
-            return failed_result("runner could not issue an admission receipt: " + error);
+            return failed_result("Teacher runner could not issue admission receipt: " + error);
         }
         result.admission_receipt = std::move(*receipt);
         trajectory::DatasetManifest manifest;
         if (!build_dataset_manifest(*result.admission_receipt, manifest, error)) {
-            return failed_result("runner could not validate the dataset manifest: " + error);
+            return failed_result("Teacher runner could not validate dataset manifest: " + error);
         }
         result.dataset_manifest = std::move(manifest);
         result.disposition = PolicyRunnerDisposition::CleanAdmitted;
@@ -324,41 +191,64 @@ PolicyRunnerResult finalize_run(
     } catch (const std::exception& exception) {
         return failed_result(exception.what());
     } catch (...) {
-        return failed_result("runner finalization threw");
+        return failed_result("Teacher runner finalization threw");
     }
 }
 
 }  // namespace
 
-PolicyRunnerCreateResult PolicyRunner::create(PolicyRunnerConfig config) noexcept {
+TeacherRunnerCreateResult TeacherRunner::create(TeacherRunnerConfig config) noexcept {
     try {
         const auto resolver = make_production_policy_provenance_resolver();
+        std::string error;
+        if (config.policy_provenance.policy_artifacts.size() != 2 ||
+            config.policy_provenance.participant_assignments.size() != 2) {
+            return {std::nullopt,
+                    PolicyError{PolicyErrorCode::InvalidConfiguration,
+                                "Teacher runner requires exactly two current profile artifacts and assignments"}};
+        }
+        if (!resolver.validate(config.policy_provenance, config.environment_config,
+                               config.episode_spec, &error)) {
+            return {std::nullopt,
+                    PolicyError{PolicyErrorCode::InvalidConfiguration, std::move(error)}};
+        }
         for (std::uint8_t player = 0; player < 2; ++player) {
             if (!config.sessions[player].has_value()) {
                 return {std::nullopt,
                         PolicyError{PolicyErrorCode::InvalidConfiguration,
-                                    "runner lacks a RandomLegal session for a player"}};
+                                    "Teacher runner lacks a session for a player"}};
+            }
+            const auto* assignment = assignment_for_player(
+                config.policy_provenance, player, error);
+            if (assignment == nullptr) {
+                return {std::nullopt,
+                        PolicyError{PolicyErrorCode::InvalidConfiguration, std::move(error)}};
             }
             const auto& session = *config.sessions[player];
-            std::string error;
-            if (!validate_execution_binding(session.binding, player, config,
-                                            resolver, error)) {
+            if (session.assignment.player != player ||
+                session.assignment.participant_policy_assignment_id !=
+                    assignment->participant_policy_assignment_id ||
+                session.assignment.policy_artifact_id != assignment->policy_artifact_id ||
+                session.artifact.policy_artifact_id != assignment->policy_artifact_id ||
+                session.policy.participant() != player ||
+                session.policy.participant_policy_assignment_id() !=
+                    assignment->participant_policy_assignment_id ||
+                session.artifact.artifact_metadata_identity !=
+                    std::optional<std::string>{session.policy.policy_binding().teacher_policy_binding_id}) {
                 return {std::nullopt,
                         PolicyError{PolicyErrorCode::InvalidConfiguration,
-                                     std::move(error)}};
+                                    "Teacher session does not match its participant assignment"}};
             }
-            if (session.policy.rng().cursor() != 0 ||
-                !policy_initialization_matches(session.policy, session.binding.initialization)) {
+            if (!session.policy.profile().profile_id.empty() &&
+                (session.policy.profile().own_deck_role !=
+                     static_cast<std::uint8_t>(assignment->deck_role) ||
+                 !teacher::validate_strategy_profile_binding(
+                     session.policy.profile(), config.environment_config, &error) ||
+                 !teacher::validate_teacher_policy_binding(
+                     session.policy.policy_binding(), session.policy.profile(), &error))) {
                 return {std::nullopt,
-                        PolicyError{PolicyErrorCode::InvalidConfiguration,
-                                    "runner RandomLegal policy state does not match its binding"}};
+                        PolicyError{PolicyErrorCode::InvalidConfiguration, std::move(error)}};
             }
-        }
-        if (config.sessions[0]->binding.stream.policy_rng_identity ==
-            config.sessions[1]->binding.stream.policy_rng_identity) {
-            return {std::nullopt,
-                    PolicyError{PolicyErrorCode::InvalidConfiguration,
-                                "runner reuses one policy RNG identity for two players"}};
         }
 
         auto factory = environment::EpisodicEnvironment::create(config.environment_config);
@@ -379,7 +269,7 @@ PolicyRunnerCreateResult PolicyRunner::create(PolicyRunnerConfig config) noexcep
         }
         auto recorder = std::make_unique<trajectory::TrajectoryRecorder>(
             config.environment_config, config.episode_spec, config.policy_provenance, resolver);
-        return {std::optional<PolicyRunner>(PolicyRunner(
+        return {std::optional<TeacherRunner>(TeacherRunner(
                     std::move(config), std::move(environment), std::move(recorder), resolver)),
                 std::nullopt};
     } catch (const std::exception& exception) {
@@ -388,18 +278,14 @@ PolicyRunnerCreateResult PolicyRunner::create(PolicyRunnerConfig config) noexcep
     } catch (...) {
         return {std::nullopt,
                 PolicyError{PolicyErrorCode::InvalidConfiguration,
-                            "policy runner construction threw"}};
+                            "Teacher runner construction threw"}};
     }
 }
 
-PolicyRunnerResult PolicyRunner::run() noexcept {
-    return run_impl(nullptr);
-}
-
-PolicyRunnerResult PolicyRunner::run_impl(
-    const detail::PolicyRunnerTestOverride* test_override) noexcept {
+PolicyRunnerResult TeacherRunner::run_impl(
+    const detail::TeacherRunnerTestOverride* test_override) noexcept {
     if (has_run_) {
-        return failed_result("policy runner can only execute one collection run");
+        return failed_result("Teacher runner can only execute one collection run");
     }
     has_run_ = true;
     try {
@@ -414,7 +300,6 @@ PolicyRunnerResult PolicyRunner::run_impl(
                           std::string(environment::reset_rejection_code_name(
                               rejected->rejection_code)));
         }
-
         Boundary boundary = reset_accepted->next;
         std::optional<environment::EpisodeInterrupted> interruption;
         std::optional<trajectory::TerminalViews> terminal_views;
@@ -423,14 +308,14 @@ PolicyRunnerResult PolicyRunner::run_impl(
         }
         std::string recorder_error;
         if (!recorder_->on_reset_accepted(*reset_accepted, terminal_views, &recorder_error)) {
-            return failed_result("recorder rejected V2 reset: " + recorder_error);
+            return failed_result("Teacher recorder rejected V2 reset: " + recorder_error);
         }
         if (const auto* reset_interrupted =
                 std::get_if<environment::EpisodeInterrupted>(&boundary)) {
             interruption = *reset_interrupted;
         }
         if (recorder_->lifecycle() == trajectory::RecorderLifecycle::Closed) {
-            return finalize_run(
+            return finalize_teacher_run(
                 config_, *recorder_, resolver_, interruption,
                 recorder_->manifest().collection_disposition.kind ==
                     trajectory::CollectionDispositionKind::QuarantinedAfterPolicyRejection);
@@ -439,26 +324,27 @@ PolicyRunnerResult PolicyRunner::run_impl(
         for (;;) {
             const auto* frame = std::get_if<environment::DecisionFrame>(&boundary);
             if (frame == nullptr || frame->acting_player > 1) {
-                return failed_result("runner reached a non-actionable or invalid V2 frame");
+                return failed_result("Teacher runner reached an invalid V2 frame");
             }
             auto& session = *config_.sessions[frame->acting_player];
-            const auto& binding = session.binding;
+            if (frame->public_observation.perspective_player != frame->acting_player) {
+                return failed_result("Teacher runner received a cross-participant public frame");
+            }
             const PolicyInput input{frame->public_observation, frame->request.candidates};
             PolicySelection selection;
-            if (test_override != nullptr &&
-                test_override->player == frame->acting_player) {
+            if (test_override != nullptr && test_override->player == frame->acting_player) {
                 if (test_override->selection_calls != nullptr) {
                     ++*test_override->selection_calls;
                 }
                 switch (test_override->behavior) {
-                    case detail::TestSelectorBehavior::InvalidPublicAction:
-                        selection.value = PolicySelectionResult{
-                            "not-a-public-action-key", PolicyRngCursorTransition{0, 0}};
-                        break;
-                    case detail::TestSelectorBehavior::PolicyFailure:
-                        selection.error = PolicyError{PolicyErrorCode::InvalidConfiguration,
-                                                      "test policy failure"};
-                        break;
+                case detail::TeacherRunnerTestSelectorBehavior::InvalidPublicAction:
+                    selection.value = PolicySelectionResult{
+                        "not-a-public-action-key", std::nullopt};
+                    break;
+                case detail::TeacherRunnerTestSelectorBehavior::PolicyFailure:
+                    selection.error = PolicyError{
+                        PolicyErrorCode::InvalidConfiguration, "test Teacher policy failure"};
+                    break;
                 }
             } else {
                 selection = session.policy.select(input);
@@ -466,20 +352,14 @@ PolicyRunnerResult PolicyRunner::run_impl(
             if (!selection) {
                 return failed_result(
                     selection.error.has_value() ? selection.error->message
-                                                : "policy selector returned no selection",
-                    selection.error.has_value()
-                        ? selection.error
-                        : std::optional<PolicyError>{PolicyError{
-                              PolicyErrorCode::InvalidConfiguration,
-                              "policy selector returned no selection"}});
+                                                : "Teacher returned no selection",
+                    selection.error);
             }
-            if (selection.value->rng_cursor.has_value() &&
-                selection.value->rng_cursor->post_cursor <
-                    selection.value->rng_cursor->pre_cursor) {
+            if (selection.value->rng_cursor.has_value()) {
                 return failed_result(
-                    "policy selector returned a wrapping cursor transition",
+                    "Teacher returned a policy RNG cursor",
                     PolicyError{PolicyErrorCode::InvalidConfiguration,
-                                "policy selector returned a wrapping cursor transition"});
+                                "Teacher returned a policy RNG cursor"});
             }
 
             environment::ActionSelection action;
@@ -491,8 +371,9 @@ PolicyRunnerResult PolicyRunner::run_impl(
             const auto pre_rejection_frame = *frame;
             const auto stepped = environment_->step(action);
             if (const auto* rejected = std::get_if<environment::StepRejected>(&stepped)) {
+                session.policy.reject_pending_proposal();
                 if (!recorder_->on_step_rejected(*rejected, true, &recorder_error)) {
-                    return failed_result("recorder rejected policy-origin StepRejected: " +
+                    return failed_result("Teacher recorder rejected policy-origin StepRejected: " +
                                          recorder_error);
                 }
                 const auto interrupted = environment_->interrupt(environment::InterruptRequest{
@@ -503,42 +384,35 @@ PolicyRunnerResult PolicyRunner::run_impl(
                     if (!recorder_->on_interrupt_accepted(
                             std::optional<environment::DecisionFrame>{pre_rejection_frame},
                             *accepted_interrupt, &recorder_error)) {
-                        return failed_result("recorder rejected administrative quarantine: " +
+                        return failed_result("Teacher recorder rejected quarantine: " +
                                              recorder_error);
                     }
-                    return finalize_run(config_, *recorder_, resolver_,
-                                        accepted_interrupt->interruption, true);
+                    return finalize_teacher_run(config_, *recorder_, resolver_,
+                                                accepted_interrupt->interruption, true);
                 }
-                if (const auto* interrupt_failure =
-                        std::get_if<environment::EpisodeFailure>(&interrupted)) {
-                    (void)recorder_->on_failure(*interrupt_failure, &recorder_error);
-                    return failed_result(
-                        "administrative quarantine returned an EpisodeFailure: " +
-                        (recorder_error.empty() ? std::string("fail-closed") : recorder_error));
-                }
-                const auto* interrupt_rejected =
-                    std::get_if<environment::InterruptRejected>(&interrupted);
-                return failed_result(
-                    interrupt_rejected == nullptr
-                        ? "administrative quarantine returned an unknown result"
-                        : "administrative quarantine was rejected: " +
-                              std::string(environment::rejection_code_name(
-                                  interrupt_rejected->rejection_code)));
+                return failed_result("Teacher administrative quarantine failed");
             }
 
             const auto* accepted = std::get_if<environment::StepAccepted>(&stepped);
             if (accepted == nullptr) {
                 return failed_result("V2 step returned an unknown result");
             }
+            if (!session.policy.commit(accepted->transition)) {
+                return failed_result(
+                    "Teacher accepted transition did not match its pending proposal",
+                    PolicyError{PolicyErrorCode::LifecycleFailure,
+                                "Teacher accepted transition did not match its pending proposal"});
+            }
             const auto attribution = detail::make_policy_rng_attribution(
-                *frame, binding.execution_binding, *selection.value);
+                *frame, session.execution_binding(), *selection.value);
             terminal_views.reset();
             if (std::holds_alternative<environment::EpisodeTerminal>(accepted->next)) {
                 terminal_views = detail::terminal_views_for_environment(*environment_);
             }
             if (!recorder_->on_step_accepted(*accepted, attribution, terminal_views,
                                              &recorder_error)) {
-                return failed_result("recorder rejected accepted V2 step: " + recorder_error);
+                return failed_result("Teacher recorder rejected accepted V2 step: " +
+                                     recorder_error);
             }
             interruption.reset();
             if (const auto* next_interrupted =
@@ -546,7 +420,7 @@ PolicyRunnerResult PolicyRunner::run_impl(
                 interruption = *next_interrupted;
             }
             if (recorder_->lifecycle() == trajectory::RecorderLifecycle::Closed) {
-                return finalize_run(
+                return finalize_teacher_run(
                     config_, *recorder_, resolver_, interruption,
                     recorder_->manifest().collection_disposition.kind ==
                         trajectory::CollectionDispositionKind::QuarantinedAfterPolicyRejection);
@@ -556,8 +430,22 @@ PolicyRunnerResult PolicyRunner::run_impl(
     } catch (const std::exception& exception) {
         return failed_result(exception.what());
     } catch (...) {
-        return failed_result("policy runner execution threw");
+        return failed_result("Teacher runner execution threw");
     }
+}
+
+PolicyRunnerResult TeacherRunner::run() noexcept {
+    return run_impl(nullptr);
+}
+
+PolicyRunnerResult detail::TeacherRunnerTestAccess::run_with_test_selector(
+    TeacherRunner& runner,
+    const std::uint8_t player,
+    const TeacherRunnerTestSelectorBehavior behavior,
+    std::shared_ptr<std::size_t> selection_calls) {
+    const TeacherRunnerTestOverride override_value{player, behavior,
+                                                   std::move(selection_calls)};
+    return runner.run_impl(&override_value);
 }
 
 }  // namespace ygo::policy
