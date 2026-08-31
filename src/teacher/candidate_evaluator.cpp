@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <new>
 #include <utility>
 
 #include "ygo/environment/public_action_identity.hpp"
@@ -32,6 +33,22 @@ bool valid_candidate_domain(
     return true;
 }
 
+CandidateEvaluation invalid_evaluation(
+    const environment::EnvironmentActionCandidate& candidate) {
+    CandidateEvaluation result;
+    result.public_action_key = candidate.public_action_key;
+    result.status = CandidateEvaluationStatus::Invalid;
+    return result;
+}
+
+bool valid_evaluator_evaluation(const CandidateEvaluation& evaluation) {
+    TeacherRankingResult validation;
+    validation.status = TeacherRankingStatus::InvalidInput;
+    validation.evaluations.push_back(evaluation);
+    return validate_teacher_ranking_result(validation) &&
+           evaluation.status != CandidateEvaluationStatus::Invalid;
+}
+
 }  // namespace
 
 bool evaluate_candidate_domain(
@@ -46,20 +63,23 @@ bool evaluate_candidate_domain(
 
         evaluations.reserve(candidates.size());
         for (const auto& candidate : candidates) {
-            auto evaluation = evaluator(candidate);
-            if (evaluation.public_action_key != candidate.public_action_key) {
-                evaluations.clear();
-                return false;
+            CandidateEvaluation evaluation;
+            bool evaluator_failed = false;
+            try {
+                evaluation = evaluator(candidate);
+            } catch (const std::bad_alloc&) {
+                throw;
+            } catch (...) {
+                evaluator_failed = true;
             }
-            evaluations.push_back(std::move(evaluation));
-        }
 
-        TeacherRankingResult validation;
-        validation.status = TeacherRankingStatus::InvalidInput;
-        validation.evaluations = evaluations;
-        if (!validate_teacher_ranking_result(validation)) {
-            evaluations.clear();
-            return false;
+            if (evaluator_failed ||
+                evaluation.public_action_key != candidate.public_action_key ||
+                !valid_evaluator_evaluation(evaluation)) {
+                evaluations.push_back(invalid_evaluation(candidate));
+            } else {
+                evaluations.push_back(std::move(evaluation));
+            }
         }
         return true;
     } catch (...) {
