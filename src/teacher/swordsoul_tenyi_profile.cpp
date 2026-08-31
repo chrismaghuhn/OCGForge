@@ -1,4 +1,4 @@
-#include "ygo/teacher/strategy_profile.hpp"
+#include "ygo/teacher/swordsoul_tenyi_profile.hpp"
 
 #include <cstdint>
 #include <string>
@@ -42,6 +42,12 @@ PredicateRef observation_boolean(const std::string& fact_id, const bool value) {
 PredicateRef observation_u64_at_least(const std::string& fact_id,
                                       const std::uint64_t value) {
     return predicate(PredicateScope::Observation, "observation.fact_u64_at_least",
+                     {token_atom(fact_id), u64_atom(value)});
+}
+
+PredicateRef observation_u64_equals(const std::string& fact_id,
+                                    const std::uint64_t value) {
+    return predicate(PredicateScope::Observation, "observation.fact_u64_equals",
                      {token_atom(fact_id), u64_atom(value)});
 }
 
@@ -111,8 +117,6 @@ StrategyProfileV1 build_profile() {
 
     value.resources = {
         {"resource.chain.window", "public.chain.length", 4294967295U, 20, 10},
-        {"resource.main.phase", "public.turn.phase", 4294967295U, 30, 10},
-        {"resource.self.life", "public.life_points.self", 4294967295U, 20, 10},
     };
 
     value.candidate_intents = {
@@ -123,7 +127,6 @@ StrategyProfileV1 build_profile() {
         {"intent.longyuan.access", {candidate_source_role("role.starter.longyuan")} },
         {"intent.mo_ye.starter", {candidate_source_role("role.starter.mo_ye")} },
         {"intent.monk.access", {candidate_source_role("role.tenyi.monk")} },
-        {"intent.safe.stop", {candidate_action("finish")} },
         {"intent.search", {candidate_source_role("role.searcher")} },
         {"intent.summit.recovery", {candidate_source_role("role.recovery.summit")} },
         {"intent.taia.recovery", {candidate_source_role("role.starter.taia")} },
@@ -133,7 +136,7 @@ StrategyProfileV1 build_profile() {
     const auto terminal_false = observation_boolean("public.terminal", false);
     const auto terminal_true = observation_boolean("public.terminal", true);
     const auto active_actor = observation_boolean("public.current_actor_is_perspective", true);
-    const auto phase_two = observation_u64_at_least("public.turn.phase", 2);
+    const auto main1_phase = observation_u64_equals("public.turn.phase", 0x04);
 
     // The current public fact registry has no ATK/DEF or damage-proof fact, so
     // this slice deliberately does not publish a lethal-action intent.
@@ -141,7 +144,6 @@ StrategyProfileV1 build_profile() {
         {"goal.foundation.chixiao", 100, {terminal_false}, {}, {terminal_true}},
         {"goal.interaction.preservation", 90, {terminal_false}, {}, {terminal_true}},
         {"goal.level10.access", 80, {terminal_false}, {}, {terminal_true}},
-        {"goal.safe.stop", 10, {terminal_false}, {terminal_true}, {}},
         {"goal.taia.summit.recovery", 70, {terminal_false}, {}, {terminal_true}},
         {"goal.tenyi.monk.access", 60, {terminal_false}, {}, {terminal_true}},
     };
@@ -159,8 +161,7 @@ StrategyProfileV1 build_profile() {
     LineDefinition foundation;
     foundation.line_id = "line.foundation.chixiao";
     foundation.goal_id = "goal.foundation.chixiao";
-    foundation.applicability_predicates = {phase_two};
-    foundation.required_resources = {{"resource.main.phase", 2}};
+    foundation.applicability_predicates = {main1_phase};
     foundation.nodes = {foundation_chixiao, foundation_interaction};
     foundation.dependencies = {{"node.foundation.chixiao", "node.foundation.interaction"}};
     foundation.recovery_edge_ids = {"recovery.foundation.interaction"};
@@ -176,6 +177,7 @@ StrategyProfileV1 build_profile() {
     interaction.applicability_predicates = {active_actor};
     interaction.required_resources = {{"resource.chain.window", 1}};
     interaction.nodes = {interaction_node};
+    interaction.recovery_edge_ids = {"recovery.interaction.foundation"};
 
     LineNode level10_access;
     level10_access.node_id = "node.level10.longyuan";
@@ -190,22 +192,10 @@ StrategyProfileV1 build_profile() {
     LineDefinition level10;
     level10.line_id = "line.level10.longyuan";
     level10.goal_id = "goal.level10.access";
-    level10.applicability_predicates = {phase_two};
-    level10.required_resources = {{"resource.main.phase", 2}};
+    level10.applicability_predicates = {main1_phase};
     level10.nodes = {level10_access, level10_payoff};
     level10.dependencies = {{"node.level10.longyuan", "node.level10.payoff"}};
     level10.recovery_edge_ids = {"recovery.level10.tenyi"};
-
-    LineNode safe_node;
-    safe_node.node_id = "node.safe.stop";
-    safe_node.candidate_intent_ids = {"intent.safe.stop"};
-    safe_node.completion_predicates = {terminal_true};
-
-    LineDefinition safe;
-    safe.line_id = "line.safe.stop";
-    safe.goal_id = "goal.safe.stop";
-    safe.applicability_predicates = {terminal_false};
-    safe.nodes = {safe_node};
 
     LineNode taia_access;
     taia_access.node_id = "node.taia.access";
@@ -220,11 +210,9 @@ StrategyProfileV1 build_profile() {
     LineDefinition taia;
     taia.line_id = "line.taia.summit";
     taia.goal_id = "goal.taia.summit.recovery";
-    taia.applicability_predicates = {phase_two};
-    taia.required_resources = {{"resource.self.life", 1}};
+    taia.applicability_predicates = {main1_phase};
     taia.nodes = {taia_access, summit_recovery};
     taia.dependencies = {{"node.taia.access", "node.taia.summit"}};
-    taia.recovery_edge_ids = {"recovery.taia.summit"};
 
     LineNode tenyi_body;
     tenyi_body.node_id = "node.tenyi.body";
@@ -239,12 +227,11 @@ StrategyProfileV1 build_profile() {
     LineDefinition tenyi;
     tenyi.line_id = "line.tenyi.monk";
     tenyi.goal_id = "goal.tenyi.monk.access";
-    tenyi.applicability_predicates = {phase_two};
-    tenyi.required_resources = {{"resource.main.phase", 2}};
+    tenyi.applicability_predicates = {main1_phase};
     tenyi.nodes = {tenyi_body, monk_access};
     tenyi.dependencies = {{"node.tenyi.body", "node.tenyi.monk"}};
 
-    value.lines = {foundation, interaction, level10, safe, taia, tenyi};
+    value.lines = {foundation, interaction, level10, taia, tenyi};
 
     RecoveryEdge foundation_recovery;
     foundation_recovery.recovery_edge_id = "recovery.foundation.interaction";
@@ -255,7 +242,7 @@ StrategyProfileV1 build_profile() {
     foundation_recovery.candidate_intent_ids = {"intent.interaction.chain"};
     foundation_recovery.target_goal_id = "goal.interaction.preservation";
     foundation_recovery.target_line_id = "line.interaction.preserve";
-    foundation_recovery.preserve_resource_ids = {"resource.chain.window"};
+    foundation_recovery.preserve_resource_ids = {};
     foundation_recovery.confidence_cap = ConfidenceClass::Medium;
 
     RecoveryEdge level10_recovery;
@@ -267,25 +254,27 @@ StrategyProfileV1 build_profile() {
     level10_recovery.candidate_intent_ids = {"intent.tenyi.body"};
     level10_recovery.target_goal_id = "goal.tenyi.monk.access";
     level10_recovery.target_line_id = "line.tenyi.monk";
-    level10_recovery.preserve_resource_ids = {"resource.main.phase"};
+    level10_recovery.preserve_resource_ids = {};
     level10_recovery.confidence_cap = ConfidenceClass::Low;
 
-    RecoveryEdge taia_recovery;
-    taia_recovery.recovery_edge_id = "recovery.taia.summit";
-    taia_recovery.source_kind = RecoverySourceKind::Line;
-    taia_recovery.source_id = "line.taia.summit";
-    taia_recovery.invalidation_reason_ids = {"public_state_contradiction"};
-    taia_recovery.preconditions = {terminal_false};
-    taia_recovery.candidate_intent_ids = {"intent.summit.recovery"};
-    taia_recovery.target_goal_id = "goal.taia.summit.recovery";
-    taia_recovery.target_line_id = "line.taia.summit";
-    taia_recovery.preserve_resource_ids = {"resource.self.life"};
-    taia_recovery.confidence_cap = ConfidenceClass::Medium;
+    // No public fact identifies a Taia/Summit body, target, or resource, so
+    // this minimal slice does not publish a Taia/Summit recovery edge.
+    RecoveryEdge interaction_recovery;
+    interaction_recovery.recovery_edge_id = "recovery.interaction.foundation";
+    interaction_recovery.source_kind = RecoverySourceKind::Line;
+    interaction_recovery.source_id = "line.interaction.preserve";
+    interaction_recovery.invalidation_reason_ids = {"public_state_contradiction"};
+    interaction_recovery.preconditions = {terminal_false};
+    interaction_recovery.candidate_intent_ids = {"intent.mo_ye.starter"};
+    interaction_recovery.target_goal_id = "goal.foundation.chixiao";
+    interaction_recovery.target_line_id = "line.foundation.chixiao";
+    interaction_recovery.preserve_resource_ids = {};
+    interaction_recovery.confidence_cap = ConfidenceClass::Low;
 
     value.recovery_edges = {
         foundation_recovery,
+        interaction_recovery,
         level10_recovery,
-        taia_recovery,
     };
 
     InteractionRule blackout;
@@ -304,8 +293,6 @@ StrategyProfileV1 build_profile() {
          PreferenceSubjectKind::Line, "line.interaction.preserve", 70},
         {ScoreDimension::ActiveGoalLineOrValidatedRecoveryProgress,
          PreferenceSubjectKind::Line, "line.level10.longyuan", 60},
-        {ScoreDimension::ActiveGoalLineOrValidatedRecoveryProgress,
-         PreferenceSubjectKind::Line, "line.safe.stop", 10},
         {ScoreDimension::ActiveGoalLineOrValidatedRecoveryProgress,
          PreferenceSubjectKind::Line, "line.taia.summit", 50},
         {ScoreDimension::ActiveGoalLineOrValidatedRecoveryProgress,

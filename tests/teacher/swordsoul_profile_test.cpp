@@ -1,5 +1,6 @@
 #include "ygo/teacher/strategy_profile.hpp"
 #include "ygo/teacher/strategy_profile_codec.hpp"
+#include "ygo/teacher/swordsoul_tenyi_profile.hpp"
 
 #include <algorithm>
 #include <cstdint>
@@ -11,10 +12,6 @@
 #include "ygo/environment/episodic_environment.hpp"
 #include "ygo/trajectory/codec.hpp"
 #include "ygo/trace/sha256.hpp"
-
-namespace ygo::teacher {
-StrategyProfileV1 make_swordsoul_tenyi_profile();
-}
 
 namespace {
 
@@ -139,7 +136,7 @@ void test_locked_roles_and_minimal_slice() {
     const std::vector<std::string> expected_intents = {
         "intent.board.breaker", "intent.interaction.chain", "intent.level10.payoff",
         "intent.level8.payoff", "intent.longyuan.access",
-        "intent.mo_ye.starter", "intent.monk.access", "intent.safe.stop", "intent.search",
+        "intent.mo_ye.starter", "intent.monk.access", "intent.search",
         "intent.summit.recovery", "intent.taia.recovery", "intent.tenyi.body",
     };
     for (const auto& intent : expected_intents) {
