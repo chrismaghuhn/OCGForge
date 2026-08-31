@@ -2,28 +2,29 @@
 
 #include <array>
 #include <cstdint>
-#include <memory>
 #include <optional>
 #include <string>
 #include <vector>
 
-#include "ygo/teacher/teacher_explanation.hpp"
-
 namespace ygo::policy {
-struct PolicyError;
 struct PolicySelection;
 }
 
 namespace ygo::teacher {
-
-struct TeacherStateDelta;
-using TeacherStateDeltaPtr = std::shared_ptr<const TeacherStateDelta>;
 
 enum class TeacherRankingStatus : std::uint8_t {
     Selected = 0,
     InvalidInput = 1,
     Blocked = 2,
     Unsupported = 3,
+};
+
+enum class TeacherFallbackLevel : std::uint8_t {
+    F0 = 0,
+    F1 = 1,
+    F2 = 2,
+    F3 = 3,
+    F4 = 4,
 };
 
 enum class CandidateEvaluationStatus : std::uint8_t {
@@ -61,17 +62,11 @@ struct TeacherRankingResult final {
     std::vector<CandidateEvaluation> evaluations;
     std::optional<std::string> selected_public_action_key;
     std::optional<ScoreVector> selected_score_vector;
-    std::optional<std::uint8_t> fallback_level;
+    std::optional<TeacherFallbackLevel> fallback_level;
 
-    // These pointers are optional handles to future-owned values. Task 3
-    // never constructs, serializes, or interprets either value.
-    TeacherDecisionExplanationPtr explanation;
-    TeacherStateDeltaPtr proposed_state_delta;
-
-    // Reuses the existing policy error type; this is not a Teacher-specific
-    // gameplay result channel.
-    using PolicyErrorPtr = std::shared_ptr<const policy::PolicyError>;
-    PolicyErrorPtr diagnostic;
+    // This is the intentionally minimal Task-3 staging shape. The future
+    // owning tasks add value-owned explanation, state-delta, and diagnostic
+    // fields; Task 3 does not invent placeholder semantics for them.
 };
 
 bool validate_teacher_ranking_result(const TeacherRankingResult& value,

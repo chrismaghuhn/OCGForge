@@ -1,5 +1,6 @@
 #include "ygo/teacher/teacher_decision.hpp"
 
+#include <cstddef>
 #include <cstdint>
 #include <exception>
 #include <string>
@@ -22,6 +23,41 @@ bool valid_ranking_status(const std::uint8_t value) noexcept { return value <= 3
 bool valid_evaluation_status(const std::uint8_t value) noexcept { return value <= 3; }
 bool valid_fallback_level(const std::uint8_t value) noexcept { return value <= 4; }
 
+bool canonical_token(const std::string_view value) noexcept {
+    if (value.empty()) {
+        return false;
+    }
+    for (const auto character : value) {
+        const auto byte = static_cast<unsigned char>(character);
+        if (!((byte >= 'a' && byte <= 'z') || (byte >= '0' && byte <= '9') ||
+              byte == '.' || byte == '_' || byte == '-')) {
+            return false;
+        }
+    }
+    return value.front() != '.' && value.back() != '.' &&
+           value.find("..") == std::string_view::npos;
+}
+
+bool validate_canonical_id_vector(const std::vector<std::string>& values,
+                                  const char* field,
+                                  std::string* diagnostic) {
+    for (std::size_t index = 0; index < values.size(); ++index) {
+        if (!canonical_token(values[index])) {
+            set_diagnostic(diagnostic,
+                           std::string("teacher ") + field +
+                               " contains a noncanonical token");
+            return false;
+        }
+        if (index > 0 && !(values[index - 1] < values[index])) {
+            set_diagnostic(diagnostic,
+                           std::string("teacher ") + field +
+                               " is not strictly sorted");
+            return false;
+        }
+    }
+    return true;
+}
+
 bool validate_candidate_evaluation(const CandidateEvaluation& value,
                                    std::string* diagnostic) {
     if (!ygo::environment::is_public_action_key(value.public_action_key)) {
@@ -30,6 +66,15 @@ bool validate_candidate_evaluation(const CandidateEvaluation& value,
     }
     if (!valid_evaluation_status(static_cast<std::uint8_t>(value.status))) {
         set_diagnostic(diagnostic, "candidate evaluation status is unknown");
+        return false;
+    }
+    if (!validate_canonical_id_vector(value.matched_intent_ids,
+                                      "matched intent IDs", diagnostic) ||
+        !validate_canonical_id_vector(value.matched_goal_ids,
+                                      "matched goal IDs", diagnostic) ||
+        !validate_canonical_id_vector(value.matched_line_ids,
+                                      "matched line IDs", diagnostic) ||
+        !validate_canonical_id_vector(value.reason_ids, "reason IDs", diagnostic)) {
         return false;
     }
     return true;
@@ -51,7 +96,8 @@ bool validate_teacher_ranking_result(const TeacherRankingResult& value,
             return false;
         }
         if (value.fallback_level.has_value() &&
-            !valid_fallback_level(*value.fallback_level)) {
+            !valid_fallback_level(
+                static_cast<std::uint8_t>(*value.fallback_level))) {
             set_diagnostic(diagnostic, "teacher fallback level is unknown");
             return false;
         }
@@ -73,8 +119,7 @@ bool validate_teacher_ranking_result(const TeacherRankingResult& value,
         if (value.status != TeacherRankingStatus::Selected) {
             if (value.selected_public_action_key.has_value() ||
                 value.selected_score_vector.has_value() ||
-                value.fallback_level.has_value() ||
-                value.proposed_state_delta) {
+                value.fallback_level.has_value()) {
                 set_diagnostic(diagnostic,
                                "non-selected teacher result carries an actionable result");
                 return false;

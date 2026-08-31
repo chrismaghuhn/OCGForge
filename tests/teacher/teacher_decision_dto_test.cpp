@@ -59,7 +59,7 @@ TeacherRankingResult selected_result(
     value.evaluations = {evaluation(candidates[0], 1), evaluation(candidates[1], 2)};
     value.selected_public_action_key = candidates[1].public_action_key;
     value.selected_score_vector = value.evaluations[1].score;
-    value.fallback_level = 0;
+    value.fallback_level = TeacherFallbackLevel::F0;
     return value;
 }
 
@@ -149,6 +149,41 @@ void test_malformed_selection_evidence_fails_closed() {
         static_cast<CandidateEvaluationStatus>(4);
     require(!validate_teacher_ranking_result(invalid_candidate_status),
             "unknown candidate evaluation status was accepted");
+
+    auto unsorted_intents = selected_result(candidates);
+    unsorted_intents.evaluations[0].matched_intent_ids = {"intent.b", "intent.a"};
+    require(!validate_teacher_ranking_result(unsorted_intents),
+            "unsorted matched intent IDs were accepted");
+
+    auto duplicate_intents = selected_result(candidates);
+    duplicate_intents.evaluations[0].matched_intent_ids = {"intent.a", "intent.a"};
+    require(!validate_teacher_ranking_result(duplicate_intents),
+            "duplicate matched intent IDs were accepted");
+
+    auto unsorted_goals = selected_result(candidates);
+    unsorted_goals.evaluations[0].matched_goal_ids = {"goal.b", "goal.a"};
+    require(!validate_teacher_ranking_result(unsorted_goals),
+            "unsorted matched goal IDs were accepted");
+
+    auto duplicate_lines = selected_result(candidates);
+    duplicate_lines.evaluations[0].matched_line_ids = {"line.a", "line.a"};
+    require(!validate_teacher_ranking_result(duplicate_lines),
+            "duplicate matched line IDs were accepted");
+
+    auto unsorted_reasons = selected_result(candidates);
+    unsorted_reasons.evaluations[0].reason_ids = {"reason.b", "reason.a"};
+    require(!validate_teacher_ranking_result(unsorted_reasons),
+            "unsorted reason IDs were accepted");
+
+    auto duplicate_reasons = selected_result(candidates);
+    duplicate_reasons.evaluations[0].reason_ids = {"reason.a", "reason.a"};
+    require(!validate_teacher_ranking_result(duplicate_reasons),
+            "duplicate reason IDs were accepted");
+
+    auto invalid_fallback = selected_result(candidates);
+    invalid_fallback.fallback_level = static_cast<TeacherFallbackLevel>(5);
+    require(!validate_teacher_ranking_result(invalid_fallback),
+            "unknown Teacher fallback level was accepted");
 
     auto unsupported_selected = selected_result(candidates);
     unsupported_selected.selected_public_action_key =
