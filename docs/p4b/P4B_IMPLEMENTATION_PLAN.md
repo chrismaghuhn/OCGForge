@@ -39,7 +39,8 @@ Every P4B CTest command below that uses a regular expression MUST include `--no-
 | Task 2 public/trajectory regression tests | 3 |
 | Task 3 boundary/DTO tests | 2 |
 | Task 4 domain-preservation/ranking tests | 2 |
-| Task 5 state/rejection tests | 2 |
+| Task 5 fact/evaluator tests | 2 |
+| Task 6 state/rejection tests | 2 |
 | Task 7 goal-line/recovery tests | 2 |
 | Task 8 fallback/explanation tests | 2 |
 | Task 9 Swordsoul profile/scenario tests | 2 |
@@ -56,7 +57,7 @@ Single-target CTest expressions in the plan expect exactly 1. The intentional RE
 | include/ygo/teacher/strategy_profile.hpp | Immutable StrategyProfile value types, binding values, and typed profile references. |
 | include/ygo/teacher/strategy_profile_codec.hpp | Strict canonical profile and binding codec/identity declarations. |
 | src/teacher/strategy_profile*.cpp | Validation, canonical bytes, content identities, and immutable publication checks. |
-| include/ygo/teacher/teacher_decision.hpp | Derived per-candidate evaluation, score, result, and state-delta values. |
+| include/ygo/teacher/teacher_decision.hpp | Derived per-candidate evaluation, score, and staged result values; Task 6 adds the value-owned state delta. |
 | include/ygo/teacher/teacher_core.hpp | Public-only TeacherCore proposal interface. |
 | include/ygo/teacher/strategy_state.hpp | Episode-local state and accepted-transition delta types. |
 | src/teacher/ | Generic public evaluators, state reconciliation, goal/line controller, fallback, and explanation implementation. |
@@ -246,53 +247,11 @@ The score-contract validation freezes the nine score dimensions/order, signed i3
 
 **Stop condition:** A valid candidate cannot disappear from evaluation evidence, and no resolver path selects candidate zero or the first vector element by default.
 
-## Task 5: Episode-local strategy state and transactional reconciliation
+## Task 5: Generic public fact and tactical/resource evaluators
 
 **Files:**
 
-- Create: include/ygo/teacher/strategy_state.hpp
-- Create: src/teacher/strategy_state.cpp
-- Create: src/teacher/strategy_state_reconciler.cpp
-- Create: tests/teacher/teacher_strategy_state_test.cpp
-- Create: tests/teacher/teacher_rejected_transition_test.cpp
-- Modify: CMakeLists.txt.
-
-**Owning layer:** Participant-owned ygo::teacher session state.
-
-**Invariants affected:** P4B-G03, P4B-G07, P4B-G08, P4B-G09; state reset/isolation, accepted-only commit, observation dominance, and no future-action queue.
-
-**Semantic change vs internal implementation:** State fields, reset, proposal, accepted-transition commit, rejection behavior, invalidation, and reconciliation are versioned. Whether a lookup table or sorted vector backs a fact ledger is internal.
-
-**Focused tests:**
-
-- Reset two profiles and two participants, interleave proposals, and compare each result with isolated execution.
-- Propose a state delta, reject the action, and assert byte-equivalent state before and after rejection.
-- Accept an action and next public frame, then assert only the allowed public facts and plan-node progress commit.
-- Remove/negate a public resource and assert stale line nodes are invalidated before the next decision.
-- Assert state contains no candidate key for future execution, candidate index, locator carried through a shuffle, token, internal key, or engine-step value.
-
-**Regression tests:** episodic_rejection_test, episodic_paired_world_test, episodic_reset_after_failure_test, and policy_runner_integration_test.
-
-**Privacy implications:** State stores public fact classes/scalars and accepted public key history only. Paired hidden worlds with equal public input must produce equal state deltas and state evolution.
-
-**Determinism implications:** Reset state is identical for equal profile IDs; updates use accepted public decision order and sorted fact IDs, never wall time or thread order.
-
-**Replay/provenance implications:** Strategy state is derived policy memory, not canonical trajectory input. A rejected step creates no record and no state advancement.
-
-- [ ] Write failing reset/isolation/rejection tests and a test for invalidation after a changed public frame.
-- [ ] Run ctest --test-dir build/dev-windows --output-on-failure --no-tests=error --tests-regex "^(teacher_strategy_state_test|teacher_rejected_transition_test)$" and record the expected missing-target failure.
-- [ ] Implement EpisodeLocalStrategyStateV1, TeacherStateDelta, pure proposal, and accepted-transition commit APIs.
-- [ ] Implement reconciliation that expires contradictory facts, clears knowledge-destroyed identity, and records only registered invalidation IDs.
-- [ ] Re-run focused tests and the listed episodic regressions.
-- [ ] Run git diff --check, commit with feat: add transactional teacher strategy state, and stop for review.
-
-**Stop condition:** A rejected or interrupted run cannot advance trusted strategic state, and an accepted next frame always outranks stale policy memory.
-
-## Task 6: Generic public fact and tactical/resource evaluators
-
-**Files:**
-
-- Create: include/ygo/teacher/public_fact_registry.hpp
+- Create: include/ygo/teacher/public_fact_registry.hpp (PublicFactValue and immutable registry)
 - Create: include/ygo/teacher/candidate_features.hpp
 - Create: include/ygo/teacher/tactical_evaluator.hpp
 - Create: include/ygo/teacher/target_evaluator.hpp
@@ -308,15 +267,16 @@ The score-contract validation freezes the nine score dimensions/order, signed i3
 - Create: tests/teacher/teacher_evaluator_test.cpp
 - Modify: CMakeLists.txt.
 
-**Owning layer:** Generic TeacherCore feature/evaluator layer.
+**Owning layer:** Generic TeacherCore public-fact and feature/evaluator layer.
 
 **Invariants affected:** P4B-G00, P4B-G01, P4B-G03, P4B-G11, P4B-G18; public facts are explicit and legality remains engine-owned.
 
-**Semantic change vs internal implementation:** Public fact IDs, scopes, feature meanings, DIRECT/SAFE_DERIVATION/BLOCKED classifications, and score contributions are versioned. Helper decomposition is internal.
+**Semantic change vs internal implementation:** PublicFactValue IDs, kinds, bounds, scopes, canonical encoding/order, feature meanings, DIRECT/SAFE_DERIVATION/BLOCKED classifications, and score contributions are versioned. Helper decomposition is internal.
 
 **Focused tests:**
 
 - Decode only PublicSafeStateView from the public observation's canonical bytes.
+- Define the immutable fact registry before any state task may consume or commit PublicFactValue.
 - Map every fact used by the evaluator to a source field or mark it BLOCKED.
 - Evaluate visible target threats, material/cost preservation, interaction timing, follow-up, and public tactical safety without reconstructing legal choices.
 - Assert an absent request-wide continuation fact returns BLOCKED for the dependent rule instead of consulting EnvironmentDecisionRequest or private state.
@@ -332,13 +292,63 @@ The score-contract validation freezes the nine score dimensions/order, signed i3
 
 - [ ] Write failing public-fact matrix and evaluator tests for direct, safe-derived, and blocked facts.
 - [ ] Run python -B tests/teacher/teacher_public_fact_matrix_test.py and ctest --test-dir build/dev-windows --output-on-failure --no-tests=error --tests-regex "^teacher_evaluator_test$" and record the expected missing-target failures.
-- [ ] Implement safe-state decode and typed public fact registry with explicit blocked results.
+- [ ] Implement the immutable typed public-fact registry with fact IDs, value kinds, bounds, validity scopes, canonical value ordering, and explicit blocked results.
+- [ ] Implement safe-state decode and public observation/candidate-to-fact extraction without private compensation.
 - [ ] Implement generic tactical, target, material, and interaction evaluators over one supplied candidate descriptor.
 - [ ] Add checked contribution composition to the Task-4 resolver without changing score dimension order.
 - [ ] Re-run focused tests and Phase-4A safe-state/privacy regressions.
 - [ ] Run git diff --check, commit with feat: add public teacher evaluators, and stop for review.
 
 **Stop condition:** Every evaluator fact has an auditable public source, and any missing source blocks or uses a declared lower fallback without private compensation.
+
+## Task 6: Episode-local strategy state and transactional reconciliation
+
+**Dependency:** Task 5 must complete the immutable public-fact registry and
+its validation/extraction contract before Task 6 can commit any
+`PublicFactValue`.
+
+**Files:**
+
+- Create: include/ygo/teacher/strategy_state.hpp
+- Create: src/teacher/strategy_state.cpp
+- Create: src/teacher/strategy_state_reconciler.cpp
+- Create: tests/teacher/teacher_strategy_state_test.cpp
+- Create: tests/teacher/teacher_rejected_transition_test.cpp
+- Modify: include/ygo/teacher/teacher_decision.hpp to add the value-owned `std::optional<TeacherStateDeltaV1> proposed_state_delta` field.
+- Modify: CMakeLists.txt.
+
+**Owning layer:** Participant-owned ygo::teacher session state.
+
+**Invariants affected:** P4B-G03, P4B-G07, P4B-G08, P4B-G09; state reset/isolation, registry-validated facts, accepted-only commit, observation dominance, and no future-action queue.
+
+**Semantic change vs internal implementation:** `EpisodeLocalStrategyStateV1`, `TeacherStateDeltaV1`, value-owned result composition, reset, pure proposal, accepted-transition commit, rejection behavior, invalidation, and reconciliation are versioned. Whether a lookup table or sorted vector backs a fact ledger is internal.
+
+**Focused tests:**
+
+- Assert every state fact is accepted only after Task-5 registry validation; unregistered, malformed, out-of-bounds, or wrong-scope values fail closed without repair or silent drop.
+- Reset two profiles and two participants, interleave proposals, and compare each result with isolated execution.
+- Propose a value-owned `TeacherStateDeltaV1`, reject the action, and assert byte-equivalent state before and after rejection.
+- Accept an action and next public frame, verify the selected key equals `proposed_for_public_action_key`, and assert only the allowed public facts and plan-node progress commit.
+- Remove/negate a public resource and assert stale line nodes are invalidated before the next decision.
+- Assert state contains no candidate key for future execution, candidate index, locator carried through a shuffle, token, internal key, or engine-step value.
+
+**Regression tests:** episodic_rejection_test, episodic_paired_world_test, episodic_reset_after_failure_test, and policy_runner_integration_test.
+
+**Privacy implications:** State stores only registry-validated public fact classes/scalars and accepted public key history. Paired hidden worlds with equal public input must produce equal state deltas and state evolution.
+
+**Determinism implications:** Reset state is identical for equal profile IDs; value-owned deltas use exact base-state bindings, accepted public decision order, and canonical fact/ID ordering, never wall time or thread order.
+
+**Replay/provenance implications:** Strategy state and `TeacherStateDeltaV1` are derived policy memory, not canonical trajectory input. A rejected step creates no record and no state advancement.
+
+- [ ] Write failing registry-validation, reset/isolation/rejection, value-owned-delta, and invalidation tests.
+- [ ] Run ctest --test-dir build/dev-windows --output-on-failure --no-tests=error --tests-regex "^(teacher_strategy_state_test|teacher_rejected_transition_test)$" and record the expected missing-target failure.
+- [ ] Implement `EpisodeLocalStrategyStateV1`, `TeacherStateDeltaV1`, the value-owned `TeacherRankingResult` field, pure proposal, and accepted-transition commit APIs.
+- [ ] Implement reconciliation that expires contradictory facts, clears knowledge-destroyed identity, and records only registered invalidation IDs in delta evidence.
+- [ ] Enforce exact base-state/public-action/profile bindings and zero mutation on rejection, interruption, mismatch, or failed commit.
+- [ ] Re-run focused tests and the listed episodic regressions.
+- [ ] Run git diff --check, commit with feat: add transactional teacher strategy state, and stop for review.
+
+**Stop condition:** A rejected or interrupted run cannot advance trusted strategic state, every committed fact was validated by Task 5, and an accepted next frame always outranks stale policy memory.
 
 ## Task 7: Goal, partial-order line, and recovery controller
 

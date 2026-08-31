@@ -128,9 +128,15 @@ TeacherRankingResult
 - selected_score_vector: optional ScoreVector
 - fallback_level: optional F0..F4
 - explanation: optional TeacherDecisionExplanation
-- proposed_state_delta: optional TeacherStateDelta
+- proposed_state_delta: optional TeacherStateDeltaV1
 - diagnostic: optional structured public-safe failure
 ```
+
+Task 3 is intentionally a minimal staging DTO: it omits future-owned
+value fields rather than carrying pointers, opaque bytes, or placeholder
+semantics. Phase-4B Task 6 adds `optional<TeacherStateDeltaV1>` as a
+value-owned field, and Task 8 adds the value-owned
+`TeacherDecisionExplanation` field before Phase-4B final acceptance.
 
 Each `CandidateEvaluation` contains:
 
@@ -391,17 +397,72 @@ last_accepted_public_action_key:optional<string>
 
 The state MUST NOT contain an episode root seed, engine-step index, submission token, internal semantic key, protocol decision ID, continuation ID, response bytes, raw message, private locator, hidden card identity, opponent hidden hand/deck fact, pointer, cache key, PID, wall time, thread/provider identity, or candidate vector index.
 
-### 6.2 Lifecycle and reconciliation
+### 6.2 Public fact ownership
+
+Phase-4B Task 5's immutable public-fact registry is the sole authority for
+`PublicFactValue` meaning. The registry owns fact IDs, value kinds, bounds,
+validity scopes, canonical encoding/order, and the source classification
+`DIRECT`, `SAFE_DERIVATION`, or `BLOCKED`. Phase-4B Task 5 owns this registry
+and public observation/candidate-to-fact extraction.
+
+Phase-4B Task 6 consumes only registry-validated `PublicFactValue` values. An
+unregistered, malformed, out-of-scope, or out-of-bounds value cannot enter
+trusted state. The state layer may reject a value that fails registry
+validation, but it MUST NOT repair, coerce, clamp, or silently drop it. No
+second fact registry or private fact source is permitted.
+
+### 6.3 Value-owned state proposal
+
+`TeacherStateDeltaV1` is a complete proposed replacement image for the
+advisory strategy fields, not an imperative mutation log:
+
+```text
+strategy_profile_id:string
+base_last_accepted_decision_index:optional<u64be>
+base_last_accepted_public_action_key:optional<string>
+proposed_for_public_action_key:string
+active_goal_id:optional<string>
+active_line_id:optional<string>
+completed_line_node_ids:vector<string>
+achieved_goal_ids:vector<string>
+public_resource_facts:vector<PublicFactValue>
+public_restriction_facts:vector<PublicFactValue>
+public_threat_facts:vector<PublicFactValue>
+invalidation_reason_ids:vector<string>
+```
+
+It is value-owned derived participant-local policy data. It is not a
+gameplay identity, trajectory record, replay input, serialized future-action
+queue, or second authoritative state. `proposed_for_public_action_key`
+refers only to the current selected public action whose acceptance may
+authorize this transaction; it MUST never be retained as a future action to
+execute. The two `base_last_accepted_*` fields bind the proposal to the exact
+state version from which it was computed.
+
+All ID vectors are canonical lower-case token vectors that are strictly
+bytewise ascending and unique. Every `PublicFactValue` vector is strictly
+ascending and unique by the registry-owned canonical `PublicFactValue`
+encoding. `invalidation_reason_ids` is derived reconciliation evidence only;
+it is not an `EpisodeLocalStrategyStateV1` field and may contain only the
+registered v1 invalidation IDs, strictly ascending and unique.
+
+`TeacherStateDeltaV1` MUST NOT contain a pointer, path, PID, wall time,
+thread or provider identity, submission token, internal key, private locator,
+engine-step value, candidate index, response bytes, hidden identity, or RNG
+state. It has no independent gameplay or content identity in v1.
+
+### 6.4 Lifecycle and reconciliation
 
 1. **Reset:** construct an empty state bound to the validated profile ID. No state is carried across episodes, participants, seat assignments, or worker processes.
-2. **Propose:** decode the current public observation, reconcile state against current public facts/events, evaluate the complete current domain, and return a proposed state delta. Proposal is pure and does not mutate trusted state.
-3. **Accept:** after V2 returns `StepAccepted` and the next public frame/closure is valid, commit the delta for an actionable next frame and reconcile that next frame. Intermediate continuation actions obey the same rule. A terminal or run-interrupted closure ends the session; no future strategic state is required.
-4. **Reject:** `StepRejected`, policy failure, malformed input, reset rejection, or failed interrupt commits zero state delta. The existing runner quarantines a policy-origin rejection and does not retry with another action.
-5. **Gameplay interruption/recovery:** when an accepted engine transition changes the next public frame, observation reconciliation expires contradictory facts, invalidates dependent line nodes, records public invalidation reason IDs, and selects a current recovery/replan candidate. A run-control interruption closes the episode and discards the state.
+2. **Propose:** the pure operation is `current state + current public input + validated profile → TeacherStateDeltaV1`. It decodes the current public observation, reconciles state against current public facts/events, evaluates the complete current domain, and returns a replacement-image delta. Trusted state is not mutated during proposal.
+3. **Accept:** commit is allowed only after the corresponding public action returns `StepAccepted` and a valid next public frame is available. The accepted public key MUST equal both `TeacherRankingResult.selected_public_action_key` and `TeacherStateDeltaV1.proposed_for_public_action_key`. The delta's `strategy_profile_id` and `base_last_accepted_*` values MUST match the current participant state; any mismatch fails closed with zero mutation.
+4. **Successful commit:** apply the proposed advisory state, set `last_accepted_decision_index` and `last_accepted_public_action_key` from the accepted transition, then reconcile against the next validated public-fact snapshot. The next snapshot overrides stale `CURRENT_RECONCILIATION` memory. Intermediate continuation actions obey the same rule. A terminal closure ends the session; no future strategic state is required.
+5. **Reject or failed commit:** `StepRejected`, policy failure, malformed input, reset rejection, administrative interruption, or failed commit performs zero state mutation. The existing runner quarantines a policy-origin rejection and does not retry with another action.
+6. **Gameplay interruption/recovery:** when an accepted engine transition changes the next public frame, observation reconciliation expires contradictory facts, invalidates dependent line nodes, records public invalidation reason IDs in the derived delta evidence, and selects a current recovery/replan candidate. A run-control interruption closes the episode and discards the state.
 
 If state and current public observation disagree, current public evidence wins. The Teacher removes unsupported memory, invalidates dependent goals/lines, and either uses an explicitly supported recovery/fallback or fails closed. It never synthesizes a missing resource.
 
-### 6.3 Plan and line progress
+### 6.5 Plan and line progress
 
 The plan is represented by `active_goal_id`, `active_line_id`, and the set of completed line node IDs. Goal completion is recorded only after an accepted action and a subsequent public observation satisfy the goal's completion predicates. Public preconditions and resource requirements are evaluated against the current public state; they do not prove legality. Candidate intent edges match the current supplied candidate descriptor and cannot generate or queue an action.
 
