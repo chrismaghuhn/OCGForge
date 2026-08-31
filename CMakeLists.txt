@@ -229,6 +229,7 @@ add_library(ygo_teacher STATIC
     src/teacher/teacher_policy_binding.cpp
     src/teacher/teacher_decision.cpp
     src/teacher/public_battle_snapshot.cpp
+    src/teacher/provable_lethal.cpp
 )
 target_include_directories(ygo_teacher PUBLIC "${CMAKE_SOURCE_DIR}/include")
 target_link_libraries(ygo_teacher PUBLIC ygo_trajectory)
@@ -409,6 +410,16 @@ target_include_directories(battle_command_shape_test PRIVATE
                            "${CMAKE_SOURCE_DIR}/src/environment")
 target_link_libraries(battle_command_shape_test PRIVATE ygo_teacher)
 add_test(NAME battle_command_shape_test COMMAND battle_command_shape_test)
+
+add_executable(provable_lethal_boundary_compile_test
+               tests/teacher/provable_lethal_boundary_compile_test.cpp)
+target_link_libraries(provable_lethal_boundary_compile_test PRIVATE ygo_teacher)
+add_test(NAME provable_lethal_boundary_compile_test
+         COMMAND provable_lethal_boundary_compile_test)
+
+add_executable(provable_lethal_test tests/teacher/provable_lethal_test.cpp)
+target_link_libraries(provable_lethal_test PRIVATE ygo_teacher)
+add_test(NAME provable_lethal_test COMMAND provable_lethal_test)
 
 add_executable(phase4c_battle_probe tools/p4c/phase4c_battle_probe.cpp)
 target_include_directories(phase4c_battle_probe PRIVATE

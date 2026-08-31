@@ -19,6 +19,7 @@ def main() -> int:
         b"PUBLIC_OBSERVATION_EQUAL=PASS",
         b"PUBLIC_CANDIDATES_EQUAL=PASS",
         b"SNAPSHOT_EQUAL=PASS",
+        b"LETHAL_EQUAL=PASS",
         b"HIDDEN_VALUES_IN_OUTPUT=NONE",
     )
     missing = [marker.decode() for marker in required if marker not in completed.stdout]

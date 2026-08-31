@@ -1,4 +1,5 @@
 #include "ygo/teacher/public_battle_snapshot.hpp"
+#include "ygo/teacher/provable_lethal.hpp"
 
 #include <cstdint>
 #include <iomanip>
@@ -149,6 +150,34 @@ std::string hex_bytes(const std::vector<std::uint8_t>& bytes) {
     return output.str();
 }
 
+std::string lethal_status_name(
+    const ygo::teacher::ProvableLethalStatus status) {
+    switch (status) {
+    case ygo::teacher::ProvableLethalStatus::NotApplicable:
+        return "NOT_APPLICABLE";
+    case ygo::teacher::ProvableLethalStatus::ProvenLethal:
+        return "PROVEN_LETHAL";
+    case ygo::teacher::ProvableLethalStatus::NotProven:
+        return "NOT_PROVEN";
+    case ygo::teacher::ProvableLethalStatus::Unsupported:
+        return "UNSUPPORTED";
+    case ygo::teacher::ProvableLethalStatus::Invalid:
+        return "INVALID";
+    }
+    return "UNKNOWN";
+}
+
+std::string join_reasons(const std::vector<std::string>& reasons) {
+    std::ostringstream output;
+    for (std::size_t index = 0; index < reasons.size(); ++index) {
+        if (index != 0) {
+            output << ',';
+        }
+        output << reasons[index];
+    }
+    return output.str();
+}
+
 void append_u32le(std::vector<std::uint8_t>& bytes, const std::uint32_t value) {
     bytes.push_back(static_cast<std::uint8_t>(value));
     bytes.push_back(static_cast<std::uint8_t>(value >> 8));
@@ -261,6 +290,61 @@ int run_snapshot_corpus() {
     return 0;
 }
 
+int run_lethal_corpus() {
+    auto source = snapshot_observation();
+    source.globals.life_points = {8000, 1};
+    source.entities.front().current->attack = 999999;
+    const auto observation =
+        ygo::environment::project_public_observation(source);
+    const std::vector<EnvironmentActionCandidate> candidates = {
+        candidate(EnvironmentActionKind::IdleCommand),
+        candidate(EnvironmentActionKind::BattleCommand,
+                  visible_reference("p0:MONSTER_ZONE:0"), std::nullopt, 1, 0),
+        candidate(EnvironmentActionKind::BattleCommand, std::nullopt,
+                  std::nullopt, 2),
+        candidate(EnvironmentActionKind::BattleCommand,
+                  redacted_reference("p1:MONSTER_ZONE:0"), std::nullopt, 1, 1),
+        candidate(EnvironmentActionKind::BattleCommand,
+                  visible_reference("p0:MONSTER_ZONE:2"), std::nullopt, 1, 2),
+    };
+    const auto snapshot =
+        ygo::teacher::extract_public_battle_snapshot(observation, candidates);
+    require(snapshot.valid, "lethal corpus snapshot extraction failed");
+    const auto result =
+        ygo::teacher::evaluate_provable_lethal(snapshot.snapshot);
+    require(result.valid, "lethal corpus evaluation failed");
+    require(result.candidates.size() == candidates.size(),
+            "lethal corpus changed the complete candidate count");
+
+    std::cout << "MODE=lethal-corpus\n";
+    std::cout << "CANDIDATE_COUNT=" << result.candidates.size() << '\n';
+    std::cout << "EVALUATION_VALID=PASS\n";
+    for (std::size_t index = 0; index < result.candidates.size(); ++index) {
+        const auto& value = result.candidates[index];
+        const auto bytes =
+            ygo::teacher::canonical_provable_lethal_candidate_bytes(value);
+        std::cout << "INDEX=" << index << '\n';
+        std::cout << "PUBLIC_ACTION_KEY=" << value.public_action_key << '\n';
+        std::cout << "LETHAL_STATUS=" << lethal_status_name(value.status)
+                  << '\n';
+        std::cout << "BOUND_PRESENT="
+                  << (value.guaranteed_opponent_lp_loss_lower_bound.has_value()
+                          ? "1"
+                          : "0")
+                  << '\n';
+        if (value.guaranteed_opponent_lp_loss_lower_bound.has_value()) {
+            std::cout << "BOUND_VALUE="
+                      << *value.guaranteed_opponent_lp_loss_lower_bound << '\n';
+        } else {
+            std::cout << "BOUND_VALUE=ABSENT\n";
+        }
+        std::cout << "PROOF_REASONS="
+                  << join_reasons(value.proof_reason_ids) << '\n';
+        std::cout << "LETHAL_BYTES_HEX=" << hex_bytes(bytes) << '\n';
+    }
+    return 0;
+}
+
 int run_paired_world() {
     auto environment = make_environment();
     auto first_observation = hidden_world_observation();
@@ -317,11 +401,30 @@ int run_paired_world() {
     require(first_bytes == second_bytes,
             "private paired worlds changed canonical battle snapshot");
 
+    const auto first_lethal =
+        ygo::teacher::evaluate_provable_lethal(first_snapshot.snapshot);
+    const auto second_lethal =
+        ygo::teacher::evaluate_provable_lethal(second_snapshot.snapshot);
+    require(first_lethal && second_lethal &&
+                first_lethal.candidates == second_lethal.candidates,
+            "private paired worlds changed lethal evaluation");
+    require(first_lethal.candidates.size() == second_lethal.candidates.size(),
+            "paired lethal evaluation changed candidate count");
+    for (std::size_t index = 0; index < first_lethal.candidates.size();
+         ++index) {
+        require(ygo::teacher::canonical_provable_lethal_candidate_bytes(
+                    first_lethal.candidates[index]) ==
+                    ygo::teacher::canonical_provable_lethal_candidate_bytes(
+                        second_lethal.candidates[index]),
+                "paired lethal candidate bytes differ");
+    }
+
     std::ostringstream output;
     output << "MODE=paired-world\n";
     output << "PUBLIC_OBSERVATION_EQUAL=PASS\n";
     output << "PUBLIC_CANDIDATES_EQUAL=PASS\n";
     output << "SNAPSHOT_EQUAL=PASS\n";
+    output << "LETHAL_EQUAL=PASS\n";
     output << "SNAPSHOT_BYTES_HEX=" << hex_bytes(first_bytes) << '\n';
     output << "HIDDEN_VALUES_IN_OUTPUT=NONE\n";
     const auto text = output.str();
@@ -342,6 +445,9 @@ int main(const int argc, char** argv) {
         const std::string_view mode(argv[1]);
         if (mode == "--snapshot-corpus") {
             return run_snapshot_corpus();
+        }
+        if (mode == "--lethal-corpus") {
+            return run_lethal_corpus();
         }
         if (mode == "--paired-world") {
             return run_paired_world();
