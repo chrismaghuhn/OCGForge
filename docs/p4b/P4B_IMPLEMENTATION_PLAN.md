@@ -324,7 +324,7 @@ The score-contract validation freezes the nine score dimensions/order, signed i3
 ## Task 6: Episode-local strategy state and transactional reconciliation
 
 **Dependency:** Task 5 must complete the immutable public-fact registry and
-its validation/extraction contract before Task 6 can commit any
+its validation/extraction contract before Task 6 can propose or commit any
 `PublicFactValue`.
 
 **Files:**
@@ -337,38 +337,44 @@ its validation/extraction contract before Task 6 can commit any
 - Modify: include/ygo/teacher/teacher_decision.hpp to add the value-owned `std::optional<TeacherStateDeltaV1> proposed_state_delta` field.
 - Modify: CMakeLists.txt.
 
-**Owning layer:** Participant-owned ygo::teacher session state.
+**Owning layer:** Participant-owned ygo::teacher session state with runtime-owned
+participant/frame routing.
 
-**Invariants affected:** P4B-G03, P4B-G07, P4B-G08, P4B-G09; state reset/isolation, registry-validated facts, accepted-only commit, observation dominance, and no future-action queue.
+**Invariants affected:** P4B-G03, P4B-G07, P4B-G08, P4B-G09; state reset/isolation, participant-perspective routing, frame-local proposal binding, registry-validated facts, accepted-only commit, deferred observation dominance, and no future-action queue.
 
-**Semantic change vs internal implementation:** `EpisodeLocalStrategyStateV1`, `TeacherStateDeltaV1`, value-owned result composition, reset, pure proposal, accepted-transition commit, rejection behavior, invalidation, and reconciliation are versioned. Whether a lookup table or sorted vector backs a fact ledger is internal.
+**Semantic change vs internal implementation:** `EpisodeLocalStrategyStateV1`, `TeacherStateDeltaV1`, value-owned result composition, participant-scoped current-observation proposal, frame-local accepted-transition binding, reset, pure proposal, deferred reconciliation, rejection behavior, invalidation, and reconciliation are versioned. Whether a lookup table or sorted vector backs a fact ledger is internal.
 
 **Focused tests:**
 
 - Assert every state fact is accepted only after Task-5 registry validation; unregistered, malformed, out-of-bounds, or wrong-scope values fail closed without repair or silent drop.
 - Reset two profiles and two participants, interleave proposals, and compare each result with isolated execution.
 - Propose a value-owned `TeacherStateDeltaV1`, reject the action, and assert byte-equivalent state before and after rejection.
-- Accept an action and next public frame, verify the selected key equals `proposed_for_public_action_key`, and assert only the allowed public facts and plan-node progress commit.
-- Remove/negate a public resource and assert stale line nodes are invalidated before the next decision.
+- Accept an action using the exact frame-local proposal binding, verify the selected key equals `proposed_for_public_action_key`, and assert the commit does not consume a `StepAccepted.next` observation belonging to another participant.
+- Require the current proposal observation to belong to the same participant as the state, to be later than the state's last accepted decision index when present, and to reconcile before proposal without mutating trusted state.
+- Require every `CURRENT_RECONCILIATION` fact in a proposed replacement to match the exact current participant `PublicFactSnapshot`; registry validity alone is insufficient.
+- Defer reconciliation after an accepted action until that participant receives its next actionable public observation; prove no cross-participant facts or frame state enter the participant state.
+- Remove/negate a public resource and assert stale line nodes are invalidated before that same participant's next decision.
 - Assert state contains no candidate key for future execution, candidate index, locator carried through a shuffle, token, internal key, or engine-step value.
 
 **Regression tests:** episodic_rejection_test, episodic_paired_world_test, episodic_reset_after_failure_test, and policy_runner_integration_test.
 
-**Privacy implications:** State stores only registry-validated public fact classes/scalars and accepted public key history. Paired hidden worlds with equal public input must produce equal state deltas and state evolution.
+**Privacy implications:** State stores only registry-validated public fact classes/scalars and accepted public key history. Runtime routing must never reconcile one participant's state with another participant's perspective. Paired hidden worlds with equal public input must produce equal state deltas and state evolution.
 
-**Determinism implications:** Reset state is identical for equal profile IDs; value-owned deltas use exact base-state bindings, accepted public decision order, and canonical fact/ID ordering, never wall time or thread order.
+**Determinism implications:** Reset state is identical for equal profile IDs; value-owned deltas use exact base-state/frame bindings, accepted public decision order, and canonical fact/ID ordering, never wall time or thread order. Opponent decisions may intervene, so only strict same-participant decision-index advancement is required.
 
 **Replay/provenance implications:** Strategy state and `TeacherStateDeltaV1` are derived policy memory, not canonical trajectory input. A rejected step creates no record and no state advancement.
 
 - [ ] Write failing registry-validation, reset/isolation/rejection, value-owned-delta, and invalidation tests.
 - [ ] Run ctest --test-dir build/dev-windows --output-on-failure --no-tests=error --tests-regex "^(teacher_strategy_state_test|teacher_rejected_transition_test)$" and record the expected missing-target failure.
 - [ ] Implement `EpisodeLocalStrategyStateV1`, `TeacherStateDeltaV1`, the value-owned `TeacherRankingResult` field, pure proposal, and accepted-transition commit APIs.
-- [ ] Implement reconciliation that expires contradictory facts, clears knowledge-destroyed identity, and records only registered invalidation IDs in delta evidence.
+- [ ] Implement participant-scoped proposal reconciliation against the current public observation, preserving accepted markers and deriving only registered invalidation IDs in delta evidence.
+- [ ] Retain the proposal's current observation as ephemeral frame-local commit context; require its decision index to equal the accepted transition and do not consume `StepAccepted.next` for another participant's state.
+- [ ] Require proposed `CURRENT_RECONCILIATION` facts to match the exact current participant public-fact snapshot; reject registry-valid mismatches without repair.
 - [ ] Enforce exact base-state/public-action/profile bindings and zero mutation on rejection, interruption, mismatch, or failed commit.
-- [ ] Re-run focused tests and the listed episodic regressions.
+- [ ] Re-run focused tests, including participant-perspective/frame-binding and current-fact-source tests, and the listed episodic regressions.
 - [ ] Run git diff --check, commit with feat: add transactional teacher strategy state, and stop for review.
 
-**Stop condition:** A rejected or interrupted run cannot advance trusted strategic state, every committed fact was validated by Task 5, and an accepted next frame always outranks stale policy memory.
+**Stop condition:** A rejected or interrupted run cannot advance trusted strategic state; every committed fact was validated by Task 5 and matched the owning participant's current public snapshot; exact frame-local proposal binding is enforced; `StepAccepted.next` cannot cross participant boundaries; and same-participant reconciliation occurs before the next policy decision.
 
 ## Task 7: Goal, partial-order line, and recovery controller
 
@@ -392,7 +398,7 @@ its validation/extraction contract before Task 6 can commit any
 
 - Validate a DAG with independent nodes and assert both supplied orders remain legal policy evaluation inputs.
 - Match candidate intents from public candidate metadata without generating actions.
-- Complete a node only after an accepted action and a public next-frame predicate.
+- Complete a node only after an accepted action and a subsequent perspective-safe public observation for the same participant satisfies the declared completion predicate; never assume `StepAccepted.next` belongs to that participant.
 - Invalidate an active line when a public body/resource/target/zone/copy budget disappears or a restriction is observed.
 - Choose a declared recovery edge or stop goal from current candidates; never reuse a queued action.
 
@@ -411,7 +417,7 @@ its validation/extraction contract before Task 6 can commit any
 - [ ] Re-run focused tests and the listed episodic regressions.
 - [ ] Run git diff --check, commit with feat: add partial-order teacher recovery, and stop for review.
 
-**Stop condition:** An interruption invalidates stale plan state before selection, and no graph edge can enqueue an exact future engine action.
+**Stop condition:** An interruption or intervening participant turn invalidates stale plan state before that participant's next selection, and no graph edge can enqueue an exact future engine action.
 
 ## Task 8: Deterministic fallback and derived explanation
 
@@ -565,14 +571,20 @@ its validation/extraction contract before Task 6 can commit any
 - Construct one exact Teacher PolicyArtifact with DETERMINISTIC_HEURISTIC, ocgforge.no_policy_rng.v1, deterministic complete sampling, immutable core identity, and binding metadata.
 - Validate two participant assignments with exact deck/seat mapping for normal and mirror assignments.
 - Run a short Teacher episode through EpisodicEnvironment.step() → TrajectoryRecorder → shard → semantic replay → admission → receipt/dataset.
+
+**Required participant-perspective handoff gate:**
+
+- Run a participant-perspective handoff scenario: Player 0 proposes and receives StepAccepted; when StepAccepted.next belongs to Player 1, Player-0 state does not consume Player-1 observation; Player-0 accepted markers still commit; Player 1 uses isolated state; and Player 0 reconciles only when it later receives its own actionable public frame before selection. Prove no cross-participant fact, hand, or entity information enters either state.
+- Prove exact frame-local correlation: the proposal observation decision index equals AcceptedActionTransition.decision_index.
+
 - Inject a stale/nonmember action and assert no Teacher state commit, no canonical record, quarantine, and no retry.
 - Spawn independent processes and compare decision keys, diagnostics, and state deltas.
 
 **Regression tests:** all Phase-4A focused policy tests, trajectory_codec_test, trajectory_recorder_test, the new teacher_runner_trajectory_test for short Teacher replay/admission integration, and policy_runner_integration_test. The existing Phase-4A replay-admission Heavy Replay is outside this focused set and runs only under the owning-layer rule or an explicitly authorized final gate.
 
-**Privacy implications:** The runner may use control-plane frame/token values only to submit to V2. TeacherCore receives the same public inputs as RandomLegal and no trajectory restricted evidence.
+**Privacy implications:** The runner may use control-plane frame/token values only to submit to V2 and to route a pending proposal to its owning participant. TeacherCore receives the same public inputs as RandomLegal and no trajectory restricted evidence; StepAccepted.next is never fed into the previous participant's state merely because it is next.
 
-**Determinism implications:** Teacher uses PolicyRngMode::None; runner output does not depend on environment root seed for policy behavior, path, PID, thread, provider, or callback completion order.
+**Determinism implications:** Teacher uses PolicyRngMode::None; runner output does not depend on environment root seed for policy behavior, path, PID, thread, provider, or callback completion order. Frame routing is explicit by participant perspective and proposal decision-index correlation, not by completion order.
 
 **Replay/provenance implications:** This task is the first Teacher integration through the exact trusted path. No direct receipt issuance, special Teacher shard, or explanation-required admission branch is permitted.
 

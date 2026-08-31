@@ -393,7 +393,7 @@ last_accepted_decision_index:optional<u64be>
 last_accepted_public_action_key:optional<string>
 ```
 
-`PublicFactValue` is encoded as `fact_id:string`, `value_kind:u8`, the kind-specific value, and `validity_scope:u8`. The value kinds are `0=BOOLEAN`, `1=U64`, `2=I32`, and `3=TOKEN`; the validity scopes are `0=CURRENT_RECONCILIATION` and `1=ACCEPTED_PUBLIC_HISTORY`. Fact IDs and token values use canonical UTF-8 strings. Values are bounded by the registered fact definition and are checked before commit. It contains no physical-card identity. Public threat facts are threat classes and scalar severity only; a current target locator is read from the current candidate/observation and is never queued in state.
+`PublicFactValue` is encoded as `fact_id:string`, `value_kind:u8`, the kind-specific value, and `validity_scope:u8`. The value kinds are `0=BOOLEAN`, `1=U64`, `2=I32`, and `3=TOKEN`; the validity scopes are `0=CURRENT_RECONCILIATION` and `1=ACCEPTED_PUBLIC_HISTORY`. Fact IDs and token values use canonical UTF-8 strings. Values are bounded by the registered fact definition and are checked before proposal or commit. `CURRENT_RECONCILIATION` values additionally require exact support from the owning participant's current public snapshot as defined below. It contains no physical-card identity. Public threat facts are threat classes and scalar severity only; a current target locator is read from the current candidate/observation and is never queued in state.
 
 The state MUST NOT contain an episode root seed, engine-step index, submission token, internal semantic key, protocol decision ID, continuation ID, response bytes, raw message, private locator, hidden card identity, opponent hidden hand/deck fact, pointer, cache key, PID, wall time, thread/provider identity, or candidate vector index.
 
@@ -451,20 +451,81 @@ thread or provider identity, submission token, internal key, private locator,
 engine-step value, candidate index, response bytes, hidden identity, or RNG
 state. It has no independent gameplay or content identity in v1.
 
-### 6.4 Lifecycle and reconciliation
+### 6.4 Participant perspective and proposal-frame binding
+
+Each `EpisodeLocalStrategyStateV1` belongs to one participant `P` within one
+episode. A current actionable observation may be used for that state only when
+`current_observation.perspective_player == P`. The V2 environment guarantees
+`DecisionFrame.acting_player == DecisionFrame.public_observation.perspective_player`;
+the runtime/session layer owns routing that frame to the matching participant
+state. V2 provides no general nonterminal `perspective_view(player)` API, and
+this contract does not invent one. TeacherCore and the state value do not
+receive or store a `DecisionFrame` or participant identifier.
+
+The pure proposal operation is:
+
+```text
+current trusted state for P
++ current actionable PublicEnvironmentObservation for P
++ validated StrategyProfileV1
+→ current reconciled advisory state
+→ Teacher proposal / TeacherStateDeltaV1
+```
+
+The current observation is reconciled before any current-frame plan proposal or
+candidate evaluation. If the state has a `last_accepted_decision_index`, the
+current observation index MUST be strictly greater than it; it need not be the
+immediate successor because the opponent may have received intervening frames.
+The proposal operation does not mutate trusted state. A malformed observation,
+wrong participant perspective, or failed public-fact extraction fails closed.
+
+The proposal is bound to the exact current frame used to produce it. The
+runtime/state commit boundary retains that current observation as ephemeral
+pending proposal context; it is not a gameplay identity, trajectory value, or
+`EpisodeLocalStrategyStateV1` field. On accepted commit, its decision index MUST
+equal `AcceptedActionTransition.decision_index`, and:
+
+```text
+TeacherRankingResult.selected_public_action_key
+== TeacherStateDeltaV1.proposed_for_public_action_key
+== AcceptedActionTransition.selected_public_action_key
+```
+
+No new frame-binding field is added to `TeacherStateDeltaV1`.
+
+### 6.5 Lifecycle and reconciliation
 
 1. **Reset:** construct an empty state bound to the validated profile ID. No state is carried across episodes, participants, seat assignments, or worker processes.
-2. **Propose:** the pure operation is `current state + current public input + validated profile → TeacherStateDeltaV1`. It decodes the current public observation, reconciles state against current public facts/events, evaluates the complete current domain, and returns a replacement-image delta. Trusted state is not mutated during proposal.
-3. **Accept:** commit is allowed only after the corresponding public action returns `StepAccepted` and a valid next public frame is available. The accepted public key MUST equal both `TeacherRankingResult.selected_public_action_key` and `TeacherStateDeltaV1.proposed_for_public_action_key`. The delta's `strategy_profile_id` and `base_last_accepted_*` values MUST match the current participant state; any mismatch fails closed with zero mutation.
-4. **Successful commit:** apply the proposed advisory state, set `last_accepted_decision_index` and `last_accepted_public_action_key` from the accepted transition, then reconcile against the next validated public-fact snapshot. The next snapshot overrides stale `CURRENT_RECONCILIATION` memory. Intermediate continuation actions obey the same rule. A terminal closure ends the session; no future strategic state is required.
+2. **Propose:** validate the participant-owned state and profile, reconcile against the participant's current actionable public observation, then produce the value-owned replacement-image delta. Current public evidence wins before Teacher evaluation.
+3. **Accept:** commit is allowed only after the corresponding public action returns `StepAccepted` and the exact frame-local proposal binding matches. Apply the already validated advisory replacement and set `last_accepted_decision_index` and `last_accepted_public_action_key` from the accepted transition. The accepted commit is atomic and does not consume `StepAccepted.next.public_observation` for the previous participant.
+4. **Deferred reconciliation:** `StepAccepted.next` may belong to the other player and MUST NOT be used to reconcile the previous participant's state. Before participant `P` makes its next policy decision, the runtime supplies a later actionable public observation for `P`; that observation is reconciled then. If the episode terminates, is interrupted, or fails before `P` acts again, its participant-local state is discarded normally.
 5. **Reject or failed commit:** `StepRejected`, policy failure, malformed input, reset rejection, administrative interruption, or failed commit performs zero state mutation. The existing runner quarantines a policy-origin rejection and does not retry with another action.
-6. **Gameplay interruption/recovery:** when an accepted engine transition changes the next public frame, observation reconciliation expires contradictory facts, invalidates dependent line nodes, records public invalidation reason IDs in the derived delta evidence, and selects a current recovery/replan candidate. A run-control interruption closes the episode and discards the state.
+6. **Gameplay interruption/recovery:** intervening public changes are reconciled when the same participant next receives a perspective-safe actionable frame. Task 6 may conservatively clear stale plan progress and emit `public_state_contradiction`; precise dependency invalidation and recovery selection belong to Task 7.
 
-If state and current public observation disagree, current public evidence wins. The Teacher removes unsupported memory, invalidates dependent goals/lines, and either uses an explicitly supported recovery/fallback or fails closed. It never synthesizes a missing resource.
+If state and the participant's current public observation disagree, current
+public evidence wins. The Teacher removes unsupported memory, invalidates
+dependent goals/lines conservatively, and either uses an explicitly supported
+recovery/fallback or fails closed. It never synthesizes a missing resource or
+consumes another participant's perspective.
 
-### 6.5 Plan and line progress
+`TeacherStateDeltaV1.invalidation_reason_ids` is reconciliation evidence
+derived while preparing the current proposal; it is never caller-authored and
+is not persisted in `EpisodeLocalStrategyStateV1`. A post-acceptance reason
+union is not required from `StepAccepted.next`, because that frame may belong
+to another participant. A later same-participant proposal derives evidence
+from that participant's current observation.
 
-The plan is represented by `active_goal_id`, `active_line_id`, and the set of completed line node IDs. Goal completion is recorded only after an accepted action and a subsequent public observation satisfy the goal's completion predicates. Public preconditions and resource requirements are evaluated against the current public state; they do not prove legality. Candidate intent edges match the current supplied candidate descriptor and cannot generate or queue an action.
+For every `CURRENT_RECONCILIATION` fact in a proposed replacement, registry
+validation is necessary but not sufficient: the exact fact ID, kind, value, and
+scope MUST also occur in the current participant's extracted
+`PublicFactSnapshot`. A registry-valid value that differs from the current
+public snapshot is rejected, never repaired or clamped. `ACCEPTED_PUBLIC_HISTORY`
+facts remain limited to scopes explicitly allowed by the registry and a future
+history owner; Task 6 introduces no new history facts.
+
+### 6.6 Plan and line progress
+
+The plan is represented by `active_goal_id`, `active_line_id`, and the set of completed line node IDs. Goal or node completion is recorded only after the action was accepted and a subsequent perspective-safe public observation for the **same participant** satisfies the declared completion predicate. `StepAccepted.next` is not sufficient unless it is later established as that participant's actionable observation through the normal runtime routing. Public preconditions and resource requirements are evaluated against the current public state; they do not prove legality. Candidate intent edges match the current supplied candidate descriptor and cannot generate or queue an action.
 
 The following invalidation classes are stable v1 reason IDs: `starter_not_resolved`, `expected_body_removed`, `resource_consumed`, `restriction_active`, `zone_unavailable`, `copy_unavailable`, `target_absent`, `payoff_answered`, `lethal_unproven`, and `public_state_contradiction`. A profile may use only registered reason IDs. A new meaning requires a new versioned reason contract or profile identity.
 
@@ -683,13 +744,13 @@ These are proposed future gates, not Task-1 evidence. Every gate has a named evi
 | P4B-G04 | Canonical StrategyProfile identity | `ctest --test-dir build/dev-windows --output-on-failure --no-tests=error --tests-regex "^strategy_profile_codec_test$"` | Strict encode/decode round-trip is byte-identical and recomputed `ocgforge.strategy_profile.v1.<64 lowercase hex>` matches; path changes do not matter. | Profile is rejected; no fallback profile is loaded. |
 | P4B-G05 | Malformed profile fail-closed | `ctest --test-dir build/dev-windows --output-on-failure --no-tests=error --tests-regex "^strategy_profile_negative_test$"` | Unknown, duplicate, dangling, cyclic, out-of-range, wrong-binding, and trailing-byte profiles all fail before session creation. | No policy session or action is created. |
 | P4B-G06 | Exact deck/matchup/rules binding | `python -B tests/teacher/teacher_profile_binding_test.py` | Own/opponent deck IDs and hashes, matchup, format, mode, flags, and rules bundle match certified V2 input for both profile roles and seat mappings. | Profile activation is `BLOCKED`; arbitrary-deck use is forbidden. |
-| P4B-G07 | Episode/participant state isolation | `ctest --test-dir build/dev-windows --output-on-failure --no-tests=error --tests-regex "^teacher_strategy_state_test$"` | Reset, interleaving, mirror seats, and separate participants produce isolated state equal to isolated execution. | State is discarded and the gate fails. |
+| P4B-G07 | Episode/participant state isolation | `ctest --test-dir build/dev-windows --output-on-failure --no-tests=error --tests-regex "^teacher_strategy_state_test$"` | Reset, interleaving, mirror seats, and separate participants produce isolated state equal to isolated execution; a participant state is reconciled only with its own perspective-safe actionable observations. | State is discarded and the gate fails. |
 | P4B-G08 | Rejected action has zero state advancement | `ctest --test-dir build/dev-windows --output-on-failure --no-tests=error --tests-regex "^teacher_rejected_transition_test$"` | Rejected/stale/nonmember actions commit no delta, create no record, and follow existing quarantine semantics. | Stop without retry; collection is quarantined or failed as existing V2 requires. |
-| P4B-G09 | Plan invalidation and recovery | `ctest --test-dir build/dev-windows --output-on-failure --no-tests=error --tests-regex "^teacher_recovery_test$"` | Removed/negated resources, restrictions, targets, zones, and copy budgets invalidate stale nodes and select a current public recovery/fallback. | No queued action survives; return structured `BLOCKED` if recovery is unproven. |
+| P4B-G09 | Plan invalidation and recovery | `ctest --test-dir build/dev-windows --output-on-failure --no-tests=error --tests-regex "^teacher_recovery_test$"` | Removed/negated resources, restrictions, targets, zones, and copy budgets invalidate stale nodes and select a current public recovery/fallback only after a subsequent same-participant public observation; `StepAccepted.next` is not assumed to belong to the prior participant. | No queued action survives; return structured `BLOCKED` if recovery is unproven. |
 | P4B-G10 | Independent-process determinism | `python -B tests/teacher/teacher_determinism_test.py --probe build/dev-windows/teacher_probe.exe` | Fresh processes reproduce keys, score vectors, fallback levels, explanations, and state deltas for the same corpus. | Determinism gate fails; no semantic acceptance claim. |
 | P4B-G11 | Explicit deterministic fallback without duplicate evaluations | `ctest --test-dir build/dev-windows --output-on-failure --no-tests=error --tests-regex "^teacher_fallback_test$"` | F0–F4 are explicit; all stages operate on the same `N` stable evaluation records, may annotate stage status/contributions or temporary comparisons, and never append or drop records; no first-candidate, random, or retry path exists; unprovable fallback blocks. | No action and structured diagnostic. |
 | P4B-G12 | Existing policy provenance recording | `ctest --test-dir build/dev-windows --output-on-failure --no-tests=error --tests-regex "^teacher_provenance_test$"` | Existing `PolicyArtifact`, binding metadata, participant assignment, deterministic sampling identity, and `NONE` RNG attribution validate through the production resolver. | No trusted Teacher record; provenance is invalid. |
-| P4B-G13 | Trusted trajectory compatibility | `ctest --test-dir build/dev-windows --output-on-failure --no-tests=error --tests-regex "^teacher_runner_trajectory_test$"` | Teacher actions flow through `TrajectoryRecorder`, candidate shard, semantic replay, admission, receipt, and dataset identity with no special bypass. | Reject/quarantine the run; do not issue a Teacher-specific receipt. |
+| P4B-G13 | Trusted trajectory compatibility | `ctest --test-dir build/dev-windows --output-on-failure --no-tests=error --tests-regex "^teacher_runner_trajectory_test$"` | Teacher actions flow through `TrajectoryRecorder`, candidate shard, semantic replay, admission, receipt, and dataset identity with no special bypass; the runner proves a Player-0 accepted action may yield a Player-1 next frame without cross-participant state reconciliation, then reconciles Player 0 only on its later own frame and enforces proposal-index/accepted-transition equality. | Reject/quarantine the run; do not issue a Teacher-specific receipt. |
 | P4B-G14 | Phase-4A public-policy regression | `ctest --test-dir build/dev-windows --output-on-failure --no-tests=error --tests-regex "^(public_safe_state_test|public_action_identity_test|policy_boundary_compile_test|policy_rng_test|random_legal_test|policy_runner_integration_test)$"`, plus `python -B tests/policy/policy_boundary_test.py` and `python -B tests/policy/public_fact_matrix_test.py` | Existing Phase-4A public boundary, RandomLegal, safe-state, public-key, and runner tests remain green; no Phase-4A byte or ownership meaning changes. | Phase-4B integration stops; investigate regression. |
 | P4B-G15 | No hidden identity after knowledge-destroying transitions | `ctest --test-dir build/dev-windows --output-on-failure --no-tests=error --tests-regex "^teacher_knowledge_boundary_test$"` | Shuffle/randomization clears destroyed physical identity; public redacted slots remain nonphysical. | Privacy gate fails; no profile/Teacher acceptance. |
 | P4B-G16 | Diagnostic safety and semantic separation | `ctest --test-dir build/dev-windows --output-on-failure --no-tests=error --tests-regex "^teacher_explanation_test$"` | Emitted explanations are canonical, public-safe, deterministic, optional, and absent from gameplay/replay identity. | Diagnostic publication fails; action identity remains unchanged. |
