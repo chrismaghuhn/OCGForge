@@ -20,24 +20,6 @@
 namespace ygo::teacher {
 namespace {
 
-bool valid_candidate_domain(
-    const std::vector<environment::EnvironmentActionCandidate>& candidates) noexcept {
-    if (candidates.empty()) {
-        return false;
-    }
-    for (std::size_t index = 0; index < candidates.size(); ++index) {
-        if (!environment::is_public_action_key(candidates[index].public_action_key)) {
-            return false;
-        }
-        for (std::size_t previous = 0; previous < index; ++previous) {
-            if (candidates[previous].public_action_key == candidates[index].public_action_key) {
-                return false;
-            }
-        }
-    }
-    return true;
-}
-
 TeacherRankingResult invalid_result(
     const TeacherRankingStatus status,
     const std::vector<environment::EnvironmentActionCandidate>& candidates) {
@@ -49,6 +31,48 @@ TeacherRankingResult invalid_result(
         evaluation.public_action_key = candidate.public_action_key;
         evaluation.status = CandidateEvaluationStatus::Invalid;
         result.evaluations.push_back(std::move(evaluation));
+    }
+    return result;
+}
+
+bool compose_score(const PublicEvaluatorOutcome& outcome,
+                   ScoreVector& score) noexcept {
+    for (const auto& contribution : outcome.contributions) {
+        if (!add_score_contribution(score, contribution.dimension, contribution.value)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+CandidateEvaluation evaluation_from_outcome(
+    const environment::EnvironmentActionCandidate& candidate,
+    const PublicEvaluatorOutcome& outcome,
+    bool& valid) {
+    CandidateEvaluation result;
+    result.public_action_key = candidate.public_action_key;
+    result.status = outcome.status;
+    result.matched_intent_ids = outcome.matched_intent_ids;
+    result.matched_goal_ids = outcome.matched_goal_ids;
+    result.matched_line_ids = outcome.matched_line_ids;
+    result.reason_ids = outcome.reason_ids;
+    if (outcome.public_action_key != candidate.public_action_key) {
+        valid = false;
+        result.status = CandidateEvaluationStatus::Invalid;
+        return result;
+    }
+    if (outcome.status == CandidateEvaluationStatus::Supported) {
+        ScoreVector score;
+        if (!compose_score(outcome, score)) {
+            valid = false;
+            result.status = CandidateEvaluationStatus::Invalid;
+            return result;
+        }
+        result.score = score;
+    } else if (outcome.status == CandidateEvaluationStatus::Invalid ||
+               !outcome.contributions.empty()) {
+        valid = false;
+        result.status = CandidateEvaluationStatus::Invalid;
     }
     return result;
 }
@@ -71,6 +95,10 @@ TeacherFallbackCandidateValue stage_value_from_outcome(
         result.contributions.clear();
         return result;
     }
+    if (outcome.status == CandidateEvaluationStatus::Invalid) {
+        valid = false;
+        return result;
+    }
     if (outcome.status == CandidateEvaluationStatus::Supported) {
         result.score = ScoreVector{};
         for (const auto& contribution : result.contributions) {
@@ -91,52 +119,31 @@ TeacherFallbackCandidateValue stage_value_from_outcome(
     return result;
 }
 
-struct StageBuildResult final {
+struct StageEvidence final {
     std::vector<TeacherFallbackCandidateValue> values;
     bool valid = true;
     bool total = true;
     bool matched = false;
 };
 
-StageBuildResult build_stage(
-    const StrategyProfileV1& profile,
-    const GoalLineSelection& selection,
-    const RecoverySelection& recovery,
-    const std::vector<environment::EnvironmentActionCandidate>& candidates,
-    const PublicFactSnapshot& facts,
-    const environment::PublicEnvironmentObservation& observation,
-    const std::uint8_t owner) {
-    StageBuildResult result;
-    result.values.reserve(candidates.size());
-    for (const auto& candidate : candidates) {
-        CandidateFeatures features;
-        if (!extract_candidate_features(candidate, facts, features)) {
-            result.valid = false;
-            TeacherFallbackCandidateValue invalid;
-            invalid.public_action_key = candidate.public_action_key;
-            invalid.status = CandidateEvaluationStatus::Invalid;
-            result.values.push_back(std::move(invalid));
-            continue;
-        }
-        const auto outcome = evaluate_goal_line_progress(
-            profile, selection, recovery, candidate, observation, owner);
-        bool value_valid = true;
-        const auto value = stage_value_from_outcome(candidate, outcome, value_valid);
-        result.valid = result.valid && value_valid;
-        result.total = result.total &&
-                       outcome.status == CandidateEvaluationStatus::Supported;
-        result.matched = result.matched ||
-                         (outcome.status == CandidateEvaluationStatus::Supported &&
-                          std::any_of(outcome.contributions.begin(),
-                                      outcome.contributions.end(), [](const auto& contribution) {
-                                          return contribution.dimension ==
-                                                     ScoreDimension::
-                                                         ActiveGoalLineOrValidatedRecoveryProgress &&
-                                                 contribution.value > 0;
-                                      }));
-        result.values.push_back(value);
-    }
-    return result;
+void append_stage_value(StageEvidence& stage,
+                        const environment::EnvironmentActionCandidate& candidate,
+                        const PublicEvaluatorOutcome& outcome) {
+    bool value_valid = true;
+    const auto value = stage_value_from_outcome(candidate, outcome, value_valid);
+    stage.valid = stage.valid && value_valid;
+    stage.total = stage.total &&
+                  outcome.status == CandidateEvaluationStatus::Supported;
+    stage.matched = stage.matched ||
+                    (outcome.status == CandidateEvaluationStatus::Supported &&
+                     std::any_of(outcome.contributions.begin(), outcome.contributions.end(),
+                                 [](const auto& contribution) {
+                                     return contribution.dimension ==
+                                                ScoreDimension::
+                                                    ActiveGoalLineOrValidatedRecoveryProgress &&
+                                            contribution.value > 0;
+                                 }));
+    stage.values.push_back(value);
 }
 
 const LineDefinition* find_line(const StrategyProfileV1& profile,
@@ -241,8 +248,7 @@ TeacherRankingResult TeacherCore::propose(
     const StrategyProfileV1& profile,
     const EpisodeLocalStrategyStateV1& state) const {
     try {
-        if (!valid_candidate_domain(input.candidates) ||
-            !validate_strategy_profile(profile) ||
+        if (!validate_strategy_profile(profile) ||
             !validate_strategy_state(state) ||
             state.strategy_profile_id != profile.profile_id ||
             input.observation.perspective_player > 1) {
@@ -272,31 +278,134 @@ TeacherRankingResult TeacherCore::propose(
             return invalid_result(TeacherRankingStatus::InvalidInput, input.candidates);
         }
 
-        TeacherFallbackStageSet stages;
-        const GoalLineSelection no_active_line;
-        if (selection.status == PredicateEvaluationStatus::True &&
-            selection.line_id.has_value()) {
-            const auto active_stage = build_stage(
-                profile, selection, RecoverySelection{}, input.candidates,
-                facts_result.snapshot, input.observation, owner);
-            if (!active_stage.valid) {
-                return invalid_result(TeacherRankingStatus::InvalidInput, input.candidates);
-            }
-            if (active_stage.total && active_stage.matched) {
-                stages.stage_evaluations[0] = active_stage.values;
-            }
+        const bool has_line_selection =
+            selection.status == PredicateEvaluationStatus::True &&
+            selection.line_id.has_value();
+        const bool retained_active_line =
+            has_line_selection && completed->active_goal_id == selection.goal_id &&
+            completed->active_line_id == selection.line_id;
+        const bool f1_applicable =
+            (has_line_selection && !retained_active_line) ||
+            recovery.status == PredicateEvaluationStatus::True;
+        const RecoverySelection proven_recovery =
+            recovery.status == PredicateEvaluationStatus::True
+                ? recovery
+                : RecoverySelection{};
+
+        StageEvidence f0_evidence;
+        StageEvidence f1_evidence;
+        if (retained_active_line) {
+            f0_evidence.values.reserve(input.candidates.size());
+        }
+        if (f1_applicable) {
+            f1_evidence.values.reserve(input.candidates.size());
         }
 
-        if (recovery.status == PredicateEvaluationStatus::True) {
-            const auto recovery_stage = build_stage(
-                profile, no_active_line, recovery, input.candidates,
-                facts_result.snapshot, input.observation, owner);
-            if (!recovery_stage.valid) {
+        std::vector<CandidateEvaluation> authoritative_evaluations;
+        const auto domain_valid = evaluate_candidate_domain(
+            input.candidates,
+            [&](const environment::EnvironmentActionCandidate& candidate) {
+                CandidateFeatures features;
+                if (!extract_candidate_features(candidate, facts_result.snapshot, features)) {
+                    if (retained_active_line) {
+                        append_stage_value(
+                            f0_evidence, candidate,
+                            PublicEvaluatorOutcome{candidate.public_action_key,
+                                                    CandidateEvaluationStatus::Invalid});
+                    }
+                    if (f1_applicable) {
+                        append_stage_value(
+                            f1_evidence, candidate,
+                            PublicEvaluatorOutcome{candidate.public_action_key,
+                                                    CandidateEvaluationStatus::Invalid});
+                    }
+                    CandidateEvaluation invalid;
+                    invalid.public_action_key = candidate.public_action_key;
+                    invalid.status = CandidateEvaluationStatus::Invalid;
+                    return invalid;
+                }
+
+                PublicEvaluatorOutcome active_outcome;
+                PublicEvaluatorOutcome f1_outcome;
+                bool has_active_outcome = false;
+                bool has_f1_outcome = false;
+                if (retained_active_line) {
+                    active_outcome = evaluate_goal_line_progress(
+                        profile, selection, RecoverySelection{}, candidate,
+                        input.observation, owner);
+                    append_stage_value(f0_evidence, candidate, active_outcome);
+                    has_active_outcome = true;
+                }
+                if (f1_applicable) {
+                    const GoalLineSelection no_active_line;
+                    if (has_line_selection) {
+                        f1_outcome = evaluate_goal_line_progress(
+                            profile, selection, proven_recovery, candidate,
+                            input.observation, owner);
+                    } else {
+                        f1_outcome = evaluate_goal_line_progress(
+                            profile, no_active_line, proven_recovery, candidate,
+                            input.observation, owner);
+                    }
+                    append_stage_value(f1_evidence, candidate, f1_outcome);
+                    has_f1_outcome = true;
+                }
+
+                bool callback_valid = true;
+                if ((has_active_outcome &&
+                     active_outcome.status == CandidateEvaluationStatus::Invalid) ||
+                    (has_f1_outcome &&
+                     f1_outcome.status == CandidateEvaluationStatus::Invalid)) {
+                    callback_valid = false;
+                }
+
+                if (retained_active_line) {
+                    auto evaluation =
+                        evaluation_from_outcome(candidate, active_outcome, callback_valid);
+                    if (!callback_valid) {
+                        evaluation.status = CandidateEvaluationStatus::Invalid;
+                    }
+                    return evaluation;
+                }
+                if (f1_applicable) {
+                    auto evaluation =
+                        evaluation_from_outcome(candidate, f1_outcome, callback_valid);
+                    if (!callback_valid) {
+                        evaluation.status = CandidateEvaluationStatus::Invalid;
+                    }
+                    return evaluation;
+                }
+
+                CandidateEvaluation evaluation;
+                evaluation.public_action_key = candidate.public_action_key;
+                evaluation.status = CandidateEvaluationStatus::Supported;
+                evaluation.score = ScoreVector{};
+                return evaluation;
+            },
+            authoritative_evaluations);
+        if (!domain_valid || authoritative_evaluations.size() != input.candidates.size()) {
+            return invalid_result(TeacherRankingStatus::InvalidInput, input.candidates);
+        }
+        for (std::size_t index = 0; index < authoritative_evaluations.size(); ++index) {
+            if (authoritative_evaluations[index].public_action_key !=
+                    input.candidates[index].public_action_key ||
+                authoritative_evaluations[index].status == CandidateEvaluationStatus::Invalid) {
                 return invalid_result(TeacherRankingStatus::InvalidInput, input.candidates);
             }
-            if (recovery_stage.total && recovery_stage.matched) {
-                stages.stage_evaluations[1] = recovery_stage.values;
-            }
+        }
+        if ((retained_active_line &&
+             (f0_evidence.values.size() != input.candidates.size() || !f0_evidence.valid)) ||
+            (f1_applicable &&
+             (f1_evidence.values.size() != input.candidates.size() || !f1_evidence.valid))) {
+            return invalid_result(TeacherRankingStatus::InvalidInput, input.candidates);
+        }
+
+        TeacherFallbackStageSet stages;
+        if (retained_active_line && f0_evidence.total && f0_evidence.matched) {
+            stages.stage_evaluations[0] = std::move(f0_evidence.values);
+        }
+        if (f1_applicable && f1_evidence.total && f1_evidence.matched) {
+            stages.stage_evaluations[1] = std::move(f1_evidence.values);
         }
 
         const auto result_before_delta =
@@ -333,6 +442,14 @@ TeacherRankingResult TeacherCore::propose(
             requested.active_goal_id = recovery.target_goal_id;
             requested.active_line_id = recovery.target_line_id;
             requested.completed_line_node_ids.clear();
+        } else if (result.fallback_level == std::optional<TeacherFallbackLevel>{
+                                        TeacherFallbackLevel::F1} &&
+                   has_line_selection) {
+            if (requested.active_line_id != selection.line_id) {
+                requested.completed_line_node_ids.clear();
+            }
+            requested.active_goal_id = selection.goal_id;
+            requested.active_line_id = selection.line_id;
         } else if (result.fallback_level == std::optional<TeacherFallbackLevel>{
                                         TeacherFallbackLevel::F0} &&
                    selection.status == PredicateEvaluationStatus::True) {

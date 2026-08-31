@@ -40,7 +40,10 @@ PublicEnvironmentObservation public_observation(const std::uint8_t participant,
                                                  const std::uint32_t chain_length = 0,
                                                  const std::string& decision_kind = "idle_command",
                                                  const std::optional<std::uint32_t>& visible_passcode =
-                                                     std::nullopt) {
+                                                     std::nullopt,
+                                                 const std::string& visible_locator = "",
+                                                 const ygo::observation::SemanticZone visible_zone =
+                                                     ygo::observation::SemanticZone::MonsterZone) {
     ygo::observation::PlayerObservation source;
     source.schema_version = "ygo.player_observation.v1";
     source.perspective_player = participant;
@@ -61,12 +64,14 @@ PublicEnvironmentObservation public_observation(const std::uint8_t participant,
     source.decision_context.player = participant;
     if (visible_passcode.has_value()) {
         ygo::observation::ObservedCard entity;
-        entity.locator = {"p" + std::to_string(participant) + ":MONSTER_ZONE:0"};
+        entity.locator = {visible_locator.empty()
+                              ? "p" + std::to_string(participant) + ":MONSTER_ZONE:0"
+                              : visible_locator};
         entity.identity_known = true;
         entity.passcode = *visible_passcode;
         entity.owner = participant;
         entity.controller = participant;
-        entity.zone = ygo::observation::SemanticZone::MonsterZone;
+        entity.zone = visible_zone;
         entity.sequence = 0;
         entity.face_up = true;
         entity.face_down = false;
@@ -94,6 +99,23 @@ EnvironmentActionCandidate public_chain_candidate() {
     PublicActionKeyInput key;
     key.action_kind = "chain";
     key.source_reference = candidate.source_reference;
+    candidate.public_action_key = public_action_key(key);
+    return candidate;
+}
+
+EnvironmentActionCandidate public_idle_card_candidate(const std::string& locator,
+                                                       const std::uint32_t command) {
+    EnvironmentActionCandidate candidate;
+    candidate.action_kind = EnvironmentActionKind::IdleCommand;
+    candidate.source_reference =
+        PublicCardReference{PublicCardReferenceKind::VisibleCard, locator};
+    candidate.phase = command;
+    candidate.source_index = 0;
+    PublicActionKeyInput key;
+    key.action_kind = "idle_command";
+    key.source_reference = candidate.source_reference;
+    key.phase = candidate.phase;
+    key.source_index = candidate.source_index;
     candidate.public_action_key = public_action_key(key);
     return candidate;
 }
@@ -131,6 +153,21 @@ PredicateRef observation_u64_equals(const std::string& fact_id,
     PredicateRef predicate;
     predicate.scope = PredicateScope::Observation;
     predicate.predicate_id = "observation.fact_u64_equals";
+    predicate.arguments = {fact_atom, value_atom};
+    return predicate;
+}
+
+PredicateRef observation_i32_equals(const std::string& fact_id,
+                                    const std::int32_t value) {
+    PredicateAtom fact_atom;
+    fact_atom.kind = PredicateAtomKind::Token;
+    fact_atom.token = fact_id;
+    PredicateAtom value_atom;
+    value_atom.kind = PredicateAtomKind::I32;
+    value_atom.i32 = value;
+    PredicateRef predicate;
+    predicate.scope = PredicateScope::Observation;
+    predicate.predicate_id = "observation.fact_i32_equals";
     predicate.arguments = {fact_atom, value_atom};
     return predicate;
 }
@@ -344,6 +381,44 @@ void test_teacher_core_stage_and_state_contracts() {
     const std::vector<EnvironmentActionCandidate> nonmatching = {public_candidate()};
     TeacherCore core;
 
+    const auto mo_ye_observation = public_observation(
+        0, 0, 8000, 7000, 0, "idle_command", std::optional<std::uint32_t>{20001443},
+        "p0:HAND:0", ygo::observation::SemanticZone::Hand);
+    const auto mo_ye_candidate = public_idle_card_candidate("p0:HAND:0", 0);
+    const std::vector<EnvironmentActionCandidate> matching = {mo_ye_candidate};
+
+    const auto reset_replan = core.propose(
+        PolicyInput{mo_ye_observation, matching}, profile, *reset);
+    require(reset_replan.status == TeacherRankingStatus::Selected &&
+                reset_replan.fallback_level == std::optional<TeacherFallbackLevel>{
+                    TeacherFallbackLevel::F1} &&
+                reset_replan.proposed_state_delta.has_value() &&
+                reset_replan.proposed_state_delta->active_goal_id ==
+                    std::optional<std::string>{"goal.main1.swordsoul"} &&
+                reset_replan.proposed_state_delta->active_line_id ==
+                    std::optional<std::string>{"line.main1.swordsoul"},
+            "a reset-state public replan was incorrectly published as F0");
+
+    auto retained_state = *reset;
+    retained_state.active_goal_id = "goal.main1.swordsoul";
+    retained_state.active_line_id = "line.main1.swordsoul";
+    const auto retained = core.propose(
+        PolicyInput{mo_ye_observation, matching}, profile, retained_state);
+    require(retained.status == TeacherRankingStatus::Selected &&
+                retained.fallback_level == std::optional<TeacherFallbackLevel>{
+                    TeacherFallbackLevel::F0},
+            "a retained active line was not published as F0");
+
+    const std::vector<EnvironmentActionCandidate> ordered_domain = {
+        mo_ye_candidate, public_candidate()};
+    const auto ordered = core.propose(
+        PolicyInput{mo_ye_observation, ordered_domain}, profile, retained_state);
+    require(ordered.status == TeacherRankingStatus::Selected &&
+                ordered.evaluations.size() == ordered_domain.size() &&
+                ordered.evaluations[0].public_action_key == ordered_domain[0].public_action_key &&
+                ordered.evaluations[1].public_action_key == ordered_domain[1].public_action_key,
+            "the authoritative candidate order or N-record evidence was not preserved");
+
     const auto zero_match = core.propose(PolicyInput{observation, nonmatching}, profile, *reset);
     require(zero_match.status == TeacherRankingStatus::Selected &&
                 zero_match.fallback_level == std::optional<TeacherFallbackLevel>{
@@ -372,6 +447,57 @@ void test_teacher_core_stage_and_state_contracts() {
                 recovery_result.fallback_level == std::optional<TeacherFallbackLevel>{
                     TeacherFallbackLevel::F1},
             "a recovery-only match was incorrectly published as F0");
+
+    auto replan_recovery_profile = profile;
+    const auto replan_recovery_edge = std::find_if(
+        replan_recovery_profile.recovery_edges.begin(),
+        replan_recovery_profile.recovery_edges.end(), [](const auto& edge) {
+            return edge.recovery_edge_id == "recovery.interaction.main1";
+        });
+    require(replan_recovery_edge != replan_recovery_profile.recovery_edges.end(),
+            "Swordsoul replan/recovery edge fixture is missing");
+    replan_recovery_edge->candidate_intent_ids = {"intent.mo_ye.starter"};
+    replan_recovery_profile.profile_id = strategy_profile_id(replan_recovery_profile);
+    auto replan_recovery_state = reset_state(replan_recovery_profile);
+    replan_recovery_state.active_goal_id = "goal.interaction.preservation";
+    replan_recovery_state.active_line_id = "line.interaction.preserve";
+    replan_recovery_state.public_resource_facts = {u64_fact("public.chain.length", 1)};
+    const auto replan_recovery_result = core.propose(
+        PolicyInput{mo_ye_observation, matching}, replan_recovery_profile,
+        replan_recovery_state);
+    require(replan_recovery_result.status == TeacherRankingStatus::Selected &&
+                replan_recovery_result.fallback_level == std::optional<TeacherFallbackLevel>{
+                    TeacherFallbackLevel::F1},
+            "a public replan plus recovery was incorrectly published as F0");
+
+    auto replan_with_unsupported_recovery_profile = replan_recovery_profile;
+    const auto unsupported_recovery_edge = std::find_if(
+        replan_with_unsupported_recovery_profile.recovery_edges.begin(),
+        replan_with_unsupported_recovery_profile.recovery_edges.end(),
+        [](const auto& edge) { return edge.recovery_edge_id == "recovery.interaction.main1"; });
+    require(unsupported_recovery_edge !=
+                replan_with_unsupported_recovery_profile.recovery_edges.end(),
+            "Swordsoul unsupported-recovery edge fixture is missing");
+    unsupported_recovery_edge->preconditions = {
+        observation_i32_equals("public.last_event.amount", 0)};
+    replan_with_unsupported_recovery_profile.profile_id =
+        strategy_profile_id(replan_with_unsupported_recovery_profile);
+    auto replan_with_unsupported_recovery_state =
+        reset_state(replan_with_unsupported_recovery_profile);
+    replan_with_unsupported_recovery_state.active_goal_id =
+        "goal.interaction.preservation";
+    replan_with_unsupported_recovery_state.active_line_id =
+        "line.interaction.preserve";
+    replan_with_unsupported_recovery_state.public_resource_facts = {
+        u64_fact("public.chain.length", 1)};
+    const auto replan_with_unsupported_recovery = core.propose(
+        PolicyInput{mo_ye_observation, matching},
+        replan_with_unsupported_recovery_profile,
+        replan_with_unsupported_recovery_state);
+    require(replan_with_unsupported_recovery.status == TeacherRankingStatus::Selected &&
+                replan_with_unsupported_recovery.fallback_level ==
+                    std::optional<TeacherFallbackLevel>{TeacherFallbackLevel::F1},
+            "an unproven recovery edge incorrectly blocked a proven public replan");
 
     auto image_state = *reset;
     image_state.active_goal_id = "goal.main1.swordsoul";
