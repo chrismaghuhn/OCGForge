@@ -132,6 +132,21 @@ void test_locked_roles_and_minimal_slice() {
     require(has_role(profile, 93850690, "role.recovery.summit") &&
                 has_role(profile, 51684157, "role.interaction"),
             "Summit/interaction roles are missing");
+    require(!has_role(profile, 56495147, "role.payoff.level8") &&
+                !has_role(profile, 93490856, "role.payoff.level10"),
+            "Taia or Longyuan was classified as an Extra Deck payoff");
+
+    require(profile.goals.size() == 2 && profile.lines.size() == 2,
+            "minimal Swordsoul profile retained unbounded plan branches");
+    require(profile.goals[0].goal_id == "goal.interaction.preservation" &&
+                profile.goals[1].goal_id == "goal.main1.swordsoul" &&
+                profile.lines[0].line_id == "line.interaction.preserve" &&
+                profile.lines[1].line_id == "line.main1.swordsoul",
+            "minimal Swordsoul goal/line ordering changed");
+    for (const auto& line : profile.lines) {
+        require(line.dependencies.empty(),
+                "minimal Swordsoul profile contains an unproven dependency");
+    }
 
     const std::vector<std::string> expected_intents = {
         "intent.board.breaker", "intent.interaction.chain", "intent.level10.payoff",

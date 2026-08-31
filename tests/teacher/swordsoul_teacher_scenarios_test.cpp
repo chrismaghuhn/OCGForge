@@ -37,7 +37,9 @@ PublicEnvironmentObservation public_observation(
     const std::string& decision_kind,
     const std::optional<std::uint32_t>& visible_passcode = std::nullopt,
     const ygo::observation::SemanticZone visible_zone =
-        ygo::observation::SemanticZone::Hand) {
+        ygo::observation::SemanticZone::Hand,
+    const PublicCardReferenceKind visible_reference_kind =
+        PublicCardReferenceKind::VisibleCard) {
     ygo::observation::PlayerObservation source;
     source.schema_version = "ygo.player_observation.v1";
     source.perspective_player = 0;
@@ -59,13 +61,16 @@ PublicEnvironmentObservation public_observation(
         ygo::observation::ObservedCard entity;
         entity.locator = {std::string("p0:") +
                           ygo::observation::semantic_zone_name(visible_zone) + ":0"};
-        entity.identity_known = true;
-        entity.passcode = *visible_passcode;
+        entity.identity_known = visible_reference_kind == PublicCardReferenceKind::VisibleCard;
+        if (entity.identity_known) {
+            entity.passcode = *visible_passcode;
+        }
         entity.owner = 0;
         entity.controller = 0;
         entity.zone = visible_zone;
         entity.sequence = 0;
         entity.face_up = false;
+        entity.face_down = !entity.identity_known;
         source.entities.push_back(entity);
     }
     return project_public_observation(source);
@@ -77,14 +82,10 @@ PublicFactSnapshot public_facts(const PublicEnvironmentObservation& observation)
     return extracted.snapshot;
 }
 
-PublicCardReference visible_source(
-    const ygo::observation::SemanticZone zone = ygo::observation::SemanticZone::Hand) {
-    return {PublicCardReferenceKind::VisibleCard,
-            std::string("p0:") + ygo::observation::semantic_zone_name(zone) + ":0"};
-}
-
-PublicCardReference redacted_source() {
-    return {PublicCardReferenceKind::RedactedSlot, "p0:HAND:0"};
+PublicCardReference card_reference(
+    const ygo::observation::SemanticZone zone = ygo::observation::SemanticZone::Hand,
+    const PublicCardReferenceKind kind = PublicCardReferenceKind::VisibleCard) {
+    return {kind, std::string("p0:") + ygo::observation::semantic_zone_name(zone) + ":0"};
 }
 
 EnvironmentActionCandidate idle_source(const std::uint32_t command,
@@ -105,9 +106,8 @@ EnvironmentActionCandidate idle_source(const std::uint32_t command,
 
 EnvironmentActionCandidate idle_card(
     const std::uint32_t command,
-    const ygo::observation::SemanticZone zone =
-        ygo::observation::SemanticZone::Hand) {
-    return idle_source(command, visible_source(zone));
+    const ygo::observation::SemanticZone zone = ygo::observation::SemanticZone::Hand) {
+    return idle_source(command, card_reference(zone));
 }
 
 EnvironmentActionCandidate chain_source(const PublicCardReference& source) {
@@ -123,13 +123,8 @@ EnvironmentActionCandidate chain_source(const PublicCardReference& source) {
     return value;
 }
 
-EnvironmentActionCandidate chain_activation() {
-    return chain_source(visible_source());
-}
-
 EnvironmentActionCandidate chain_pass() {
-    // The public projection of the decoder's chain.pass has no source or
-    // choice and carries the pass phase marker.
+    // The decoder's chain.pass has no source or choice and carries phase 1.
     EnvironmentActionCandidate value;
     value.action_kind = EnvironmentActionKind::Chain;
     value.phase = 1;
@@ -151,11 +146,25 @@ EnvironmentActionCandidate continuation_finish() {
     return value;
 }
 
+PublicFactValue u64_fact(const std::string& fact_id, const std::uint64_t value) {
+    PublicFactValue fact;
+    fact.fact_id = fact_id;
+    fact.value_kind = PublicFactValueKind::U64;
+    fact.u64_value = value;
+    return fact;
+}
+
+EpisodeLocalStrategyStateV1 reset_state(const StrategyProfileV1& profile) {
+    const auto reset = reset_strategy_state(profile);
+    require(reset.has_value(), "Swordsoul profile did not reset strategy state");
+    return *reset;
+}
+
 void require_idle_shape(const EnvironmentActionCandidate& value,
                         const std::uint32_t command,
                         const std::string& locator) {
     require(value.action_kind == EnvironmentActionKind::IdleCommand &&
-                value.phase.has_value() && *value.phase == command && value.choice.has_value() &&
+                value.phase == std::optional<std::uint32_t>(command) && value.choice.has_value() &&
                 value.choice->kind == PublicChoiceKind::EffectChoice &&
                 value.choice->value == 0 && !value.choice->response_index.has_value() &&
                 value.source_reference.has_value() &&
@@ -181,102 +190,193 @@ void require_chain_shape(const EnvironmentActionCandidate& value,
     }
 }
 
-PublicFactValue u64_fact(const std::string& fact_id, const std::uint64_t value) {
-    PublicFactValue fact;
-    fact.fact_id = fact_id;
-    fact.value_kind = PublicFactValueKind::U64;
-    fact.u64_value = value;
-    return fact;
+void require_progress(const StrategyProfileV1& profile,
+                      const GoalLineSelection& selection,
+                      const EnvironmentActionCandidate& candidate,
+                      const PublicEnvironmentObservation& observation,
+                      const std::int32_t expected) {
+    RecoverySelection no_recovery;
+    const auto result = evaluate_goal_line_progress(
+        profile, selection, no_recovery, candidate, observation, 0);
+    require(result.status == CandidateEvaluationStatus::Supported &&
+                result.contributions.size() == 1 &&
+                result.contributions[0].dimension ==
+                    ScoreDimension::ActiveGoalLineOrValidatedRecoveryProgress &&
+                result.contributions[0].value == expected,
+            "Swordsoul candidate progress did not match the declared profile intent");
 }
 
-EpisodeLocalStrategyStateV1 reset_state(const StrategyProfileV1& profile) {
-    const auto reset = reset_strategy_state(profile);
-    require(reset.has_value(), "Swordsoul profile did not reset strategy state");
-    return *reset;
-}
-
-void test_public_profile_goals_and_intents() {
+void test_frame_controller_and_independent_nodes() {
     const auto profile = make_swordsoul_tenyi_profile();
-    const auto observation = public_observation(12, 8000, 7000, 0x04, 0, "idle_command");
-    const auto facts = public_facts(observation);
-    const auto state = reset_state(profile);
+    const auto main_observation =
+        public_observation(12, 8000, 7000, 0x04, 0, "idle_command");
+    const auto selection =
+        select_goal_and_line(profile, reset_state(profile), public_facts(main_observation));
+    require(selection.status == PredicateEvaluationStatus::True &&
+                selection.goal_id == std::optional<std::string>("goal.main1.swordsoul") &&
+                selection.line_id == std::optional<std::string>("line.main1.swordsoul") &&
+                selection.ready_node_ids ==
+                    std::vector<std::string>{
+                        "node.main1.board_breaker", "node.main1.level10_payoff",
+                        "node.main1.level8_payoff", "node.main1.longyuan",
+                        "node.main1.mo_ye", "node.main1.monk", "node.main1.search",
+                        "node.main1.summit", "node.main1.taia", "node.main1.tenyi"},
+            "Main1 controller did not select the independent Swordsoul nodes");
 
-    const auto selected = select_goal_and_line(profile, state, facts);
-    require(selected.status == PredicateEvaluationStatus::True &&
-                selected.goal_id == std::optional<std::string>("goal.foundation.chixiao") &&
-                selected.line_id == std::optional<std::string>("line.foundation.chixiao") &&
-                selected.ready_node_ids ==
-                    std::vector<std::string>{"node.foundation.chixiao"},
-            "Swordsoul foundation goal/line selection was not deterministic");
+    for (const auto& line : profile.lines) {
+        require(line.dependencies.empty(),
+                "minimal Swordsoul profile retained an unproven sequential dependency");
+    }
+
+    const auto chain_observation =
+        public_observation(13, 8000, 7000, 0x04, 1, "chain", 51684157);
+    const auto chain_selection =
+        select_goal_and_line(profile, reset_state(profile), public_facts(chain_observation));
+    require(chain_selection.status == PredicateEvaluationStatus::True &&
+                chain_selection.goal_id ==
+                    std::optional<std::string>("goal.interaction.preservation") &&
+                chain_selection.line_id ==
+                    std::optional<std::string>("line.interaction.preserve"),
+            "interaction goal was not restricted to public chain context");
+
+    const std::vector<std::pair<std::uint32_t, std::string>> non_main_phases = {
+        {0x02, "STANDBY"}, {0x80, "BATTLE"}, {0x200, "END"}};
+    for (const auto& phase : non_main_phases) {
+        auto state = reset_state(profile);
+        state.active_goal_id = "goal.main1.swordsoul";
+        const auto non_main = select_goal_and_line(
+            profile, state,
+            public_facts(public_observation(14, 8000, 7000, phase.first, 0, "idle_command")));
+        require(non_main.status == PredicateEvaluationStatus::False &&
+                    !non_main.goal_id.has_value() && !non_main.line_id.has_value() &&
+                    non_main.ready_node_ids.empty(),
+                phase.second + " incorrectly activated the Main1 Swordsoul line");
+    }
+}
+
+void test_action_specific_intents_and_progress() {
+    const auto profile = make_swordsoul_tenyi_profile();
+    const auto main_observation =
+        public_observation(20, 8000, 7000, 0x04, 0, "idle_command");
+    const auto selection =
+        select_goal_and_line(profile, reset_state(profile), public_facts(main_observation));
 
     const auto mo_ye = idle_card(0);
     const auto mo_ye_observation =
-        public_observation(12, 8000, 7000, 0x04, 0, "idle_command", 20001443);
+        public_observation(20, 8000, 7000, 0x04, 0, "idle_command", 20001443);
     require_idle_shape(mo_ye, 0, "p0:HAND:0");
     std::vector<std::string> matched;
     require(match_candidate_intent_set(
-                profile, {"intent.mo_ye.starter"}, mo_ye, mo_ye_observation, 0, matched) ==
-                PredicateEvaluationStatus::True &&
-                matched == std::vector<std::string>{"intent.mo_ye.starter"},
-            "Mo Ye public role intent did not match");
+                profile, {"intent.mo_ye.starter"}, mo_ye, mo_ye_observation, 0,
+                matched) == PredicateEvaluationStatus::True,
+            "Mo Ye normal-summon intent did not match");
+    require_progress(profile, selection, mo_ye, mo_ye_observation, 3);
+
+    const auto mo_ye_set = idle_card(3);
+    matched.clear();
+    require(match_candidate_intent_set(
+                profile, {"intent.mo_ye.starter"}, mo_ye_set, mo_ye_observation, 0,
+                matched) == PredicateEvaluationStatus::False,
+            "Mo Ye monster-set candidate matched normal-summon intent");
 
     const auto longyuan = idle_card(5);
     const auto longyuan_observation =
-        public_observation(12, 8000, 7000, 0x04, 0, "idle_command", 93490856);
+        public_observation(20, 8000, 7000, 0x04, 0, "idle_command", 93490856);
     require_idle_shape(longyuan, 5, "p0:HAND:0");
-    matched.clear();
     require(match_candidate_intent_set(
                 profile, {"intent.longyuan.access"}, longyuan, longyuan_observation, 0,
                 matched) == PredicateEvaluationStatus::True,
-            "Longyuan public role intent did not match");
+            "Longyuan activation intent did not match");
+    require_progress(profile, selection, longyuan, longyuan_observation, 3);
+    const auto longyuan_normal = idle_card(0);
+    matched.clear();
+    require(match_candidate_intent_set(
+                profile, {"intent.longyuan.access"}, longyuan_normal, longyuan_observation, 0,
+                matched) == PredicateEvaluationStatus::False,
+            "Longyuan normal-summon-shaped candidate matched activation intent");
 
     const auto tenyi = idle_card(1);
     const auto tenyi_observation =
-        public_observation(12, 8000, 7000, 0x04, 0, "idle_command", 87052196);
+        public_observation(20, 8000, 7000, 0x04, 0, "idle_command", 87052196);
     require_idle_shape(tenyi, 1, "p0:HAND:0");
     matched.clear();
     require(match_candidate_intent_set(
                 profile, {"intent.tenyi.body"}, tenyi, tenyi_observation, 0, matched) ==
                 PredicateEvaluationStatus::True,
-            "Tenyi body public role intent did not match");
-
-    const auto taia = idle_card(0);
-    const auto taia_observation =
-        public_observation(12, 8000, 7000, 0x04, 0, "idle_command", 56495147);
-    require_idle_shape(taia, 0, "p0:HAND:0");
+            "Tenyi special-summon intent did not match");
+    require_progress(profile, selection, tenyi, tenyi_observation, 3);
+    const auto tenyi_wrong_command = idle_card(5);
     matched.clear();
     require(match_candidate_intent_set(
-                profile, {"intent.taia.recovery"}, taia, taia_observation, 0, matched) ==
-                PredicateEvaluationStatus::True,
-            "Taia public role intent did not match");
-
-    const auto summit = idle_card(5);
-    const auto summit_observation =
-        public_observation(12, 8000, 7000, 0x04, 0, "idle_command", 93850690);
-    require_idle_shape(summit, 5, "p0:HAND:0");
-    matched.clear();
-    require(match_candidate_intent_set(
-                profile, {"intent.summit.recovery"}, summit, summit_observation, 0, matched) ==
-                PredicateEvaluationStatus::True,
-            "Sacred Summit public role intent did not match");
+                profile, {"intent.tenyi.body"}, tenyi_wrong_command, tenyi_observation, 0,
+                matched) == PredicateEvaluationStatus::False,
+            "Tenyi activation-shaped candidate matched free-body intent");
 
     const auto monk = idle_card(1, ygo::observation::SemanticZone::ExtraDeck);
-    const auto monk_observation =
-        public_observation(12, 8000, 7000, 0x04, 0, "idle_command", 32519092,
-                           ygo::observation::SemanticZone::ExtraDeck);
+    const auto monk_observation = public_observation(
+        20, 8000, 7000, 0x04, 0, "idle_command", 32519092,
+        ygo::observation::SemanticZone::ExtraDeck);
     require_idle_shape(monk, 1, "p0:EXTRA_DECK:0");
     matched.clear();
     require(match_candidate_intent_set(
                 profile, {"intent.monk.access"}, monk, monk_observation, 0, matched) ==
                 PredicateEvaluationStatus::True,
-            "Monk public role intent did not match");
+            "Monk Extra Deck intent did not match");
+    require_progress(profile, selection, monk, monk_observation, 3);
 
-    const auto redacted = idle_source(0, redacted_source());
+    const auto taia = idle_card(0);
+    const auto taia_observation =
+        public_observation(20, 8000, 7000, 0x04, 0, "idle_command", 56495147);
+    require_idle_shape(taia, 0, "p0:HAND:0");
     matched.clear();
     require(match_candidate_intent_set(
-                profile, {"intent.mo_ye.starter"}, redacted, mo_ye_observation, 0, matched) ==
-                PredicateEvaluationStatus::Unsupported,
-            "redacted Swordsoul role was not unsupported");
+                profile, {"intent.taia.recovery"}, taia, taia_observation, 0, matched) ==
+                PredicateEvaluationStatus::True,
+            "Taia normal-summon intent did not match");
+    require_progress(profile, selection, taia, taia_observation, 3);
+    matched.clear();
+    require(match_candidate_intent_set(
+                profile, {"intent.level8.payoff"}, taia, taia_observation, 0, matched) ==
+                PredicateEvaluationStatus::False,
+            "Taia bridge was classified as a Level-8 payoff");
+
+    const auto summit = idle_card(5);
+    const auto summit_observation =
+        public_observation(20, 8000, 7000, 0x04, 0, "idle_command", 93850690);
+    require_idle_shape(summit, 5, "p0:HAND:0");
+    matched.clear();
+    require(match_candidate_intent_set(
+                profile, {"intent.summit.recovery"}, summit, summit_observation, 0, matched) ==
+                PredicateEvaluationStatus::True,
+            "Sacred Summit activation intent did not match");
+    require_progress(profile, selection, summit, summit_observation, 3);
+
+    const auto chixiao = idle_card(1, ygo::observation::SemanticZone::ExtraDeck);
+    const auto chixiao_observation = public_observation(
+        20, 8000, 7000, 0x04, 0, "idle_command", 69248256,
+        ygo::observation::SemanticZone::ExtraDeck);
+    matched.clear();
+    require(match_candidate_intent_set(
+                profile, {"intent.level8.payoff"}, chixiao, chixiao_observation, 0, matched) ==
+                PredicateEvaluationStatus::True,
+            "Chixiao Level-8 payoff intent did not match");
+    require_progress(profile, selection, chixiao, chixiao_observation, 3);
+
+    const auto qixing = idle_card(1, ygo::observation::SemanticZone::ExtraDeck);
+    const auto qixing_observation = public_observation(
+        20, 8000, 7000, 0x04, 0, "idle_command", 47710198,
+        ygo::observation::SemanticZone::ExtraDeck);
+    matched.clear();
+    require(match_candidate_intent_set(
+                profile, {"intent.level10.payoff"}, qixing, qixing_observation, 0, matched) ==
+                PredicateEvaluationStatus::True,
+            "Qixing Level-10 payoff intent did not match");
+    require_progress(profile, selection, qixing, qixing_observation, 3);
+    matched.clear();
+    require(match_candidate_intent_set(
+                profile, {"intent.level10.payoff"}, longyuan, longyuan_observation, 0,
+                matched) == PredicateEvaluationStatus::False,
+            "Longyuan bridge was classified as a Level-10 payoff");
 
     const auto finish = continuation_finish();
     std::vector<std::string> all_intents;
@@ -284,158 +384,140 @@ void test_public_profile_goals_and_intents() {
         all_intents.push_back(intent.intent_id);
     }
     matched.clear();
-    require(match_candidate_intent_set(profile, all_intents, finish, observation, 0, matched) ==
-                PredicateEvaluationStatus::False && matched.empty(),
-            "continuation Finish was classified as a strategic safe stop");
-
-    const std::vector<std::pair<std::string, std::string>> main_phase_lines = {
-        {"goal.foundation.chixiao", "line.foundation.chixiao"},
-        {"goal.level10.access", "line.level10.longyuan"},
-        {"goal.taia.summit.recovery", "line.taia.summit"},
-        {"goal.tenyi.monk.access", "line.tenyi.monk"},
-    };
-    for (const auto& expected : main_phase_lines) {
-        auto main_state = reset_state(profile);
-        main_state.active_goal_id = expected.first;
-        const auto main = select_goal_and_line(
-            profile, main_state,
-            public_facts(public_observation(40, 8000, 7000, 0x04, 0, "idle_command")));
-        require(main.status == PredicateEvaluationStatus::True &&
-                    main.goal_id == std::optional<std::string>(expected.first) &&
-                    main.line_id == std::optional<std::string>(expected.second),
-                "MAIN1 did not activate a Main-Phase Swordsoul line");
-
-        for (const auto phase : {0x02U, 0x80U, 0x200U}) {
-            auto non_main_state = reset_state(profile);
-            non_main_state.active_goal_id = expected.first;
-            const auto non_main = select_goal_and_line(
-                profile, non_main_state,
-                public_facts(public_observation(40, 8000, 7000, phase, 0, "idle_command")));
-            require(non_main.status == PredicateEvaluationStatus::True &&
-                        non_main.goal_id == std::optional<std::string>(expected.first) &&
-                        !non_main.line_id.has_value() && non_main.ready_node_ids.empty(),
-                    "non-MAIN1 phase activated a Main-Phase Swordsoul line");
-        }
-    }
-
-    const auto chain_observation =
-        public_observation(41, 8000, 7000, 0x04, 1, "chain", 51684157);
-    const auto chain_activation_candidate = chain_activation();
-    const auto chain_pass_candidate = chain_pass();
-    require_chain_shape(chain_activation_candidate, true);
-    require_chain_shape(chain_pass_candidate, false);
-    matched.clear();
     require(match_candidate_intent_set(
-                profile, {"intent.interaction.chain"}, chain_activation_candidate,
-                chain_observation, 0, matched) == PredicateEvaluationStatus::True,
-            "source-bearing visible Chain candidate did not match interaction intent");
+                profile, all_intents, finish, main_observation, 0, matched) ==
+                PredicateEvaluationStatus::False && matched.empty(),
+            "continuation Finish acquired a strategic profile intent");
+}
+
+void test_interaction_and_public_recovery() {
+    const auto profile = make_swordsoul_tenyi_profile();
+    const auto chain_observation =
+        public_observation(30, 8000, 7000, 0x04, 1, "chain", 51684157);
+    const auto chain_selection =
+        select_goal_and_line(profile, reset_state(profile), public_facts(chain_observation));
+    const auto chain_activation = chain_source(card_reference());
+    const auto chain_pass_candidate = chain_pass();
+    require_chain_shape(chain_activation, true);
+    require_chain_shape(chain_pass_candidate, false);
+    std::vector<std::string> matched;
+    require(match_candidate_intent_set(
+                profile, {"intent.interaction.chain"}, chain_activation, chain_observation, 0,
+                matched) == PredicateEvaluationStatus::True,
+            "visible source-bearing Chain activation did not match");
+    require_progress(profile, chain_selection, chain_activation, chain_observation, 3);
     matched.clear();
     require(match_candidate_intent_set(
                 profile, {"intent.interaction.chain"}, chain_pass_candidate,
                 chain_observation, 0, matched) == PredicateEvaluationStatus::False,
             "chain.pass matched interaction intent");
-    const auto redacted_chain = chain_source(redacted_source());
+    require_progress(profile, chain_selection, chain_pass_candidate, chain_observation, 0);
+
+    for (const auto passcode : {14558127U, 97268402U, 10045474U}) {
+        const auto hand_interaction = chain_source(card_reference());
+        const auto interaction_observation =
+            public_observation(30, 8000, 7000, 0x04, 1, "chain", passcode);
+        matched.clear();
+        require(match_candidate_intent_set(
+                    profile, {"intent.interaction.chain"}, hand_interaction,
+                    interaction_observation, 0, matched) == PredicateEvaluationStatus::True,
+                "locked hand interaction did not match interaction intent");
+    }
+
+    const auto redacted_chain = chain_source(
+        card_reference(ygo::observation::SemanticZone::Hand,
+                       PublicCardReferenceKind::RedactedSlot));
     matched.clear();
     require(match_candidate_intent_set(
-                profile, {"intent.interaction.chain"}, redacted_chain,
-                chain_observation, 0, matched) == PredicateEvaluationStatus::Unsupported,
+                profile, {"intent.interaction.chain"}, redacted_chain, chain_observation, 0,
+                matched) == PredicateEvaluationStatus::Unsupported,
             "redacted Chain source was not UNSUPPORTED");
+    const auto redacted_progress = evaluate_goal_line_progress(
+        profile, chain_selection, RecoverySelection{}, redacted_chain, chain_observation, 0);
+    require(redacted_progress.status == CandidateEvaluationStatus::Unsupported &&
+                redacted_progress.contributions.empty(),
+            "redacted Chain source produced strategic progress");
 
-    GoalLineSelection interaction_selection;
-    interaction_selection.status = PredicateEvaluationStatus::True;
-    interaction_selection.goal_id = "goal.interaction.preservation";
-    interaction_selection.line_id = "line.interaction.preserve";
-    interaction_selection.ready_node_ids = {"node.interaction.preserve"};
-    RecoverySelection no_recovery;
-    const auto pass_progress = evaluate_goal_line_progress(
-        profile, interaction_selection, no_recovery, chain_pass_candidate, chain_observation, 0);
-    require(pass_progress.status == CandidateEvaluationStatus::Supported &&
-                pass_progress.contributions.size() == 1 &&
-                pass_progress.contributions[0].value == 0,
-            "chain.pass received interaction progress");
-    const auto activation_progress = evaluate_goal_line_progress(
-        profile, interaction_selection, no_recovery, chain_activation_candidate,
-        chain_observation, 0);
-    require(activation_progress.status == CandidateEvaluationStatus::Supported &&
-                activation_progress.contributions.size() == 1 &&
-                activation_progress.contributions[0].value == 3,
-            "source-bearing Chain activation did not receive interaction progress");
+    auto main_state = reset_state(profile);
+    main_state.active_goal_id = "goal.main1.swordsoul";
+    main_state.active_line_id = "line.main1.swordsoul";
+    main_state.public_resource_facts = {u64_fact("public.chain.length", 0)};
+    const auto main_recovery =
+        select_recovery_edge(profile, main_state, chain_observation, 0);
+    require(main_recovery.status == PredicateEvaluationStatus::True &&
+                main_recovery.recovery_edge_id ==
+                    std::optional<std::string>("recovery.main1.interaction") &&
+                main_recovery.target_line_id ==
+                    std::optional<std::string>("line.interaction.preserve"),
+            "public chain-window opening did not select interaction recovery");
 
-    const std::vector<EnvironmentActionCandidate> complete_domain = {
-        chain_activation_candidate, chain_pass_candidate};
-    require(complete_domain.size() == 2,
-            "scenario fixture did not retain its complete candidate domain");
-    for (const auto& supplied : complete_domain) {
-        std::vector<std::string> evidence;
-        (void)match_candidate_intent_set(
-            profile, {"intent.mo_ye.starter", "intent.interaction.chain"},
-            supplied, chain_observation, 0, evidence);
-    }
-    require(complete_domain.size() == 2,
-            "profile intent evaluation filtered the supplied candidate domain");
-}
+    auto interaction_state = reset_state(profile);
+    interaction_state.active_goal_id = "goal.interaction.preservation";
+    interaction_state.active_line_id = "line.interaction.preserve";
+    interaction_state.public_resource_facts = {u64_fact("public.chain.length", 1)};
+    const auto main_observation =
+        public_observation(31, 7000, 7000, 0x04, 0, "idle_command", 20001443);
+    const auto interaction_recovery =
+        select_recovery_edge(profile, interaction_state, main_observation, 0);
+    require(interaction_recovery.status == PredicateEvaluationStatus::True &&
+                interaction_recovery.recovery_edge_id ==
+                    std::optional<std::string>("recovery.interaction.main1") &&
+                interaction_recovery.target_line_id ==
+                    std::optional<std::string>("line.main1.swordsoul"),
+            "public chain-window loss did not select Main1 recovery");
 
-void test_public_interruption_recovery() {
-    const auto profile = make_swordsoul_tenyi_profile();
-    auto state = reset_state(profile);
-    state.active_goal_id = "goal.interaction.preservation";
-    state.active_line_id = "line.interaction.preserve";
-    state.public_resource_facts = {
-        u64_fact("public.chain.length", 1),
-    };
-
+    auto lp_only_state = interaction_state;
     const auto lp_only_observation =
-        public_observation(30, 7000, 7000, 0x04, 1, "idle_command", 20001443);
+        public_observation(31, 7000, 7000, 0x04, 1, "chain", 51684157);
     const auto lp_only_recovery =
-        select_recovery_edge(profile, state, lp_only_observation, 0);
+        select_recovery_edge(profile, lp_only_state, lp_only_observation, 0);
     require(lp_only_recovery.status == PredicateEvaluationStatus::False &&
                 !lp_only_recovery.recovery_edge_id.has_value(),
-            "life-point movement alone triggered Swordsoul recovery");
+            "life-point movement alone triggered interaction recovery");
 
-    const auto interrupted_observation =
-        public_observation(30, 7000, 7000, 0x04, 0, "idle_command", 20001443);
-    require_idle_shape(idle_card(0), 0, "p0:HAND:0");
-    const auto recovery = select_recovery_edge(
-        profile, state, interrupted_observation, 0);
-    require(recovery.status == PredicateEvaluationStatus::True &&
-                recovery.recovery_edge_id ==
-                    std::optional<std::string>("recovery.interaction.foundation") &&
-                recovery.target_line_id ==
-                    std::optional<std::string>("line.foundation.chixiao"),
-            "public chain-window interruption did not select declared recovery");
-
-    std::vector<std::string> matched;
-    const auto mo_ye = idle_card(0);
-    require(match_candidate_intent_set(
-                profile, {"intent.mo_ye.starter"}, mo_ye, interrupted_observation, 0,
-                matched) == PredicateEvaluationStatus::True,
-            "public recovery candidate did not match its public role intent");
-
-    auto unchanged_state = state;
-    unchanged_state.public_resource_facts = {
-        u64_fact("public.chain.length", 1),
-    };
     const auto unchanged_observation =
-        public_observation(30, 8000, 7000, 0x04, 1, "idle_command", 20001443);
-    const auto no_recovery =
-        select_recovery_edge(profile, unchanged_state, unchanged_observation, 0);
-    require(no_recovery.status == PredicateEvaluationStatus::False &&
-                !no_recovery.recovery_edge_id.has_value(),
-            "unchanged public facts incorrectly triggered recovery");
+        public_observation(31, 8000, 7000, 0x04, 1, "chain", 51684157);
+    const auto unchanged_recovery =
+        select_recovery_edge(profile, interaction_state, unchanged_observation, 0);
+    require(unchanged_recovery.status == PredicateEvaluationStatus::False &&
+                !unchanged_recovery.recovery_edge_id.has_value(),
+            "unchanged public chain resource triggered recovery");
 
     const auto wrong_participant =
-        select_recovery_edge(profile, state,
-                             public_observation(30, 7000, 7000, 0x04, 0, "idle_command", 20001443), 1);
+        select_recovery_edge(profile, interaction_state, main_observation, 1);
     require(wrong_participant.status == PredicateEvaluationStatus::Invalid,
-            "cross-participant Swordsoul recovery observation was accepted");
+            "cross-participant recovery observation was accepted");
+}
+
+void test_complete_domain_is_preserved() {
+    const auto profile = make_swordsoul_tenyi_profile();
+    const auto observation =
+        public_observation(40, 8000, 7000, 0x04, 1, "chain", 51684157);
+    const auto activation = chain_source(card_reference());
+    const auto pass = chain_pass();
+    const std::vector<EnvironmentActionCandidate> supplied = {activation, pass};
+    const auto first_keys = std::vector<std::string>{
+        supplied[0].public_action_key, supplied[1].public_action_key};
+    std::vector<std::vector<std::string>> evidence;
+    for (const auto& candidate : supplied) {
+        std::vector<std::string> matched;
+        (void)match_candidate_intent_set(
+            profile, {"intent.interaction.chain"}, candidate, observation, 0, matched);
+        evidence.push_back(std::move(matched));
+    }
+    require(supplied.size() == 2 && supplied[0].public_action_key == first_keys[0] &&
+                supplied[1].public_action_key == first_keys[1] && evidence.size() == 2,
+            "profile intent evaluation changed the supplied candidate domain");
 }
 
 }  // namespace
 
 int main() {
     try {
-        test_public_profile_goals_and_intents();
-        test_public_interruption_recovery();
+        test_frame_controller_and_independent_nodes();
+        test_action_specific_intents_and_progress();
+        test_interaction_and_public_recovery();
+        test_complete_domain_is_preserved();
         std::cout << "swordsoul_teacher_scenarios_test: PASS\n";
         return 0;
     } catch (const std::exception& error) {
