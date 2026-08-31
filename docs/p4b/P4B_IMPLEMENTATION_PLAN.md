@@ -12,7 +12,7 @@
 
 ## Frozen execution constraints
 
-- Start each implementation task from the exact prior task head and a clean worktree.
+- Start each implementation task from the exact prior task head and a clean worktree. Task 2 starts only from TASK1_ACCEPTED_HEAD; TASK1_INITIAL_HEAD is historical context for the pre-review-fix commit.
 - Do not modify fixtures/decks/, third_party/rules_bundle.lock.json, the pinned rules materialization, Phase-3 contract meanings, or Phase-4A public-policy meanings.
 - Use only the existing ygo::policy::PolicyInput boundary:
 
@@ -28,6 +28,26 @@
 - Deterministic Teacher v1 returns an existing public_action_key and no policy RNG. Accepted records use existing PolicyArtifact, participant assignment, PolicyRngDecisionProvenance::NONE, TrajectoryRecorder, shard, semantic replay, admission, receipt, and dataset path.
 - Missing public facts are BLOCKED; no private lookup compensates for them.
 - The locked first profiles are ocgforge.swordsoul_tenyi.ml_v1 versus ocgforge.salamangreat.ml_v1 and the reverse, under the exact certified rules bundle and matchup identities in P4B_TEACHER_CONTRACT.md.
+
+### CTest fail-closed and cardinality rule
+
+Every P4B CTest command below that uses a regular expression MUST include `--no-tests=error`. The associated task/evidence validator MUST inspect the CTest result and require the exact expected test count; zero tests or an unexpected count is never PASS. The multi-target counts are fixed as follows:
+
+| Command scope | Expected CTest count |
+| --- | ---: |
+| Task 2 profile codec/negative tests | 2 |
+| Task 2 public/trajectory regression tests | 3 |
+| Task 3 boundary/DTO tests | 2 |
+| Task 4 domain-preservation/ranking tests | 2 |
+| Task 5 state/rejection tests | 2 |
+| Task 7 goal-line/recovery tests | 2 |
+| Task 8 fallback/explanation tests | 2 |
+| Task 9 Swordsoul profile/scenario tests | 2 |
+| Task 10 Salamangreat profile/scenario tests | 2 |
+| Task 11 provenance/runner tests | 2 |
+| P4B-G14 Phase-4A regression expression | 6 |
+
+Single-target CTest expressions in the plan expect exactly 1. The intentional RED/missing-target commands still fail closed because `--no-tests=error` reports no registered target.
 
 ## File and module map
 
@@ -51,9 +71,13 @@ The JSON authoring files are convenience inputs. The strict C++ codec and canoni
 
 ## Task 1: Contract/specification freeze
 
-**Status:** This Task-1 commit.
+**Status:** Task-1 review-fix finalization.
 
-TASK1_HEAD = 6f46c3c7d10692356ac2d7f085c58f1fefcc88e7
+TASK1_INITIAL_HEAD = 6f46c3c7d10692356ac2d7f085c58f1fefcc88e7
+
+TASK1_ACCEPTED_HEAD = 989707b3f867d5e1fc7a313ed07549efc3abe8fb
+
+Task 2 MUST start from TASK1_ACCEPTED_HEAD, not TASK1_INITIAL_HEAD.
 
 **Files:**
 
@@ -104,7 +128,7 @@ TASK1_HEAD = 6f46c3c7d10692356ac2d7f085c58f1fefcc88e7
 
 **Focused tests:**
 
-- strategy_profile_codec_test: canonical bytes, recomputed ID, strict round-trip, sorted vectors, and path-independent content.
+- strategy_profile_codec_test: canonical bytes, recomputed ID, strict round-trip, sorted vectors, path-independent content, exact DeckRole codes, and canonical-byte-sorted unique PredicateRef vectors with no order-significant alternative list.
 - strategy_profile_negative_test: unknown schema, invalid enum/token, duplicate/out-of-order entries, dangling references, line cycle, bad binding, overflow, mismatched ID, and trailing bytes.
 
 **Regression tests:** public_action_identity_test, public_safe_state_test, and trajectory_codec_test; these prove no existing public or trajectory codec was changed.
@@ -115,12 +139,17 @@ TASK1_HEAD = 6f46c3c7d10692356ac2d7f085c58f1fefcc88e7
 
 **Replay/provenance implications:** TeacherPolicyBindingV1 is content metadata carried through existing PolicyArtifact.artifact_metadata_identity; no Phase-3 field or codec is added.
 
+**Binding validation:** Task 2 MUST validate teacher_core_artifact_identity as a canonical identity valid for the existing ProvenanceKind::ProducerImplementation category; strategy_profile_id as ocgforge.strategy_profile.v1.<64 lowercase hex>; score_contract_identity as ocgforge.policy.teacher_score.v1; fallback_contract_identity as ocgforge.policy.teacher_fallback.v1; tie_break_contract_identity as ocgforge.policy.public_key_tiebreak.v1; and an optional diagnostic_contract_identity as ocgforge.teacher_decision_explanation.v1. Task 2 validates canonical identity classes and exact literals, but not production registry membership; that registration belongs to Task 11.
+
+The score-contract validation freezes the nine score dimensions/order, signed i32 contribution range, signed i64 accumulation, checked overflow/underflow behavior, and higher-is-better lexicographic comparison under ocgforge.policy.teacher_score.v1. Task 2 also rejects every own_deck_role or opponent_deck_role value other than 0=FirstLockedDeck and 1=SecondLockedDeck.
+
 - [ ] Write failing tests that construct the smallest valid profile, compute ocgforge.strategy_profile.v1.<64 lowercase hex>, compute ocgforge.teacher_policy_binding.v1.<64 lowercase hex>, and assert canonical path independence.
-- [ ] Run ctest --test-dir build/dev-windows --output-on-failure --tests-regex "^(strategy_profile_codec_test|strategy_profile_negative_test)$" and record the expected missing-target failure.
+- [ ] Run ctest --test-dir build/dev-windows --output-on-failure --no-tests=error --tests-regex "^(strategy_profile_codec_test|strategy_profile_negative_test)$" and record the expected missing-target failure.
 - [ ] Implement the exact value types and canonical codec using ygo::trajectory::ByteWriter/ByteReader; reject malformed data before publication.
 - [ ] Add strict profile/binding validation: exact matchup, rules bundle, format, mode, flags, own/opponent deck roles, references, DAG, ranges, and content ID.
+- [ ] Validate own_deck_role and opponent_deck_role as exactly 0=FirstLockedDeck or 1=SecondLockedDeck, and validate the binding identity classes/literals and score-contract ownership rules.
 - [ ] Re-run the focused CTest command and expect both targets to pass with zero failures.
-- [ ] Run ctest --test-dir build/dev-windows --output-on-failure --tests-regex "^(public_action_identity_test|public_safe_state_test|trajectory_codec_test)$" and expect all selected regression targets to pass.
+- [ ] Run ctest --test-dir build/dev-windows --output-on-failure --no-tests=error --tests-regex "^(public_action_identity_test|public_safe_state_test|trajectory_codec_test)$" and expect all selected regression targets to pass.
 - [ ] Run git diff --check, commit with feat: add phase 4b strategy profile identity, and stop for review.
 
 **Stop condition:** A profile can be accepted only from exact canonical bytes and identity; malformed or mismatched content cannot create a Teacher session.
@@ -157,7 +186,7 @@ TASK1_HEAD = 6f46c3c7d10692356ac2d7f085c58f1fefcc88e7
 **Replay/provenance implications:** No Teacher DTO is added to the canonical trajectory. The adapter returns the existing public action result and leaves attribution to the runner.
 
 - [ ] Write the boundary compile test and DTO round-trip/validation tests.
-- [ ] Run ctest --test-dir build/dev-windows --output-on-failure --tests-regex "^(teacher_policy_boundary_compile_test|teacher_decision_dto_test)$" and record the expected missing-target failure.
+- [ ] Run ctest --test-dir build/dev-windows --output-on-failure --no-tests=error --tests-regex "^(teacher_policy_boundary_compile_test|teacher_decision_dto_test)$" and record the expected missing-target failure.
 - [ ] Implement the public-only TeacherCore::propose(const ygo::policy::PolicyInput&, const StrategyProfile&, const EpisodeLocalStrategyState&) declaration and derived result types.
 - [ ] Implement the adapter that converts only a successful Teacher result to existing PolicySelection; rejected/blocked results carry no key.
 - [ ] Re-run the focused tests and the three Phase-4A boundary regressions.
@@ -201,7 +230,7 @@ TASK1_HEAD = 6f46c3c7d10692356ac2d7f085c58f1fefcc88e7
 **Replay/provenance implications:** The full evaluation vector is derived diagnostic data. Only the selected public key reaches V2 and the existing trajectory record.
 
 - [ ] Write failing authoritative-domain preservation tests with a spy evaluator that records each supplied public key exactly once.
-- [ ] Run ctest --test-dir build/dev-windows --output-on-failure --tests-regex "^(teacher_domain_preservation_test|teacher_ranking_test)$" and record the expected missing-target failure.
+- [ ] Run ctest --test-dir build/dev-windows --output-on-failure --no-tests=error --tests-regex "^(teacher_domain_preservation_test|teacher_ranking_test)$" and record the expected missing-target failure.
 - [ ] Implement candidate validation, one logical evaluation pass, fixed score-vector comparison, and explicit key-only equality completion.
 - [ ] Implement checked arithmetic that returns INVALID on overflow/underflow instead of wrapping, saturating, or clamping.
 - [ ] Re-run focused tests and the Phase-4A policy regressions.
@@ -243,7 +272,7 @@ TASK1_HEAD = 6f46c3c7d10692356ac2d7f085c58f1fefcc88e7
 **Replay/provenance implications:** Strategy state is derived policy memory, not canonical trajectory input. A rejected step creates no record and no state advancement.
 
 - [ ] Write failing reset/isolation/rejection tests and a test for invalidation after a changed public frame.
-- [ ] Run ctest --test-dir build/dev-windows --output-on-failure --tests-regex "^(teacher_strategy_state_test|teacher_rejected_transition_test)$" and record the expected missing-target failure.
+- [ ] Run ctest --test-dir build/dev-windows --output-on-failure --no-tests=error --tests-regex "^(teacher_strategy_state_test|teacher_rejected_transition_test)$" and record the expected missing-target failure.
 - [ ] Implement EpisodeLocalStrategyStateV1, TeacherStateDelta, pure proposal, and accepted-transition commit APIs.
 - [ ] Implement reconciliation that expires contradictory facts, clears knowledge-destroyed identity, and records only registered invalidation IDs.
 - [ ] Re-run focused tests and the listed episodic regressions.
@@ -294,7 +323,7 @@ TASK1_HEAD = 6f46c3c7d10692356ac2d7f085c58f1fefcc88e7
 **Replay/provenance implications:** Feature/evaluator outputs are derived explanations and score inputs only. They do not alter public frame bytes or trajectory identity.
 
 - [ ] Write failing public-fact matrix and evaluator tests for direct, safe-derived, and blocked facts.
-- [ ] Run python -B tests/teacher/teacher_public_fact_matrix_test.py and ctest --test-dir build/dev-windows --output-on-failure --tests-regex "^teacher_evaluator_test$" and record the expected missing-target failures.
+- [ ] Run python -B tests/teacher/teacher_public_fact_matrix_test.py and ctest --test-dir build/dev-windows --output-on-failure --no-tests=error --tests-regex "^teacher_evaluator_test$" and record the expected missing-target failures.
 - [ ] Implement safe-state decode and typed public fact registry with explicit blocked results.
 - [ ] Implement generic tactical, target, material, and interaction evaluators over one supplied candidate descriptor.
 - [ ] Add checked contribution composition to the Task-4 resolver without changing score dimension order.
@@ -338,7 +367,7 @@ TASK1_HEAD = 6f46c3c7d10692356ac2d7f085c58f1fefcc88e7
 **Replay/provenance implications:** Plan progress is policy-local derived state. The engine/replay path receives only the selected current public key.
 
 - [ ] Write failing line-DAG, intent-match, invalidation, and recovery tests.
-- [ ] Run ctest --test-dir build/dev-windows --output-on-failure --tests-regex "^(teacher_goal_line_test|teacher_recovery_test)$" and record the expected missing-target failure.
+- [ ] Run ctest --test-dir build/dev-windows --output-on-failure --no-tests=error --tests-regex "^(teacher_goal_line_test|teacher_recovery_test)$" and record the expected missing-target failure.
 - [ ] Implement public predicate evaluation, active goal/line selection, node progress, and recovery edge matching.
 - [ ] Connect controller output to the Task-4 complete-domain evaluator as score contributions, never as candidate filtering.
 - [ ] Re-run focused tests and the listed episodic regressions.
@@ -382,7 +411,7 @@ TASK1_HEAD = 6f46c3c7d10692356ac2d7f085c58f1fefcc88e7
 **Replay/provenance implications:** Explanation is optional derived policy/audit data. It is not a DecisionRecord field and is not required for admission.
 
 - [ ] Write failing fallback/explanation tests for all levels, unsupported stages, and forbidden fields.
-- [ ] Run ctest --test-dir build/dev-windows --output-on-failure --tests-regex "^(teacher_fallback_test|teacher_explanation_test)$" and record the expected missing-target failure.
+- [ ] Run ctest --test-dir build/dev-windows --output-on-failure --no-tests=error --tests-regex "^(teacher_fallback_test|teacher_explanation_test)$" and record the expected missing-target failure.
 - [ ] Implement the versioned fallback resolver and explanation codec without modifying public environment or trajectory codecs.
 - [ ] Add exact PolicySelection mapping with rng_cursor = std::nullopt for deterministic Teacher output.
 - [ ] Re-run focused tests and Phase-4A policy/trajectory regressions.
@@ -422,7 +451,7 @@ TASK1_HEAD = 6f46c3c7d10692356ac2d7f085c58f1fefcc88e7
 **Replay/provenance implications:** The profile ID is embedded in TeacherPolicyBindingV1, then the existing PolicyArtifact; scenario diagnostics remain derived.
 
 - [ ] Add the reviewable JSON source and the compiled profile factory with only exact locked-list cards, registered public predicates, and supported line/recovery facts.
-- [ ] Run python -B tests/teacher/teacher_profile_binding_test.py and ctest --test-dir build/dev-windows --output-on-failure --tests-regex "^(swordsoul_profile_test|swordsoul_teacher_scenarios_test)$" and record the expected missing-target failures.
+- [ ] Run python -B tests/teacher/teacher_profile_binding_test.py and ctest --test-dir build/dev-windows --output-on-failure --no-tests=error --tests-regex "^(swordsoul_profile_test|swordsoul_teacher_scenarios_test)$" and record the expected missing-target failures.
 - [ ] Add profile loading through the immutable registry and assert content ID from canonical bytes, not path.
 - [ ] Add engine-reachable/public-input scenario fixtures without introducing a general hidden board-construction API.
 - [ ] Re-run the focused scenario, profile, and locked-deck regressions.
@@ -462,7 +491,7 @@ TASK1_HEAD = 6f46c3c7d10692356ac2d7f085c58f1fefcc88e7
 **Replay/provenance implications:** The reverse-deck profile binds through the same existing policy metadata/provenance fields; no Teacher-specific trajectory schema is created.
 
 - [ ] Add the reviewable JSON source and the compiled profile factory using only validated public facts and exact locked-list cards.
-- [ ] Run python -B tests/teacher/teacher_profile_binding_test.py and ctest --test-dir build/dev-windows --output-on-failure --tests-regex "^(salamangreat_profile_test|salamangreat_teacher_scenarios_test)$" and record the expected missing-target failures.
+- [ ] Run python -B tests/teacher/teacher_profile_binding_test.py and ctest --test-dir build/dev-windows --output-on-failure --no-tests=error --tests-regex "^(salamangreat_profile_test|salamangreat_teacher_scenarios_test)$" and record the expected missing-target failures.
 - [ ] Add engine-reachable/public-input scenarios for recursion, interaction, recovery, and copy-safe stopping.
 - [ ] Compare equal public paired worlds and assert identical selected key, evaluation evidence, explanation, and state delta.
 - [ ] Re-run focused scenario, profile, privacy, and locked-deck regressions.
@@ -510,7 +539,7 @@ TASK1_HEAD = 6f46c3c7d10692356ac2d7f085c58f1fefcc88e7
 **Replay/provenance implications:** This task is the first Teacher integration through the exact trusted path. No direct receipt issuance, special Teacher shard, or explanation-required admission branch is permitted.
 
 - [ ] Write failing provenance and runner integration tests, including policy-origin rejection/quarantine.
-- [ ] Run ctest --test-dir build/dev-windows --output-on-failure --tests-regex "^(teacher_provenance_test|teacher_runner_trajectory_test)$" and record the expected missing-target failure.
+- [ ] Run ctest --test-dir build/dev-windows --output-on-failure --no-tests=error --tests-regex "^(teacher_provenance_test|teacher_runner_trajectory_test)$" and record the expected missing-target failure.
 - [ ] Implement DeterministicTeacherPolicy as a thin adapter over TeacherCore and state, returning existing PolicySelection.
 - [ ] Extract or share only the runner mechanics needed to preserve the existing RandomLegal path; keep V2 action submission and recorder callbacks unchanged.
 - [ ] Register exact production identities and validate the profile/binding registry before session creation.
