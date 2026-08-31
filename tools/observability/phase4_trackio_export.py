@@ -6,6 +6,7 @@ import importlib.util
 import json
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as installed_package_version
+import os
 from pathlib import Path
 import sys
 from typing import Any, Mapping
@@ -20,6 +21,7 @@ DEFAULT_PROJECT = "ocgforge-phase4-evaluation"
 TRACKIO_TARGET_VERSION = "0.37.0"
 PHASE4C_ACCEPTED_SOURCE_HEAD = "9fe935531b63aaaf9535201dd4daf3f25e0f1a93"
 EXPORTER_SCHEMA = "ocgforge.trackio.phase4_evaluation_export.v1"
+REMOTE_TRACKIO_ENV_VARS = ("TRACKIO_SPACE_ID", "TRACKIO_SERVER_URL")
 
 PUBLIC_CONFIG_KEYS = frozenset(
     {
@@ -67,6 +69,10 @@ class ValidationFailure(RuntimeError):
 
 class TrackioUnavailable(RuntimeError):
     """The optional, pinned Trackio dependency is not usable."""
+
+
+class RemoteTrackioConfiguration(RuntimeError):
+    """The local-only pilot found remote Trackio configuration."""
 
 
 class TrackioExportFailure(RuntimeError):
@@ -212,12 +218,15 @@ def export_to_trackio(
     adapter: Any,
 ) -> None:
     """Send one validated projection through the documented Trackio API."""
+    _ensure_local_only_trackio_environment()
     try:
         adapter.init(
             project=project,
             name=run_name,
             config=projection["config"],
             embed=False,
+            auto_log_gpu=False,
+            auto_log_cpu=False,
         )
     except Exception as error:
         raise TrackioExportFailure("Trackio init failed") from error
@@ -245,6 +254,13 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _ensure_local_only_trackio_environment() -> None:
+    if any(os.environ.get(variable, "") for variable in REMOTE_TRACKIO_ENV_VARS):
+        raise RemoteTrackioConfiguration(
+            "remote Trackio configuration is forbidden for this local-only pilot"
+        )
+
+
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     try:
@@ -261,7 +277,13 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     try:
+        _ensure_local_only_trackio_environment()
         adapter = _load_trackio_adapter()
+    except RemoteTrackioConfiguration as error:
+        print("TRACKIO_EXPORT=FAIL")
+        print("TRACKIO_INIT=NOT_RUN")
+        print(f"ERROR={error}", file=sys.stderr)
+        return 1
     except TrackioUnavailable as error:
         print("TRACKIO_EXPORT=FAIL")
         print("TRACKIO_INIT=NOT_RUN")

@@ -5,6 +5,7 @@ import contextlib
 import importlib.util
 import io
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -319,12 +320,17 @@ class Phase4TrackioExportTests(unittest.TestCase):
     def test_trackio_adapter_receives_one_init_one_log_step_zero_and_one_finish(self) -> None:
         projection = self.accepted_projection()
         fake = FakeTrackio()
-        self.exporter.export_to_trackio(
-            project="ocgforge-phase4-evaluation",
-            run_name="phase4c-9fe935531b63",
-            projection=projection,
-            adapter=fake,
-        )
+        with mock.patch.dict(
+            os.environ,
+            {"TRACKIO_SPACE_ID": "", "TRACKIO_SERVER_URL": ""},
+            clear=False,
+        ):
+            self.exporter.export_to_trackio(
+                project="ocgforge-phase4-evaluation",
+                run_name="phase4c-9fe935531b63",
+                projection=projection,
+                adapter=fake,
+            )
         self.assertEqual([name for name, _ in fake.calls], ["init", "log", "finish"])
         self.assertEqual(
             fake.calls[0],
@@ -335,10 +341,74 @@ class Phase4TrackioExportTests(unittest.TestCase):
                     "name": "phase4c-9fe935531b63",
                     "config": projection["config"],
                     "embed": False,
+                    "auto_log_gpu": False,
+                    "auto_log_cpu": False,
                 },
             ),
         )
         self.assertEqual(fake.calls[1], ("log", (projection["metrics"], 0)))
+
+    def test_trackio_system_auto_logging_flags_are_exactly_false(self) -> None:
+        projection = self.accepted_projection()
+        fake = FakeTrackio()
+        with mock.patch.dict(
+            os.environ,
+            {"TRACKIO_SPACE_ID": "", "TRACKIO_SERVER_URL": ""},
+            clear=False,
+        ):
+            self.exporter.export_to_trackio(
+                project="ocgforge-phase4-evaluation",
+                run_name="phase4c-9fe935531b63",
+                projection=projection,
+                adapter=fake,
+        )
+        init_kwargs = fake.calls[0][1]
+        self.assertIs(init_kwargs.get("auto_log_gpu"), False)
+        self.assertIs(init_kwargs.get("auto_log_cpu"), False)
+
+    def assert_remote_environment_rejected(self, variable: str, value: str) -> None:
+        fake = FakeTrackio()
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with mock.patch.dict(os.environ, {variable: value}, clear=False):
+            with mock.patch.object(self.exporter, "_load_trackio_adapter", return_value=fake):
+                with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                    exit_code = self.exporter.main([])
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(stdout.getvalue(), "TRACKIO_EXPORT=FAIL\nTRACKIO_INIT=NOT_RUN\n")
+        self.assertEqual(
+            stderr.getvalue(),
+            "ERROR=remote Trackio configuration is forbidden for this local-only pilot\n",
+        )
+        self.assertNotIn(value, stdout.getvalue() + stderr.getvalue())
+        self.assertEqual(fake.calls, [])
+
+    def test_trackio_space_id_rejects_real_export_before_init(self) -> None:
+        self.assert_remote_environment_rejected(
+            "TRACKIO_SPACE_ID", "space-secret-value"
+        )
+
+    def test_trackio_server_url_rejects_real_export_before_init(self) -> None:
+        self.assert_remote_environment_rejected(
+            "TRACKIO_SERVER_URL", "https://secret.example.invalid/token"
+        )
+
+    def test_dry_run_remains_independent_of_remote_environment(self) -> None:
+        stdout = io.StringIO()
+        with mock.patch.dict(
+            os.environ,
+            {
+                "TRACKIO_SPACE_ID": "space-secret-value",
+                "TRACKIO_SERVER_URL": "https://secret.example.invalid/token",
+            },
+            clear=False,
+        ):
+            with contextlib.redirect_stdout(stdout):
+                exit_code = self.exporter.main(["--dry-run"])
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(json.loads(stdout.getvalue())["project"], "ocgforge-phase4-evaluation")
+        self.assertNotIn("space-secret-value", stdout.getvalue())
+        self.assertNotIn("secret.example.invalid", stdout.getvalue())
 
 
 if __name__ == "__main__":

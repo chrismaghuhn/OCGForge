@@ -49,7 +49,10 @@ python -m pip install trackio==0.37.0
 No command auto-installs dependencies. Without Trackio, `--dry-run` still
 works; a real export fails clearly before Trackio initialization. The normal
 export uses only the documented public calls `trackio.init`, one
-`trackio.log(..., step=0)`, and `trackio.finish`.
+`trackio.log(..., step=0)`, and `trackio.finish`. Trackio hardware/system
+auto-logging is explicitly disabled with `auto_log_gpu=False` and
+`auto_log_cpu=False`; no GPU, CPU, RAM, disk, network, sensor, host, or other
+system metrics are automatically emitted.
 
 ## Commands
 
@@ -75,7 +78,11 @@ run-name = phase4c-<first 12 characters of source_head>
 The command also accepts `--report`, `--markdown`, `--project`, and
 `--run-name`. It does not specify `space_id`, `bucket_id`, or `server_url`; no
 Hugging Face login, network requirement, Space creation, or automatic sync is
-part of this pilot.
+part of this pilot. If `TRACKIO_SPACE_ID` or `TRACKIO_SERVER_URL` is non-empty,
+the exporter fails closed before `trackio.init()` with a deterministic error.
+It does not expose, delete, overwrite, or temporarily mutate either environment
+variable. This prevents a local pilot from silently switching to a Space or a
+self-hosted remote server. `--dry-run` remains independent of these variables.
 
 The optional dashboard is a manual action:
 
