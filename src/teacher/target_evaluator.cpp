@@ -15,8 +15,9 @@ PublicEvaluatorOutcome TargetEvaluator::evaluate(
     if (!candidate.target_is_visible) {
         return result;
     }
-    result.status = CandidateEvaluationStatus::Supported;
-    result.contributions.push_back({ScoreDimension::PublicTargetValue, 1});
+    // Visibility is a public feature, but it does not prove target value or
+    // threat semantics for a generic evaluator.
+    result.status = CandidateEvaluationStatus::Unsupported;
     return result;
 }
 

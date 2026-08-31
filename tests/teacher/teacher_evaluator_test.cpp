@@ -48,19 +48,47 @@ void require(const bool condition, const std::string& message) {
     }
 }
 
-EnvironmentActionCandidate candidate(const EnvironmentActionKind action_kind,
-                                     const std::uint64_t choice_value = 0) {
+EnvironmentActionCandidate candidate(
+    const EnvironmentActionKind action_kind,
+    const std::uint64_t choice_value = 0,
+    const std::optional<PublicCardReference>& target_reference = std::nullopt,
+    const std::optional<std::int32_t>& amount = std::nullopt) {
     EnvironmentActionCandidate value;
     value.action_kind = action_kind;
-    if (action_kind == EnvironmentActionKind::YesNo) {
+    value.target_reference = target_reference;
+    value.amount = amount;
+    if (action_kind == EnvironmentActionKind::AssignAmount) {
+        value.choice.reset();
+    } else if (action_kind == EnvironmentActionKind::YesNo) {
         value.choice = PublicChoice{PublicChoiceKind::YesNo, choice_value % 2, std::nullopt};
     } else {
         value.choice = PublicChoice{PublicChoiceKind::EffectChoice, choice_value, std::nullopt};
     }
 
     PublicActionKeyInput key_input;
-    key_input.action_kind = action_kind == EnvironmentActionKind::YesNo ? "yes_no" : "chain";
+    switch (action_kind) {
+    case EnvironmentActionKind::BattleCommand:
+        key_input.action_kind = "battle_command";
+        break;
+    case EnvironmentActionKind::CardSelection:
+        key_input.action_kind = "card_selection";
+        break;
+    case EnvironmentActionKind::Chain:
+        key_input.action_kind = "chain";
+        break;
+    case EnvironmentActionKind::AssignAmount:
+        key_input.action_kind = "assign_amount";
+        break;
+    case EnvironmentActionKind::YesNo:
+        key_input.action_kind = "yes_no";
+        break;
+    default:
+        key_input.action_kind = "option";
+        break;
+    }
     key_input.choice = value.choice;
+    key_input.target_reference = value.target_reference;
+    key_input.amount = value.amount;
     value.public_action_key = ygo::environment::public_action_key(key_input);
     return value;
 }
@@ -329,9 +357,9 @@ void test_candidate_features_and_evaluators() {
     const auto extracted = ygo::teacher::extract_public_fact_snapshot(public_observation);
     require(extracted.valid, "evaluator fixture facts are invalid");
 
-    auto chain_candidate = candidate(EnvironmentActionKind::Chain, 7);
-    chain_candidate.target_reference = PublicCardReference{
-        PublicCardReferenceKind::VisibleCard, "p1:MONSTER_ZONE:0"};
+    const auto chain_candidate = candidate(
+        EnvironmentActionKind::Chain, 7,
+        PublicCardReference{PublicCardReferenceKind::VisibleCard, "p1:MONSTER_ZONE:0"});
     CandidateFeatures chain_features;
     require(ygo::teacher::extract_candidate_features(
                 chain_candidate, extracted.snapshot, chain_features),
@@ -349,14 +377,14 @@ void test_candidate_features_and_evaluators() {
             "generic evaluator changed the authoritative candidate key");
     require(tactical.status == CandidateEvaluationStatus::NotApplicable,
             "tactical evaluator invented a chain legality result");
-    require(interaction.status == CandidateEvaluationStatus::Supported &&
-                interaction.contributions.size() == 1 &&
-                interaction.contributions[0].dimension == ScoreDimension::InteractionTiming,
-            "interaction evaluator did not use public chain timing");
+    require(interaction.status == CandidateEvaluationStatus::Unsupported &&
+                interaction.contributions.empty(),
+            "chain length was incorrectly treated as interaction timing utility");
 
-    auto redacted_candidate = candidate(EnvironmentActionKind::CardSelection, 4);
-    redacted_candidate.target_reference = PublicCardReference{
-        PublicCardReferenceKind::RedactedSlot, "p1:SPELL_TRAP_ZONE:0"};
+    const auto redacted_candidate = candidate(
+        EnvironmentActionKind::CardSelection, 4,
+        PublicCardReference{PublicCardReferenceKind::RedactedSlot,
+                            "p1:SPELL_TRAP_ZONE:0"});
     CandidateFeatures redacted_features;
     require(ygo::teacher::extract_candidate_features(
                 redacted_candidate, extracted.snapshot, redacted_features),
@@ -369,37 +397,39 @@ void test_candidate_features_and_evaluators() {
                 redacted_target.public_action_key == redacted_candidate.public_action_key,
             "redacted target evaluator did not remain unsupported/public-only");
 
-    auto battle_candidate = candidate(EnvironmentActionKind::BattleCommand, 8);
+    const auto battle_candidate = candidate(EnvironmentActionKind::BattleCommand, 8);
     CandidateFeatures battle_features;
     require(ygo::teacher::extract_candidate_features(
                 battle_candidate, extracted.snapshot, battle_features),
             "battle candidate feature extraction failed");
     const auto tactical_battle = ygo::teacher::TacticalEvaluator{}.evaluate(
         battle_features, extracted.snapshot);
-    require(tactical_battle.status == CandidateEvaluationStatus::Supported &&
-                tactical_battle.contributions.size() == 1 &&
-                tactical_battle.contributions[0].dimension ==
-                    ScoreDimension::ImmediateTacticalNecessity,
-            "tactical evaluator did not use public life-points evidence");
+    require(tactical_battle.status == CandidateEvaluationStatus::Unsupported &&
+                tactical_battle.contributions.empty(),
+            "opponent life-points presence was incorrectly treated as tactical necessity");
 
-    battle_candidate.amount = 7;
+    const auto amount_candidate =
+        candidate(EnvironmentActionKind::AssignAmount, 0, std::nullopt, 7);
+    CandidateFeatures amount_features;
     require(ygo::teacher::extract_candidate_features(
-                battle_candidate, extracted.snapshot, battle_features),
+                amount_candidate, extracted.snapshot, amount_features),
             "cost candidate feature extraction failed");
+    require(amount_features.action_kind == EnvironmentActionKind::AssignAmount &&
+                amount_features.amount == 7,
+            "amount-bearing candidate metadata was not preserved exactly");
     const auto material = ygo::teacher::MaterialEvaluator{}.evaluate(
-        battle_features, extracted.snapshot);
-    require(material.status == CandidateEvaluationStatus::Supported &&
-                material.public_action_key == battle_candidate.public_action_key &&
-                material.contributions.size() == 1 &&
-                material.contributions[0].dimension ==
-                    ScoreDimension::ResourcePreservationAndCost,
-            "material evaluator did not use public candidate/resource evidence");
+        amount_features, extracted.snapshot);
+    require(material.status == CandidateEvaluationStatus::Unsupported &&
+                material.public_action_key == amount_candidate.public_action_key &&
+                material.contributions.empty(),
+            "generic amount was incorrectly interpreted as LP/resource cost");
 
     const auto target = ygo::teacher::TargetEvaluator{}.evaluate(
         chain_features, extracted.snapshot);
-    require(target.status == CandidateEvaluationStatus::Supported &&
-                target.contributions[0].dimension == ScoreDimension::PublicTargetValue,
-            "visible target evaluator did not produce a public target contribution");
+    require(target.status == CandidateEvaluationStatus::Unsupported &&
+                target.public_action_key == chain_candidate.public_action_key &&
+                target.contributions.empty(),
+            "visible target was incorrectly assigned strategic target value");
 }
 
 void test_checked_contribution_composition() {
