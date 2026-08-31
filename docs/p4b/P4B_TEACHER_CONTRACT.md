@@ -154,7 +154,7 @@ every supplied candidate remains in the ranking evidence
 selected_public_action_key occurs exactly once in the supplied domain
 ```
 
-An empty domain, malformed observation, malformed candidate descriptor, invalid public key, duplicate public key, or incomplete public domain produces no selection. A malformed domain is never repaired by choosing an element that happens to be present.
+An empty candidate vector at an actionable frame, a malformed public observation, a noncanonical candidate descriptor, an invalid public key, or a duplicate public key produces no selection. These are structural checks on the delivered authoritative vector and public observation. Once they pass, TeacherCore treats the supplied vector as authoritative; it does not determine whether the upstream legal domain is complete. Environment/Phase 4A owns that completeness guarantee. Teacher acceptance proves preservation as `N` supplied candidates to `N` stable evaluation records with the same ordered keys, not legal-domain completeness. A structurally malformed vector is never repaired by choosing an element that happens to be present.
 
 ## 5. Immutable StrategyProfile v1
 
@@ -307,8 +307,10 @@ Profile canonical bytes use the primitive encoding already accepted by Phase 3: 
 
 ```text
 strategy_profile_id =
-  ocgforge.strategy_profile.v1.<lowercase SHA-256(canonical StrategyProfileV1 content bytes)>
+  ocgforge.strategy_profile.v1.<64 lowercase hex>
 ```
+
+The 64 lowercase hexadecimal value is SHA-256 of the canonical StrategyProfileV1 content bytes.
 
 The derived ID is not included in the bytes hashed to create itself. A stored profile envelope may carry the ID after the content bytes, but a decoder MUST recompute and compare it. The profile ID never includes a filename, directory, symlink, host path, URI, branch, process identity, or publication location.
 
@@ -343,8 +345,10 @@ TeacherPolicyBindingV1
 - diagnostic_contract_identity:optional<string>
 
 teacher_policy_binding_id =
-  ocgforge.teacher_policy_binding.v1.<lowercase SHA-256(canonical binding bytes)>
+  ocgforge.teacher_policy_binding.v1.<64 lowercase hex>
 ```
+
+The 64 lowercase hexadecimal value is SHA-256 of the canonical TeacherPolicyBindingV1 bytes.
 
 The binding is not a second trajectory/provenance system. It is immutable policy metadata carried in the existing Phase-3 `PolicyArtifact.artifact_metadata_identity` slot. A deterministic Teacher artifact MUST set that slot to the binding ID. The production policy resolver registers the exact content identity under the existing `ArtifactMetadataArtifact` category and validates the referenced profile bytes before execution.
 
@@ -395,7 +399,7 @@ No field stores an expected future `public_action_key`, candidate vector positio
 
 ### 7.1 Exactly-once domain invariant
 
-For every valid, supported, actionable frame with a nonempty complete domain, TeacherCore performs one logical evaluation pass over the supplied vector. It produces one evaluation record for every candidate in the original order and resolves only from those records. A profile, rule, fallback, or diagnostic may not remove a candidate from the evidence.
+For every actionable frame for which Environment/Phase 4A has supplied an authoritative nonempty vector that passes TeacherCore's structural checks, TeacherCore performs one logical evaluation pass over that vector. It produces one evaluation record for every supplied candidate in the original order and resolves only from those records. This is preservation evidence, not an independent proof of legal-domain completeness. A profile, rule, fallback, or diagnostic may not remove a candidate from the evidence.
 
 The implementation may use an internal lookup cache, but authoritative iteration uses the supplied vector order or an explicitly sorted canonical ID list. A cache is never authoritative, and cache iteration never decides the result.
 
@@ -426,7 +430,7 @@ Profile preference values and feature contributions are signed `i32` values in `
 - `UNSUPPORTED` means a required public fact, predicate, or semantic mapping is not proven. It is not a low score and cannot win a ranking by default.
 - `INVALID` means the input, profile, arithmetic, or candidate descriptor violates a contract.
 
-If an active line is unsupported, TeacherCore invalidates that line and tries the next complete-domain stage. If a generic stage can evaluate every candidate from public data, it may select with visible lower confidence. If no stage, including the explicit key-only completion, can be proven over the complete valid domain, the result is `BLOCKED` and no action is submitted.
+If an active line is unsupported, TeacherCore invalidates that line and tries the next authoritative-domain stage. If a generic stage can evaluate every supplied candidate from public data, it may select with visible lower confidence. If no stage, including the explicit key-only completion, can be proven over the supplied structurally valid vector, the result is `BLOCKED` and no action is submitted.
 
 ## 8. Deterministic fallback hierarchy
 
@@ -444,7 +448,7 @@ F3 generic public tactical-safe utility
 F4 bytewise public_action_key equality completion
 ```
 
-Each stage consumes the same complete domain and produces one evaluation record per candidate. A stage may be selected only when it provides a total, checked comparison for all candidates. F4 is permitted only when every supplied public key is valid and unique; it is a deterministic canonical completion mechanism, not a claim of strategic quality. It is always labeled `FALLBACK`/low confidence.
+F0–F4 operate on the same supplied authoritative vector and the same single `N`-record evaluation result. A stage may add stage-specific status, contributions, and temporary non-authoritative comparison values to those records, but it MUST NOT append another `CandidateEvaluation` for any candidate. No candidate may disappear when a higher stage is unsupported. A stage may be selected only when it provides a total, checked comparison for all candidates. F4 is permitted only when every supplied public key is valid and unique; it is a deterministic canonical completion mechanism, not a claim of strategic quality. It is always labeled `FALLBACK`/low confidence.
 
 There is no implicit first-candidate, candidate-zero, random-device, `RandomLegal`, or retry fallback. Fallback provenance is visible in `TeacherDecisionExplanation` and future acceptance evidence. A fallback that cannot be proven public-only and complete is a failure, not a reason to continue.
 
@@ -471,6 +475,16 @@ If serialized, the diagnostic uses strict canonical bytes, sorted ID vectors, ch
 
 Diagnostics are derived audit data. They do not affect action selection, public observation, public action identity, environment/episode/gameplay identity, trusted replay, or admission. An optional diagnostic may be absent without changing gameplay. If a test or publication profile declares that diagnostics are required, malformed or missing diagnostics make that diagnostic gate fail; they never authorize a different action or a trajectory bypass.
 
+### 9.1 Identity separation
+
+| Identity | Owner and effect of change |
+| --- | --- |
+| Public gameplay identity | Existing V2/public gameplay identity codecs. Optional explanation persistence is excluded; enabling or disabling it under the same contracts cannot change this identity. |
+| Trajectory/collection record identity | Existing Phase-3 trajectory-record codec. It binds policy attribution, so a new Teacher binding or PolicyArtifact may produce a new record identity even when public gameplay is unchanged. |
+| Policy/provenance identity | Existing PolicyArtifact, participant assignment, RNG provenance, and the immutable TeacherPolicyBinding metadata. It identifies the producer/profile/configuration and is not gameplay identity. |
+
+Changing only whether an optional explanation payload is persisted, while keeping the same diagnostic contract and Teacher artifact, changes none of these identities. Changing diagnostic contract semantics/version, TeacherCore semantic behavior, StrategyProfile content, or TeacherPolicyBinding content requires the corresponding new binding/PolicyArtifact provenance and may change trajectory record identity; it does not automatically change public gameplay identity.
+
 ## 10. Provenance, trajectory, and replay compatibility
 
 The deterministic Teacher uses the existing Phase-3 policy provenance owner:
@@ -483,10 +497,10 @@ PolicyArtifact.observation_adapter_identity   = existing public-observation adap
 PolicyArtifact.action_adapter_identity        = existing public-action-key adapter identity
 PolicyArtifact.sampling_contract_identity     = ocgforge.policy.deterministic_lexicographic_argmax.v1
 PolicyArtifact.policy_rng_contract_identity   = ocgforge.no_policy_rng.v1
-PolicyArtifact.artifact_metadata_identity     = teacher_policy_binding.v1.<digest>
+PolicyArtifact.artifact_metadata_identity     = ocgforge.teacher_policy_binding.v1.<64 lowercase hex>
 ```
 
-`teacher_policy_binding.v1.<digest>` binds the TeacherCore artifact, `strategy_profile.v1.<digest>`, score contract, fallback contract, tie-break contract, and optional diagnostic contract. The existing `PolicyArtifact.policy_artifact_id` therefore changes when the Teacher artifact or profile binding changes. The existing `ParticipantPolicyAssignment` remains responsible for player, seat role, deck role, exact locked-deck identity, policy role, and assignment epoch. No profile field is added to the assignment identity.
+The full identity `ocgforge.teacher_policy_binding.v1.<64 lowercase hex>` binds the TeacherCore artifact, `ocgforge.strategy_profile.v1.<64 lowercase hex>`, score contract, fallback contract, tie-break contract, and optional diagnostic contract. The existing `PolicyArtifact.policy_artifact_id` therefore changes when the Teacher artifact or profile binding changes. The existing `ParticipantPolicyAssignment` remains responsible for player, seat role, deck role, exact locked-deck identity, policy role, and assignment epoch. No profile field is added to the assignment identity.
 
 For every accepted Teacher action, the runner creates the existing `PolicyRngDecisionProvenance` in `NONE` mode with the exact `ocgforge.no_policy_rng.v1` values. No Teacher RNG root, cursor, random stream, process entropy, or policy-generated seed exists in v1.
 
@@ -505,7 +519,7 @@ TeacherPolicy
   → AdmissionReceipt / DatasetManifest
 ```
 
-Teacher-specific explanation data remains outside the canonical `DecisionRecord` and is never required to admit an otherwise valid trajectory. A rejected Teacher `step()` produces no canonical record, advances no trusted strategy state, and follows the existing policy-origin quarantine path. A changed profile/core creates new provenance and record identity while leaving the public gameplay identity rules unchanged. Previously admitted Teacher trajectories are never reinterpreted under a new profile or core artifact.
+Teacher-specific explanation data remains outside the canonical `DecisionRecord` and is never required to admit an otherwise valid trajectory. A rejected Teacher `step()` produces no canonical record, advances no trusted strategy state, and follows the existing policy-origin quarantine path. Public gameplay identity, trajectory/collection record identity, and policy/provenance identity remain distinct: enabling or disabling optional explanation persistence under the identical policy and diagnostic contracts changes none of the selected action, public gameplay identity, or record identity; changing diagnostic contract semantics/version, the TeacherCore semantic artifact, the StrategyProfile, or the TeacherPolicyBinding requires a new binding and PolicyArtifact provenance and may change trajectory record identity while public gameplay identity can remain equal. Previously admitted Teacher trajectories are never reinterpreted under a new profile or core artifact.
 
 ## 11. Privacy and determinism invariants
 
@@ -569,7 +583,8 @@ Before Phase 4B acceptance, executable tests MUST cover at least:
 | Hidden physical identity changed across a shuffle/randomization boundary | No stale physical identity survives in state, diagnostics, or selection. |
 | Strategically bad but legal supplied candidate | Candidate remains in evaluation evidence and loses only through public score dimensions. |
 | Candidate reorder with equal strategic scores | Supplied order is preserved in evidence; final equality uses bytewise public-key order, never vector position. |
-| Empty, duplicate, malformed, or incomplete candidate domain | No selection, no state commit, structured failure. |
+| Empty or structurally malformed supplied candidate vector | No selection, no state commit, structured failure; TeacherCore does not diagnose upstream legal-domain completeness. |
+| Authoritative supplied vector with `N` candidates | Exactly `N` stable evaluation records, the same ordered public-action-key vector, and no omission, fabrication, filtering, or truncation. Any environment-provided domain digest remains an upstream/runner evidence comparison, not a Teacher reconstruction. |
 | Missing continuation-wide public fact | The dependent rule/line is `BLOCKED` or the declared lower fallback is used; no private lookup. |
 | Malformed profile: unknown version, duplicate/out-of-order entry, dangling reference, cycle, bad identity, wrong binding, trailing bytes | Profile publication/session creation fails closed; no default profile or partial profile is used. |
 | Same canonical profile bytes at different paths | Same profile ID and same decision; changing bytes creates a new ID. |
@@ -585,17 +600,17 @@ These are proposed future gates, not Task-1 evidence. Every gate has a named evi
 | Gate | Invariant | Exact executable evidence | PASS condition | Failure behavior |
 | --- | --- | --- | --- | --- |
 | P4B-G00 | Public-only Teacher boundary | `ctest --test-dir build/dev-windows --output-on-failure --tests-regex "^teacher_policy_boundary_compile_test$"` and `python -B tests/teacher/teacher_public_boundary_test.py` | Headers and runtime instrumentation expose only `PolicyInput`, immutable profile, and local public-safe state; forbidden types are absent. | No Teacher selection is trusted; report a boundary blocker. |
-| P4B-G01 | Complete candidate-domain evaluation | `ctest --test-dir build/dev-windows --output-on-failure --tests-regex "^teacher_complete_domain_test$"` | Evaluation count, ordered key vector, and domain digest match the supplied complete domain; each candidate has exactly one record. | No action; diagnose omission, duplication, filtering, or truncation. |
+| P4B-G01 | Preservation of the authoritative supplied domain | `ctest --test-dir build/dev-windows --output-on-failure --tests-regex "^teacher_domain_preservation_test$"` | For an upstream-supplied vector of `N` candidates, the result contains exactly `N` stable records in supplied order with the same ordered public-action-key vector; this gate does not test legal-domain completeness. | No action; diagnose omission, fabrication, duplication, filtering, or truncation. Upstream completeness remains an Environment/Phase 4A responsibility. |
 | P4B-G02 | Deterministic ranking and tie-break | `ctest --test-dir build/dev-windows --output-on-failure --tests-regex "^teacher_ranking_test$"` | Fixed score vector ranks correctly; exact ties use bytewise public-key order and never candidate position. | No action; ranking is invalid. |
 | P4B-G03 | Equal-public-world privacy | `python -B tests/teacher/teacher_paired_world_test.py` | Paired hidden worlds with equal public inputs yield identical key, evaluation evidence, explanation, and state delta. | Privacy gate fails; private dependency is a BLOCKER. |
-| P4B-G04 | Canonical StrategyProfile identity | `ctest --test-dir build/dev-windows --output-on-failure --tests-regex "^strategy_profile_codec_test$"` | Strict encode/decode round-trip is byte-identical and recomputed `strategy_profile.v1.<digest>` matches; path changes do not matter. | Profile is rejected; no fallback profile is loaded. |
+| P4B-G04 | Canonical StrategyProfile identity | `ctest --test-dir build/dev-windows --output-on-failure --tests-regex "^strategy_profile_codec_test$"` | Strict encode/decode round-trip is byte-identical and recomputed `ocgforge.strategy_profile.v1.<64 lowercase hex>` matches; path changes do not matter. | Profile is rejected; no fallback profile is loaded. |
 | P4B-G05 | Malformed profile fail-closed | `ctest --test-dir build/dev-windows --output-on-failure --tests-regex "^strategy_profile_negative_test$"` | Unknown, duplicate, dangling, cyclic, out-of-range, wrong-binding, and trailing-byte profiles all fail before session creation. | No policy session or action is created. |
 | P4B-G06 | Exact deck/matchup/rules binding | `python -B tests/teacher/teacher_profile_binding_test.py` | Own/opponent deck IDs and hashes, matchup, format, mode, flags, and rules bundle match certified V2 input for both profile roles and seat mappings. | Profile activation is `BLOCKED`; arbitrary-deck use is forbidden. |
 | P4B-G07 | Episode/participant state isolation | `ctest --test-dir build/dev-windows --output-on-failure --tests-regex "^teacher_strategy_state_test$"` | Reset, interleaving, mirror seats, and separate participants produce isolated state equal to isolated execution. | State is discarded and the gate fails. |
 | P4B-G08 | Rejected action has zero state advancement | `ctest --test-dir build/dev-windows --output-on-failure --tests-regex "^teacher_rejected_transition_test$"` | Rejected/stale/nonmember actions commit no delta, create no record, and follow existing quarantine semantics. | Stop without retry; collection is quarantined or failed as existing V2 requires. |
 | P4B-G09 | Plan invalidation and recovery | `ctest --test-dir build/dev-windows --output-on-failure --tests-regex "^teacher_recovery_test$"` | Removed/negated resources, restrictions, targets, zones, and copy budgets invalidate stale nodes and select a current public recovery/fallback. | No queued action survives; return structured `BLOCKED` if recovery is unproven. |
 | P4B-G10 | Independent-process determinism | `python -B tests/teacher/teacher_determinism_test.py --probe build/dev-windows/teacher_probe.exe` | Fresh processes reproduce keys, score vectors, fallback levels, explanations, and state deltas for the same corpus. | Determinism gate fails; no semantic acceptance claim. |
-| P4B-G11 | Explicit deterministic fallback | `ctest --test-dir build/dev-windows --output-on-failure --tests-regex "^teacher_fallback_test$"` | F0–F4 are explicit; every stage considers the complete domain; no first-candidate, random, or retry path exists; unprovable fallback blocks. | No action and structured diagnostic. |
+| P4B-G11 | Explicit deterministic fallback without duplicate evaluations | `ctest --test-dir build/dev-windows --output-on-failure --tests-regex "^teacher_fallback_test$"` | F0–F4 are explicit; all stages operate on the same `N` stable evaluation records, may annotate stage status/contributions or temporary comparisons, and never append or drop records; no first-candidate, random, or retry path exists; unprovable fallback blocks. | No action and structured diagnostic. |
 | P4B-G12 | Existing policy provenance recording | `ctest --test-dir build/dev-windows --output-on-failure --tests-regex "^teacher_provenance_test$"` | Existing `PolicyArtifact`, binding metadata, participant assignment, deterministic sampling identity, and `NONE` RNG attribution validate through the production resolver. | No trusted Teacher record; provenance is invalid. |
 | P4B-G13 | Trusted trajectory compatibility | `ctest --test-dir build/dev-windows --output-on-failure --tests-regex "^teacher_runner_trajectory_test$"` | Teacher actions flow through `TrajectoryRecorder`, candidate shard, semantic replay, admission, receipt, and dataset identity with no special bypass. | Reject/quarantine the run; do not issue a Teacher-specific receipt. |
 | P4B-G14 | Phase-4A public-policy regression | `ctest --test-dir build/dev-windows --output-on-failure --tests-regex "^(public_safe_state_test|public_action_identity_test|policy_boundary_compile_test|policy_rng_test|random_legal_test|policy_runner_integration_test)$"`, plus `python -B tests/policy/policy_boundary_test.py` and `python -B tests/policy/public_fact_matrix_test.py` | Existing Phase-4A public boundary, RandomLegal, safe-state, public-key, and runner tests remain green; no Phase-4A byte or ownership meaning changes. | Phase-4B integration stops; investigate regression. |

@@ -53,6 +53,8 @@ The JSON authoring files are convenience inputs. The strict C++ codec and canoni
 
 **Status:** This Task-1 commit.
 
+TASK1_HEAD = 6f46c3c7d10692356ac2d7f085c58f1fefcc88e7
+
 **Files:**
 
 - Create: docs/p4b/P4B_TEACHER_CONTRACT.md
@@ -64,7 +66,7 @@ The JSON authoring files are convenience inputs. The strict C++ codec and canoni
 
 **Semantic change vs internal implementation:** Contract meaning is introduced for Phase 4B. No runtime behavior changes.
 
-**Focused tests:** Markdown structure, code-fence balance, incomplete-marker scan, local-link resolution, and git diff --check.
+**Focused tests:** Markdown structure, code-fence balance, invalid-marker scan, local-link resolution, and git diff --check.
 
 **Regression tests:** None; Phase-4A G00–G29 remains frozen evidence and is not rerun for this documentation-only task.
 
@@ -77,7 +79,7 @@ The JSON authoring files are convenience inputs. The strict C++ codec and canoni
 - [x] Verify live origin/main is 2493046c967f4718dbbf4a63098b37edb0b5a336 and the starting worktree is clean.
 - [x] Read Issue #16, accepted Phase-3/Phase-4A contracts, live policy/runner APIs, required research documents, and repository testing conventions.
 - [x] Write the normative contract and this implementation plan under docs/p4b/.
-- [ ] Run the final documentation checks, commit both files, push the dedicated branch, and stop before Task 2.
+- [x] Run the final documentation checks, commit both files, push the dedicated branch, and stop before Task 2.
 
 **Stop condition:** The Task-1 branch contains documentation/specification only, the exact commit is pushed, and NEXT_TASK_AUTHORIZED=NO.
 
@@ -113,7 +115,7 @@ The JSON authoring files are convenience inputs. The strict C++ codec and canoni
 
 **Replay/provenance implications:** TeacherPolicyBindingV1 is content metadata carried through existing PolicyArtifact.artifact_metadata_identity; no Phase-3 field or codec is added.
 
-- [ ] Write failing tests that construct the smallest valid profile, compute strategy_profile.v1.<digest>, compute teacher_policy_binding.v1.<digest>, and assert canonical path independence.
+- [ ] Write failing tests that construct the smallest valid profile, compute ocgforge.strategy_profile.v1.<64 lowercase hex>, compute ocgforge.teacher_policy_binding.v1.<64 lowercase hex>, and assert canonical path independence.
 - [ ] Run ctest --test-dir build/dev-windows --output-on-failure --tests-regex "^(strategy_profile_codec_test|strategy_profile_negative_test)$" and record the expected missing-target failure.
 - [ ] Implement the exact value types and canonical codec using ygo::trajectory::ByteWriter/ByteReader; reject malformed data before publication.
 - [ ] Add strict profile/binding validation: exact matchup, rules bundle, format, mode, flags, own/opponent deck roles, references, DAG, ranges, and content ID.
@@ -163,7 +165,7 @@ The JSON authoring files are convenience inputs. The strict C++ codec and canoni
 
 **Stop condition:** TeacherCore has a compile-enforced public input boundary and no gameplay-facing output other than one existing public action key.
 
-## Task 4: Complete-domain feature records and deterministic resolver
+## Task 4: Authoritative-domain preservation records and deterministic resolver
 
 **Files:**
 
@@ -171,13 +173,13 @@ The JSON authoring files are convenience inputs. The strict C++ codec and canoni
 - Create: include/ygo/teacher/deterministic_resolver.hpp
 - Create: src/teacher/candidate_evaluator.cpp
 - Create: src/teacher/deterministic_resolver.cpp
-- Create: tests/teacher/teacher_complete_domain_test.cpp
+- Create: tests/teacher/teacher_domain_preservation_test.cpp
 - Create: tests/teacher/teacher_ranking_test.cpp
 - Modify: CMakeLists.txt.
 
 **Owning layer:** Generic TeacherCore resolver.
 
-**Invariants affected:** P4B-G01, P4B-G02; complete supplied domain, nine-component signed-integer score, checked arithmetic, and public-key tie-break.
+**Invariants affected:** P4B-G01, P4B-G02; preservation of the upstream authoritative supplied domain, nine-component signed-integer score, checked arithmetic, and public-key tie-break.
 
 **Semantic change vs internal implementation:** The score vector order, range, arithmetic failure, exactly-once evaluation shape, and ocgforge.policy.public_key_tiebreak.v1 are versioned semantics. A one-pass loop or pre-sized vector is internal.
 
@@ -185,6 +187,7 @@ The JSON authoring files are convenience inputs. The strict C++ codec and canoni
 
 - Supply a domain containing multiple legal candidates, one strategically bad candidate, and equal-score candidates.
 - Assert one evaluation record per input candidate, exact input order, unchanged candidate keys, no duplicate evaluation, and selected key membership.
+- Assert the test does not attempt to determine legal-domain completeness; Environment/Phase 4A owns that guarantee.
 - Assert survival/lethal, goal/recovery, tactical, timing, target, resource, follow-up, battle/Main-2, and profile dimensions compare lexicographically.
 - Assert equality selects the bytewise-smallest key even when vector order is reversed.
 - Assert empty, duplicate-key, malformed-key, overflow, and unsupported-total cases return no selection.
@@ -197,8 +200,8 @@ The JSON authoring files are convenience inputs. The strict C++ codec and canoni
 
 **Replay/provenance implications:** The full evaluation vector is derived diagnostic data. Only the selected public key reaches V2 and the existing trajectory record.
 
-- [ ] Write failing complete-domain tests with a spy evaluator that records each public key exactly once.
-- [ ] Run ctest --test-dir build/dev-windows --output-on-failure --tests-regex "^(teacher_complete_domain_test|teacher_ranking_test)$" and record the expected missing-target failure.
+- [ ] Write failing authoritative-domain preservation tests with a spy evaluator that records each supplied public key exactly once.
+- [ ] Run ctest --test-dir build/dev-windows --output-on-failure --tests-regex "^(teacher_domain_preservation_test|teacher_ranking_test)$" and record the expected missing-target failure.
 - [ ] Implement candidate validation, one logical evaluation pass, fixed score-vector comparison, and explicit key-only equality completion.
 - [ ] Implement checked arithmetic that returns INVALID on overflow/underflow instead of wrapping, saturating, or clamping.
 - [ ] Re-run focused tests and the Phase-4A policy regressions.
@@ -367,7 +370,8 @@ The JSON authoring files are convenience inputs. The strict C++ codec and canoni
 - Assert every fallback level retains N evaluation records and emits an explicit level.
 - Assert unsupported arithmetic/public fact behavior descends only to a total public stage or returns BLOCKED.
 - Assert explanation canonical bytes are stable and contain no forbidden field.
-- Change only explanation output and assert public gameplay/trajectory identity remains equal.
+- Toggle optional explanation persistence under the identical diagnostic contract and assert selected action, public gameplay identity, and record identity remain equal; then change diagnostic-contract semantics/version or the TeacherCore/profile/binding artifact and assert new provenance/binding and potentially new record identity while public gameplay may remain equal.
+- Assert every fallback level enriches the same single N-record evaluation vector overall; no stage appends a second record per candidate.
 
 **Regression tests:** Phase-4A random_legal_test, policy_runner_integration_test, and trajectory privacy/codec tests.
 
@@ -497,7 +501,7 @@ The JSON authoring files are convenience inputs. The strict C++ codec and canoni
 - Inject a stale/nonmember action and assert no Teacher state commit, no canonical record, quarantine, and no retry.
 - Spawn independent processes and compare decision keys, diagnostics, and state deltas.
 
-**Regression tests:** all Phase-4A focused policy tests, trajectory_codec_test, trajectory_recorder_test, replay_admission_test only at its short fixture scope, and policy_runner_integration_test.
+**Regression tests:** all Phase-4A focused policy tests, trajectory_codec_test, trajectory_recorder_test, the new teacher_runner_trajectory_test for short Teacher replay/admission integration, and policy_runner_integration_test. The existing Phase-4A replay-admission Heavy Replay is outside this focused set and runs only under the owning-layer rule or an explicitly authorized final gate.
 
 **Privacy implications:** The runner may use control-plane frame/token values only to submit to V2. TeacherCore receives the same public inputs as RandomLegal and no trajectory restricted evidence.
 
