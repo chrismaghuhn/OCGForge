@@ -110,8 +110,12 @@ void test_locked_roles_and_shape() {
             "engine-trigger roles are missing");
     require(has_role(profile, 26889158, "role.starter.gazelle"),
             "Gazelle starter role is missing");
-    require(has_role(profile, 52277807, "role.extender.spinny"),
-            "Spinny extender role is missing");
+    require(has_role(profile, 52277807, "role.spinny.activation") &&
+                !has_role(profile, 52277807, "role.extender.spinny"),
+            "Spinny activation role is missing");
+    require(has_role(profile, 83533296, "role.charge.access") &&
+                !has_role(profile, 83533296, "role.recovery.charge"),
+            "Charge access role is missing");
     require(has_role(profile, 14812471, "role.payoff.link1") &&
                 has_role(profile, 87871125, "role.payoff.link2") &&
                 has_role(profile, 57134592, "role.payoff.link4") &&

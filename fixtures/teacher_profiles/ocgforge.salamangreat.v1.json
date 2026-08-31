@@ -27,7 +27,7 @@
     {"passcode": 48815792, "role_ids": ["role.board.breaker", "role.bridge.link2"]},
     {"passcode": 51339637, "role_ids": ["role.interaction", "role.salamangreat", "role.trap.roar"]},
     {"passcode": 52155219, "role_ids": ["role.circle.access", "role.salamangreat"]},
-    {"passcode": 52277807, "role_ids": ["role.extender.spinny", "role.salamangreat"]},
+    {"passcode": 52277807, "role_ids": ["role.salamangreat", "role.spinny.activation"]},
     {"passcode": 56003780, "role_ids": ["role.recovery.jaguar", "role.salamangreat"]},
     {"passcode": 57134592, "role_ids": ["role.payoff.link4", "role.recovery.raging", "role.salamangreat"]},
     {"passcode": 57160136, "role_ids": ["role.searcher"]},
@@ -35,7 +35,7 @@
     {"passcode": 64178424, "role_ids": ["role.extender.will", "role.salamangreat"]},
     {"passcode": 73642296, "role_ids": ["role.hand.interaction", "role.interaction"]},
     {"passcode": 74652966, "role_ids": ["role.extender.code_of_soul", "role.salamangreat"]},
-    {"passcode": 83533296, "role_ids": ["role.recovery.charge", "role.salamangreat"]},
+    {"passcode": 83533296, "role_ids": ["role.charge.access", "role.salamangreat"]},
     {"passcode": 87327776, "role_ids": ["role.bridge.rank3", "role.salamangreat"]},
     {"passcode": 87871125, "role_ids": ["role.payoff.link2", "role.recovery.wolf", "role.salamangreat"]},
     {"passcode": 94620082, "role_ids": ["role.extender.foxy", "role.salamangreat"]},
@@ -50,10 +50,10 @@
       {"scope": "CANDIDATE", "predicate_id": "candidate.action_kind_equals", "arguments": [{"kind": "TOKEN", "value": "idle_command"}]},
       {"scope": "CANDIDATE", "predicate_id": "candidate.source_role_contains", "arguments": [{"kind": "TOKEN", "value": "role.board.breaker"}]}
     ]},
-    {"intent_id": "intent.charge.recovery", "public_predicates": [
+    {"intent_id": "intent.charge.access", "public_predicates": [
       {"scope": "CANDIDATE", "predicate_id": "candidate.phase_equals", "arguments": [{"kind": "U64", "value": 5}]},
       {"scope": "CANDIDATE", "predicate_id": "candidate.action_kind_equals", "arguments": [{"kind": "TOKEN", "value": "idle_command"}]},
-      {"scope": "CANDIDATE", "predicate_id": "candidate.source_role_contains", "arguments": [{"kind": "TOKEN", "value": "role.recovery.charge"}]}
+      {"scope": "CANDIDATE", "predicate_id": "candidate.source_role_contains", "arguments": [{"kind": "TOKEN", "value": "role.charge.access"}]}
     ]},
     {"intent_id": "intent.circle.access", "public_predicates": [
       {"scope": "CANDIDATE", "predicate_id": "candidate.phase_equals", "arguments": [{"kind": "U64", "value": 5}]},
@@ -150,10 +150,10 @@
       {"scope": "CANDIDATE", "predicate_id": "candidate.action_kind_equals", "arguments": [{"kind": "TOKEN", "value": "idle_command"}]},
       {"scope": "CANDIDATE", "predicate_id": "candidate.source_role_contains", "arguments": [{"kind": "TOKEN", "value": "role.searcher"}]}
     ]},
-    {"intent_id": "intent.spinny.extender", "public_predicates": [
+    {"intent_id": "intent.spinny.activation", "public_predicates": [
       {"scope": "CANDIDATE", "predicate_id": "candidate.phase_equals", "arguments": [{"kind": "U64", "value": 5}]},
       {"scope": "CANDIDATE", "predicate_id": "candidate.action_kind_equals", "arguments": [{"kind": "TOKEN", "value": "idle_command"}]},
-      {"scope": "CANDIDATE", "predicate_id": "candidate.source_role_contains", "arguments": [{"kind": "TOKEN", "value": "role.extender.spinny"}]}
+      {"scope": "CANDIDATE", "predicate_id": "candidate.source_role_contains", "arguments": [{"kind": "TOKEN", "value": "role.spinny.activation"}]}
     ]},
     {"intent_id": "intent.weasel.conversion", "public_predicates": [
       {"scope": "CANDIDATE", "predicate_id": "candidate.action_kind_equals", "arguments": [{"kind": "TOKEN", "value": "chain"}]},
@@ -203,7 +203,7 @@
     ], "dependencies": [], "recovery_edge_ids": ["recovery.chain.main1"]},
     {"line_id": "line.main1.salamangreat", "goal_id": "goal.main1.salamangreat", "applicability_predicates": [{"scope": "OBSERVATION", "predicate_id": "observation.fact_u64_equals", "arguments": [{"kind": "TOKEN", "value": "public.turn.phase"}, {"kind": "U64", "value": 4}]}, {"scope": "OBSERVATION", "predicate_id": "observation.fact_token_equals", "arguments": [{"kind": "TOKEN", "value": "public.decision_context.kind"}, {"kind": "TOKEN", "value": "idle_command"}]}], "required_resources": [], "optional_resources": [], "nodes": [
       {"node_id": "node.main1.board_breaker", "candidate_intent_ids": ["intent.board.breaker"], "completion_predicates": [], "preserve_resource_ids": [], "stop_predicates": [{"scope": "OBSERVATION", "predicate_id": "observation.fact_boolean_equals", "arguments": [{"kind": "TOKEN", "value": "public.terminal"}, {"kind": "BOOLEAN", "value": true}]}]},
-      {"node_id": "node.main1.charge", "candidate_intent_ids": ["intent.charge.recovery"], "completion_predicates": [], "preserve_resource_ids": [], "stop_predicates": [{"scope": "OBSERVATION", "predicate_id": "observation.fact_boolean_equals", "arguments": [{"kind": "TOKEN", "value": "public.terminal"}, {"kind": "BOOLEAN", "value": true}]}]},
+      {"node_id": "node.main1.charge", "candidate_intent_ids": ["intent.charge.access"], "completion_predicates": [], "preserve_resource_ids": [], "stop_predicates": [{"scope": "OBSERVATION", "predicate_id": "observation.fact_boolean_equals", "arguments": [{"kind": "TOKEN", "value": "public.terminal"}, {"kind": "BOOLEAN", "value": true}]}]},
       {"node_id": "node.main1.circle", "candidate_intent_ids": ["intent.circle.access"], "completion_predicates": [], "preserve_resource_ids": [], "stop_predicates": [{"scope": "OBSERVATION", "predicate_id": "observation.fact_boolean_equals", "arguments": [{"kind": "TOKEN", "value": "public.terminal"}, {"kind": "BOOLEAN", "value": true}]}]},
       {"node_id": "node.main1.code_of_soul", "candidate_intent_ids": ["intent.code.of.soul"], "completion_predicates": [], "preserve_resource_ids": [], "stop_predicates": [{"scope": "OBSERVATION", "predicate_id": "observation.fact_boolean_equals", "arguments": [{"kind": "TOKEN", "value": "public.terminal"}, {"kind": "BOOLEAN", "value": true}]}]},
       {"node_id": "node.main1.falco", "candidate_intent_ids": ["intent.falco.recovery"], "completion_predicates": [], "preserve_resource_ids": [], "stop_predicates": [{"scope": "OBSERVATION", "predicate_id": "observation.fact_boolean_equals", "arguments": [{"kind": "TOKEN", "value": "public.terminal"}, {"kind": "BOOLEAN", "value": true}]}]},
@@ -219,7 +219,7 @@
       {"node_id": "node.main1.princess", "candidate_intent_ids": ["intent.princess.recovery.ignition"], "completion_predicates": [], "preserve_resource_ids": [], "stop_predicates": [{"scope": "OBSERVATION", "predicate_id": "observation.fact_boolean_equals", "arguments": [{"kind": "TOKEN", "value": "public.terminal"}, {"kind": "BOOLEAN", "value": true}]}]},
       {"node_id": "node.main1.sanctuary", "candidate_intent_ids": ["intent.sanctuary.access"], "completion_predicates": [], "preserve_resource_ids": [], "stop_predicates": [{"scope": "OBSERVATION", "predicate_id": "observation.fact_boolean_equals", "arguments": [{"kind": "TOKEN", "value": "public.terminal"}, {"kind": "BOOLEAN", "value": true}]}]},
       {"node_id": "node.main1.search", "candidate_intent_ids": ["intent.search"], "completion_predicates": [], "preserve_resource_ids": [], "stop_predicates": [{"scope": "OBSERVATION", "predicate_id": "observation.fact_boolean_equals", "arguments": [{"kind": "TOKEN", "value": "public.terminal"}, {"kind": "BOOLEAN", "value": true}]}]},
-      {"node_id": "node.main1.spinny", "candidate_intent_ids": ["intent.spinny.extender"], "completion_predicates": [], "preserve_resource_ids": [], "stop_predicates": [{"scope": "OBSERVATION", "predicate_id": "observation.fact_boolean_equals", "arguments": [{"kind": "TOKEN", "value": "public.terminal"}, {"kind": "BOOLEAN", "value": true}]}]},
+      {"node_id": "node.main1.spinny", "candidate_intent_ids": ["intent.spinny.activation"], "completion_predicates": [], "preserve_resource_ids": [], "stop_predicates": [{"scope": "OBSERVATION", "predicate_id": "observation.fact_boolean_equals", "arguments": [{"kind": "TOKEN", "value": "public.terminal"}, {"kind": "BOOLEAN", "value": true}]}]},
       {"node_id": "node.main1.weasel", "candidate_intent_ids": ["intent.weasel.extension"], "completion_predicates": [], "preserve_resource_ids": [], "stop_predicates": [{"scope": "OBSERVATION", "predicate_id": "observation.fact_boolean_equals", "arguments": [{"kind": "TOKEN", "value": "public.terminal"}, {"kind": "BOOLEAN", "value": true}]}]},
       {"node_id": "node.main1.will", "candidate_intent_ids": ["intent.will.extension"], "completion_predicates": [], "preserve_resource_ids": [], "stop_predicates": [{"scope": "OBSERVATION", "predicate_id": "observation.fact_boolean_equals", "arguments": [{"kind": "TOKEN", "value": "public.terminal"}, {"kind": "BOOLEAN", "value": true}]}]},
       {"node_id": "node.main1.wolf", "candidate_intent_ids": ["intent.wolf.recovery.ignition"], "completion_predicates": [], "preserve_resource_ids": [], "stop_predicates": [{"scope": "OBSERVATION", "predicate_id": "observation.fact_boolean_equals", "arguments": [{"kind": "TOKEN", "value": "public.terminal"}, {"kind": "BOOLEAN", "value": true}]}]}

@@ -125,7 +125,7 @@ StrategyProfileV1 build_profile() {
         card_role(51339637, {"role.interaction", "role.salamangreat",
                              "role.trap.roar"}),
         card_role(52155219, {"role.circle.access", "role.salamangreat"}),
-        card_role(52277807, {"role.extender.spinny", "role.salamangreat"}),
+        card_role(52277807, {"role.salamangreat", "role.spinny.activation"}),
         card_role(56003780, {"role.recovery.jaguar", "role.salamangreat"}),
         card_role(57134592, {"role.payoff.link4", "role.recovery.raging",
                              "role.salamangreat"}),
@@ -134,7 +134,7 @@ StrategyProfileV1 build_profile() {
         card_role(64178424, {"role.extender.will", "role.salamangreat"}),
         card_role(73642296, {"role.hand.interaction", "role.interaction"}),
         card_role(74652966, {"role.extender.code_of_soul", "role.salamangreat"}),
-        card_role(83533296, {"role.recovery.charge", "role.salamangreat"}),
+        card_role(83533296, {"role.charge.access", "role.salamangreat"}),
         card_role(87327776, {"role.bridge.rank3", "role.salamangreat"}),
         card_role(87871125, {"role.payoff.link2", "role.recovery.wolf",
                              "role.salamangreat"}),
@@ -148,7 +148,7 @@ StrategyProfileV1 build_profile() {
 
     value.candidate_intents = {
         {"intent.board.breaker", idle_role_predicates(1, "role.board.breaker")},
-        {"intent.charge.recovery", idle_role_predicates(5, "role.recovery.charge")},
+        {"intent.charge.access", idle_role_predicates(5, "role.charge.access")},
         {"intent.circle.access", idle_role_predicates(5, "role.circle.access")},
         {"intent.code.of.soul", idle_role_predicates(5, "role.extender.code_of_soul")},
         {"intent.falco.recovery", idle_role_predicates(5, "role.recovery.falco")},
@@ -177,7 +177,7 @@ StrategyProfileV1 build_profile() {
          idle_role_predicates(5, "role.recovery.princess")},
         {"intent.sanctuary.access", idle_role_predicates(5, "role.sanctuary.access")},
         {"intent.search", idle_role_predicates(5, "role.searcher")},
-        {"intent.spinny.extender", idle_role_predicates(5, "role.extender.spinny")},
+        {"intent.spinny.activation", idle_role_predicates(5, "role.spinny.activation")},
         {"intent.weasel.conversion",
          {candidate_action("chain"), candidate_source_role("role.recovery.weasel"),
           candidate_source_visibility("visible")} },
@@ -246,7 +246,7 @@ StrategyProfileV1 build_profile() {
     main1.applicability_predicates = {main1_phase, idle_context};
     main1.nodes = {
         make_main1_node("node.main1.board_breaker", "intent.board.breaker"),
-        make_main1_node("node.main1.charge", "intent.charge.recovery"),
+        make_main1_node("node.main1.charge", "intent.charge.access"),
         make_main1_node("node.main1.circle", "intent.circle.access"),
         make_main1_node("node.main1.code_of_soul", "intent.code.of.soul"),
         make_main1_node("node.main1.falco", "intent.falco.recovery"),
@@ -262,7 +262,7 @@ StrategyProfileV1 build_profile() {
         make_main1_node("node.main1.princess", "intent.princess.recovery.ignition"),
         make_main1_node("node.main1.sanctuary", "intent.sanctuary.access"),
         make_main1_node("node.main1.search", "intent.search"),
-        make_main1_node("node.main1.spinny", "intent.spinny.extender"),
+        make_main1_node("node.main1.spinny", "intent.spinny.activation"),
         make_main1_node("node.main1.weasel", "intent.weasel.extension"),
         make_main1_node("node.main1.will", "intent.will.extension"),
         make_main1_node("node.main1.wolf", "intent.wolf.recovery.ignition"),

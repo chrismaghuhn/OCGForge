@@ -11,6 +11,7 @@
 
 #include <cstdint>
 #include <iostream>
+#include <memory>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -20,11 +21,18 @@
 #include "ygo/environment/episodic_environment.hpp"
 #include "ygo/environment/public_action_identity.hpp"
 #include "ygo/observation/player_observation.hpp"
+#include "../../src/environment/episodic_environment_test_access.hpp"
+#include "ygo/observation/decision_integration.hpp"
+#include "ygo/observation/serialization.hpp"
+#include "ygo/protocol/continuation.hpp"
 
 namespace {
 
 using namespace ygo::environment;
 using namespace ygo::teacher;
+using ygo::observation::PlayerObservation;
+using ygo::protocol::ActionCandidate;
+using ygo::protocol::DecisionRequest;
 
 void require(const bool condition, const std::string& message) {
     if (!condition) {
@@ -41,8 +49,7 @@ PublicEnvironmentObservation public_observation(
     const ygo::observation::SemanticZone visible_zone =
         ygo::observation::SemanticZone::Hand,
     const PublicCardReferenceKind visible_reference_kind =
-        PublicCardReferenceKind::VisibleCard,
-    const std::string& private_world_marker = {}) {
+        PublicCardReferenceKind::VisibleCard) {
     ygo::observation::PlayerObservation source;
     source.schema_version = "ygo.player_observation.v1";
     source.perspective_player = 0;
@@ -59,13 +66,6 @@ PublicEnvironmentObservation public_observation(
     source.match_context.knowledge.opponent_decklist_known = false;
     source.decision_context.kind = decision_kind;
     source.decision_context.player = 0;
-    if (!private_world_marker.empty()) {
-        // The source marker stands for hidden/control-plane world variation;
-        // project_public_observation deliberately excludes these fields.
-        source.decision_context.decision_id = private_world_marker;
-        source.decision_context.continuation_id = private_world_marker;
-        source.engine_step_index = private_world_marker == "world-a" ? 101 : 202;
-    }
 
     if (visible_passcode.has_value()) {
         ygo::observation::ObservedCard entity;
@@ -82,16 +82,6 @@ PublicEnvironmentObservation public_observation(
         entity.face_up = false;
         entity.face_down = !entity.identity_known;
         source.entities.push_back(entity);
-    }
-    if (!private_world_marker.empty()) {
-        ygo::observation::ObservedCard hidden_opponent_entity;
-        hidden_opponent_entity.locator = {"p1:HAND:0"};
-        hidden_opponent_entity.owner = 1;
-        hidden_opponent_entity.controller = 1;
-        hidden_opponent_entity.zone = ygo::observation::SemanticZone::Hand;
-        hidden_opponent_entity.sequence = 0;
-        hidden_opponent_entity.face_down = true;
-        source.entities.push_back(hidden_opponent_entity);
     }
     return project_public_observation(source);
 }
@@ -246,9 +236,34 @@ void test_main1_and_action_specific_intents() {
         public_observation(10, 0x04, 0, "idle_command", 52277807);
     matched.clear();
     require(match_candidate_intent_set(
-                profile, {"intent.spinny.extender"}, spinny, spinny_observation, 0, matched) ==
+                profile, {"intent.spinny.activation"}, spinny, spinny_observation, 0, matched) ==
                 PredicateEvaluationStatus::True,
-            "Spinny activation did not match its extender intent");
+            "Spinny activation did not match its neutral activation intent");
+    require(matched == std::vector<std::string>{"intent.spinny.activation"},
+            "Spinny activation emitted a non-neutral intent");
+    const auto spinny_gy = idle_card(5, ygo::observation::SemanticZone::Graveyard);
+    const auto spinny_gy_observation =
+        public_observation(10, 0x04, 0, "idle_command", 52277807,
+                           ygo::observation::SemanticZone::Graveyard);
+    matched.clear();
+    require(match_candidate_intent_set(profile, {"intent.spinny.activation"}, spinny_gy,
+                                       spinny_gy_observation, 0, matched) ==
+                PredicateEvaluationStatus::True,
+            "Spinny Graveyard activation did not match the same neutral intent");
+
+    const auto charge = idle_card(5);
+    const auto charge_observation =
+        public_observation(10, 0x04, 0, "idle_command", 83533296);
+    matched.clear();
+    require(match_candidate_intent_set(profile, {"intent.charge.access"}, charge,
+                                       charge_observation, 0, matched) ==
+                PredicateEvaluationStatus::True,
+            "Charge activation did not match its neutral access intent");
+    for (const auto& intent : profile.candidate_intents) {
+        require(intent.intent_id != "intent.charge.recovery" &&
+                    intent.intent_id != "intent.spinny.extender",
+                "profile retained an unproven Charge/Spinny semantic intent");
+    }
 
     const auto balelynx = idle_card(1, ygo::observation::SemanticZone::ExtraDeck);
     const auto balelynx_observation =
@@ -368,10 +383,10 @@ void test_main1_and_action_specific_intents() {
                                        wolf_observation, 0, matched) ==
                 PredicateEvaluationStatus::False,
             "Sunlight Wolf Link summon matched ignition recovery");
-    const auto wolf_ignition = idle_card(5, ygo::observation::SemanticZone::Graveyard);
+    const auto wolf_ignition = idle_card(5, ygo::observation::SemanticZone::MonsterZone);
     const auto wolf_recovery_observation =
         public_observation(10, 0x04, 0, "idle_command", 87871125,
-                           ygo::observation::SemanticZone::Graveyard);
+                           ygo::observation::SemanticZone::MonsterZone);
     matched.clear();
     require(match_candidate_intent_set(profile, {"intent.wolf.recovery.ignition"},
                                        wolf_ignition, wolf_recovery_observation, 0, matched) ==
@@ -392,10 +407,10 @@ void test_main1_and_action_specific_intents() {
                                        princess, princess_observation, 0, matched) ==
                 PredicateEvaluationStatus::False,
             "Princess Link summon matched ignition recovery");
-    const auto princess_ignition = idle_card(5, ygo::observation::SemanticZone::Graveyard);
+    const auto princess_ignition = idle_card(5, ygo::observation::SemanticZone::MonsterZone);
     const auto princess_recovery_observation =
         public_observation(10, 0x04, 0, "idle_command", 2772337,
-                           ygo::observation::SemanticZone::Graveyard);
+                           ygo::observation::SemanticZone::MonsterZone);
     matched.clear();
     require(match_candidate_intent_set(profile, {"intent.princess.recovery.ignition"},
                                        princess_ignition, princess_recovery_observation, 0,
@@ -454,33 +469,44 @@ void test_interaction_recovery_and_domain_preservation() {
             "chain construction with no existing chain length was incorrectly blocked");
 
     std::vector<std::string> matched;
-    const auto trigger_cases = std::vector<std::pair<std::uint32_t, const char*>>{
-        {26889158U, "intent.gazelle.trigger"},
-        {11962031U, "intent.of_fire.trigger"},
-        {87871125U, "intent.wolf.recovery.chain"},
-        {2772337U, "intent.princess.recovery.chain"},
-        {57357130U, "intent.weasel.conversion"},
+    struct TriggerCase final {
+        std::uint32_t passcode;
+        const char* intent_id;
+        ygo::observation::SemanticZone source_zone;
     };
-    for (const auto& [passcode, intent_id] : trigger_cases) {
-        const auto trigger = chain_source(card_reference());
-        const auto trigger_observation = public_observation(20, 0x04, 1, "chain", passcode);
+    const auto trigger_cases = std::vector<TriggerCase>{
+        {26889158U, "intent.gazelle.trigger", ygo::observation::SemanticZone::MonsterZone},
+        {11962031U, "intent.of_fire.trigger", ygo::observation::SemanticZone::MonsterZone},
+        {87871125U, "intent.wolf.recovery.chain", ygo::observation::SemanticZone::MonsterZone},
+        {2772337U, "intent.princess.recovery.chain", ygo::observation::SemanticZone::Graveyard},
+        {57357130U, "intent.weasel.conversion", ygo::observation::SemanticZone::Graveyard},
+    };
+    for (const auto& trigger_case : trigger_cases) {
+        const auto trigger = chain_source(card_reference(trigger_case.source_zone));
+        const auto trigger_observation = public_observation(
+            20, 0x04, 1, "chain", trigger_case.passcode, trigger_case.source_zone);
         matched.clear();
-        require(match_candidate_intent_set(profile, {intent_id}, trigger,
+        require(match_candidate_intent_set(profile, {trigger_case.intent_id}, trigger,
                                            trigger_observation, 0, matched) ==
                     PredicateEvaluationStatus::True,
-                std::string("public Chain trigger did not match ") + intent_id);
+                std::string("public Chain trigger did not match ") + trigger_case.intent_id);
         require_progress(profile, chain_selection, trigger, trigger_observation, 3);
     }
-    const auto wolf_chain = chain_source(card_reference());
-    const auto wolf_chain_observation = public_observation(20, 0x04, 1, "chain", 87871125);
+    const auto wolf_chain = chain_source(
+        card_reference(ygo::observation::SemanticZone::MonsterZone));
+    const auto wolf_chain_observation = public_observation(
+        20, 0x04, 1, "chain", 87871125,
+        ygo::observation::SemanticZone::MonsterZone);
     matched.clear();
     require(match_candidate_intent_set(profile, {"intent.wolf.recovery.ignition"}, wolf_chain,
                                        wolf_chain_observation, 0, matched) ==
                 PredicateEvaluationStatus::False,
             "Sunlight Wolf Chain trigger matched its Ignition-only intent");
-    const auto princess_chain = chain_source(card_reference());
+    const auto princess_chain = chain_source(
+        card_reference(ygo::observation::SemanticZone::Graveyard));
     const auto princess_chain_observation =
-        public_observation(20, 0x04, 1, "chain", 2772337);
+        public_observation(20, 0x04, 1, "chain", 2772337,
+                           ygo::observation::SemanticZone::Graveyard);
     matched.clear();
     require(match_candidate_intent_set(profile, {"intent.princess.recovery.ignition"},
                                        princess_chain, princess_chain_observation, 0, matched) ==
@@ -625,58 +651,82 @@ bool same_ranking_result(const TeacherRankingResult& left,
     return true;
 }
 
-PublicTeacherOutputs compose_public_teacher_outputs(
-    const StrategyProfileV1& profile,
-    const EpisodeLocalStrategyStateV1& state,
-    const PublicEnvironmentObservation& observation,
-    const std::vector<EnvironmentActionCandidate>& candidates) {
-    const auto facts = public_facts(observation);
-    const auto selection = select_goal_and_line(profile, state, facts);
-    require(selection.status == PredicateEvaluationStatus::True,
-            "paired-world Main1 selection was not publicly supported");
+std::unique_ptr<EpisodicEnvironment> make_paired_environment() {
+    auto factory = EpisodicEnvironment::create(CertifiedEnvironmentConfig::canonical());
+    require(std::holds_alternative<std::unique_ptr<EpisodicEnvironment>>(factory),
+            "paired-world test could not create the canonical environment");
+    return std::move(std::get<std::unique_ptr<EpisodicEnvironment>>(factory));
+}
 
-    std::vector<TeacherFallbackCandidateValue> stage;
-    stage.reserve(candidates.size());
-    for (const auto& candidate : candidates) {
-        const auto outcome = evaluate_goal_line_progress(
-            profile, selection, RecoverySelection{}, candidate, observation, 0);
-        require(outcome.status == CandidateEvaluationStatus::Supported,
-                "paired-world candidate did not have a supported public outcome");
+PlayerObservation hidden_pair_observation(const std::uint8_t perspective,
+                                          const std::uint64_t engine_step_index) {
+    PlayerObservation observation;
+    observation.schema_version = "ygo.player_observation.v1";
+    observation.perspective_player = perspective;
+    observation.engine_step_index = engine_step_index;
+    observation.globals.life_points = {8000, 7000};
+    observation.globals.player_to_act = perspective;
+    observation.globals.turn_player = 0;
+    observation.globals.turn_count = 1;
+    observation.globals.phase = 0x04;
+    observation.globals.chain_length = 0;
+    observation.globals.terminal = false;
+    observation.match_context.perspective_player = perspective;
+    observation.match_context.knowledge.own_decklist_known = true;
+    observation.match_context.knowledge.opponent_decklist_known = false;
+    observation.observation_hash = ygo::observation::observation_hash(observation);
+    return observation;
+}
 
-        TeacherFallbackCandidateValue value;
-        value.public_action_key = candidate.public_action_key;
-        value.status = outcome.status;
-        value.score = ScoreVector{};
-        value.contributions = outcome.contributions;
-        for (const auto& contribution : value.contributions) {
-            require(add_score_contribution(*value.score, contribution.dimension,
-                                           contribution.value),
-                    "paired-world score contribution could not be composed");
-        }
-        value.matched_intent_ids = outcome.matched_intent_ids;
-        value.matched_goal_ids = outcome.matched_goal_ids;
-        value.matched_line_ids = outcome.matched_line_ids;
-        value.reason_ids = outcome.reason_ids;
-        stage.push_back(std::move(value));
-    }
+DecisionRequest hidden_pair_request(const std::uint32_t hidden_code) {
+    DecisionRequest request;
+    request.kind = ygo::protocol::DecisionRequestKind::CardSelection;
+    request.decision_id = "private-decision.card." + std::to_string(hidden_code);
+    request.engine_step_index = 91;
+    request.player = 1;
+    request.engine_message_type = 15;
+    request.engine_message_name = "MSG_SELECT_CARD";
+    request.raw_message_hash = "private-raw." + std::to_string(hidden_code);
+    ActionCandidate candidate;
+    candidate.action_kind = ygo::protocol::ActionKind::CardSelection;
+    candidate.semantic_key = "card.0.3." + std::to_string(hidden_code) + ".0.8.0";
+    candidate.source_card = hidden_code;
+    candidate.source_controller = 0;
+    candidate.source_location = 8;
+    candidate.source_sequence = 0;
+    candidate.source_index = 3;
+    candidate.exact_response_bytes = {3, 0, 0, 0};
+    request.candidates.push_back(std::move(candidate));
+    return request;
+}
 
-    TeacherFallbackStageSet stages;
-    stages.stage_evaluations[0] = std::move(stage);
+PlayerObservation hidden_pair_observation_for_request(const DecisionRequest& request,
+                                                      const std::uint64_t engine_step_index) {
+    auto observation = hidden_pair_observation(request.player, engine_step_index);
+    ygo::observation::attach_decision_context(observation, request);
+    return observation;
+}
+
+PublicTeacherOutputs compose_paired_fallback_outputs(
+    const StrategyProfileV1& profile, const DecisionFrame& frame) {
+    const auto& candidates = frame.request.candidates;
     PublicTeacherOutputs output;
-    output.ranking = resolve_teacher_fallback(candidates, stages);
+    // No public strategy proof is assumed for this deliberately unsupported
+    // card-selection pair; the accepted fallback contract supplies F4.
+    output.ranking = resolve_teacher_fallback(candidates, TeacherFallbackStageSet{});
     require(output.ranking.status == TeacherRankingStatus::Selected &&
                 output.ranking.selected_public_action_key.has_value() &&
-                output.ranking.explanation.has_value(),
-            "paired-world fallback composition did not select a public action with explanation");
+                output.ranking.explanation.has_value() &&
+                output.ranking.fallback_level == TeacherFallbackLevel::F4,
+            "paired-world fallback composition did not select deterministic F4");
 
+    const auto state = reset_state(profile);
     TeacherStateDeltaV1 requested;
     requested.strategy_profile_id = profile.profile_id;
     requested.proposed_for_public_action_key = *output.ranking.selected_public_action_key;
-    requested.active_goal_id = selection.goal_id;
-    requested.active_line_id = selection.line_id;
-    requested.public_resource_facts = {u64_fact("public.chain.length", 0)};
     const auto delta = propose_teacher_state_delta(
-        state, observation, 0, profile, requested);
+        state, frame.public_observation, frame.public_observation.perspective_player,
+        profile, requested);
     require(delta.has_value(), "paired-world state proposal was not accepted");
     output.ranking.proposed_state_delta = *delta;
     std::string diagnostic;
@@ -687,33 +737,82 @@ PublicTeacherOutputs compose_public_teacher_outputs(
     return output;
 }
 
+void require_same_public_candidate(const EnvironmentActionCandidate& left,
+                                   const EnvironmentActionCandidate& right) {
+    const auto same_choice = [](const std::optional<PublicChoice>& first,
+                                const std::optional<PublicChoice>& second) {
+        if (first.has_value() != second.has_value()) {
+            return false;
+        }
+        return !first.has_value() ||
+               (first->kind == second->kind && first->value == second->value &&
+                first->response_index == second->response_index);
+    };
+    const auto same_reference = [](const std::optional<PublicCardReference>& first,
+                                   const std::optional<PublicCardReference>& second) {
+        if (first.has_value() != second.has_value()) {
+            return false;
+        }
+        return !first.has_value() ||
+               (first->kind == second->kind &&
+                first->observation_locator == second->observation_locator);
+    };
+    require(left.action_kind == right.action_kind &&
+                left.public_action_key == right.public_action_key &&
+                same_choice(left.choice, right.choice) &&
+                same_reference(left.source_reference, right.source_reference) &&
+                same_reference(left.target_reference, right.target_reference) &&
+                left.phase == right.phase &&
+                left.position == right.position && left.source_index == right.source_index &&
+                left.amount == right.amount &&
+                left.continuation_operation == right.continuation_operation &&
+                left.submits_engine_response == right.submits_engine_response,
+            "paired public candidate descriptors differ");
+}
+
 void test_equal_public_worlds_are_identical() {
     const auto profile = make_salamangreat_profile();
-    const auto world_a =
-        public_observation(50, 0x04, 0, "idle_command", 11962031,
-                           ygo::observation::SemanticZone::Hand,
-                           PublicCardReferenceKind::VisibleCard, "world-a");
-    const auto world_b =
-        public_observation(50, 0x04, 0, "idle_command", 11962031,
-                           ygo::observation::SemanticZone::Hand,
-                           PublicCardReferenceKind::VisibleCard, "world-b");
-    require(canonical_public_environment_observation_bytes(world_a) ==
-                canonical_public_environment_observation_bytes(world_b),
-            "paired worlds did not produce identical public observation bytes");
+    auto environment = make_paired_environment();
+    const auto request_a = hidden_pair_request(14821890);
+    const auto request_b = hidden_pair_request(7654321);
+    const auto observation_a = hidden_pair_observation_for_request(request_a, 91);
+    const auto observation_b = hidden_pair_observation_for_request(request_b, 91);
+    require(request_a.candidates.front().semantic_key != request_b.candidates.front().semantic_key,
+            "paired hidden worlds did not differ in private semantic key");
+    require(ygo::observation::canonical_serialize(observation_a) !=
+                ygo::observation::canonical_serialize(observation_b),
+            "paired hidden worlds did not differ in private request context");
 
-    const auto candidates = std::vector<EnvironmentActionCandidate>{idle_card(0)};
-    const auto state_a = reset_state(profile);
-    const auto state_b = reset_state(profile);
-    require(state_a == state_b, "paired-world initial states differ");
-    const auto output_a = compose_public_teacher_outputs(profile, state_a, world_a, candidates);
-    const auto output_b = compose_public_teacher_outputs(profile, state_b, world_b, candidates);
+    const auto frame_a = ygo::environment::detail::EpisodicEnvironmentTestAccess::project_frame_for_test(
+        *environment, request_a, observation_a, std::string(64, 'a'), 7);
+    const auto frame_b = ygo::environment::detail::EpisodicEnvironmentTestAccess::project_frame_for_test(
+        *environment, request_b, observation_b, std::string(64, 'a'), 7);
+    require(canonical_public_environment_observation_bytes(frame_a.public_observation) ==
+                canonical_public_environment_observation_bytes(frame_b.public_observation),
+            "paired hidden worlds did not produce equal public observations");
+    require(frame_a.request.candidates.size() == frame_b.request.candidates.size(),
+            "paired hidden worlds produced different public candidate counts");
+    for (std::size_t index = 0; index < frame_a.request.candidates.size(); ++index) {
+        require_same_public_candidate(frame_a.request.candidates[index],
+                                       frame_b.request.candidates[index]);
+    }
+    const auto public_bytes = canonical_public_environment_observation_bytes(
+        frame_a.public_observation);
+    const std::string public_text(public_bytes.begin(), public_bytes.end());
+    require(public_text.find("14821890") == std::string::npos &&
+                public_text.find("7654321") == std::string::npos &&
+                frame_a.request.candidates.front().public_action_key.find("14821890") ==
+                    std::string::npos &&
+                frame_a.request.candidates.front().public_action_key.find("7654321") ==
+                    std::string::npos,
+            "paired hidden passcodes leaked into public Teacher inputs");
+
+    const auto output_a = compose_paired_fallback_outputs(profile, frame_a);
+    const auto output_b = compose_paired_fallback_outputs(profile, frame_b);
     require(same_ranking_result(output_a.ranking, output_b.ranking),
             "equal public worlds produced different ranking evidence or state delta");
     require(output_a.explanation_bytes == output_b.explanation_bytes,
             "equal public worlds produced different explanation bytes");
-    require(output_a.ranking.explanation->invalidation_reason_ids.empty() &&
-                output_b.ranking.explanation->invalidation_reason_ids.empty(),
-            "paired-world explanation carried unexpected invalidation evidence");
 }
 
 }  // namespace
