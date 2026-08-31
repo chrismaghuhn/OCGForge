@@ -156,42 +156,58 @@ deck, general battle-proof, or ML claim.
 
 ### Phase 4C — Public battle proof + frozen Teacher evaluation
 
-Phase 4C is the active future layer. Tasks 1, 2, 2A, and 3 are accepted.
-Task 4 records the current Teacher integration decision: Teacher v1 remains
-the active policy and Battle/Lethal are evaluation-only sidecar evidence.
-The positive-lethal capability remains explicitly blocked under the accepted
-current-action contract; Phase 4C is not final.
+Status: **FINAL PASS** for the fixed certified Swordsoul-versus-Salamangreat
+matchup.
 
 ~~~text
-Task 1 — Battle Facts / Provable Lethal contract freeze
-FINAL PASS
+H_exec =
+9fe935531b63aaaf9535201dd4daf3f25e0f1a93
 
-Task 2 — Battle snapshot implementation
-FINAL PASS
+H_evidence =
+043061a6bd81701d6344bd97dab098fd36acd7be
 
+schema =
+ocgforge.phase4c_acceptance.v1
+
+P4C-G00..G14 = PASS
+
+Task 1  — Battle Facts / Provable Lethal contract freeze
+FINAL PASS
+Task 2  — Battle snapshot implementation
+FINAL PASS
 Task 2A — Battle/Lethal prerequisite decision
 FINAL PASS
-
-Task 3 — Provable lethal implementation
+Task 3  — fail-closed ProvableLethal evaluator
 FINAL PASS
-
-Task 4 — Teacher Battle/Lethal integration decision
-CURRENT / AUTHORIZED — docs-only
-
-Decision:
-TEACHER_V1_PLUS_EVALUATION_SIDECAR
-
-Task 5 — frozen evaluation harness
-NOT AUTHORIZED
-
-Task 6 — Phase-4C acceptance/evidence
-NOT AUTHORIZED
+Task 4  — Teacher Battle/Lethal integration decision
+FINAL PASS
+Task 5  — frozen Teacher-v1 + sidecar evaluation harness
+FINAL PASS
+Task 6  — Phase-4C final acceptance/evidence
+FINAL PASS
 ~~~
 
-Phase 4C does not authorize new public observation bytes, new legality logic,
-private engine queries, future-action search, battle simulation duplication,
-copy-budget inference, ML, or arbitrary-deck support. It is not a Phase-4C
-final-pass claim.
+Accepted integration decision:
+
+`TEACHER_V1_PLUS_EVALUATION_SIDECAR`
+
+Teacher v1 remains the authoritative gameplay policy. BattleSnapshot and
+ProvableLethal are deterministic, public-only, post-hoc evaluation/audit
+sidecars and do not change action selection, strategy state, trusted trajectory
+bytes, replay, admission, or dataset identity.
+
+The accepted positive-lethal capability remains deliberately fail-closed:
+
+`BLOCKED_BY_ACCEPTED_CURRENT_ACTION_CONTRACT`
+
+This is not a proven-non-lethal result and does not authorize optimistic damage,
+direct-attack, response-absence, or terminal-outcome inference. Phase 4C does
+not claim general provable lethal, complete battle resolution, arbitrary-deck
+battle intelligence, Teacher v2, or ML.
+
+With Phase 4A, Phase 4B, and Phase 4C accepted, **Phase 4 is FINAL PASS**. Future
+model-facing or ML work remains a separate milestone and requires its own
+contracts and acceptance gates.
 
 ## Post-M4 work remains separate
 
