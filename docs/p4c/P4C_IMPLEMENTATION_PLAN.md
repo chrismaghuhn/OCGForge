@@ -28,6 +28,15 @@ authority for battle legality and resolution. Teacher and evaluation code may
 consume only the accepted public observation and the complete ordered public
 candidate vector.
 
+Phase-4C Battle/Lethal acceptance has its own probe owner. The accepted
+Phase-4B `tools/p4b/teacher_probe.cpp` and its binary are not extended for
+Phase 4C. The Phase-4C probe is test/evidence infrastructure only:
+
+~~~text
+tools/p4c/phase4c_battle_probe.cpp
+build/dev-windows/phase4c_battle_probe.exe
+~~~
+
 No future task may silently:
 
 - add fields or bytes to the accepted public observation;
@@ -104,6 +113,10 @@ continues to own the public observation and complete candidate inputs.
 include/ygo/teacher/public_battle_snapshot.hpp
 src/teacher/public_battle_snapshot.cpp
 tests/teacher/public_battle_snapshot_test.cpp
+tools/p4c/phase4c_battle_probe.cpp
+tests/teacher/phase4c_public_boundary_test.py
+tests/teacher/phase4c_battle_determinism_test.py
+tests/teacher/phase4c_battle_paired_world_test.py
 CMakeLists.txt                  # registration only, if required
 ~~~
 
@@ -135,6 +148,9 @@ DecisionRecord, shard, receipt, manifest, or replay requirements.
 **Focused acceptance gates:** Public-boundary, N-record/order, visible-stat,
 redacted/absent-stat, exact BattleCommand-shape, checked-arithmetic,
 independent-process, and paired-world tests.
+
+The Phase-4C probe initially covers PublicBattleSnapshotV1 in Task 2. It is
+owned by Phase 4C and is not a modification of the accepted Phase-4B probe.
 
 **Stop condition:** If any required attack distinction or public field cannot
 be proven, stop with that capability BLOCKED and insert Task 2A below before
@@ -197,6 +213,9 @@ include/ygo/teacher/provable_lethal.hpp
 src/teacher/provable_lethal.cpp
 tests/teacher/provable_lethal_test.cpp
 tests/teacher/provable_lethal_paired_world_test.cpp
+tools/p4c/phase4c_battle_probe.cpp
+tests/teacher/phase4c_battle_determinism_test.py
+tests/teacher/phase4c_battle_paired_world_test.py
 CMakeLists.txt                  # registration only, if required
 ~~~
 
@@ -227,6 +246,11 @@ are outside trajectory/replay/admission schemas.
 positive matrix, missing-response/effect negative matrix, checked integer
 matrix, no-future-queue test, paired-world privacy, and independent-process
 determinism.
+
+Task 3 may modify the already authorized Phase-4C probe and the two named
+determinism/paired-world producers only to extend public snapshot evidence
+with ProvableLethalV1 evidence. It may not extend or repurpose the Phase-4B
+probe.
 
 **Stop condition:** Any proof that needs a missing public fact, future
 candidate, assumed opponent pass, or duplicated nontrivial rule is left
@@ -391,8 +415,8 @@ runs the producer. A gate may be PASS only on actual evidence.
 | P4C-G02 | Visible current ATK/DEF extraction | ctest --test-dir build/dev-windows --output-on-failure --no-tests=error --tests-regex "^public_battle_snapshot_test$" | Exact same-perspective visible join copies only current public stats | Missing current stat is UNSUPPORTED; bad join is INVALID |
 | P4C-G03 | Redacted/absent stats fail closed | Same snapshot test target with explicit RedactedSlot/absent-stat cases | No hidden lookup; redacted or missing stat never becomes a value | UNSUPPORTED, never guessed |
 | P4C-G04 | BattleCommand shape correctness | ctest --test-dir build/dev-windows --output-on-failure --no-tests=error --tests-regex "^battle_command_shape_test$" | Exact current decoder/projection shapes are documented and tested; unproven subtypes stay unsupported | No phase/name heuristic; UNSUPPORTED |
-| P4C-G05 | Independent-process determinism | python -B tests/teacher/phase4c_battle_determinism_test.py --probe build/dev-windows/teacher_probe.exe | Identical public corpus yields byte/canonical-identical snapshots and lethal results | Any mismatch is FAIL; no environment-specific fallback |
-| P4C-G06 | Equal-public-world privacy | python -B tests/teacher/phase4c_battle_paired_world_test.py --probe build/dev-windows/teacher_probe.exe | Different hidden/private worlds with equal public inputs yield identical derived outputs | Hidden-dependent output is FAIL |
+| P4C-G05 | Independent-process determinism | python -B tests/teacher/phase4c_battle_determinism_test.py --probe build/dev-windows/phase4c_battle_probe.exe | Identical public corpus yields byte/canonical-identical snapshots and lethal results | Any mismatch is FAIL; no environment-specific fallback |
+| P4C-G06 | Equal-public-world privacy | python -B tests/teacher/phase4c_battle_paired_world_test.py --probe build/dev-windows/phase4c_battle_probe.exe | Different hidden/private worlds with equal public inputs yield identical derived outputs | Hidden-dependent output is FAIL |
 | P4C-G07 | Checked integer arithmetic | ctest --test-dir build/dev-windows --output-on-failure --no-tests=error --tests-regex "^provable_lethal_test$" | Exact signed subtraction/bounds; overflow/underflow is rejected | INVALID; no wrap/clamp/saturate |
 | P4C-G08 | No optimistic false positives | ctest --test-dir build/dev-windows --output-on-failure --no-tests=error --tests-regex "^provable_lethal_test$" | No PROVEN_LETHAL without all positive-proof conditions; ATK-versus-LP alone fails | NOT_PROVEN/UNSUPPORTED |
 | P4C-G09 | Missing response/effect proof | Same lethal test target with response/modifier/effect gaps | Unproven response, modifier, immunity, target, or continuation prevents positive proof | NOT_PROVEN/UNSUPPORTED |

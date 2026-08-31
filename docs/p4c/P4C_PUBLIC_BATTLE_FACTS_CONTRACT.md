@@ -243,8 +243,31 @@ public input and is `INVALID`; it is not a negative battle result.
 Current ATK, DEF, position, controller, and zone may be copied only from
 the matched entity's current public observation fields. A known passcode
 does not authorize a CardScripts/database lookup for current stats. If the
-requested current ATK, DEF, or position is absent from the public entity,
-the requested feature is `UNSUPPORTED`.
+requested current ATK or DEF is absent from the public entity, the requested
+feature is `UNSUPPORTED`.
+
+The accepted observation types use enum sentinels for some fields rather than
+optional storage. They have the following exact mapping:
+
+~~~text
+ObservedCard.position == Position::Unknown
+    -> no concrete public battle position
+    -> snapshot optional position is absent
+    -> position-dependent feature is UNSUPPORTED
+
+ObservedCard.zone == SemanticZone::Unknown
+    -> no concrete public zone
+    -> zone-dependent derivation is UNSUPPORTED
+
+optional controller absent
+    -> controller-dependent feature is UNSUPPORTED
+~~~
+
+`Position::Unknown` and `SemanticZone::Unknown` are not supported concrete
+values. An invalid enum value remains `INVALID`. An absent controller is
+`UNSUPPORTED` unless another frozen structural invariant makes that
+combination contradictory, in which case it is `INVALID`. The extractor must
+not encode either Unknown sentinel as a concrete battle fact.
 
 ### RedactedSlot
 
