@@ -179,28 +179,31 @@ StrategyProfileV1 valid_profile() {
     return value;
 }
 
-PublicEnvironmentObservation public_observation(const std::uint64_t decision_index = 12) {
+PublicEnvironmentObservation public_observation(const std::uint64_t decision_index = 12,
+                                                const std::uint8_t perspective_player = 0) {
     ygo::observation::PlayerObservation source;
     source.schema_version = "ygo.player_observation.v1";
-    source.perspective_player = 0;
+    source.perspective_player = perspective_player;
     source.decision_index = decision_index;
     source.globals.life_points = {8000, 7000};
-    source.globals.player_to_act = 0;
-    source.globals.turn_player = 0;
+    source.globals.player_to_act = perspective_player;
+    source.globals.turn_player = perspective_player;
     source.globals.turn_count = 1;
     source.globals.phase = 2;
-    source.match_context.perspective_player = 0;
+    source.match_context.perspective_player = perspective_player;
     source.match_context.knowledge.own_decklist_known = true;
     source.match_context.knowledge.opponent_decklist_known = false;
     source.decision_context.kind = "yes_no";
-    source.decision_context.player = 0;
+    source.decision_context.player = perspective_player;
     return project_public_observation(source);
 }
 
-PublicFactSnapshot public_facts(const PublicEnvironmentObservation& observation) {
-    const auto extracted = extract_public_fact_snapshot(observation);
-    require(extracted.valid, "public fact extraction failed");
-    return extracted.snapshot;
+PublicFactValue self_fact(const std::uint64_t value) {
+    PublicFactValue fact;
+    fact.fact_id = "public.life_points.self";
+    fact.value_kind = PublicFactValueKind::U64;
+    fact.u64_value = value;
+    return fact;
 }
 
 EpisodeLocalStrategyStateV1 active_state(const StrategyProfileV1& profile) {
@@ -227,49 +230,53 @@ EnvironmentActionCandidate recovery_candidate() {
 void test_recovery_sources_and_pre_ready_context() {
     const auto profile = valid_profile();
     const auto state = active_state(profile);
-    const StrategyReconciliationResult evidence{state, {"public_state_contradiction"}};
-    const StrategyReconciliationResult no_evidence{state, {}};
-    const auto context = derive_pre_reconciliation_plan_context(profile, state);
-    require(context.has_value() &&
-                context->pre_active_goal_id() == std::optional<std::string>("goal.active") &&
-                context->pre_active_line_id() == std::optional<std::string>("line.active") &&
-                context->pre_ready_node_ids() == std::vector<std::string>{"node.ready"},
-            "pre-reconciliation ready-node context was incorrect");
+    auto stale_state = state;
+    stale_state.public_resource_facts = {self_fact(7000)};
 
-    const auto facts = public_facts(public_observation());
-    const auto selected = select_recovery_edge(
-        profile, *context, evidence, facts);
+    const auto selected = select_recovery_edge(profile, stale_state, public_observation(), 0);
     require(selected.status == PredicateEvaluationStatus::True &&
                 selected.recovery_edge_id == std::optional<std::string>("recovery.a") &&
                 selected.target_goal_id == std::optional<std::string>("goal.recovery"),
             "deterministic recovery tie/source selection changed");
+    const auto repeated = select_recovery_edge(profile, stale_state, public_observation(), 0);
+    require(repeated == selected, "identical recovery input was not deterministic");
+    const auto wrong_participant =
+        select_recovery_edge(profile, stale_state,
+                             public_observation(12, 1), 0);
+    require(wrong_participant.status == PredicateEvaluationStatus::Invalid,
+            "wrong participant recovery observation was accepted");
+
+    auto stale_index_state = stale_state;
+    stale_index_state.last_accepted_decision_index = 12;
+    stale_index_state.last_accepted_public_action_key = recovery_candidate().public_action_key;
+    const auto stale_index =
+        select_recovery_edge(profile, stale_index_state, public_observation(12), 0);
+    require(stale_index.status == PredicateEvaluationStatus::Invalid,
+            "equal recovery observation index was accepted");
 
     auto goal_only_state = state;
     goal_only_state.active_line_id.reset();
     goal_only_state.completed_line_node_ids.clear();
-    const auto goal_only_context =
-        derive_pre_reconciliation_plan_context(profile, goal_only_state);
-    require(goal_only_context.has_value() && goal_only_context->pre_ready_node_ids().empty(),
-            "goal-only recovery context was not derived");
-    const auto goal_selected = select_recovery_edge(
-        profile, *goal_only_context,
-        StrategyReconciliationResult{goal_only_state, {"public_state_contradiction"}}, facts);
+    goal_only_state.public_resource_facts = {self_fact(7000)};
+    const auto goal_selected =
+        select_recovery_edge(profile, goal_only_state, public_observation(), 0);
     require(goal_selected.status == PredicateEvaluationStatus::True &&
                 goal_selected.recovery_edge_id == std::optional<std::string>("recovery.goal"),
             "GOAL recovery source did not match the pre-active goal");
 
-    auto no_reason = select_recovery_edge(profile, *context, no_evidence, facts);
+    auto unchanged_state = state;
+    unchanged_state.public_resource_facts = {self_fact(8000)};
+    auto no_reason =
+        select_recovery_edge(profile, unchanged_state, public_observation(), 0);
     require(no_reason.status == PredicateEvaluationStatus::False &&
                 !no_reason.recovery_edge_id.has_value(),
             "recovery without invalidation reason was accepted");
 
     auto no_ready_state = state;
     no_ready_state.completed_line_node_ids = {"node.blocked", "node.completed", "node.ready"};
-    const auto no_ready = derive_pre_reconciliation_plan_context(profile, no_ready_state);
-    require(no_ready.has_value() && no_ready->pre_ready_node_ids().empty(),
-            "fully completed line unexpectedly exposed ready nodes");
-    const auto line_fallback = select_recovery_edge(
-        profile, *no_ready, evidence, facts);
+    no_ready_state.public_resource_facts = {self_fact(7000)};
+    const auto line_fallback =
+        select_recovery_edge(profile, no_ready_state, public_observation(), 0);
     require(line_fallback.recovery_edge_id ==
                 std::optional<std::string>("recovery.line"),
             "NODE recovery matched without a pre-ready node");
@@ -286,24 +293,16 @@ void test_recovery_sources_and_pre_ready_context() {
 
     auto completed_state = active_state(source_filter_profile);
     completed_state.completed_line_node_ids = {"node.blocked", "node.completed", "node.ready"};
-    const auto completed_source =
-        derive_pre_reconciliation_plan_context(source_filter_profile, completed_state);
-    require(completed_source.has_value(), "completed-node context derivation failed");
     const auto completed = select_recovery_edge(
-        source_filter_profile, *completed_source,
-        StrategyReconciliationResult{completed_state, {"public_state_contradiction"}}, facts);
+        source_filter_profile, completed_state, public_observation(), 0);
     require(completed.status == PredicateEvaluationStatus::False &&
                 !completed.recovery_edge_id.has_value(),
             "completed node was accepted as a ready recovery source");
 
     auto nonready_state = active_state(source_filter_profile);
     nonready_state.completed_line_node_ids = {"node.completed"};
-    const auto nonready_source =
-        derive_pre_reconciliation_plan_context(source_filter_profile, nonready_state);
-    require(nonready_source.has_value(), "non-ready-node context derivation failed");
     const auto nonready = select_recovery_edge(
-        source_filter_profile, *nonready_source,
-        StrategyReconciliationResult{nonready_state, {"public_state_contradiction"}}, facts);
+        source_filter_profile, nonready_state, public_observation(), 0);
     require(nonready.status == PredicateEvaluationStatus::False &&
                 !nonready.recovery_edge_id.has_value(),
             "non-ready node was accepted as a recovery source");
@@ -311,14 +310,10 @@ void test_recovery_sources_and_pre_ready_context() {
     auto unlisted_profile = profile;
     unlisted_profile.lines[0].recovery_edge_ids = {"recovery.line"};
     unlisted_profile.profile_id = strategy_profile_id(unlisted_profile);
-    const auto unlisted_context = derive_pre_reconciliation_plan_context(
-        unlisted_profile, active_state(unlisted_profile));
-    require(unlisted_context.has_value(), "unlisted recovery profile context failed");
-    const auto unlisted = select_recovery_edge(
-        unlisted_profile, *unlisted_context,
-        StrategyReconciliationResult{active_state(unlisted_profile),
-                                     {"public_state_contradiction"}},
-        facts);
+    auto unlisted_state = active_state(unlisted_profile);
+    unlisted_state.public_resource_facts = {self_fact(7000)};
+    const auto unlisted =
+        select_recovery_edge(unlisted_profile, unlisted_state, public_observation(), 0);
     require(unlisted.recovery_edge_id == std::optional<std::string>("recovery.line"),
             "unlisted NODE recovery edge was eligible");
 }
@@ -326,13 +321,11 @@ void test_recovery_sources_and_pre_ready_context() {
 void test_recovery_preconditions_and_progress() {
     const auto profile = valid_profile();
     const auto state = active_state(profile);
-    const auto context = derive_pre_reconciliation_plan_context(profile, state);
-    require(context.has_value(), "recovery context failed");
     const auto observation = public_observation();
-    const auto facts = public_facts(observation);
-    const auto recovery = select_recovery_edge(
-        profile, *context,
-        StrategyReconciliationResult{state, {"public_state_contradiction"}}, facts);
+    auto stale_state = state;
+    stale_state.public_resource_facts = {self_fact(7000)};
+    const auto recovery =
+        select_recovery_edge(profile, stale_state, public_observation(), 0);
     require(recovery.recovery_edge_id.has_value(), "eligible recovery edge missing");
 
     GoalLineSelection active_line;
@@ -372,10 +365,20 @@ void test_recovery_preconditions_and_progress() {
                 invalid_outcome.contributions.empty(),
             "invalid recovery proof produced a score");
 
-    const auto missing_facts = select_recovery_edge(
-        profile, *context,
-        StrategyReconciliationResult{state, {"public_state_contradiction"}},
-        PublicFactSnapshot{});
+    auto missing_fact_profile = profile;
+    const auto missing_precondition = predicate(
+        PredicateScope::Observation, "observation.fact_i32_equals",
+        {token_atom("public.last_event.amount"),
+         PredicateAtom{PredicateAtomKind::I32, {}, 0, 0, 0, false}});
+    for (auto& edge : missing_fact_profile.recovery_edges) {
+        edge.preconditions = {missing_precondition};
+    }
+    missing_fact_profile.profile_id = strategy_profile_id(missing_fact_profile);
+    auto missing_fact_state = active_state(missing_fact_profile);
+    missing_fact_state.public_resource_facts = {self_fact(7000)};
+    const auto missing_facts =
+        select_recovery_edge(missing_fact_profile, missing_fact_state,
+                             public_observation(), 0);
     require(missing_facts.status == PredicateEvaluationStatus::Unsupported,
             "missing recovery precondition fact was not UNSUPPORTED");
 }

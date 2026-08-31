@@ -308,6 +308,43 @@ void test_profile_value_rejections() {
             "wrong opponent-deck binding was accepted");
 }
 
+void test_predicate_field_scope_rejections() {
+    const auto base = valid_profile();
+    const auto candidate_predicate =
+        base.candidate_intents.front().public_predicates.front();
+
+    auto goal_preconditions = base;
+    goal_preconditions.goals[0].preconditions = {candidate_predicate};
+    require_throw([&] { (void)canonical_strategy_profile_content_bytes(goal_preconditions); },
+                  "candidate predicate was accepted in goal preconditions");
+
+    auto goal_completion = base;
+    goal_completion.goals[0].completion_predicates = {candidate_predicate};
+    require_throw([&] { (void)canonical_strategy_profile_content_bytes(goal_completion); },
+                  "candidate predicate was accepted in goal completion");
+
+    auto line_applicability = base;
+    line_applicability.lines[0].applicability_predicates = {candidate_predicate};
+    require_throw([&] { (void)canonical_strategy_profile_content_bytes(line_applicability); },
+                  "candidate predicate was accepted in line applicability");
+
+    auto node_completion = base;
+    node_completion.lines[0].nodes[0].completion_predicates = {candidate_predicate};
+    require_throw([&] { (void)canonical_strategy_profile_content_bytes(node_completion); },
+                  "candidate predicate was accepted in node completion");
+
+    auto recovery_preconditions = base;
+    recovery_preconditions.recovery_edges[0].preconditions = {candidate_predicate};
+    require_throw(
+        [&] { (void)canonical_strategy_profile_content_bytes(recovery_preconditions); },
+        "candidate predicate was accepted in recovery preconditions");
+
+    auto interaction_trigger = base;
+    interaction_trigger.interactions[0].trigger_predicates = {candidate_predicate};
+    require_throw([&] { (void)canonical_strategy_profile_content_bytes(interaction_trigger); },
+                  "candidate predicate was accepted in interaction triggers");
+}
+
 void test_binding_rejections() {
     const auto profile = valid_profile();
     auto binding = valid_binding(profile);
@@ -382,6 +419,7 @@ void test_decode_rejections() {
 int main() {
     try {
         test_profile_value_rejections();
+        test_predicate_field_scope_rejections();
         test_binding_rejections();
         test_decode_rejections();
         std::cout << "strategy_profile_negative_test: PASS\n";

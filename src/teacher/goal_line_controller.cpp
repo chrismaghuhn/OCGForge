@@ -305,28 +305,6 @@ void sort_evidence(PublicEvaluatorOutcome& outcome) {
 
 }  // namespace
 
-std::optional<PreReconciliationPlanContext> derive_pre_reconciliation_plan_context(
-    const StrategyProfileV1& profile,
-    const EpisodeLocalStrategyStateV1& state) noexcept {
-    try {
-        if (!validate_strategy_profile(profile) || !valid_state_for_profile(state, profile)) {
-            return std::nullopt;
-        }
-        std::vector<std::string> ready;
-        if (state.active_line_id.has_value()) {
-            const auto* line = find_line(profile, *state.active_line_id);
-            if (line == nullptr) {
-                return std::nullopt;
-            }
-            ready = ready_nodes(*line, state.completed_line_node_ids);
-        }
-        return PreReconciliationPlanContext(state.active_goal_id, state.active_line_id,
-                                            std::move(ready));
-    } catch (...) {
-        return std::nullopt;
-    }
-}
-
 PredicateEvaluationStatus evaluate_public_predicate_conjunction(
     const std::vector<PredicateRef>& predicates,
     const PublicFactSnapshot& public_facts,

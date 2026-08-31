@@ -81,6 +81,11 @@ PredicateRef candidate_target_role(const std::string& role_id) {
                      {token_atom(role_id)});
 }
 
+PredicateRef profile_goal_exists(const std::string& goal_id) {
+    return predicate(PredicateScope::ProfileStatic, "profile.goal_exists",
+                     {token_atom(goal_id)});
+}
+
 PredicateRef observation_fact_missing() {
     return predicate(PredicateScope::Observation, "observation.fact_i32_equals",
                      {token_atom("public.last_event.amount"),
@@ -109,7 +114,8 @@ StrategyProfileV1 valid_profile() {
     };
 
     value.candidate_intents = {
-        {"intent.advance", {candidate_action("yes_no")}},
+        {"intent.advance", {public_self_at_least(), candidate_action("yes_no"),
+                              profile_goal_exists("goal.alpha")}},
         {"intent.recover", {candidate_choice_present()}},
         {"intent.starter", {candidate_source_role("role.starter")}},
     };
@@ -472,8 +478,20 @@ void test_predicate_registry_and_runtime_statuses() {
     require(evaluate_candidate_predicate(
                 predicate(PredicateScope::Candidate, "candidate.choice_value_equals",
                           {u64_atom(1)}),
-                candidate(), observation, 0, profile) == PredicateEvaluationStatus::Unsupported,
-            "missing candidate choice was not UNSUPPORTED");
+                candidate(), observation, 0, profile) == PredicateEvaluationStatus::False,
+            "missing candidate choice was not FALSE");
+    require(evaluate_candidate_predicate(
+                predicate(PredicateScope::Candidate, "candidate.phase_equals", {u64_atom(2)}),
+                candidate(), observation, 0, profile) == PredicateEvaluationStatus::False,
+            "missing candidate phase was not FALSE");
+    require(evaluate_candidate_predicate(
+                predicate(PredicateScope::Candidate, "candidate.position_equals", {u64_atom(1)}),
+                candidate(), observation, 0, profile) == PredicateEvaluationStatus::False,
+            "missing candidate position was not FALSE");
+    require(evaluate_candidate_predicate(
+                predicate(PredicateScope::Candidate, "candidate.source_index_equals", {u64_atom(0)}),
+                candidate(), observation, 0, profile) == PredicateEvaluationStatus::False,
+            "missing candidate source index was not FALSE");
 
     const auto described = described_candidate();
     require(evaluate_candidate_predicate(

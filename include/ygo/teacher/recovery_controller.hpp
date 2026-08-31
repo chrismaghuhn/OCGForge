@@ -26,10 +26,8 @@ struct RecoverySelection final {
 
 RecoverySelection select_recovery_edge(
     const StrategyProfileV1& profile,
-    const PreReconciliationPlanContext& context,
-    // This value is the derived result returned by Task 6 reconciliation;
-    // raw caller-authored reason vectors are intentionally not accepted.
-    const StrategyReconciliationResult& reconciliation_evidence,
-    const PublicFactSnapshot& public_facts) noexcept;
+    const EpisodeLocalStrategyStateV1& pre_reconciliation_state,
+    const environment::PublicEnvironmentObservation& current_observation,
+    std::uint8_t owning_participant) noexcept;
 
 }  // namespace ygo::teacher

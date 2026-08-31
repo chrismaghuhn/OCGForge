@@ -3,7 +3,6 @@
 #include <cstdint>
 #include <optional>
 #include <string>
-#include <utility>
 #include <vector>
 
 #include "ygo/environment/public_decision.hpp"
@@ -17,44 +16,6 @@
 namespace ygo::teacher {
 
 struct RecoverySelection;
-
-struct PreReconciliationPlanContext final {
-public:
-    const std::optional<std::string>& pre_active_goal_id() const noexcept {
-        return pre_active_goal_id_;
-    }
-    const std::optional<std::string>& pre_active_line_id() const noexcept {
-        return pre_active_line_id_;
-    }
-    const std::vector<std::string>& pre_ready_node_ids() const noexcept {
-        return pre_ready_node_ids_;
-    }
-
-    bool operator==(const PreReconciliationPlanContext& other) const noexcept {
-        return pre_active_goal_id_ == other.pre_active_goal_id_ &&
-               pre_active_line_id_ == other.pre_active_line_id_ &&
-               pre_ready_node_ids_ == other.pre_ready_node_ids_;
-    }
-    bool operator!=(const PreReconciliationPlanContext& other) const noexcept {
-        return !(*this == other);
-    }
-
-private:
-    PreReconciliationPlanContext(std::optional<std::string> active_goal_id,
-                                 std::optional<std::string> active_line_id,
-                                 std::vector<std::string> ready_node_ids)
-        : pre_active_goal_id_(std::move(active_goal_id)),
-          pre_active_line_id_(std::move(active_line_id)),
-          pre_ready_node_ids_(std::move(ready_node_ids)) {}
-
-    std::optional<std::string> pre_active_goal_id_;
-    std::optional<std::string> pre_active_line_id_;
-    std::vector<std::string> pre_ready_node_ids_;
-
-    friend std::optional<PreReconciliationPlanContext>
-    derive_pre_reconciliation_plan_context(const StrategyProfileV1&,
-                                           const EpisodeLocalStrategyStateV1&) noexcept;
-};
 
 struct GoalLineSelection final {
     PredicateEvaluationStatus status = PredicateEvaluationStatus::False;
@@ -70,10 +31,6 @@ struct GoalLineSelection final {
         return !(*this == other);
     }
 };
-
-std::optional<PreReconciliationPlanContext> derive_pre_reconciliation_plan_context(
-    const StrategyProfileV1& profile,
-    const EpisodeLocalStrategyStateV1& state) noexcept;
 
 PredicateEvaluationStatus evaluate_public_predicate_conjunction(
     const std::vector<PredicateRef>& predicates,
@@ -98,9 +55,6 @@ PredicateEvaluationStatus match_candidate_intent_set(
     std::vector<std::string>& matched_ids) noexcept;
 
 PredicateEvaluationStatus evaluate_node_completion(
-    // The accepted transition and subsequent observation are intentionally
-    // required here; a bare boolean or caller-supplied fact snapshot cannot
-    // establish the same-participant later-frame contract.
     const LineNode& node,
     const environment::AcceptedActionTransition& accepted_transition,
     const environment::PublicEnvironmentObservation& subsequent_observation,

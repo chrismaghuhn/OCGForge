@@ -661,7 +661,7 @@ PredicateEvaluationStatus evaluate_candidate_predicate(
         }
         if (id == "candidate.choice_value_equals") {
             return !candidate.choice.has_value()
-                       ? PredicateEvaluationStatus::Unsupported
+                       ? PredicateEvaluationStatus::False
                        : (candidate.choice->value == value.arguments[0].u64
                               ? PredicateEvaluationStatus::True
                               : PredicateEvaluationStatus::False);
@@ -682,21 +682,21 @@ PredicateEvaluationStatus evaluate_candidate_predicate(
         }
         if (id == "candidate.phase_equals") {
             return !candidate.phase.has_value()
-                       ? PredicateEvaluationStatus::Unsupported
+                       ? PredicateEvaluationStatus::False
                        : (*candidate.phase == value.arguments[0].u64
                               ? PredicateEvaluationStatus::True
                               : PredicateEvaluationStatus::False);
         }
         if (id == "candidate.position_equals") {
             return !candidate.position.has_value()
-                       ? PredicateEvaluationStatus::Unsupported
+                       ? PredicateEvaluationStatus::False
                        : (*candidate.position == value.arguments[0].u64
                               ? PredicateEvaluationStatus::True
                               : PredicateEvaluationStatus::False);
         }
         if (id == "candidate.source_index_equals") {
             return !candidate.source_index.has_value()
-                       ? PredicateEvaluationStatus::Unsupported
+                       ? PredicateEvaluationStatus::False
                        : (*candidate.source_index == value.arguments[0].u64
                               ? PredicateEvaluationStatus::True
                               : PredicateEvaluationStatus::False);

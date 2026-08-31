@@ -168,13 +168,20 @@ void write_predicate_ref(trajectory::ByteWriter& writer, const PredicateRef& val
 }
 
 void require_predicate_vector(const std::vector<PredicateRef>& values, const char* field,
-                              const StrategyProfileV1* profile = nullptr) {
+                              const StrategyProfileV1* profile = nullptr,
+                              const bool allow_candidate_scope = false) {
     require_count(values.size(), field);
     std::vector<std::vector<std::uint8_t>> encoded;
     encoded.reserve(values.size());
     for (const auto& value : values) {
         encoded.push_back(canonical_predicate_ref_bytes(value));
         if (profile != nullptr) {
+            const bool scope_allowed = value.scope == PredicateScope::Observation ||
+                                       value.scope == PredicateScope::ProfileStatic ||
+                                       (allow_candidate_scope &&
+                                        value.scope == PredicateScope::Candidate);
+            require_condition(scope_allowed,
+                              "predicate scope is incompatible with its profile field");
             std::string diagnostic;
             require_condition(
                 TeacherPredicateRegistryV1::canonical().validate_profile_ref(value, *profile,
@@ -325,7 +332,8 @@ void validate_profile_content(const StrategyProfileV1& value) {
         "candidate intents");
     for (const auto& intent : value.candidate_intents) {
         require_token(intent.intent_id, "candidate intent ID");
-        require_predicate_vector(intent.public_predicates, "candidate intent predicates", &value);
+        require_predicate_vector(intent.public_predicates, "candidate intent predicates", &value,
+                                 true);
     }
 
     require_count(value.goals.size(), "goals");
