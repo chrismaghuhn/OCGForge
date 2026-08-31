@@ -19,6 +19,7 @@
 #include "ygo/core/rules_bundle.hpp"
 #include "ygo/environment/episode_driver.hpp"
 #include "episodic_environment_test_access.hpp"
+#include "public_action_identity_internal.hpp"
 #include "ygo/core/seed_bundle.hpp"
 #include "ygo/environment/identity_contract.hpp"
 #include "ygo/m3/canonical_rules.hpp"

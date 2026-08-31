@@ -172,6 +172,7 @@ add_library(ygo_m4 STATIC
     src/environment/identity_contract.cpp
     src/environment/candidate_domain_evidence.cpp
     src/environment/public_action_identity.cpp
+    src/environment/public_safe_state.cpp
     src/environment/public_environment_observation.cpp
     src/environment/public_environment_observation_decoder.cpp
     src/simulation/canonical_simulation.cpp
@@ -204,6 +205,21 @@ else()
     target_compile_options(ygo_trajectory PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
+add_library(ygo_policy STATIC
+    src/policy/rng.cpp
+    src/policy/production_provenance.cpp
+    src/policy/production.cpp
+    src/policy/random_legal.cpp
+    src/policy/runner.cpp
+)
+target_include_directories(ygo_policy PUBLIC "${CMAKE_SOURCE_DIR}/include")
+target_link_libraries(ygo_policy PUBLIC ygo_trajectory)
+if(MSVC)
+    target_compile_options(ygo_policy PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(ygo_policy PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
 add_executable(trajectory_codec_test tests/trajectory/codec_test.cpp)
 target_link_libraries(trajectory_codec_test PRIVATE ygo_trajectory)
 add_test(NAME trajectory_codec_test COMMAND trajectory_codec_test)
@@ -225,6 +241,9 @@ target_include_directories(trajectory_replay_admission_test PRIVATE
                            "${CMAKE_SOURCE_DIR}/src/environment")
 target_link_libraries(trajectory_replay_admission_test PRIVATE ygo_trajectory)
 add_test(NAME trajectory_replay_admission_test COMMAND trajectory_replay_admission_test)
+set_tests_properties(trajectory_replay_admission_test PROPERTIES
+    LABELS "P4A_HEAVY_REPLAY"
+)
 
 add_executable(trajectory_receipt_test tests/trajectory/receipt_test.cpp)
 target_link_libraries(trajectory_receipt_test PRIVATE ygo_trajectory)
@@ -408,8 +427,38 @@ target_include_directories(episodic_reset_after_failure_test PRIVATE
 add_test(NAME episodic_reset_after_failure_test COMMAND episodic_reset_after_failure_test)
 
 add_executable(public_action_identity_test tests/episodic/public_action_identity_test.cpp)
+target_include_directories(public_action_identity_test PRIVATE
+                           "${CMAKE_SOURCE_DIR}/src/environment")
 target_link_libraries(public_action_identity_test PRIVATE ygo_m4)
 add_test(NAME public_action_identity_test COMMAND public_action_identity_test)
+
+add_executable(public_safe_state_test tests/environment/public_safe_state_test.cpp)
+target_link_libraries(public_safe_state_test PRIVATE ygo_m4)
+target_compile_definitions(public_safe_state_test PRIVATE
+    YGO_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+)
+add_test(NAME public_safe_state_test COMMAND public_safe_state_test)
+
+add_executable(policy_boundary_compile_test tests/policy/policy_boundary_compile_test.cpp)
+target_include_directories(policy_boundary_compile_test PRIVATE
+                           "${CMAKE_SOURCE_DIR}/include")
+add_test(NAME policy_boundary_compile_test COMMAND policy_boundary_compile_test)
+
+add_executable(policy_rng_test tests/policy/rng_test.cpp)
+target_link_libraries(policy_rng_test PRIVATE ygo_policy)
+add_test(NAME policy_rng_test COMMAND policy_rng_test)
+
+add_executable(random_legal_test tests/policy/random_legal_test.cpp)
+target_link_libraries(random_legal_test PRIVATE ygo_policy)
+add_test(NAME random_legal_test COMMAND random_legal_test)
+
+add_executable(policy_random_legal_probe tools/policy_random_legal_probe/main.cpp)
+target_link_libraries(policy_random_legal_probe PRIVATE ygo_policy)
+
+add_executable(policy_runner_integration_test tests/policy/policy_runner_integration_test.cpp)
+target_include_directories(policy_runner_integration_test PRIVATE "${CMAKE_SOURCE_DIR}/src")
+target_link_libraries(policy_runner_integration_test PRIVATE ygo_policy)
+add_test(NAME policy_runner_integration_test COMMAND policy_runner_integration_test)
 
 if(DEFINED ENV{OCGFORGE_PHASE1_RAW_ROOT} AND
    DEFINED ENV{OCGFORGE_PHASE1_POST_RAW_ROOT} AND
@@ -809,6 +858,17 @@ add_test(NAME m4_failure_isolation_test
 )
 set_tests_properties(m4_failure_isolation_test PROPERTIES
     WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    LABELS "M4_HEAVY_LIFECYCLE"
+)
+
+add_test(NAME m4_failure_isolation_fast_test
+    COMMAND "${Python3_EXECUTABLE}" -m unittest
+            tests.m4.test_failure_isolation.FailureIsolationTests.test_result_then_exit_is_not_published_as_primary_evidence
+            -v
+)
+set_tests_properties(m4_failure_isolation_fast_test PROPERTIES
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    LABELS "M4_FAST"
 )
 
 add_test(NAME m4_worker_integration_test

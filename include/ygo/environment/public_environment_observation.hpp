@@ -6,7 +6,11 @@
 #include <string_view>
 #include <vector>
 
-#include "ygo/observation/player_observation.hpp"
+#include "ygo/observation/observed_zone.hpp"
+
+namespace ygo::observation {
+struct PlayerObservation;
+}
 
 namespace ygo::environment {
 
@@ -47,6 +51,8 @@ private:
         const std::vector<std::uint8_t>& bytes,
         PublicEnvironmentObservationInput& output) noexcept;
 };
+
+using PublicEnvironmentObservation = PublicEnvironmentObservationInput;
 
 // Serializes exactly the perspective-safe state owned by PlayerObservation.
 // Internal observation metadata and attached decision identity are excluded.
