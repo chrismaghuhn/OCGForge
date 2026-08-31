@@ -1,6 +1,7 @@
 #include "ygo/teacher/strategy_state.hpp"
 #include "ygo/teacher/teacher_decision.hpp"
 
+#include <algorithm>
 #include <cstddef>
 #include <exception>
 #include <string_view>
@@ -74,10 +75,70 @@ bool valid_reason_vector(const std::vector<std::string>& values) noexcept {
     return true;
 }
 
+template <typename Value>
+bool valid_plan_references(const Value& value,
+                           const StrategyProfileV1& profile) noexcept {
+    if (value.strategy_profile_id != profile.profile_id) {
+        return false;
+    }
+
+    const auto goal_exists = [&profile](const std::string& id) noexcept {
+        return std::any_of(profile.goals.begin(), profile.goals.end(),
+                           [&id](const auto& goal) { return goal.goal_id == id; });
+    };
+    for (const auto& goal_id : value.achieved_goal_ids) {
+        if (!goal_exists(goal_id)) {
+            return false;
+        }
+    }
+
+    const LineDefinition* active_line = nullptr;
+    if (value.active_goal_id.has_value() && !goal_exists(*value.active_goal_id)) {
+        return false;
+    }
+    if (value.active_line_id.has_value()) {
+        const auto line = std::find_if(
+            profile.lines.begin(), profile.lines.end(), [&value](const auto& candidate) {
+                return candidate.line_id == *value.active_line_id;
+            });
+        if (line == profile.lines.end() || !value.active_goal_id.has_value() ||
+            line->goal_id != *value.active_goal_id) {
+            return false;
+        }
+        active_line = &*line;
+    } else if (!value.completed_line_node_ids.empty()) {
+        return false;
+    }
+
+    if (active_line != nullptr) {
+        for (const auto& node_id : value.completed_line_node_ids) {
+            const auto node = std::find_if(
+                active_line->nodes.begin(), active_line->nodes.end(),
+                [&node_id](const auto& candidate) { return candidate.node_id == node_id; });
+            if (node == active_line->nodes.end()) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+bool valid_state_for_profile(const EpisodeLocalStrategyStateV1& state,
+                             const StrategyProfileV1& profile) noexcept {
+    return validate_strategy_state(state) && valid_plan_references(state, profile);
+}
+
+bool valid_delta_for_profile(const TeacherStateDeltaV1& delta,
+                             const StrategyProfileV1& profile) noexcept {
+    return validate_teacher_state_delta(delta) && valid_plan_references(delta, profile);
+}
+
 }  // namespace
 
 bool validate_strategy_state(const EpisodeLocalStrategyStateV1& state) noexcept {
     try {
+        const bool has_index = state.last_accepted_decision_index.has_value();
+        const bool has_key = state.last_accepted_public_action_key.has_value();
         return valid_profile_id(state.strategy_profile_id) &&
                valid_optional_id(state.active_goal_id) &&
                valid_optional_id(state.active_line_id) &&
@@ -86,7 +147,8 @@ bool validate_strategy_state(const EpisodeLocalStrategyStateV1& state) noexcept 
                valid_fact_vector(state.public_resource_facts) &&
                valid_fact_vector(state.public_restriction_facts) &&
                valid_fact_vector(state.public_threat_facts) &&
-               (!state.last_accepted_public_action_key.has_value() ||
+               has_index == has_key &&
+               (!has_key ||
                 environment::is_public_action_key(*state.last_accepted_public_action_key));
     } catch (...) {
         return false;
@@ -95,8 +157,11 @@ bool validate_strategy_state(const EpisodeLocalStrategyStateV1& state) noexcept 
 
 bool validate_teacher_state_delta(const TeacherStateDeltaV1& delta) noexcept {
     try {
+        const bool has_index = delta.base_last_accepted_decision_index.has_value();
+        const bool has_key = delta.base_last_accepted_public_action_key.has_value();
         return valid_profile_id(delta.strategy_profile_id) &&
-               (!delta.base_last_accepted_public_action_key.has_value() ||
+               has_index == has_key &&
+               (!has_key ||
                 environment::is_public_action_key(*delta.base_last_accepted_public_action_key)) &&
                environment::is_public_action_key(delta.proposed_for_public_action_key) &&
                valid_optional_id(delta.active_goal_id) && valid_optional_id(delta.active_line_id) &&
@@ -120,7 +185,7 @@ std::optional<EpisodeLocalStrategyStateV1> reset_strategy_state(
         }
         EpisodeLocalStrategyStateV1 state;
         state.strategy_profile_id = validated_profile.profile_id;
-        if (!validate_strategy_state(state)) {
+        if (!valid_state_for_profile(state, validated_profile)) {
             return std::nullopt;
         }
         return state;
@@ -137,8 +202,8 @@ std::optional<TeacherStateDeltaV1> propose_teacher_state_delta(
         if (!validate_strategy_state(current_state) ||
             !validate_strategy_profile(validated_profile) ||
             !validate_teacher_state_delta(requested_replacement) ||
-            current_state.strategy_profile_id != validated_profile.profile_id ||
-            requested_replacement.strategy_profile_id != validated_profile.profile_id ||
+            !valid_plan_references(current_state, validated_profile) ||
+            !valid_delta_for_profile(requested_replacement, validated_profile) ||
             requested_replacement.base_last_accepted_decision_index !=
                 current_state.last_accepted_decision_index ||
             requested_replacement.base_last_accepted_public_action_key !=
@@ -151,29 +216,33 @@ std::optional<TeacherStateDeltaV1> propose_teacher_state_delta(
         result.base_last_accepted_decision_index = current_state.last_accepted_decision_index;
         result.base_last_accepted_public_action_key =
             current_state.last_accepted_public_action_key;
-        return validate_teacher_state_delta(result) ? std::optional<TeacherStateDeltaV1>(result)
-                                                    : std::nullopt;
+        return valid_delta_for_profile(result, validated_profile)
+                   ? std::optional<TeacherStateDeltaV1>(result)
+                   : std::nullopt;
     } catch (...) {
         return std::nullopt;
     }
 }
 
-bool commit_teacher_state_delta(
+std::optional<StrategyReconciliationResult> commit_teacher_state_delta_with_evidence(
     EpisodeLocalStrategyStateV1& current_state,
     const TeacherRankingResult& ranking_result,
+    const StrategyProfileV1& validated_profile,
     const environment::AcceptedActionTransition& accepted_transition,
     const environment::PublicEnvironmentObservation& next_observation) noexcept {
     try {
-        if (!validate_strategy_state(current_state) ||
+        if (!valid_state_for_profile(current_state, validated_profile) ||
+            !validate_strategy_profile(validated_profile) ||
+            !validate_teacher_ranking_result(ranking_result) ||
             ranking_result.status != TeacherRankingStatus::Selected ||
             !ranking_result.selected_public_action_key.has_value() ||
             !ranking_result.proposed_state_delta.has_value() ||
-            !validate_teacher_state_delta(*ranking_result.proposed_state_delta) ||
             !environment::is_public_action_key(
                 *ranking_result.selected_public_action_key) ||
             !environment::is_public_action_key(accepted_transition.selected_public_action_key) ||
             ranking_result.proposed_state_delta->strategy_profile_id !=
                 current_state.strategy_profile_id ||
+            !valid_delta_for_profile(*ranking_result.proposed_state_delta, validated_profile) ||
             ranking_result.proposed_state_delta->base_last_accepted_decision_index !=
                 current_state.last_accepted_decision_index ||
             ranking_result.proposed_state_delta->base_last_accepted_public_action_key !=
@@ -181,8 +250,12 @@ bool commit_teacher_state_delta(
             ranking_result.proposed_state_delta->proposed_for_public_action_key !=
                 *ranking_result.selected_public_action_key ||
             accepted_transition.selected_public_action_key !=
-                *ranking_result.selected_public_action_key) {
-            return false;
+                *ranking_result.selected_public_action_key ||
+            (current_state.last_accepted_decision_index.has_value() &&
+             accepted_transition.decision_index <=
+                 *current_state.last_accepted_decision_index) ||
+            next_observation.decision_index <= accepted_transition.decision_index) {
+            return std::nullopt;
         }
 
         const auto& delta = *ranking_result.proposed_state_delta;
@@ -198,19 +271,32 @@ bool commit_teacher_state_delta(
         next_state.last_accepted_public_action_key =
             accepted_transition.selected_public_action_key;
 
-        const auto reconciled = reconcile_strategy_state(next_state, next_observation);
+        auto reconciled = reconcile_strategy_state_with_evidence(next_state, next_observation);
         if (!reconciled.has_value()) {
-            return false;
+            return std::nullopt;
         }
-        next_state = *reconciled;
-        if (!validate_strategy_state(next_state)) {
-            return false;
+        if (!valid_state_for_profile(reconciled->state, validated_profile) ||
+            !valid_reason_vector(reconciled->invalidation_reason_ids)) {
+            return std::nullopt;
         }
-        current_state = std::move(next_state);
-        return true;
+        auto result = *reconciled;
+        current_state = std::move(reconciled->state);
+        return result;
     } catch (...) {
-        return false;
+        return std::nullopt;
     }
+}
+
+bool commit_teacher_state_delta(
+    EpisodeLocalStrategyStateV1& current_state,
+    const TeacherRankingResult& ranking_result,
+    const StrategyProfileV1& validated_profile,
+    const environment::AcceptedActionTransition& accepted_transition,
+    const environment::PublicEnvironmentObservation& next_observation) noexcept {
+    return commit_teacher_state_delta_with_evidence(
+               current_state, ranking_result, validated_profile, accepted_transition,
+               next_observation)
+        .has_value();
 }
 
 bool observe_step_rejected(EpisodeLocalStrategyStateV1& state,

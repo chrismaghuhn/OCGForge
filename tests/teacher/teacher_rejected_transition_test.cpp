@@ -19,6 +19,7 @@ using ygo::environment::PublicChoice;
 using ygo::environment::PublicChoiceKind;
 using ygo::environment::PublicEnvironmentObservation;
 using ygo::environment::StepRejected;
+using ygo::teacher::CandidateEvaluation;
 using ygo::teacher::EpisodeLocalStrategyStateV1;
 using ygo::teacher::PublicFactValue;
 using ygo::teacher::PublicFactValueKind;
@@ -48,6 +49,18 @@ StrategyProfileV1 valid_profile() {
     value.opponent_deck_id = "ocgforge.salamangreat.ml_v1";
     value.opponent_deck_sha256 =
         "6041abe0a59463d0715ae1da9100090ad487de02a02794e8ec0686d4c0513188";
+    ygo::teacher::GoalDefinition secondary_goal;
+    secondary_goal.goal_id = "goal.other";
+    ygo::teacher::GoalDefinition goal;
+    goal.goal_id = "goal.test";
+    ygo::teacher::LineDefinition line;
+    line.line_id = "line.test";
+    line.goal_id = goal.goal_id;
+    ygo::teacher::LineNode node;
+    node.node_id = "node.test";
+    line.nodes = {node};
+    value.goals = {secondary_goal, goal};
+    value.lines = {line};
     value.profile_id = ygo::teacher::strategy_profile_id(value);
     return value;
 }
@@ -95,10 +108,10 @@ TeacherStateDeltaV1 valid_delta(const EpisodeLocalStrategyStateV1& state,
     delta.base_last_accepted_decision_index = state.last_accepted_decision_index;
     delta.base_last_accepted_public_action_key = state.last_accepted_public_action_key;
     delta.proposed_for_public_action_key = key;
-    delta.active_goal_id = "goal.rejected";
-    delta.active_line_id = "line.rejected";
-    delta.completed_line_node_ids = {"node.rejected"};
-    delta.achieved_goal_ids = {"goal.done"};
+    delta.active_goal_id = "goal.test";
+    delta.active_line_id = "line.test";
+    delta.completed_line_node_ids = {"node.test"};
+    delta.achieved_goal_ids = {"goal.test"};
     delta.public_resource_facts = {valid_fact()};
     return delta;
 }
@@ -107,6 +120,10 @@ TeacherRankingResult ranking_result(const TeacherStateDeltaV1& delta,
                                     const std::string& selected_key) {
     TeacherRankingResult result;
     result.status = ygo::teacher::TeacherRankingStatus::Selected;
+    CandidateEvaluation evaluation;
+    evaluation.public_action_key = selected_key;
+    evaluation.status = ygo::teacher::CandidateEvaluationStatus::Supported;
+    result.evaluations = {evaluation};
     result.selected_public_action_key = selected_key;
     result.proposed_state_delta = delta;
     return result;
@@ -141,7 +158,7 @@ void test_rejected_and_malformed_operations_do_not_mutate() {
     require(!ygo::teacher::validate_teacher_state_delta(malformed),
             "malformed delta unexpectedly validated");
     require(!ygo::teacher::commit_teacher_state_delta(
-                state, ranking_result(malformed, key), accepted_transition(key),
+                state, ranking_result(malformed, key), profile, accepted_transition(key),
                 public_observation()),
             "malformed delta unexpectedly committed");
     require(state == before, "malformed delta partially mutated strategy state");

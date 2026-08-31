@@ -1,5 +1,6 @@
 #include "ygo/teacher/strategy_state.hpp"
 
+#include <cstddef>
 #include <utility>
 
 namespace ygo::teacher {
@@ -26,8 +27,19 @@ bool retain_current_facts(std::vector<PublicFactValue>& facts,
     return true;
 }
 
+bool valid_reason_vector(const std::vector<std::string>& values) noexcept {
+    for (std::size_t index = 0; index < values.size(); ++index) {
+        if (!is_registered_invalidation_reason(values[index]) ||
+            (index > 0 && !(values[index - 1] < values[index]))) {
+            return false;
+        }
+    }
+    return true;
+}
+
 bool reconcile_in_place(EpisodeLocalStrategyStateV1& state,
-                        const environment::PublicEnvironmentObservation& observation) {
+                        const environment::PublicEnvironmentObservation& observation,
+                        std::vector<std::string>& invalidation_reason_ids) {
     const auto extracted = extract_public_fact_snapshot(observation);
     if (!extracted.valid) {
         return false;
@@ -42,13 +54,14 @@ bool reconcile_in_place(EpisodeLocalStrategyStateV1& state,
         state.active_line_id.reset();
         state.completed_line_node_ids.clear();
         state.achieved_goal_ids.clear();
+        invalidation_reason_ids.emplace_back("public_state_contradiction");
     }
-    return true;
+    return valid_reason_vector(invalidation_reason_ids);
 }
 
 }  // namespace
 
-std::optional<EpisodeLocalStrategyStateV1> reconcile_strategy_state(
+std::optional<StrategyReconciliationResult> reconcile_strategy_state_with_evidence(
     const EpisodeLocalStrategyStateV1& state,
     const environment::PublicEnvironmentObservation& next_observation) noexcept {
     try {
@@ -56,14 +69,26 @@ std::optional<EpisodeLocalStrategyStateV1> reconcile_strategy_state(
             return std::nullopt;
         }
         auto next_state = state;
-        if (!reconcile_in_place(next_state, next_observation) ||
+        std::vector<std::string> invalidation_reason_ids;
+        if (!reconcile_in_place(next_state, next_observation, invalidation_reason_ids) ||
             !validate_strategy_state(next_state)) {
             return std::nullopt;
         }
-        return next_state;
+        return StrategyReconciliationResult{std::move(next_state),
+                                             std::move(invalidation_reason_ids)};
     } catch (...) {
         return std::nullopt;
     }
+}
+
+std::optional<EpisodeLocalStrategyStateV1> reconcile_strategy_state(
+    const EpisodeLocalStrategyStateV1& state,
+    const environment::PublicEnvironmentObservation& next_observation) noexcept {
+    const auto result = reconcile_strategy_state_with_evidence(state, next_observation);
+    if (!result.has_value()) {
+        return std::nullopt;
+    }
+    return result->state;
 }
 
 }  // namespace ygo::teacher

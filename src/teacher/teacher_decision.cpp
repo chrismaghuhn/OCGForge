@@ -101,6 +101,11 @@ bool validate_teacher_ranking_result(const TeacherRankingResult& value,
             set_diagnostic(diagnostic, "teacher fallback level is unknown");
             return false;
         }
+        if (value.proposed_state_delta.has_value() &&
+            !validate_teacher_state_delta(*value.proposed_state_delta)) {
+            set_diagnostic(diagnostic, "teacher state delta is invalid");
+            return false;
+        }
 
         for (std::size_t index = 0; index < value.evaluations.size(); ++index) {
             if (!validate_candidate_evaluation(value.evaluations[index], diagnostic)) {
@@ -119,7 +124,8 @@ bool validate_teacher_ranking_result(const TeacherRankingResult& value,
         if (value.status != TeacherRankingStatus::Selected) {
             if (value.selected_public_action_key.has_value() ||
                 value.selected_score_vector.has_value() ||
-                value.fallback_level.has_value()) {
+                value.fallback_level.has_value() ||
+                value.proposed_state_delta.has_value()) {
                 set_diagnostic(diagnostic,
                                "non-selected teacher result carries an actionable result");
                 return false;
@@ -132,6 +138,13 @@ bool validate_teacher_ranking_result(const TeacherRankingResult& value,
                 *value.selected_public_action_key)) {
             set_diagnostic(diagnostic,
                            "selected teacher result lacks a valid public action key");
+            return false;
+        }
+        if (value.proposed_state_delta.has_value() &&
+            value.proposed_state_delta->proposed_for_public_action_key !=
+                *value.selected_public_action_key) {
+            set_diagnostic(diagnostic,
+                           "teacher state delta does not match selected public action key");
             return false;
         }
 

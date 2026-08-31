@@ -78,6 +78,21 @@ struct TeacherStateDeltaV1 final {
     }
 };
 
+struct StrategyReconciliationResult final {
+    // Derived public reconciliation evidence; invalidation reasons are not
+    // persisted in EpisodeLocalStrategyStateV1.
+    EpisodeLocalStrategyStateV1 state;
+    std::vector<std::string> invalidation_reason_ids;
+
+    bool operator==(const StrategyReconciliationResult& other) const noexcept {
+        return state == other.state &&
+               invalidation_reason_ids == other.invalidation_reason_ids;
+    }
+    bool operator!=(const StrategyReconciliationResult& other) const noexcept {
+        return !(*this == other);
+    }
+};
+
 bool validate_strategy_state(const EpisodeLocalStrategyStateV1& state) noexcept;
 bool validate_teacher_state_delta(const TeacherStateDeltaV1& delta) noexcept;
 
@@ -96,9 +111,21 @@ std::optional<EpisodeLocalStrategyStateV1> reconcile_strategy_state(
     const EpisodeLocalStrategyStateV1& state,
     const environment::PublicEnvironmentObservation& next_observation) noexcept;
 
+std::optional<StrategyReconciliationResult> reconcile_strategy_state_with_evidence(
+    const EpisodeLocalStrategyStateV1& state,
+    const environment::PublicEnvironmentObservation& next_observation) noexcept;
+
 bool commit_teacher_state_delta(
     EpisodeLocalStrategyStateV1& current_state,
     const TeacherRankingResult& ranking_result,
+    const StrategyProfileV1& validated_profile,
+    const environment::AcceptedActionTransition& accepted_transition,
+    const environment::PublicEnvironmentObservation& next_observation) noexcept;
+
+std::optional<StrategyReconciliationResult> commit_teacher_state_delta_with_evidence(
+    EpisodeLocalStrategyStateV1& current_state,
+    const TeacherRankingResult& ranking_result,
+    const StrategyProfileV1& validated_profile,
     const environment::AcceptedActionTransition& accepted_transition,
     const environment::PublicEnvironmentObservation& next_observation) noexcept;
 
