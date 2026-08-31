@@ -216,6 +216,7 @@ add_library(ygo_teacher STATIC
     src/teacher/predicate_registry.cpp
     src/teacher/public_fact_registry.cpp
     src/teacher/recovery_controller.cpp
+    src/teacher/salamangreat_profile.cpp
     src/teacher/strategy_profile.cpp
     src/teacher/strategy_profile_codec.cpp
     src/teacher/strategy_state.cpp
@@ -364,6 +365,18 @@ add_executable(swordsoul_teacher_scenarios_test
 target_link_libraries(swordsoul_teacher_scenarios_test PRIVATE ygo_teacher)
 add_test(NAME swordsoul_teacher_scenarios_test
          COMMAND swordsoul_teacher_scenarios_test)
+
+add_executable(salamangreat_profile_test tests/teacher/salamangreat_profile_test.cpp)
+target_link_libraries(salamangreat_profile_test PRIVATE ygo_teacher)
+target_compile_definitions(salamangreat_profile_test PRIVATE
+                           YGO_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+add_test(NAME salamangreat_profile_test COMMAND salamangreat_profile_test)
+
+add_executable(salamangreat_teacher_scenarios_test
+               tests/teacher/salamangreat_teacher_scenarios_test.cpp)
+target_link_libraries(salamangreat_teacher_scenarios_test PRIVATE ygo_teacher)
+add_test(NAME salamangreat_teacher_scenarios_test
+         COMMAND salamangreat_teacher_scenarios_test)
 
 add_executable(ygo_core_probe tools/ygo_core_probe/main.cpp)
 target_link_libraries(ygo_core_probe PRIVATE ygo_m4)
