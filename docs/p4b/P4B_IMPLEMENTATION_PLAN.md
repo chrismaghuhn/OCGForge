@@ -39,7 +39,7 @@ Every P4B CTest command below that uses a regular expression MUST include `--no-
 | Task 2 public/trajectory regression tests | 3 |
 | Task 3 boundary/DTO tests | 2 |
 | Task 4 domain-preservation/ranking tests | 2 |
-| Task 5 fact/evaluator tests | 2 |
+| Task 5 evaluator CTest | 1 |
 | Task 6 state/rejection tests | 2 |
 | Task 7 goal-line/recovery tests | 2 |
 | Task 8 fallback/explanation tests | 2 |
@@ -49,6 +49,26 @@ Every P4B CTest command below that uses a regular expression MUST include `--no-
 | P4B-G14 Phase-4A regression expression | 6 |
 
 Single-target CTest expressions in the plan expect exactly 1. The intentional RED/missing-target commands still fail closed because `--no-tests=error` reports no registered target.
+
+Task 5 additionally requires exactly one direct Python focused gate:
+`python -B tests/teacher/teacher_public_fact_matrix_test.py`. That Python
+execution is not included in the CTest selected-test count. The authoritative
+Task-5 focused gate is therefore:
+
+```text
+PYTHON:
+python -B tests/teacher/teacher_public_fact_matrix_test.py
+PASS required
+
+CTEST:
+ctest --test-dir <active-build-dir> \
+  --output-on-failure \
+  --no-tests=error \
+  --tests-regex "^teacher_evaluator_test$"
+
+selected = 1
+passed   = 1
+```
 
 ## File and module map
 
@@ -295,7 +315,7 @@ The score-contract validation freezes the nine score dimensions/order, signed i3
 - [ ] Implement the immutable typed public-fact registry with fact IDs, value kinds, bounds, validity scopes, canonical value ordering, and explicit blocked results.
 - [ ] Implement safe-state decode and public observation/candidate-to-fact extraction without private compensation.
 - [ ] Implement generic tactical, target, material, and interaction evaluators over one supplied candidate descriptor.
-- [ ] Add checked contribution composition to the Task-4 resolver without changing score dimension order.
+- [ ] Require Task-5 evaluators to reuse the already accepted `add_score_contribution()` Task-4 API for checked contribution composition; Task 5 MUST NOT reopen or modify Task-4 score, tie, or domain semantics, and Task-4 production files remain outside Task-5 scope unless independently authorized.
 - [ ] Re-run focused tests and Phase-4A safe-state/privacy regressions.
 - [ ] Run git diff --check, commit with feat: add public teacher evaluators, and stop for review.
 
