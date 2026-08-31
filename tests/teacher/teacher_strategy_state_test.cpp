@@ -82,23 +82,24 @@ std::string public_key(const std::uint64_t choice) {
 PublicEnvironmentObservation public_observation(
     const std::uint32_t self_life_points = 8000,
     const std::uint32_t opponent_life_points = 7000,
-    const std::uint64_t decision_index = 43) {
+    const std::uint64_t decision_index = 43,
+    const std::uint8_t perspective_player = 0) {
     ygo::observation::PlayerObservation source;
     source.schema_version = "ygo.player_observation.v1";
-    source.perspective_player = 0;
+    source.perspective_player = perspective_player;
     source.decision_index = decision_index;
     source.globals.life_points = {self_life_points, opponent_life_points};
-    source.globals.player_to_act = 0;
-    source.globals.turn_player = 0;
+    source.globals.player_to_act = perspective_player;
+    source.globals.turn_player = perspective_player;
     source.globals.turn_count = 1;
     source.globals.phase = 2;
     source.globals.chain_length = 0;
     source.globals.terminal = false;
-    source.match_context.perspective_player = 0;
+    source.match_context.perspective_player = perspective_player;
     source.match_context.knowledge.own_decklist_known = true;
     source.match_context.knowledge.opponent_decklist_known = false;
     source.decision_context.kind = "yes_no";
-    source.decision_context.player = 0;
+    source.decision_context.player = perspective_player;
     return ygo::environment::project_public_observation(source);
 }
 
@@ -302,14 +303,15 @@ void test_plan_references_bind_to_profile() {
     const auto proposal_rejected = [&](const TeacherStateDeltaV1& value,
                                        const std::string& message) {
         require(!ygo::teacher::propose_teacher_state_delta(
-                    state, public_observation(), profile, value)
+                    state, public_observation(), 0, profile, value)
                      .has_value(),
                 message);
         auto unchanged = state;
         const auto before = unchanged;
         require(!ygo::teacher::commit_teacher_state_delta(
                     unchanged, ranking_result(value, selected_key), profile,
-                    accepted_transition(1, selected_key), public_observation(8000, 7000, 2)),
+                    0, public_observation(8000, 7000, 1),
+                    accepted_transition(1, selected_key)),
                 message + " at commit");
         require(unchanged == before, message + " mutated trusted state");
     };
@@ -374,7 +376,8 @@ void test_ranking_delta_validation() {
     const auto before = unchanged;
     require(!ygo::teacher::commit_teacher_state_delta(
                 unchanged, missing_evaluation, profile,
-                accepted_transition(1, selected_key), public_observation(8000, 7000, 2)),
+                0, public_observation(8000, 7000, 1),
+                accepted_transition(1, selected_key)),
             "malformed ranking result unexpectedly committed");
     require(unchanged == before, "malformed ranking result mutated trusted state");
 }
@@ -398,7 +401,7 @@ void test_proposal_reconciles_current_public_input() {
     requested.completed_line_node_ids.clear();
     requested.achieved_goal_ids.clear();
     const auto proposal = ygo::teacher::propose_teacher_state_delta(
-        stale_state, public_observation(7000, 7000, 3), profile, requested);
+        stale_state, public_observation(7000, 7000, 3), 0, profile, requested);
     require(proposal.has_value(), "proposal did not reconcile current public input");
     require(stale_state == before, "current-public proposal mutated trusted state");
     require(proposal->invalidation_reason_ids ==
@@ -410,7 +413,7 @@ void test_proposal_reconciles_current_public_input() {
             "proposal retained stale plan progress after current reconciliation");
 
     const auto equal_public = ygo::teacher::propose_teacher_state_delta(
-        initial_state(profile), public_observation(8000, 7000, 3), profile,
+        initial_state(profile), public_observation(8000, 7000, 3), 0, profile,
         replacement_delta(initial_state(profile), profile, selected_key));
     require(equal_public.has_value() && equal_public->invalidation_reason_ids.empty(),
             "equal current public input produced invalidation evidence");
@@ -418,7 +421,7 @@ void test_proposal_reconciles_current_public_input() {
     auto malformed_state = initial_state(profile);
     const auto malformed_before = malformed_state;
     require(!ygo::teacher::propose_teacher_state_delta(
-                 malformed_state, PublicEnvironmentObservation{}, profile,
+                 malformed_state, PublicEnvironmentObservation{}, 0, profile,
                  replacement_delta(malformed_state, profile, selected_key))
                  .has_value(),
             "malformed current observation was accepted");
@@ -428,17 +431,76 @@ void test_proposal_reconciles_current_public_input() {
     auto caller_reason = replacement_delta(initial_state(profile), profile, selected_key);
     caller_reason.invalidation_reason_ids = {"resource_consumed"};
     require(!ygo::teacher::propose_teacher_state_delta(
-                 initial_state(profile), public_observation(), profile, caller_reason)
+                 initial_state(profile), public_observation(), 0, profile, caller_reason)
                  .has_value(),
             "caller-authored invalidation reason was accepted");
 
     const auto repeated_first = ygo::teacher::propose_teacher_state_delta(
-        stale_state, public_observation(7000, 7000, 3), profile, requested);
+        stale_state, public_observation(7000, 7000, 3), 0, profile, requested);
     const auto repeated_second = ygo::teacher::propose_teacher_state_delta(
-        stale_state, public_observation(7000, 7000, 3), profile, requested);
+        stale_state, public_observation(7000, 7000, 3), 0, profile, requested);
     require(repeated_first.has_value() && repeated_second.has_value() &&
                 *repeated_first == *repeated_second,
-            "identical proposal inputs produced different deltas or evidence");
+                "identical proposal inputs produced different deltas or evidence");
+}
+
+void test_participant_perspective_freshness_and_fact_source() {
+    const auto profile = valid_profile();
+    const auto selected_key = public_key(0);
+
+    const auto state = initial_state(profile);
+    const auto before = state;
+    require(!ygo::teacher::propose_teacher_state_delta(
+                 state, public_observation(8000, 7000, 12, 1), 0, profile,
+                 replacement_delta(state, profile, selected_key))
+                 .has_value(),
+            "opponent-perspective observation was accepted for participant zero");
+    require(state == before, "wrong-perspective proposal mutated trusted state");
+
+    auto prior_state = state;
+    prior_state.last_accepted_decision_index = 10;
+    prior_state.last_accepted_public_action_key = public_key(1);
+    const auto prior_delta = replacement_delta(prior_state, profile, selected_key);
+    require(!ygo::teacher::propose_teacher_state_delta(
+                 prior_state, public_observation(8000, 7000, 10), 0, profile, prior_delta)
+                 .has_value(),
+            "current observation equal to the last accepted index was accepted");
+    require(!ygo::teacher::propose_teacher_state_delta(
+                 prior_state, public_observation(8000, 7000, 9), 0, profile, prior_delta)
+                 .has_value(),
+            "current observation older than the last accepted index was accepted");
+    require(ygo::teacher::propose_teacher_state_delta(
+                prior_state, public_observation(8000, 7000, 12), 0, profile, prior_delta)
+                .has_value(),
+            "later same-participant observation was rejected");
+
+    auto exact = replacement_delta(state, profile, selected_key, 7000);
+    exact.public_restriction_facts = {u64_fact("public.turn.phase", 2)};
+    require(ygo::teacher::propose_teacher_state_delta(
+                state, public_observation(7000, 7000, 12), 0, profile, exact)
+                .has_value(),
+            "CURRENT facts matching the public snapshot were rejected");
+
+    auto wrong_resource = replacement_delta(state, profile, selected_key, 8000);
+    require(!ygo::teacher::propose_teacher_state_delta(
+                 state, public_observation(7000, 7000, 12), 0, profile, wrong_resource)
+                 .has_value(),
+            "registry-valid but stale resource fact was accepted");
+
+    auto wrong_restriction = exact;
+    wrong_restriction.public_restriction_facts = {u64_fact("public.turn.phase", 3)};
+    require(!ygo::teacher::propose_teacher_state_delta(
+                 state, public_observation(7000, 7000, 12), 0, profile, wrong_restriction)
+                 .has_value(),
+            "registry-valid but unsupported restriction fact was accepted");
+
+    auto wrong_threat = exact;
+    wrong_threat.public_threat_facts = {
+        u64_fact("public.life_points.opponent", 6000)};
+    require(!ygo::teacher::propose_teacher_state_delta(
+                 state, public_observation(7000, 7000, 12), 0, profile, wrong_threat)
+                 .has_value(),
+            "registry-valid but stale threat fact was accepted");
 }
 
 void test_pure_proposal_and_accepted_commit() {
@@ -447,7 +509,7 @@ void test_pure_proposal_and_accepted_commit() {
     const auto selected_key = public_key(0);
     const auto requested = replacement_delta(initial, profile, selected_key);
     const auto proposed = ygo::teacher::propose_teacher_state_delta(
-        initial, public_observation(), profile, requested);
+        initial, public_observation(8000, 7000, 42), 0, profile, requested);
     require(proposed.has_value(), "valid state proposal was rejected");
     require(initial == initial_state(profile), "pure proposal mutated trusted state");
     require(proposed->base_last_accepted_decision_index ==
@@ -467,7 +529,8 @@ void test_pure_proposal_and_accepted_commit() {
     auto committed = initial;
     require(ygo::teacher::commit_teacher_state_delta(
                 committed, ranking_result(*proposed, selected_key), profile,
-                accepted_transition(42, selected_key), public_observation()),
+                0, public_observation(8000, 7000, 42),
+                accepted_transition(42, selected_key)),
             "exact accepted transition did not commit");
     require(committed.last_accepted_decision_index == std::optional<std::uint64_t>(42) &&
                 committed.last_accepted_public_action_key == selected_key,
@@ -497,7 +560,7 @@ void test_observation_dominance_and_repeated_reconciliation() {
     stale_requested.completed_line_node_ids.clear();
     stale_requested.achieved_goal_ids.clear();
     const auto stale_proposed = ygo::teacher::propose_teacher_state_delta(
-        stale_first, public_observation(7000, 7000, 3), profile, stale_requested);
+        stale_first, public_observation(7000, 7000, 12), 0, profile, stale_requested);
     require(stale_proposed.has_value(), "dominance proposal was rejected");
     require(stale_proposed->invalidation_reason_ids ==
                 std::vector<std::string>{"public_state_contradiction"},
@@ -506,37 +569,48 @@ void test_observation_dominance_and_repeated_reconciliation() {
     auto dominated = stale_first;
     const auto dominated_result = ygo::teacher::commit_teacher_state_delta_with_evidence(
         dominated, ranking_result(*stale_proposed, selected_key), profile,
-        accepted_transition(1, selected_key), public_observation(6000, 7000, 2));
+        0, public_observation(7000, 7000, 12), accepted_transition(12, selected_key));
     require(dominated_result.has_value(),
-            "changed next public observation rejected the commit transaction");
+            "participant-local commit rejected the accepted proposal");
     require(dominated_result->invalidation_reason_ids ==
                 std::vector<std::string>{"public_state_contradiction"},
-            "proposal and next-frame reasons were not canonically unioned");
+            "proposal-derived reasons were not preserved in commit evidence");
     require(!dominated.active_goal_id.has_value() && !dominated.active_line_id.has_value() &&
                 dominated.completed_line_node_ids.empty() && dominated.achieved_goal_ids.empty() &&
-                dominated.public_resource_facts.empty(),
-            "stale current-reconciliation memory was not invalidated conservatively");
+                dominated.public_resource_facts ==
+                    std::vector<PublicFactValue>{
+                        u64_fact("public.life_points.self", 7000)},
+            "accepted proposal-frame state was not retained until deferred reconciliation");
     require(dominated_result->state == dominated,
             "commit evidence did not contain the committed value-state");
     require(dominated.last_accepted_public_action_key == selected_key,
-            "accepted key was lost during observation reconciliation");
+            "accepted key was lost during participant-local commit");
+
+    const auto deferred = ygo::teacher::reconcile_strategy_state_with_evidence(
+        dominated, 0, public_observation(6000, 7000, 13));
+    require(deferred.has_value() &&
+                deferred->invalidation_reason_ids ==
+                    std::vector<std::string>{"public_state_contradiction"} &&
+                deferred->state.public_resource_facts.empty() &&
+                !deferred->state.active_goal_id.has_value(),
+            "later same-participant reconciliation did not dominate stale proposal memory");
 
     const auto first = initial_state(profile);
     const auto requested = replacement_delta(first, profile, selected_key, 8000);
     const auto proposed = ygo::teacher::propose_teacher_state_delta(
-        first, public_observation(), profile, requested);
+        first, public_observation(8000, 7000, 2), 0, profile, requested);
     require(proposed.has_value(), "dominance proposal was rejected");
 
     auto left = first;
     auto right = first;
     const auto left_result = ygo::teacher::commit_teacher_state_delta_with_evidence(
         left, ranking_result(*proposed, selected_key), profile,
-        accepted_transition(2, selected_key), public_observation());
+        0, public_observation(8000, 7000, 2), accepted_transition(2, selected_key));
     require(left_result.has_value() && left_result->invalidation_reason_ids.empty(),
             "first identical reconciliation failed");
     const auto right_result = ygo::teacher::commit_teacher_state_delta_with_evidence(
         right, ranking_result(*proposed, selected_key), profile,
-        accepted_transition(2, selected_key), public_observation());
+        0, public_observation(8000, 7000, 2), accepted_transition(2, selected_key));
     require(right_result.has_value() && right_result->invalidation_reason_ids.empty(),
             "second identical reconciliation failed");
     require(left == right, "identical public state/reconciliation diverged");
@@ -547,9 +621,9 @@ void test_observation_dominance_and_repeated_reconciliation() {
     stale_fact_state.public_resource_facts = {
         u64_fact("public.life_points.self", 8000)};
     const auto first_reconciliation = ygo::teacher::reconcile_strategy_state_with_evidence(
-        stale_fact_state, public_observation(7000, 7000));
+        stale_fact_state, 0, public_observation(7000, 7000));
     const auto second_reconciliation = ygo::teacher::reconcile_strategy_state_with_evidence(
-        stale_fact_state, public_observation(7000, 7000));
+        stale_fact_state, 0, public_observation(7000, 7000));
     require(first_reconciliation.has_value() && second_reconciliation.has_value(),
             "stale fact reconciliation failed");
     require(first_reconciliation->invalidation_reason_ids ==
@@ -573,7 +647,7 @@ void test_commit_mismatches_are_atomic() {
         auto state = initial;
         const auto before = state;
         require(!ygo::teacher::commit_teacher_state_delta(
-                    state, ranking_result(delta, selected), profile, transition, observation),
+                    state, ranking_result(delta, selected), profile, 0, observation, transition),
                 "invalid commit unexpectedly succeeded");
         require(state == before, "rejected commit partially mutated trusted state");
     };
@@ -607,37 +681,67 @@ void test_commit_mismatches_are_atomic() {
             public_observation());
 }
 
-void test_commit_rejects_stale_or_non_next_frames() {
+void test_frame_local_commit_and_deferred_reconciliation() {
     const auto profile = valid_profile();
     const auto selected_key = public_key(0);
 
-    auto prior_state = initial_state(profile);
-    prior_state.last_accepted_decision_index = 10;
-    prior_state.last_accepted_public_action_key = public_key(1);
-    const auto prior_delta = replacement_delta(prior_state, profile, selected_key);
-
-    auto equal_index = prior_state;
-    require(!ygo::teacher::commit_teacher_state_delta(
-                equal_index, ranking_result(prior_delta, selected_key), profile,
-                accepted_transition(10, selected_key), public_observation(8000, 7000, 11)),
-            "equal accepted decision index was not rejected");
-    require(equal_index == prior_state, "equal-index rejection mutated state");
-
-    auto lower_index = prior_state;
-    require(!ygo::teacher::commit_teacher_state_delta(
-                lower_index, ranking_result(prior_delta, selected_key), profile,
-                accepted_transition(9, selected_key), public_observation(8000, 7000, 10)),
-            "lower accepted decision index was not rejected");
-    require(lower_index == prior_state, "lower-index rejection mutated state");
-
     const auto initial = initial_state(profile);
+    const auto proposal_observation = public_observation(8000, 7000, 12, 0);
     const auto delta = replacement_delta(initial, profile, selected_key);
-    auto non_next_frame = initial;
+    const auto proposal = ygo::teacher::propose_teacher_state_delta(
+        initial, proposal_observation, 0, profile, delta);
+    require(proposal.has_value(), "frame-local proposal was rejected");
+
+    auto mismatched_fact_delta = *proposal;
+    mismatched_fact_delta.public_resource_facts = {
+        u64_fact("public.life_points.self", 7000)};
+    auto mismatched_fact_state = initial;
     require(!ygo::teacher::commit_teacher_state_delta(
-                non_next_frame, ranking_result(delta, selected_key), profile,
-                accepted_transition(42, selected_key), public_observation(8000, 7000, 42)),
-            "non-next public observation was accepted");
-    require(non_next_frame == initial, "non-next-frame rejection mutated state");
+                mismatched_fact_state,
+                ranking_result(mismatched_fact_delta, selected_key), profile, 0,
+                proposal_observation, accepted_transition(12, selected_key)),
+            "commit accepted a CURRENT fact absent from the proposal snapshot");
+    require(mismatched_fact_state == initial,
+            "snapshot-mismatched commit mutated trusted state");
+
+    auto committed = initial;
+    const auto opponent_observation = public_observation(2000, 9000, 13, 1);
+    require(opponent_observation.perspective_player == 1,
+            "opponent test observation was not perspective-bound");
+    const auto committed_result = ygo::teacher::commit_teacher_state_delta_with_evidence(
+        committed, ranking_result(*proposal, selected_key), profile, 0,
+        proposal_observation, accepted_transition(12, selected_key));
+    require(committed_result.has_value(),
+            "participant-local commit required an opponent observation");
+    require(committed.last_accepted_decision_index == std::optional<std::uint64_t>(12) &&
+                committed.last_accepted_public_action_key == selected_key,
+            "accepted transition markers were not committed");
+    require(committed.public_resource_facts ==
+                std::vector<PublicFactValue>{
+                    u64_fact("public.life_points.self", 8000)},
+            "accepted proposal-frame facts were not retained until deferred reconciliation");
+    require(committed_result->invalidation_reason_ids.empty(),
+            "commit synthesized post-acceptance opponent-frame evidence");
+
+    const auto attempt_frame = [&](const std::uint64_t transition_index,
+                                   const std::string& message) {
+        auto state = initial;
+        require(!ygo::teacher::commit_teacher_state_delta(
+                    state, ranking_result(*proposal, selected_key), profile, 0,
+                    proposal_observation, accepted_transition(transition_index, selected_key)),
+                message);
+        require(state == initial, message + " mutated trusted state");
+    };
+    attempt_frame(11, "accepted transition before proposal frame was accepted");
+    attempt_frame(13, "accepted transition after proposal frame was accepted");
+
+    const auto later = ygo::teacher::reconcile_strategy_state_with_evidence(
+        committed, 0, public_observation(7000, 7000, 13, 0));
+    require(later.has_value() &&
+                later->invalidation_reason_ids ==
+                    std::vector<std::string>{"public_state_contradiction"} &&
+                later->state.public_resource_facts.empty(),
+            "later same-participant observation did not perform deferred reconciliation");
 }
 
 }  // namespace
@@ -652,7 +756,8 @@ int main() {
         test_pure_proposal_and_accepted_commit();
         test_observation_dominance_and_repeated_reconciliation();
         test_commit_mismatches_are_atomic();
-        test_commit_rejects_stale_or_non_next_frames();
+        test_participant_perspective_freshness_and_fact_source();
+        test_frame_local_commit_and_deferred_reconciliation();
         std::cout << "teacher_strategy_state_test: PASS\n";
         return 0;
     } catch (const std::exception& error) {

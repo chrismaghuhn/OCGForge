@@ -64,6 +64,27 @@ bool valid_fact_vector(const std::vector<PublicFactValue>& values) {
     return true;
 }
 
+bool current_facts_match_snapshot(const std::vector<PublicFactValue>& values,
+                                  const PublicFactSnapshot& snapshot) {
+    for (const auto& fact : values) {
+        if (fact.validity_scope != PublicFactValidityScope::CurrentReconciliation) {
+            continue;
+        }
+        const auto current = snapshot.value(fact.fact_id);
+        if (!current.has_value() || *current != fact) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool delta_current_facts_match_snapshot(const TeacherStateDeltaV1& delta,
+                                        const PublicFactSnapshot& snapshot) {
+    return current_facts_match_snapshot(delta.public_resource_facts, snapshot) &&
+           current_facts_match_snapshot(delta.public_restriction_facts, snapshot) &&
+           current_facts_match_snapshot(delta.public_threat_facts, snapshot);
+}
+
 bool valid_reason_vector(const std::vector<std::string>& values) noexcept {
     for (std::size_t index = 0; index < values.size(); ++index) {
         if (!canonical_token(values[index]) ||
@@ -73,28 +94,6 @@ bool valid_reason_vector(const std::vector<std::string>& values) noexcept {
         }
     }
     return true;
-}
-
-std::vector<std::string> union_reason_vectors(
-    const std::vector<std::string>& left,
-    const std::vector<std::string>& right) {
-    std::vector<std::string> result;
-    result.reserve(left.size() + right.size());
-    std::size_t left_index = 0;
-    std::size_t right_index = 0;
-    while (left_index < left.size() || right_index < right.size()) {
-        if (right_index == right.size() ||
-            (left_index < left.size() && left[left_index] < right[right_index])) {
-            result.push_back(left[left_index++]);
-        } else if (left_index == left.size() ||
-                   right[right_index] < left[left_index]) {
-            result.push_back(right[right_index++]);
-        } else {
-            result.push_back(left[left_index++]);
-            ++right_index;
-        }
-    }
-    return result;
 }
 
 template <typename Value>
@@ -219,6 +218,7 @@ std::optional<EpisodeLocalStrategyStateV1> reset_strategy_state(
 std::optional<TeacherStateDeltaV1> propose_teacher_state_delta(
     const EpisodeLocalStrategyStateV1& current_state,
     const environment::PublicEnvironmentObservation& current_observation,
+    const std::uint8_t owning_participant,
     const StrategyProfileV1& validated_profile,
     const TeacherStateDeltaV1& requested_replacement) noexcept {
     try {
@@ -228,15 +228,25 @@ std::optional<TeacherStateDeltaV1> propose_teacher_state_delta(
         }
 
         const auto reconciled = reconcile_strategy_state_with_evidence(
-            current_state, current_observation);
+            current_state, owning_participant, current_observation);
         if (!reconciled.has_value() ||
-            !valid_state_for_profile(reconciled->state, validated_profile)) {
+            !valid_state_for_profile(reconciled->state, validated_profile) ||
+            (current_state.last_accepted_decision_index.has_value() &&
+             current_observation.decision_index <=
+                 *current_state.last_accepted_decision_index)) {
+            return std::nullopt;
+        }
+
+        const auto current_facts = extract_public_fact_snapshot(current_observation);
+        if (!current_facts.valid) {
             return std::nullopt;
         }
 
         if (!validate_teacher_state_delta(requested_replacement) ||
             !requested_replacement.invalidation_reason_ids.empty() ||
             !valid_delta_for_profile(requested_replacement, validated_profile) ||
+            !delta_current_facts_match_snapshot(
+                requested_replacement, current_facts.snapshot) ||
             requested_replacement.base_last_accepted_decision_index !=
                 reconciled->state.last_accepted_decision_index ||
             requested_replacement.base_last_accepted_public_action_key !=
@@ -262,9 +272,12 @@ std::optional<StrategyReconciliationResult> commit_teacher_state_delta_with_evid
     EpisodeLocalStrategyStateV1& current_state,
     const TeacherRankingResult& ranking_result,
     const StrategyProfileV1& validated_profile,
-    const environment::AcceptedActionTransition& accepted_transition,
-    const environment::PublicEnvironmentObservation& next_observation) noexcept {
+    const std::uint8_t owning_participant,
+    const environment::PublicEnvironmentObservation& proposal_observation,
+    const environment::AcceptedActionTransition& accepted_transition) noexcept {
     try {
+        // The proposal observation is the only public frame used here. The
+        // subsequent StepAccepted frame may belong to another participant.
         if (!valid_state_for_profile(current_state, validated_profile) ||
             !validate_strategy_profile(validated_profile) ||
             !validate_teacher_ranking_result(ranking_result) ||
@@ -274,6 +287,9 @@ std::optional<StrategyReconciliationResult> commit_teacher_state_delta_with_evid
             !environment::is_public_action_key(
                 *ranking_result.selected_public_action_key) ||
             !environment::is_public_action_key(accepted_transition.selected_public_action_key) ||
+            owning_participant > 1 ||
+            proposal_observation.perspective_player != owning_participant ||
+            proposal_observation.decision_index != accepted_transition.decision_index ||
             ranking_result.proposed_state_delta->strategy_profile_id !=
                 current_state.strategy_profile_id ||
             !valid_delta_for_profile(*ranking_result.proposed_state_delta, validated_profile) ||
@@ -287,12 +303,21 @@ std::optional<StrategyReconciliationResult> commit_teacher_state_delta_with_evid
                 *ranking_result.selected_public_action_key ||
             (current_state.last_accepted_decision_index.has_value() &&
              accepted_transition.decision_index <=
-                 *current_state.last_accepted_decision_index) ||
-            next_observation.decision_index <= accepted_transition.decision_index) {
+                 *current_state.last_accepted_decision_index)) {
             return std::nullopt;
         }
 
         const auto& delta = *ranking_result.proposed_state_delta;
+        const auto proposal_facts = extract_public_fact_snapshot(proposal_observation);
+        if (!proposal_facts.valid ||
+            !delta_current_facts_match_snapshot(delta, proposal_facts.snapshot) ||
+            !valid_state_for_profile(current_state, validated_profile) ||
+            (current_state.last_accepted_decision_index.has_value() &&
+             proposal_observation.decision_index <=
+                 *current_state.last_accepted_decision_index)) {
+            return std::nullopt;
+        }
+
         auto next_state = current_state;
         next_state.active_goal_id = delta.active_goal_id;
         next_state.active_line_id = delta.active_line_id;
@@ -305,22 +330,14 @@ std::optional<StrategyReconciliationResult> commit_teacher_state_delta_with_evid
         next_state.last_accepted_public_action_key =
             accepted_transition.selected_public_action_key;
 
-        auto reconciled = reconcile_strategy_state_with_evidence(next_state, next_observation);
-        if (!reconciled.has_value()) {
-            return std::nullopt;
-        }
-        if (!valid_state_for_profile(reconciled->state, validated_profile) ||
-            !valid_reason_vector(reconciled->invalidation_reason_ids) ||
+        if (!valid_state_for_profile(next_state, validated_profile) ||
             !valid_reason_vector(delta.invalidation_reason_ids)) {
             return std::nullopt;
         }
-        auto result = *reconciled;
-        result.invalidation_reason_ids = union_reason_vectors(
-            delta.invalidation_reason_ids, reconciled->invalidation_reason_ids);
-        if (!valid_reason_vector(result.invalidation_reason_ids)) {
-            return std::nullopt;
-        }
-        current_state = std::move(reconciled->state);
+        StrategyReconciliationResult result;
+        result.state = next_state;
+        result.invalidation_reason_ids = delta.invalidation_reason_ids;
+        current_state = std::move(next_state);
         return result;
     } catch (...) {
         return std::nullopt;
@@ -331,11 +348,12 @@ bool commit_teacher_state_delta(
     EpisodeLocalStrategyStateV1& current_state,
     const TeacherRankingResult& ranking_result,
     const StrategyProfileV1& validated_profile,
-    const environment::AcceptedActionTransition& accepted_transition,
-    const environment::PublicEnvironmentObservation& next_observation) noexcept {
+    const std::uint8_t owning_participant,
+    const environment::PublicEnvironmentObservation& proposal_observation,
+    const environment::AcceptedActionTransition& accepted_transition) noexcept {
     return commit_teacher_state_delta_with_evidence(
-               current_state, ranking_result, validated_profile, accepted_transition,
-               next_observation)
+               current_state, ranking_result, validated_profile, owning_participant,
+               proposal_observation, accepted_transition)
         .has_value();
 }
 

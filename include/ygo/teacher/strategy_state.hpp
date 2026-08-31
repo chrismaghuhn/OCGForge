@@ -104,35 +104,43 @@ std::optional<EpisodeLocalStrategyStateV1> reset_strategy_state(
 // state. The returned value is rebuilt from the original trusted-state
 // bindings and carries only reconciliation-derived invalidation evidence;
 // caller-supplied invalidation reasons are not accepted at proposal time.
+// owning_participant is runtime context only and is never stored in the state
+// or delta.
 std::optional<TeacherStateDeltaV1> propose_teacher_state_delta(
     const EpisodeLocalStrategyStateV1& current_state,
     const environment::PublicEnvironmentObservation& current_observation,
+    std::uint8_t owning_participant,
     const StrategyProfileV1& validated_profile,
     const TeacherStateDeltaV1& requested_replacement) noexcept;
 
 std::optional<EpisodeLocalStrategyStateV1> reconcile_strategy_state(
     const EpisodeLocalStrategyStateV1& state,
-    const environment::PublicEnvironmentObservation& next_observation) noexcept;
+    std::uint8_t owning_participant,
+    const environment::PublicEnvironmentObservation& current_observation) noexcept;
 
 std::optional<StrategyReconciliationResult> reconcile_strategy_state_with_evidence(
     const EpisodeLocalStrategyStateV1& state,
-    const environment::PublicEnvironmentObservation& next_observation) noexcept;
+    std::uint8_t owning_participant,
+    const environment::PublicEnvironmentObservation& current_observation) noexcept;
 
 bool commit_teacher_state_delta(
     EpisodeLocalStrategyStateV1& current_state,
     const TeacherRankingResult& ranking_result,
     const StrategyProfileV1& validated_profile,
-    const environment::AcceptedActionTransition& accepted_transition,
-    const environment::PublicEnvironmentObservation& next_observation) noexcept;
+    std::uint8_t owning_participant,
+    const environment::PublicEnvironmentObservation& proposal_observation,
+    const environment::AcceptedActionTransition& accepted_transition) noexcept;
 
-// The value-owned result retains the committed state and the canonical union
-// of proposal-time and next-frame reconciliation evidence.
+// The value-owned result retains the committed state and the proposal-time
+// reconciliation evidence carried by its validated delta. Commit does not
+// consume a post-acceptance observation.
 std::optional<StrategyReconciliationResult> commit_teacher_state_delta_with_evidence(
     EpisodeLocalStrategyStateV1& current_state,
     const TeacherRankingResult& ranking_result,
     const StrategyProfileV1& validated_profile,
-    const environment::AcceptedActionTransition& accepted_transition,
-    const environment::PublicEnvironmentObservation& next_observation) noexcept;
+    std::uint8_t owning_participant,
+    const environment::PublicEnvironmentObservation& proposal_observation,
+    const environment::AcceptedActionTransition& accepted_transition) noexcept;
 
 // Existing StepRejected is observation-only at this layer: it can validate
 // the unchanged state but has no mutation or retry path.

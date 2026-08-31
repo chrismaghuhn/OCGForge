@@ -37,6 +37,13 @@ bool valid_reason_vector(const std::vector<std::string>& values) noexcept {
     return true;
 }
 
+bool observation_belongs_to_participant(
+    const environment::PublicEnvironmentObservation& observation,
+    const std::uint8_t owning_participant) noexcept {
+    return owning_participant <= 1 &&
+           observation.perspective_player == owning_participant;
+}
+
 bool reconcile_in_place(EpisodeLocalStrategyStateV1& state,
                         const environment::PublicEnvironmentObservation& observation,
                         std::vector<std::string>& invalidation_reason_ids) {
@@ -63,14 +70,19 @@ bool reconcile_in_place(EpisodeLocalStrategyStateV1& state,
 
 std::optional<StrategyReconciliationResult> reconcile_strategy_state_with_evidence(
     const EpisodeLocalStrategyStateV1& state,
-    const environment::PublicEnvironmentObservation& next_observation) noexcept {
+    const std::uint8_t owning_participant,
+    const environment::PublicEnvironmentObservation& current_observation) noexcept {
     try {
-        if (!validate_strategy_state(state)) {
+        if (!validate_strategy_state(state) ||
+            !observation_belongs_to_participant(current_observation, owning_participant) ||
+            (state.last_accepted_decision_index.has_value() &&
+             current_observation.decision_index <=
+                 *state.last_accepted_decision_index)) {
             return std::nullopt;
         }
         auto next_state = state;
         std::vector<std::string> invalidation_reason_ids;
-        if (!reconcile_in_place(next_state, next_observation, invalidation_reason_ids) ||
+        if (!reconcile_in_place(next_state, current_observation, invalidation_reason_ids) ||
             !validate_strategy_state(next_state)) {
             return std::nullopt;
         }
@@ -83,8 +95,10 @@ std::optional<StrategyReconciliationResult> reconcile_strategy_state_with_eviden
 
 std::optional<EpisodeLocalStrategyStateV1> reconcile_strategy_state(
     const EpisodeLocalStrategyStateV1& state,
-    const environment::PublicEnvironmentObservation& next_observation) noexcept {
-    const auto result = reconcile_strategy_state_with_evidence(state, next_observation);
+    const std::uint8_t owning_participant,
+    const environment::PublicEnvironmentObservation& current_observation) noexcept {
+    const auto result = reconcile_strategy_state_with_evidence(
+        state, owning_participant, current_observation);
     if (!result.has_value()) {
         return std::nullopt;
     }

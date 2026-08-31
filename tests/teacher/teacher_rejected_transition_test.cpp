@@ -158,8 +158,8 @@ void test_rejected_and_malformed_operations_do_not_mutate() {
     require(!ygo::teacher::validate_teacher_state_delta(malformed),
             "malformed delta unexpectedly validated");
     require(!ygo::teacher::commit_teacher_state_delta(
-                state, ranking_result(malformed, key), profile, accepted_transition(key),
-                public_observation()),
+                state, ranking_result(malformed, key), profile, 0,
+                public_observation(), accepted_transition(key)),
             "malformed delta unexpectedly committed");
     require(state == before, "malformed delta partially mutated strategy state");
 
