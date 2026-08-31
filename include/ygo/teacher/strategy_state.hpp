@@ -100,10 +100,13 @@ std::optional<EpisodeLocalStrategyStateV1> reset_strategy_state(
     const StrategyProfileV1& validated_profile) noexcept;
 
 // requested_replacement supplies a complete proposed image. Its profile/base
-// bindings are checked, while the returned value is rebuilt from current state
-// bindings so proposal remains pure and exact.
+// bindings are checked after current_observation has reconciled the advisory
+// state. The returned value is rebuilt from the original trusted-state
+// bindings and carries only reconciliation-derived invalidation evidence;
+// caller-supplied invalidation reasons are not accepted at proposal time.
 std::optional<TeacherStateDeltaV1> propose_teacher_state_delta(
     const EpisodeLocalStrategyStateV1& current_state,
+    const environment::PublicEnvironmentObservation& current_observation,
     const StrategyProfileV1& validated_profile,
     const TeacherStateDeltaV1& requested_replacement) noexcept;
 
@@ -122,6 +125,8 @@ bool commit_teacher_state_delta(
     const environment::AcceptedActionTransition& accepted_transition,
     const environment::PublicEnvironmentObservation& next_observation) noexcept;
 
+// The value-owned result retains the committed state and the canonical union
+// of proposal-time and next-frame reconciliation evidence.
 std::optional<StrategyReconciliationResult> commit_teacher_state_delta_with_evidence(
     EpisodeLocalStrategyStateV1& current_state,
     const TeacherRankingResult& ranking_result,

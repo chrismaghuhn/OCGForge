@@ -75,6 +75,28 @@ bool valid_reason_vector(const std::vector<std::string>& values) noexcept {
     return true;
 }
 
+std::vector<std::string> union_reason_vectors(
+    const std::vector<std::string>& left,
+    const std::vector<std::string>& right) {
+    std::vector<std::string> result;
+    result.reserve(left.size() + right.size());
+    std::size_t left_index = 0;
+    std::size_t right_index = 0;
+    while (left_index < left.size() || right_index < right.size()) {
+        if (right_index == right.size() ||
+            (left_index < left.size() && left[left_index] < right[right_index])) {
+            result.push_back(left[left_index++]);
+        } else if (left_index == left.size() ||
+                   right[right_index] < left[left_index]) {
+            result.push_back(right[right_index++]);
+        } else {
+            result.push_back(left[left_index++]);
+            ++right_index;
+        }
+    }
+    return result;
+}
+
 template <typename Value>
 bool valid_plan_references(const Value& value,
                            const StrategyProfileV1& profile) noexcept {
@@ -196,18 +218,29 @@ std::optional<EpisodeLocalStrategyStateV1> reset_strategy_state(
 
 std::optional<TeacherStateDeltaV1> propose_teacher_state_delta(
     const EpisodeLocalStrategyStateV1& current_state,
+    const environment::PublicEnvironmentObservation& current_observation,
     const StrategyProfileV1& validated_profile,
     const TeacherStateDeltaV1& requested_replacement) noexcept {
     try {
-        if (!validate_strategy_state(current_state) ||
-            !validate_strategy_profile(validated_profile) ||
-            !validate_teacher_state_delta(requested_replacement) ||
-            !valid_plan_references(current_state, validated_profile) ||
+        if (!validate_strategy_profile(validated_profile) ||
+            !valid_state_for_profile(current_state, validated_profile)) {
+            return std::nullopt;
+        }
+
+        const auto reconciled = reconcile_strategy_state_with_evidence(
+            current_state, current_observation);
+        if (!reconciled.has_value() ||
+            !valid_state_for_profile(reconciled->state, validated_profile)) {
+            return std::nullopt;
+        }
+
+        if (!validate_teacher_state_delta(requested_replacement) ||
+            !requested_replacement.invalidation_reason_ids.empty() ||
             !valid_delta_for_profile(requested_replacement, validated_profile) ||
             requested_replacement.base_last_accepted_decision_index !=
-                current_state.last_accepted_decision_index ||
+                reconciled->state.last_accepted_decision_index ||
             requested_replacement.base_last_accepted_public_action_key !=
-                current_state.last_accepted_public_action_key) {
+                reconciled->state.last_accepted_public_action_key) {
             return std::nullopt;
         }
 
@@ -216,6 +249,7 @@ std::optional<TeacherStateDeltaV1> propose_teacher_state_delta(
         result.base_last_accepted_decision_index = current_state.last_accepted_decision_index;
         result.base_last_accepted_public_action_key =
             current_state.last_accepted_public_action_key;
+        result.invalidation_reason_ids = reconciled->invalidation_reason_ids;
         return valid_delta_for_profile(result, validated_profile)
                    ? std::optional<TeacherStateDeltaV1>(result)
                    : std::nullopt;
@@ -276,10 +310,16 @@ std::optional<StrategyReconciliationResult> commit_teacher_state_delta_with_evid
             return std::nullopt;
         }
         if (!valid_state_for_profile(reconciled->state, validated_profile) ||
-            !valid_reason_vector(reconciled->invalidation_reason_ids)) {
+            !valid_reason_vector(reconciled->invalidation_reason_ids) ||
+            !valid_reason_vector(delta.invalidation_reason_ids)) {
             return std::nullopt;
         }
         auto result = *reconciled;
+        result.invalidation_reason_ids = union_reason_vectors(
+            delta.invalidation_reason_ids, reconciled->invalidation_reason_ids);
+        if (!valid_reason_vector(result.invalidation_reason_ids)) {
+            return std::nullopt;
+        }
         current_state = std::move(reconciled->state);
         return result;
     } catch (...) {
