@@ -18,6 +18,12 @@ inline constexpr std::string_view kUniformBelowU64SamplingContractIdentity =
     "ocgforge.policy.uniform_below_u64.v1";
 inline constexpr std::string_view kSha256CounterPolicyRngContractIdentity =
     "ocgforge.policy_rng.sha256_counter.v1";
+inline constexpr std::string_view kTeacherProducerImplementationIdentity =
+    "ocgforge.policy.teacher_core.v1";
+inline constexpr std::string_view kTeacherDeterministicSamplingContractIdentity =
+    "ocgforge.policy.deterministic_lexicographic_argmax.v1";
+inline constexpr std::string_view kDeterministicLexicographicArgmaxSamplingContractIdentity =
+    kTeacherDeterministicSamplingContractIdentity;
 
 trajectory::ProvenanceResolver make_production_policy_provenance_resolver();
 

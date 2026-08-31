@@ -205,15 +205,50 @@ else()
     target_compile_options(ygo_trajectory PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
+add_library(ygo_teacher STATIC
+    src/teacher/candidate_evaluator.cpp
+    src/teacher/candidate_features.cpp
+    src/teacher/deterministic_resolver.cpp
+    src/teacher/fallback_resolver.cpp
+    src/teacher/interaction_evaluator.cpp
+    src/teacher/material_evaluator.cpp
+    src/teacher/goal_line_controller.cpp
+    src/teacher/predicate_registry.cpp
+    src/teacher/public_fact_registry.cpp
+    src/teacher/recovery_controller.cpp
+    src/teacher/salamangreat_profile.cpp
+    src/teacher/strategy_profile.cpp
+    src/teacher/strategy_profile_codec.cpp
+    src/teacher/strategy_state.cpp
+    src/teacher/strategy_state_reconciler.cpp
+    src/teacher/target_evaluator.cpp
+    src/teacher/tactical_evaluator.cpp
+    src/teacher/swordsoul_tenyi_profile.cpp
+    src/teacher/teacher_core.cpp
+    src/teacher/teacher_explanation_codec.cpp
+    src/teacher/teacher_policy_binding.cpp
+    src/teacher/teacher_decision.cpp
+)
+target_include_directories(ygo_teacher PUBLIC "${CMAKE_SOURCE_DIR}/include")
+target_link_libraries(ygo_teacher PUBLIC ygo_trajectory)
+if(MSVC)
+    target_compile_options(ygo_teacher PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(ygo_teacher PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
 add_library(ygo_policy STATIC
     src/policy/rng.cpp
     src/policy/production_provenance.cpp
     src/policy/production.cpp
     src/policy/random_legal.cpp
     src/policy/runner.cpp
+    src/policy/runner_shared.cpp
+    src/policy/teacher.cpp
+    src/policy/teacher_runner.cpp
 )
 target_include_directories(ygo_policy PUBLIC "${CMAKE_SOURCE_DIR}/include")
-target_link_libraries(ygo_policy PUBLIC ygo_trajectory)
+target_link_libraries(ygo_policy PUBLIC ygo_teacher)
 if(MSVC)
     target_compile_options(ygo_policy PRIVATE /W4 /permissive-)
 else()
@@ -266,6 +301,104 @@ target_include_directories(trajectory_privacy_test PRIVATE
                            "${CMAKE_SOURCE_DIR}/src/environment")
 target_link_libraries(trajectory_privacy_test PRIVATE ygo_trajectory)
 add_test(NAME trajectory_privacy_test COMMAND trajectory_privacy_test)
+
+add_executable(strategy_profile_codec_test tests/teacher/strategy_profile_codec_test.cpp)
+target_link_libraries(strategy_profile_codec_test PRIVATE ygo_teacher)
+add_test(NAME strategy_profile_codec_test COMMAND strategy_profile_codec_test)
+
+add_executable(strategy_profile_negative_test tests/teacher/strategy_profile_negative_test.cpp)
+target_link_libraries(strategy_profile_negative_test PRIVATE ygo_teacher)
+add_test(NAME strategy_profile_negative_test COMMAND strategy_profile_negative_test)
+
+add_executable(teacher_policy_boundary_compile_test
+               tests/teacher/teacher_policy_boundary_compile_test.cpp)
+target_include_directories(teacher_policy_boundary_compile_test PRIVATE
+                           "${CMAKE_SOURCE_DIR}/include")
+add_test(NAME teacher_policy_boundary_compile_test
+         COMMAND teacher_policy_boundary_compile_test)
+
+add_executable(teacher_decision_dto_test tests/teacher/teacher_decision_dto_test.cpp)
+target_link_libraries(teacher_decision_dto_test PRIVATE ygo_teacher)
+add_test(NAME teacher_decision_dto_test COMMAND teacher_decision_dto_test)
+
+add_executable(teacher_domain_preservation_test
+               tests/teacher/teacher_domain_preservation_test.cpp)
+target_link_libraries(teacher_domain_preservation_test PRIVATE ygo_teacher)
+add_test(NAME teacher_domain_preservation_test COMMAND teacher_domain_preservation_test)
+
+add_executable(teacher_ranking_test tests/teacher/teacher_ranking_test.cpp)
+target_link_libraries(teacher_ranking_test PRIVATE ygo_teacher)
+add_test(NAME teacher_ranking_test COMMAND teacher_ranking_test)
+
+add_executable(teacher_evaluator_test tests/teacher/teacher_evaluator_test.cpp)
+target_link_libraries(teacher_evaluator_test PRIVATE ygo_teacher)
+add_test(NAME teacher_evaluator_test COMMAND teacher_evaluator_test)
+
+add_executable(teacher_strategy_state_test tests/teacher/teacher_strategy_state_test.cpp)
+target_link_libraries(teacher_strategy_state_test PRIVATE ygo_teacher)
+add_test(NAME teacher_strategy_state_test COMMAND teacher_strategy_state_test)
+
+add_executable(teacher_rejected_transition_test
+               tests/teacher/teacher_rejected_transition_test.cpp)
+target_link_libraries(teacher_rejected_transition_test PRIVATE ygo_teacher)
+add_test(NAME teacher_rejected_transition_test
+         COMMAND teacher_rejected_transition_test)
+
+add_executable(teacher_goal_line_test tests/teacher/teacher_goal_line_test.cpp)
+target_link_libraries(teacher_goal_line_test PRIVATE ygo_teacher)
+add_test(NAME teacher_goal_line_test COMMAND teacher_goal_line_test)
+
+add_executable(teacher_recovery_test tests/teacher/teacher_recovery_test.cpp)
+target_link_libraries(teacher_recovery_test PRIVATE ygo_teacher)
+add_test(NAME teacher_recovery_test COMMAND teacher_recovery_test)
+
+add_executable(teacher_fallback_test tests/teacher/teacher_fallback_test.cpp)
+target_link_libraries(teacher_fallback_test PRIVATE ygo_teacher)
+add_test(NAME teacher_fallback_test COMMAND teacher_fallback_test)
+
+add_executable(teacher_explanation_test tests/teacher/teacher_explanation_test.cpp)
+target_link_libraries(teacher_explanation_test PRIVATE ygo_teacher)
+add_test(NAME teacher_explanation_test COMMAND teacher_explanation_test)
+
+add_executable(swordsoul_profile_test tests/teacher/swordsoul_profile_test.cpp)
+target_link_libraries(swordsoul_profile_test PRIVATE ygo_teacher)
+add_test(NAME swordsoul_profile_test COMMAND swordsoul_profile_test)
+
+add_executable(swordsoul_teacher_scenarios_test
+               tests/teacher/swordsoul_teacher_scenarios_test.cpp)
+target_link_libraries(swordsoul_teacher_scenarios_test PRIVATE ygo_teacher)
+add_test(NAME swordsoul_teacher_scenarios_test
+         COMMAND swordsoul_teacher_scenarios_test)
+
+add_executable(salamangreat_profile_test tests/teacher/salamangreat_profile_test.cpp)
+target_link_libraries(salamangreat_profile_test PRIVATE ygo_teacher)
+target_compile_definitions(salamangreat_profile_test PRIVATE
+                           YGO_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+add_test(NAME salamangreat_profile_test COMMAND salamangreat_profile_test)
+
+add_executable(salamangreat_teacher_scenarios_test
+               tests/teacher/salamangreat_teacher_scenarios_test.cpp)
+target_link_libraries(salamangreat_teacher_scenarios_test PRIVATE ygo_teacher)
+add_test(NAME salamangreat_teacher_scenarios_test
+         COMMAND salamangreat_teacher_scenarios_test)
+
+add_executable(teacher_provenance_test tests/teacher/teacher_provenance_test.cpp)
+target_link_libraries(teacher_provenance_test PRIVATE ygo_policy)
+add_test(NAME teacher_provenance_test COMMAND teacher_provenance_test)
+
+add_executable(teacher_runner_trajectory_test
+               tests/teacher/teacher_runner_trajectory_test.cpp)
+target_link_libraries(teacher_runner_trajectory_test PRIVATE ygo_policy)
+add_test(NAME teacher_runner_trajectory_test COMMAND teacher_runner_trajectory_test)
+
+add_executable(teacher_probe tools/p4b/teacher_probe.cpp)
+target_include_directories(teacher_probe PRIVATE
+                           "${CMAKE_SOURCE_DIR}/src/environment")
+target_link_libraries(teacher_probe PRIVATE ygo_policy)
+add_test(NAME teacher_knowledge_boundary_test
+         COMMAND teacher_probe --knowledge-boundary)
+add_test(NAME teacher_profile_registry_test
+         COMMAND teacher_probe --profile-registry)
 
 add_executable(ygo_core_probe tools/ygo_core_probe/main.cpp)
 target_link_libraries(ygo_core_probe PRIVATE ygo_m4)

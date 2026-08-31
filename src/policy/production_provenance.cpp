@@ -5,6 +5,9 @@
 #include <vector>
 
 #include "ygo/policy/rng.hpp"
+#include "ygo/policy/teacher.hpp"
+#include "ygo/teacher/salamangreat_profile.hpp"
+#include "ygo/teacher/swordsoul_tenyi_profile.hpp"
 #include "ygo/trajectory/codec.hpp"
 
 namespace ygo::policy {
@@ -51,6 +54,13 @@ trajectory::ProvenanceRegistration policy_rng_registration() {
     return result;
 }
 
+trajectory::ProvenanceRegistration teacher_binding_registration(
+    const teacher::StrategyProfileV1& profile) {
+    const auto binding = make_teacher_policy_binding(profile);
+    return registration(trajectory::ProvenanceKind::ArtifactMetadataArtifact,
+                        binding.teacher_policy_binding_id);
+}
+
 }  // namespace
 
 trajectory::ProvenanceResolver make_production_policy_provenance_resolver() {
@@ -74,7 +84,19 @@ trajectory::ProvenanceResolver make_production_policy_provenance_resolver() {
                                  kUniformBelowU64SamplingContractIdentity);
     sampling.sampling_capabilities = trajectory::SamplingContractCapabilities{true, false};
     registrations.push_back(std::move(sampling));
+    auto teacher_sampling = registration(
+        trajectory::ProvenanceKind::SamplingContract,
+        kTeacherDeterministicSamplingContractIdentity);
+    teacher_sampling.sampling_capabilities = trajectory::SamplingContractCapabilities{true, true};
+    registrations.push_back(std::move(teacher_sampling));
     registrations.push_back(policy_rng_registration());
+    registrations.push_back(registration(
+        trajectory::ProvenanceKind::ProducerImplementation,
+        kTeacherProducerImplementationIdentity));
+    registrations.push_back(teacher_binding_registration(
+        teacher::make_swordsoul_tenyi_profile()));
+    registrations.push_back(teacher_binding_registration(
+        teacher::make_salamangreat_profile()));
     return trajectory::ProvenanceResolver(std::move(registrations));
 }
 
