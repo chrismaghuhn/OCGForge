@@ -224,6 +224,7 @@ add_library(ygo_teacher STATIC
     src/teacher/target_evaluator.cpp
     src/teacher/tactical_evaluator.cpp
     src/teacher/swordsoul_tenyi_profile.cpp
+    src/teacher/teacher_core.cpp
     src/teacher/teacher_explanation_codec.cpp
     src/teacher/teacher_policy_binding.cpp
     src/teacher/teacher_decision.cpp

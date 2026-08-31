@@ -41,22 +41,44 @@ void require(const bool condition, const std::string& message) {
 }
 
 PublicEnvironmentObservation public_observation(const std::uint8_t participant,
-                                                 const std::uint64_t decision_index) {
+                                                 const std::uint64_t decision_index,
+                                                 const std::uint32_t self_life_points = 8000,
+                                                 const std::uint32_t opponent_life_points = 7000,
+                                                 const std::uint32_t chain_length = 0,
+                                                 const std::string& decision_kind = "idle_command",
+                                                 const std::optional<std::uint32_t>& visible_passcode =
+                                                     std::nullopt) {
     ygo::observation::PlayerObservation source;
     source.schema_version = "ygo.player_observation.v1";
     source.perspective_player = participant;
     source.decision_index = decision_index;
     source.globals.life_points = {8000, 7000};
+    source.globals.life_points[participant] = self_life_points;
+    source.globals.life_points[1 - participant] = opponent_life_points;
     source.globals.player_to_act = participant;
     source.globals.turn_player = 0;
     source.globals.turn_count = 1;
     source.globals.phase = 0x04;
+    source.globals.chain_length = chain_length;
     source.globals.terminal = false;
     source.match_context.perspective_player = participant;
     source.match_context.knowledge.own_decklist_known = true;
     source.match_context.knowledge.opponent_decklist_known = false;
-    source.decision_context.kind = "idle_command";
+    source.decision_context.kind = decision_kind;
     source.decision_context.player = participant;
+    if (visible_passcode.has_value()) {
+        ygo::observation::ObservedCard entity;
+        entity.locator = {"p" + std::to_string(participant) + ":MONSTER_ZONE:0"};
+        entity.identity_known = true;
+        entity.passcode = *visible_passcode;
+        entity.owner = participant;
+        entity.controller = participant;
+        entity.zone = ygo::observation::SemanticZone::MonsterZone;
+        entity.sequence = 0;
+        entity.face_up = true;
+        entity.face_down = false;
+        source.entities.push_back(std::move(entity));
+    }
     return project_public_observation(source);
 }
 
@@ -136,6 +158,52 @@ std::string canonical_bytes_hex(const std::vector<std::uint8_t>& bytes) {
     return output.str();
 }
 
+std::string optional_u64_text(const std::optional<std::uint64_t>& value) {
+    return value.has_value() ? std::to_string(*value) : "none";
+}
+
+std::string optional_string_text(const std::optional<std::string>& value) {
+    return value.has_value() ? *value : "none";
+}
+
+std::string score_text(const std::optional<ScoreVector>& score) {
+    if (!score.has_value()) {
+        return "none";
+    }
+    std::ostringstream output;
+    for (std::size_t index = 0; index < score->values.size(); ++index) {
+        if (index != 0) {
+            output << ',';
+        }
+        output << score->values[index];
+    }
+    return output.str();
+}
+
+std::string id_vector_text(const std::vector<std::string>& values) {
+    std::ostringstream output;
+    output << values.size() << ':';
+    for (std::size_t index = 0; index < values.size(); ++index) {
+        if (index != 0) {
+            output << ',';
+        }
+        output << values[index];
+    }
+    return output.str();
+}
+
+std::string fact_vector_text(const std::vector<PublicFactValue>& values) {
+    std::ostringstream output;
+    output << values.size() << ':';
+    for (std::size_t index = 0; index < values.size(); ++index) {
+        if (index != 0) {
+            output << ',';
+        }
+        output << canonical_bytes_hex(canonical_public_fact_value_bytes(values[index]));
+    }
+    return output.str();
+}
+
 std::string run_probe_process(const std::string& executable) {
     const std::string command = "\"" + executable + "\" --probe";
     FILE* pipe = _popen(command.c_str(), "r");
@@ -162,15 +230,48 @@ int run_probe() {
     require(ranking->explanation.has_value() && ranking->proposed_state_delta.has_value(),
             "independent Teacher probe lacks derived values");
     std::cout << "selected=" << ranking->selected_public_action_key.value() << '\n';
+    std::cout << "selected_score=" << score_text(ranking->selected_score_vector) << '\n';
     std::cout << "fallback=" << static_cast<unsigned int>(*ranking->fallback_level) << '\n';
-    std::cout << "evaluations=" << ranking->evaluations.size() << ':'
-              << ranking->evaluations.front().public_action_key << ':'
-              << static_cast<unsigned int>(ranking->evaluations.front().status) << '\n';
+    std::cout << "evaluations=" << ranking->evaluations.size() << '\n';
+    for (std::size_t index = 0; index < ranking->evaluations.size(); ++index) {
+        const auto& evaluation = ranking->evaluations[index];
+        std::cout << "evaluation[" << index << "].key=" << evaluation.public_action_key << '\n';
+        std::cout << "evaluation[" << index << "].status="
+                  << static_cast<unsigned int>(evaluation.status) << '\n';
+        std::cout << "evaluation[" << index << "].score=" << score_text(evaluation.score)
+                  << '\n';
+        std::cout << "evaluation[" << index << "].matched_intent_ids="
+                  << id_vector_text(evaluation.matched_intent_ids) << '\n';
+        std::cout << "evaluation[" << index << "].matched_goal_ids="
+                  << id_vector_text(evaluation.matched_goal_ids) << '\n';
+        std::cout << "evaluation[" << index << "].matched_line_ids="
+                  << id_vector_text(evaluation.matched_line_ids) << '\n';
+        std::cout << "evaluation[" << index << "].reason_ids="
+                  << id_vector_text(evaluation.reason_ids) << '\n';
+    }
     std::cout << "explanation=" << canonical_bytes_hex(
         canonical_teacher_decision_explanation_bytes(*ranking->explanation)) << '\n';
-    std::cout << "delta_profile=" << ranking->proposed_state_delta->strategy_profile_id << '\n';
-    std::cout << "delta_action="
-              << ranking->proposed_state_delta->proposed_for_public_action_key << '\n';
+    const auto& delta = *ranking->proposed_state_delta;
+    std::cout << "delta.strategy_profile_id=" << delta.strategy_profile_id << '\n';
+    std::cout << "delta.base_last_accepted_decision_index="
+              << optional_u64_text(delta.base_last_accepted_decision_index) << '\n';
+    std::cout << "delta.base_last_accepted_public_action_key="
+              << optional_string_text(delta.base_last_accepted_public_action_key) << '\n';
+    std::cout << "delta.proposed_for_public_action_key="
+              << delta.proposed_for_public_action_key << '\n';
+    std::cout << "delta.active_goal_id=" << optional_string_text(delta.active_goal_id) << '\n';
+    std::cout << "delta.active_line_id=" << optional_string_text(delta.active_line_id) << '\n';
+    std::cout << "delta.completed_line_node_ids="
+              << id_vector_text(delta.completed_line_node_ids) << '\n';
+    std::cout << "delta.achieved_goal_ids=" << id_vector_text(delta.achieved_goal_ids) << '\n';
+    std::cout << "delta.public_resource_facts="
+              << fact_vector_text(delta.public_resource_facts) << '\n';
+    std::cout << "delta.public_restriction_facts="
+              << fact_vector_text(delta.public_restriction_facts) << '\n';
+    std::cout << "delta.public_threat_facts="
+              << fact_vector_text(delta.public_threat_facts) << '\n';
+    std::cout << "delta.invalidation_reason_ids="
+              << id_vector_text(delta.invalidation_reason_ids) << '\n';
     return 0;
 }
 
@@ -242,7 +343,8 @@ void test_participant_handoff_and_rejection_state() {
 
     DecisionFrame p1_next;
     p1_next.acting_player = 1;
-    p1_next.public_observation = public_observation(1, 11);
+    p1_next.public_observation = public_observation(
+        1, 11, 6100, 4200, 7, "chain", std::optional<std::uint32_t>{11962031});
     StepAccepted accepted;
     accepted.transition.decision_index = 10;
     accepted.transition.selected_public_action_key = p0_selection.value->public_action_key;
@@ -260,8 +362,32 @@ void test_participant_handoff_and_rejection_state() {
             "Player-1 state was contaminated by Player-0 acceptance");
 
     const auto p1_selection = p1.policy.select(
-        PolicyInput{public_observation(1, 11), candidates});
+        PolicyInput{p1_next.public_observation, candidates});
     require(static_cast<bool>(p1_selection), "Player-1 did not select from its own frame");
+    const auto p1_ranking = p1.policy.pending_ranking_result();
+    const auto p1_facts = extract_public_fact_snapshot(p1_next.public_observation);
+    require(p1_facts.valid && p1_facts.snapshot.value("public.visible.entity_count").has_value() &&
+                p1_facts.snapshot.value("public.visible.entity_count")->u64_value == 1,
+            "P1 distinctive public entity was not present in its own observation");
+    require(p1_ranking.has_value() && p1_ranking->proposed_state_delta.has_value() &&
+                std::any_of(
+                    p1_ranking->proposed_state_delta->public_resource_facts.begin(),
+                    p1_ranking->proposed_state_delta->public_resource_facts.end(),
+                    [](const auto& fact) {
+                        return fact.fact_id == "public.chain.length" && fact.u64_value == 7;
+                    }),
+            "Player-1 did not consume its distinctive public frame");
+    require(std::none_of(
+                p0.policy.state().public_resource_facts.begin(),
+                p0.policy.state().public_resource_facts.end(), [](const auto& fact) {
+                    return (fact.fact_id == "public.chain.length" && fact.u64_value == 7) ||
+                           (fact.fact_id == "public.life_points.self" && fact.u64_value == 6100) ||
+                           (fact.fact_id == "public.life_points.opponent" &&
+                            fact.u64_value == 4200) ||
+                           (fact.fact_id == "public.visible.entity_count" &&
+                            fact.u64_value == 1);
+                }),
+            "Player-0 state consumed Player-1 public facts");
     p1.policy.reject_pending_proposal();
     require(p1.policy.state().last_accepted_decision_index == std::nullopt,
             "Player-1 rejected proposal mutated state");
@@ -328,6 +454,22 @@ void test_independent_process_determinism(const std::string& executable) {
     const auto second = run_probe_process(executable);
     require(!first.empty() && first == second,
             "independent Teacher processes produced different public outputs");
+    const std::vector<std::string> required_fields = {
+        "selected_score=", "evaluation[0].key=", "evaluation[0].status=",
+        "evaluation[0].score=", "evaluation[0].matched_intent_ids=",
+        "evaluation[0].matched_goal_ids=", "evaluation[0].matched_line_ids=",
+        "evaluation[0].reason_ids=", "delta.strategy_profile_id=",
+        "delta.base_last_accepted_decision_index=",
+        "delta.base_last_accepted_public_action_key=",
+        "delta.proposed_for_public_action_key=", "delta.active_goal_id=",
+        "delta.active_line_id=", "delta.completed_line_node_ids=",
+        "delta.achieved_goal_ids=", "delta.public_resource_facts=",
+        "delta.public_restriction_facts=", "delta.public_threat_facts=",
+        "delta.invalidation_reason_ids="};
+    for (const auto& field : required_fields) {
+        require(first.find(field) != std::string::npos,
+                "independent Teacher probe omitted required deterministic evidence: " + field);
+    }
 }
 
 }  // namespace

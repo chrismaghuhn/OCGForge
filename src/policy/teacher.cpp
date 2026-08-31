@@ -8,261 +8,10 @@
 #include <utility>
 #include <vector>
 
-#include "ygo/environment/public_action_identity.hpp"
 #include "ygo/policy/production_provenance.hpp"
-#include "ygo/teacher/candidate_evaluator.hpp"
-#include "ygo/teacher/fallback_resolver.hpp"
-#include "ygo/teacher/goal_line_controller.hpp"
-#include "ygo/teacher/recovery_controller.hpp"
-#include "ygo/teacher/teacher_decision.hpp"
-#include "ygo/teacher/teacher_explanation_codec.hpp"
-#include "ygo/trace/sha256.hpp"
+#include "ygo/teacher/salamangreat_profile.hpp"
+#include "ygo/teacher/swordsoul_tenyi_profile.hpp"
 #include "ygo/trajectory/codec.hpp"
-
-namespace ygo::teacher {
-namespace {
-
-bool valid_candidate_domain(
-    const std::vector<environment::EnvironmentActionCandidate>& candidates) noexcept {
-    if (candidates.empty()) {
-        return false;
-    }
-    for (std::size_t index = 0; index < candidates.size(); ++index) {
-        if (!environment::is_public_action_key(candidates[index].public_action_key)) {
-            return false;
-        }
-        for (std::size_t previous = 0; previous < index; ++previous) {
-            if (candidates[previous].public_action_key == candidates[index].public_action_key) {
-                return false;
-            }
-        }
-    }
-    return true;
-}
-
-TeacherRankingResult invalid_result(
-    TeacherRankingStatus status,
-    const std::vector<environment::EnvironmentActionCandidate>& candidates) {
-    TeacherRankingResult result;
-    result.status = status;
-    result.evaluations.reserve(candidates.size());
-    for (const auto& candidate : candidates) {
-        CandidateEvaluation evaluation;
-        evaluation.public_action_key = candidate.public_action_key;
-        evaluation.status = CandidateEvaluationStatus::Invalid;
-        result.evaluations.push_back(std::move(evaluation));
-    }
-    return result;
-}
-
-bool compose_score(const PublicEvaluatorOutcome& outcome,
-                   ScoreVector& score) noexcept {
-    for (const auto& contribution : outcome.contributions) {
-        if (!add_score_contribution(score, contribution.dimension, contribution.value)) {
-            return false;
-        }
-    }
-    return true;
-}
-
-CandidateEvaluation evaluation_from_outcome(
-    const environment::EnvironmentActionCandidate& candidate,
-    const PublicEvaluatorOutcome& outcome,
-    bool& valid) {
-    CandidateEvaluation result;
-    result.public_action_key = candidate.public_action_key;
-    result.status = outcome.status;
-    result.matched_intent_ids = outcome.matched_intent_ids;
-    result.matched_goal_ids = outcome.matched_goal_ids;
-    result.matched_line_ids = outcome.matched_line_ids;
-    result.reason_ids = outcome.reason_ids;
-    if (outcome.public_action_key != candidate.public_action_key) {
-        valid = false;
-        result.status = CandidateEvaluationStatus::Invalid;
-        return result;
-    }
-    if (outcome.status == CandidateEvaluationStatus::Supported) {
-        ScoreVector score;
-        if (!compose_score(outcome, score)) {
-            valid = false;
-            result.status = CandidateEvaluationStatus::Invalid;
-            return result;
-        }
-        result.score = score;
-    } else if (!outcome.contributions.empty()) {
-        valid = false;
-        result.status = CandidateEvaluationStatus::Invalid;
-    }
-    return result;
-}
-
-TeacherFallbackCandidateValue stage_value_from_outcome(
-    const environment::EnvironmentActionCandidate& candidate,
-    const PublicEvaluatorOutcome& outcome,
-    bool& valid) {
-    TeacherFallbackCandidateValue result;
-    result.public_action_key = candidate.public_action_key;
-    result.status = outcome.status;
-    result.matched_intent_ids = outcome.matched_intent_ids;
-    result.matched_goal_ids = outcome.matched_goal_ids;
-    result.matched_line_ids = outcome.matched_line_ids;
-    result.reason_ids = outcome.reason_ids;
-    result.contributions = outcome.contributions;
-    if (outcome.public_action_key != candidate.public_action_key) {
-        valid = false;
-        result.status = CandidateEvaluationStatus::Invalid;
-        result.contributions.clear();
-        return result;
-    }
-    if (outcome.status == CandidateEvaluationStatus::Supported) {
-        result.score = ScoreVector{};
-        for (const auto& contribution : result.contributions) {
-            if (!add_score_contribution(*result.score, contribution.dimension,
-                                        contribution.value)) {
-                valid = false;
-                result.status = CandidateEvaluationStatus::Invalid;
-                result.score.reset();
-                result.contributions.clear();
-                return result;
-            }
-        }
-    } else if (!result.contributions.empty()) {
-        valid = false;
-        result.status = CandidateEvaluationStatus::Invalid;
-        result.contributions.clear();
-    }
-    return result;
-}
-
-std::optional<PublicFactValue> current_chain_fact(const PublicFactSnapshot& facts) {
-    return facts.value("public.chain.length");
-}
-
-}  // namespace
-
-TeacherRankingResult TeacherCore::propose(
-    const ygo::policy::PolicyInput& input,
-    const StrategyProfileV1& profile,
-    const EpisodeLocalStrategyStateV1& state) const {
-    try {
-        if (!valid_candidate_domain(input.candidates) ||
-            !validate_strategy_profile(profile) ||
-            !validate_strategy_state(state) ||
-            state.strategy_profile_id != profile.profile_id ||
-            input.observation.perspective_player > 1) {
-            return invalid_result(TeacherRankingStatus::InvalidInput, input.candidates);
-        }
-
-        const auto facts_result = extract_public_fact_snapshot(input.observation);
-        if (!facts_result.valid) {
-            return invalid_result(TeacherRankingStatus::InvalidInput, input.candidates);
-        }
-        const auto owner = input.observation.perspective_player;
-        const auto reconciled = reconcile_strategy_state_with_evidence(
-            state, owner, input.observation);
-        if (!reconciled.has_value()) {
-            return invalid_result(TeacherRankingStatus::InvalidInput, input.candidates);
-        }
-        const auto selection = select_goal_and_line(
-            profile, reconciled->state, facts_result.snapshot);
-        const auto recovery = select_recovery_edge(profile, state, input.observation, owner);
-        if (selection.status == PredicateEvaluationStatus::Invalid ||
-            recovery.status == PredicateEvaluationStatus::Invalid) {
-            return invalid_result(TeacherRankingStatus::InvalidInput, input.candidates);
-        }
-
-        std::vector<TeacherFallbackCandidateValue> stage;
-        std::vector<CandidateEvaluation> evaluations;
-        stage.reserve(input.candidates.size());
-        evaluations.reserve(input.candidates.size());
-        bool all_supported = true;
-        bool valid = true;
-        for (const auto& candidate : input.candidates) {
-            CandidateFeatures features;
-            if (!extract_candidate_features(candidate, facts_result.snapshot, features)) {
-                valid = false;
-                CandidateEvaluation evaluation;
-                evaluation.public_action_key = candidate.public_action_key;
-                evaluation.status = CandidateEvaluationStatus::Invalid;
-                evaluations.push_back(std::move(evaluation));
-                TeacherFallbackCandidateValue invalid_stage;
-                invalid_stage.public_action_key = candidate.public_action_key;
-                invalid_stage.status = CandidateEvaluationStatus::Invalid;
-                stage.push_back(std::move(invalid_stage));
-                continue;
-            }
-            const auto outcome = evaluate_goal_line_progress(
-                profile, selection, recovery, candidate, input.observation, owner);
-            auto evaluation = evaluation_from_outcome(candidate, outcome, valid);
-            if (evaluation.status == CandidateEvaluationStatus::Invalid) {
-                valid = false;
-            }
-            if (outcome.status != CandidateEvaluationStatus::Supported) {
-                all_supported = false;
-            }
-            evaluations.push_back(std::move(evaluation));
-            stage.push_back(stage_value_from_outcome(candidate, outcome, valid));
-        }
-        if (!valid) {
-            TeacherRankingResult result;
-            result.status = TeacherRankingStatus::InvalidInput;
-            result.evaluations = std::move(evaluations);
-            return result;
-        }
-
-        TeacherRankingResult result;
-        if (all_supported) {
-            TeacherFallbackStageSet stages;
-            stages.stage_evaluations[0] = std::move(stage);
-            result = resolve_teacher_fallback(input.candidates, stages);
-        } else {
-            // F4 is the only total stage that does not assert an unavailable
-            // strategic meaning. It operates on the unchanged domain.
-            result = resolve_teacher_fallback(input.candidates, TeacherFallbackStageSet{});
-        }
-        if (result.status != TeacherRankingStatus::Selected ||
-            !result.selected_public_action_key.has_value()) {
-            return result;
-        }
-
-        TeacherStateDeltaV1 requested;
-        requested.strategy_profile_id = profile.profile_id;
-        requested.base_last_accepted_decision_index = state.last_accepted_decision_index;
-        requested.base_last_accepted_public_action_key =
-            state.last_accepted_public_action_key;
-        requested.proposed_for_public_action_key = *result.selected_public_action_key;
-        if (recovery.status == PredicateEvaluationStatus::True &&
-            recovery.target_goal_id.has_value()) {
-            requested.active_goal_id = recovery.target_goal_id;
-            requested.active_line_id = recovery.target_line_id;
-        } else if (selection.status == PredicateEvaluationStatus::True) {
-            requested.active_goal_id = selection.goal_id;
-            requested.active_line_id = selection.line_id;
-        }
-        requested.achieved_goal_ids = reconciled->state.achieved_goal_ids;
-        if (const auto chain_fact = current_chain_fact(facts_result.snapshot);
-            chain_fact.has_value()) {
-            requested.public_resource_facts.push_back(*chain_fact);
-        }
-
-        const auto delta = propose_teacher_state_delta(
-            state, input.observation, owner, profile, requested);
-        if (!delta.has_value()) {
-            return invalid_result(TeacherRankingStatus::InvalidInput, input.candidates);
-        }
-        result.proposed_state_delta = *delta;
-        std::string diagnostic;
-        if (!validate_teacher_ranking_result(result, &diagnostic)) {
-            return invalid_result(TeacherRankingStatus::InvalidInput, input.candidates);
-        }
-        return result;
-    } catch (...) {
-        return invalid_result(TeacherRankingStatus::InvalidInput, input.candidates);
-    }
-}
-
-}  // namespace ygo::teacher
-
 namespace ygo::policy {
 
 teacher::TeacherPolicyBindingV1 make_teacher_policy_binding(
@@ -359,6 +108,25 @@ make_teacher_participant_assignments(
     return result;
 }
 
+bool is_published_teacher_profile_pair(
+    const teacher::StrategyProfileV1& profile,
+    const teacher::TeacherPolicyBindingV1& binding,
+    const trajectory::PolicyArtifact& artifact) {
+    const auto matches = [&](const teacher::StrategyProfileV1& published_profile) {
+        const auto published_binding = make_teacher_policy_binding(published_profile);
+        const auto published_artifact = make_teacher_policy_artifact(published_profile);
+        return teacher::canonical_strategy_profile_content_bytes(profile) ==
+                   teacher::canonical_strategy_profile_content_bytes(published_profile) &&
+               binding.teacher_policy_binding_id ==
+                   published_binding.teacher_policy_binding_id &&
+               artifact.policy_artifact_id == published_artifact.policy_artifact_id &&
+               artifact.artifact_metadata_identity ==
+                   std::optional<std::string>{published_binding.teacher_policy_binding_id};
+    };
+    return matches(teacher::make_swordsoul_tenyi_profile()) ||
+           matches(teacher::make_salamangreat_profile());
+}
+
 DeterministicTeacherPolicy::DeterministicTeacherPolicy(
     teacher::StrategyProfileV1 profile,
     teacher::TeacherPolicyBindingV1 policy_binding,
@@ -443,7 +211,17 @@ TeacherPolicySessionCreateResult create_teacher_policy_session(
     const trajectory::ParticipantPolicyAssignment& assignment) noexcept {
     try {
         std::string diagnostic;
+        const auto resolver = make_production_policy_provenance_resolver();
+        const auto canonical_config = environment::CertifiedEnvironmentConfig::canonical();
         if (!teacher::validate_teacher_policy_binding(policy_binding, profile, &diagnostic) ||
+            !teacher::validate_strategy_profile_binding(profile, canonical_config, &diagnostic) ||
+            !resolver.can_resolve(trajectory::ProvenanceKind::ProducerImplementation,
+                                  kTeacherProducerImplementationIdentity) ||
+            !resolver.can_resolve(trajectory::ProvenanceKind::SamplingContract,
+                                  kTeacherDeterministicSamplingContractIdentity) ||
+            !resolver.can_resolve(trajectory::ProvenanceKind::ArtifactMetadataArtifact,
+                                  policy_binding.teacher_policy_binding_id) ||
+            !is_published_teacher_profile_pair(profile, policy_binding, artifact) ||
             artifact.policy_kind != trajectory::PolicyKind::DeterministicHeuristic ||
             artifact.producer_implementation_identity !=
                 kTeacherProducerImplementationIdentity ||
