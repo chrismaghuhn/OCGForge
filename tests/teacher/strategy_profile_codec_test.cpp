@@ -22,10 +22,26 @@ void require(const bool condition, const std::string& message) {
     }
 }
 
-PredicateRef predicate(const PredicateScope scope, const std::string& id) {
+PredicateAtom token_atom(const std::string& value) {
+    PredicateAtom atom;
+    atom.kind = PredicateAtomKind::Token;
+    atom.token = value;
+    return atom;
+}
+
+PredicateAtom u64_atom(const std::uint64_t value) {
+    PredicateAtom atom;
+    atom.kind = PredicateAtomKind::U64;
+    atom.u64 = value;
+    return atom;
+}
+
+PredicateRef predicate(const PredicateScope scope, const std::string& id,
+                       std::vector<PredicateAtom> arguments = {}) {
     PredicateRef value;
     value.scope = scope;
     value.predicate_id = id;
+    value.arguments = std::move(arguments);
     return value;
 }
 
@@ -52,43 +68,52 @@ StrategyProfileV1 valid_profile() {
     };
 
     value.resources = {
-        {"resource.follow_up", "fact.follow_up", 3, 20, 10},
-        {"resource.normal_summon", "fact.normal_summon", 1, 30, 5},
+        {"resource.follow_up", "public.life_points.self", 8000, 20, 10},
+        {"resource.normal_summon", "public.turn.phase", 3, 30, 5},
     };
 
-    const auto fact_a = predicate(PredicateScope::Observation, "fact.a");
-    const auto fact_b = predicate(PredicateScope::Candidate, "fact.b");
+    const auto candidate_action = predicate(
+        PredicateScope::Candidate, "candidate.action_kind_equals",
+        {token_atom("yes_no")});
+    const auto candidate_choice =
+        predicate(PredicateScope::Candidate, "candidate.choice_present");
+    const auto public_self = predicate(
+        PredicateScope::Observation, "observation.fact_u64_at_least",
+        {token_atom("public.life_points.self"), u64_atom(1)});
+    const auto public_opponent = predicate(
+        PredicateScope::Observation, "observation.fact_u64_at_most",
+        {token_atom("public.life_points.opponent"), u64_atom(8000)});
     value.candidate_intents = {
-        {"intent.advance", {fact_a}},
-        {"intent.interact", {fact_b}},
+        {"intent.advance", {candidate_action}},
+        {"intent.interact", {candidate_choice}},
     };
 
     GoalDefinition goal;
     goal.goal_id = "goal.establish";
     goal.priority = 100;
-    goal.preconditions = {fact_a, fact_b};
-    goal.completion_predicates = {fact_a};
-    goal.stop_predicates = {fact_b};
+    goal.preconditions = {public_opponent, public_self};
+    goal.completion_predicates = {public_self};
+    goal.stop_predicates = {public_opponent};
     value.goals = {goal};
 
     LineNode first_node;
     first_node.node_id = "node.first";
     first_node.candidate_intent_ids = {"intent.advance"};
-    first_node.completion_predicates = {fact_a};
+    first_node.completion_predicates = {public_self};
     first_node.preserve_resource_ids = {"resource.follow_up"};
     first_node.stop_predicates = {};
 
     LineNode second_node;
     second_node.node_id = "node.second";
     second_node.candidate_intent_ids = {"intent.interact"};
-    second_node.completion_predicates = {fact_b};
+    second_node.completion_predicates = {public_opponent};
     second_node.preserve_resource_ids = {"resource.normal_summon"};
     second_node.stop_predicates = {};
 
     LineDefinition line;
     line.line_id = "line.foundation";
     line.goal_id = "goal.establish";
-    line.applicability_predicates = {fact_a};
+    line.applicability_predicates = {public_self};
     line.required_resources = {{"resource.normal_summon", 1}};
     line.optional_resources = {"resource.follow_up"};
     line.nodes = {first_node, second_node};
@@ -101,7 +126,7 @@ StrategyProfileV1 valid_profile() {
     recovery.source_kind = RecoverySourceKind::Line;
     recovery.source_id = "line.foundation";
     recovery.invalidation_reason_ids = {"resource_consumed"};
-    recovery.preconditions = {fact_a};
+    recovery.preconditions = {public_self};
     recovery.candidate_intent_ids = {"intent.interact"};
     recovery.target_goal_id = "goal.establish";
     recovery.target_line_id = "line.foundation";
@@ -111,7 +136,7 @@ StrategyProfileV1 valid_profile() {
 
     InteractionRule interaction;
     interaction.interaction_id = "interaction.public";
-    interaction.trigger_predicates = {fact_b};
+    interaction.trigger_predicates = {public_opponent};
     interaction.candidate_intent_ids = {"intent.interact"};
     interaction.timing_priority = 50;
     interaction.preserve_resource_ids = {"resource.follow_up"};

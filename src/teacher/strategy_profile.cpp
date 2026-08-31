@@ -12,6 +12,8 @@
 #include <vector>
 
 #include "ygo/environment/episodic_environment.hpp"
+#include "ygo/teacher/predicate_registry.hpp"
+#include "ygo/teacher/public_fact_registry.hpp"
 #include "ygo/trace/sha256.hpp"
 #include "ygo/trajectory/codec.hpp"
 
@@ -127,6 +129,9 @@ void validate_predicate_ref(const PredicateRef& value) {
     for (const auto& argument : value.arguments) {
         validate_predicate_atom(argument);
     }
+    std::string diagnostic;
+    require_condition(TeacherPredicateRegistryV1::canonical().validate_shape(value, &diagnostic),
+                      diagnostic.c_str());
 }
 
 void write_predicate_atom(trajectory::ByteWriter& writer, const PredicateAtom& value) {
@@ -162,12 +167,20 @@ void write_predicate_ref(trajectory::ByteWriter& writer, const PredicateRef& val
     }
 }
 
-void require_predicate_vector(const std::vector<PredicateRef>& values, const char* field) {
+void require_predicate_vector(const std::vector<PredicateRef>& values, const char* field,
+                              const StrategyProfileV1* profile = nullptr) {
     require_count(values.size(), field);
     std::vector<std::vector<std::uint8_t>> encoded;
     encoded.reserve(values.size());
     for (const auto& value : values) {
         encoded.push_back(canonical_predicate_ref_bytes(value));
+        if (profile != nullptr) {
+            std::string diagnostic;
+            require_condition(
+                TeacherPredicateRegistryV1::canonical().validate_profile_ref(value, *profile,
+                                                                               &diagnostic),
+                diagnostic.c_str());
+        }
     }
     for (std::size_t index = 1; index < encoded.size(); ++index) {
         if (!(encoded[index - 1] < encoded[index])) {
@@ -280,6 +293,29 @@ void validate_profile_content(const StrategyProfileV1& value) {
         require_token(resource.public_fact_id, "public fact ID");
         require_score_value(resource.preservation_priority, "resource preservation priority");
         require_score_value(resource.conversion_priority, "resource conversion priority");
+
+        const auto& definitions = PublicFactRegistry::canonical().definitions();
+        const auto fact = std::find_if(
+            definitions.begin(), definitions.end(), [&](const auto& definition) {
+                return definition.fact_id == resource.public_fact_id;
+            });
+        require_condition(fact != definitions.end(),
+                          "profile resource public fact is not registered");
+        require_condition(
+            fact->source_classification != PublicFactSourceClassification::Blocked,
+            "profile resource public fact is blocked");
+        require_condition(fact->value_kind == PublicFactValueKind::U64,
+                          "profile resource public fact is not U64");
+        require_condition(
+            std::find(fact->allowed_scopes.begin(), fact->allowed_scopes.end(),
+                      PublicFactValidityScope::CurrentReconciliation) !=
+                fact->allowed_scopes.end(),
+            "profile resource public fact has no current scope");
+        if (fact->u64_maximum.has_value()) {
+            require_condition(static_cast<std::uint64_t>(resource.max_value) <=
+                                  *fact->u64_maximum,
+                              "profile resource maximum exceeds public fact bounds");
+        }
     }
 
     require_count(value.candidate_intents.size(), "candidate intents");
@@ -289,7 +325,7 @@ void validate_profile_content(const StrategyProfileV1& value) {
         "candidate intents");
     for (const auto& intent : value.candidate_intents) {
         require_token(intent.intent_id, "candidate intent ID");
-        require_predicate_vector(intent.public_predicates, "candidate intent predicates");
+        require_predicate_vector(intent.public_predicates, "candidate intent predicates", &value);
     }
 
     require_count(value.goals.size(), "goals");
@@ -299,9 +335,9 @@ void validate_profile_content(const StrategyProfileV1& value) {
     for (const auto& goal : value.goals) {
         require_token(goal.goal_id, "goal ID");
         require_score_value(goal.priority, "goal priority");
-        require_predicate_vector(goal.preconditions, "goal preconditions");
-        require_predicate_vector(goal.completion_predicates, "goal completion predicates");
-        require_predicate_vector(goal.stop_predicates, "goal stop predicates");
+        require_predicate_vector(goal.preconditions, "goal preconditions", &value);
+        require_predicate_vector(goal.completion_predicates, "goal completion predicates", &value);
+        require_predicate_vector(goal.stop_predicates, "goal stop predicates", &value);
     }
 
     require_count(value.lines.size(), "lines");
@@ -311,7 +347,8 @@ void validate_profile_content(const StrategyProfileV1& value) {
     for (const auto& line : value.lines) {
         require_token(line.line_id, "line ID");
         require_token(line.goal_id, "line goal ID");
-        require_predicate_vector(line.applicability_predicates, "line applicability predicates");
+        require_predicate_vector(line.applicability_predicates, "line applicability predicates",
+                                 &value);
         validate_resource_requirements(line.required_resources);
         require_sorted_strings(line.optional_resources, "line optional resources");
         require_count(line.nodes.size(), "line nodes");
@@ -321,9 +358,10 @@ void validate_profile_content(const StrategyProfileV1& value) {
         for (const auto& node : line.nodes) {
             require_token(node.node_id, "line node ID");
             require_sorted_strings(node.candidate_intent_ids, "node candidate intent IDs");
-            require_predicate_vector(node.completion_predicates, "node completion predicates");
+            require_predicate_vector(node.completion_predicates, "node completion predicates",
+                                     &value);
             require_sorted_strings(node.preserve_resource_ids, "node preserved resource IDs");
-            require_predicate_vector(node.stop_predicates, "node stop predicates");
+            require_predicate_vector(node.stop_predicates, "node stop predicates", &value);
         }
         validate_node_dependencies(line);
         require_sorted_strings(line.recovery_edge_ids, "line recovery edge IDs");
@@ -344,7 +382,7 @@ void validate_profile_content(const StrategyProfileV1& value) {
             require_condition(is_registered_invalidation_reason(reason),
                               "profile invalidation reason is not registered in v1");
         }
-        require_predicate_vector(edge.preconditions, "recovery preconditions");
+        require_predicate_vector(edge.preconditions, "recovery preconditions", &value);
         require_sorted_strings(edge.candidate_intent_ids, "recovery candidate intent IDs");
         require_token(edge.target_goal_id, "recovery target goal ID");
         if (edge.target_line_id.has_value()) {
@@ -362,7 +400,7 @@ void validate_profile_content(const StrategyProfileV1& value) {
         "interactions");
     for (const auto& interaction : value.interactions) {
         require_token(interaction.interaction_id, "interaction ID");
-        require_predicate_vector(interaction.trigger_predicates, "interaction predicates");
+        require_predicate_vector(interaction.trigger_predicates, "interaction predicates", &value);
         require_sorted_strings(interaction.candidate_intent_ids,
                                "interaction candidate intent IDs");
         require_score_value(interaction.timing_priority, "interaction timing priority");

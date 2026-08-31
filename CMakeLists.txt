@@ -211,7 +211,10 @@ add_library(ygo_teacher STATIC
     src/teacher/deterministic_resolver.cpp
     src/teacher/interaction_evaluator.cpp
     src/teacher/material_evaluator.cpp
+    src/teacher/goal_line_controller.cpp
+    src/teacher/predicate_registry.cpp
     src/teacher/public_fact_registry.cpp
+    src/teacher/recovery_controller.cpp
     src/teacher/strategy_profile.cpp
     src/teacher/strategy_profile_codec.cpp
     src/teacher/strategy_state.cpp
@@ -332,6 +335,14 @@ add_executable(teacher_rejected_transition_test
 target_link_libraries(teacher_rejected_transition_test PRIVATE ygo_teacher)
 add_test(NAME teacher_rejected_transition_test
          COMMAND teacher_rejected_transition_test)
+
+add_executable(teacher_goal_line_test tests/teacher/teacher_goal_line_test.cpp)
+target_link_libraries(teacher_goal_line_test PRIVATE ygo_teacher)
+add_test(NAME teacher_goal_line_test COMMAND teacher_goal_line_test)
+
+add_executable(teacher_recovery_test tests/teacher/teacher_recovery_test.cpp)
+target_link_libraries(teacher_recovery_test PRIVATE ygo_teacher)
+add_test(NAME teacher_recovery_test COMMAND teacher_recovery_test)
 
 add_executable(ygo_core_probe tools/ygo_core_probe/main.cpp)
 target_link_libraries(ygo_core_probe PRIVATE ygo_m4)
