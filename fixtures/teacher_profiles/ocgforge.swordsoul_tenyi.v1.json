@@ -52,7 +52,9 @@
     {
       "intent_id": "intent.interaction.chain",
       "public_predicates": [
-        {"scope": "CANDIDATE", "predicate_id": "candidate.action_kind_equals", "arguments": [{"kind": "TOKEN", "value": "chain"}]}
+        {"scope": "CANDIDATE", "predicate_id": "candidate.action_kind_equals", "arguments": [{"kind": "TOKEN", "value": "chain"}]},
+        {"scope": "CANDIDATE", "predicate_id": "candidate.source_role_contains", "arguments": [{"kind": "TOKEN", "value": "role.interaction"}]},
+        {"scope": "CANDIDATE", "predicate_id": "candidate.source_visibility_equals", "arguments": [{"kind": "TOKEN", "value": "visible"}]}
       ]
     },
     {

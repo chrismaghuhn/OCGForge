@@ -61,6 +61,11 @@ PredicateRef candidate_source_role(const std::string& value) {
                      {token_atom(value)});
 }
 
+PredicateRef candidate_source_visibility(const std::string& value) {
+    return predicate(PredicateScope::Candidate, "candidate.source_visibility_equals",
+                     {token_atom(value)});
+}
+
 CardRoleEntry card_role(const std::uint32_t passcode,
                         std::vector<std::string> roles) {
     return CardRoleEntry{passcode, std::move(roles)};
@@ -121,7 +126,9 @@ StrategyProfileV1 build_profile() {
 
     value.candidate_intents = {
         {"intent.board.breaker", {candidate_source_role("role.board.breaker")} },
-        {"intent.interaction.chain", {candidate_action("chain")} },
+        {"intent.interaction.chain",
+         {candidate_action("chain"), candidate_source_role("role.interaction"),
+          candidate_source_visibility("visible")} },
         {"intent.level10.payoff", {candidate_source_role("role.payoff.level10")} },
         {"intent.level8.payoff", {candidate_source_role("role.payoff.level8")} },
         {"intent.longyuan.access", {candidate_source_role("role.starter.longyuan")} },
