@@ -205,6 +205,19 @@ else()
     target_compile_options(ygo_trajectory PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
+add_library(ygo_teacher STATIC
+    src/teacher/strategy_profile.cpp
+    src/teacher/strategy_profile_codec.cpp
+    src/teacher/teacher_policy_binding.cpp
+)
+target_include_directories(ygo_teacher PUBLIC "${CMAKE_SOURCE_DIR}/include")
+target_link_libraries(ygo_teacher PUBLIC ygo_trajectory)
+if(MSVC)
+    target_compile_options(ygo_teacher PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(ygo_teacher PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
 add_library(ygo_policy STATIC
     src/policy/rng.cpp
     src/policy/production_provenance.cpp
@@ -266,6 +279,14 @@ target_include_directories(trajectory_privacy_test PRIVATE
                            "${CMAKE_SOURCE_DIR}/src/environment")
 target_link_libraries(trajectory_privacy_test PRIVATE ygo_trajectory)
 add_test(NAME trajectory_privacy_test COMMAND trajectory_privacy_test)
+
+add_executable(strategy_profile_codec_test tests/teacher/strategy_profile_codec_test.cpp)
+target_link_libraries(strategy_profile_codec_test PRIVATE ygo_teacher)
+add_test(NAME strategy_profile_codec_test COMMAND strategy_profile_codec_test)
+
+add_executable(strategy_profile_negative_test tests/teacher/strategy_profile_negative_test.cpp)
+target_link_libraries(strategy_profile_negative_test PRIVATE ygo_teacher)
+add_test(NAME strategy_profile_negative_test COMMAND strategy_profile_negative_test)
 
 add_executable(ygo_core_probe tools/ygo_core_probe/main.cpp)
 target_link_libraries(ygo_core_probe PRIVATE ygo_m4)
