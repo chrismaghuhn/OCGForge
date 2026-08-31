@@ -96,6 +96,7 @@ When a researched line needs one of these facts, the implementation MUST mark th
 | TeacherCore | `ygo::teacher` | Interprets public state, reconciles state, extracts features, controls goals/lines, evaluates every candidate, resolves deterministically, and emits derived explanation data. |
 | StrategyProfile | `ygo::teacher` immutable artifact | Supplies deck/matchup-specific data. It never generates legal actions or owns runtime mutable state. |
 | Teacher predicate registry | Task-7 `ygo::teacher` immutable semantic registry | Owns the exact v1 predicate IDs, scopes, argument schemas, public sources, and runtime statuses; it does not own legality or mutable session state. |
+| Strategy resource-to-fact binding | Task-7 profile-validation hook plus Task-5 `PublicFactRegistry` | Every profile resource names one registered non-blocked U64 current fact; Task 7 owns the cross-artifact validation and runtime bounds proof. |
 | Profile identity and content binding | `ygo::teacher` codec plus existing `ygo::trajectory::PolicyArtifact` metadata field | `StrategyProfileV1` and `TeacherPolicyBindingV1` are content-addressed. The binding is carried in existing `PolicyArtifact.artifact_metadata_identity`; no new trajectory field is introduced. |
 | Episode-local strategy state | the participant's `DeterministicTeacherPolicy` session | State is bounded, public-derived, participant/episode-local, reset explicitly, and committed only after accepted V2 transitions. |
 | Candidate feature extraction | generic `TeacherCore` | Reads only public observation, current public candidate metadata, accepted public history, and profile references. It does not own legality. |
@@ -336,6 +337,8 @@ metadata already available at the public boundary:
 | `candidate.choice_value_equals` | `CANDIDATE` | `U64 expected` | The supplied candidate has a choice and its public choice value equals `expected`. |
 | `candidate.source_visibility_equals` | `CANDIDATE` | `TOKEN visibility` | The candidate source reference class is exactly `absent`, `visible`, or `redacted`; no locator or card identity is resolved. |
 | `candidate.target_visibility_equals` | `CANDIDATE` | `TOKEN visibility` | The candidate target reference class is exactly `absent`, `visible`, or `redacted`; no locator or card identity is resolved. |
+| `candidate.source_role_contains` | `CANDIDATE` | `TOKEN role_id` | The current public source card resolves to one immutable profile passcode role containing `role_id`; no passcode or locator is emitted as evidence. |
+| `candidate.target_role_contains` | `CANDIDATE` | `TOKEN role_id` | The current public target card resolves to one immutable profile passcode role containing `role_id`; no passcode or locator is emitted as evidence. |
 | `candidate.phase_equals` | `CANDIDATE` | `U64 expected` | The public candidate phase is present and equals `expected`, which MUST be at most `u32` maximum. |
 | `candidate.position_equals` | `CANDIDATE` | `U64 expected` | The public candidate position is present and equals `expected`, which MUST be at most `u8` maximum. |
 | `candidate.source_index_equals` | `CANDIDATE` | `U64 expected` | The public candidate source index is present and equals `expected`, which MUST be at most `u32` maximum. |
@@ -351,9 +354,27 @@ For every observation predicate, the `fact_id` argument MUST name a Task-5
 registered non-`BLOCKED` fact with the exact declared kind. Numeric arguments
 MUST satisfy that fact definition's bounds; TOKEN arguments MUST satisfy its
 TOKEN domain. For candidate predicates, token domains and integer ranges are
-part of the table above. For profile-static predicates, the referenced ID or
-passcode MUST exist in the same validated profile. These contextual checks are
-not optional lookup hints.
+part of the table above. `candidate.source_role_contains` and
+`candidate.target_role_contains` require a canonical `role_id` that occurs in
+at least one `StrategyProfileV1.card_roles[].role_ids` vector. For
+profile-static predicates, the referenced ID or passcode MUST exist in the
+same validated profile. These contextual checks are not optional lookup hints.
+
+The role predicates use one public-safe join only. For an absent source or
+target reference, the result is `FALSE`. For a `RedactedSlot`, the result is
+`UNSUPPORTED`. For a `VisibleCard`, the controller resolves the candidate's
+`observation_locator` only against the same owning participant's current
+decoded `PublicSafeStateView` and requires exactly one matching entity with
+`identity_known=true` and a present public `passcode`. An exact locator miss,
+duplicate match, or otherwise non-exact locator resolution is `INVALID`; it is
+never repaired or downgraded to `FALSE`. Exactly one matched entity with
+`identity_known=false` or no public passcode is `FALSE`, not an inferred role.
+When the identity is known, the resolved passcode is looked up in the
+immutable profile card-role catalog, and the predicate is `TRUE` exactly when
+the requested role ID is present for that passcode; otherwise it is `FALSE`.
+The locator and passcode are derivation inputs only and MUST NOT be emitted as
+Teacher evidence. No v1 predicate directly exposes or compares a candidate
+passcode or locator, and a redacted identity is never inferred.
 
 No v1 predicate has scope `ACCEPTED_PUBLIC_HISTORY`; such a reference is
 unavailable until a registered public-history owner exists and therefore fails
@@ -392,7 +413,29 @@ consume only immutable profile data. No predicate may call an engine query,
 read a private observation, reconstruct legality, or inspect another
 participant's perspective.
 
-### 5.4 Goal, line, node, and recovery controller v1
+### 5.4 Resource-to-public-fact binding
+
+The same Task-7 profile-validation hook validates every
+`ResourceDefinition.public_fact_id` against the Task-5 `PublicFactRegistry`.
+The fact MUST be registered, have a source classification other than
+`BLOCKED`, have value kind `U64`, and allow `CURRENT_RECONCILIATION` scope.
+When the registered U64 maximum is finite,
+`ResourceDefinition.max_value` MUST be within that bound. The existing
+`ResourceRequirement.minimum <= ResourceDefinition.max_value` rule remains
+mandatory. A resource pointing to an unknown, blocked, non-U64, or
+current-scope-incompatible fact fails profile validation; no profile-local
+resource registry or alias is permitted.
+
+At runtime, resource proof requires the exact current Task-5
+`PublicFactSnapshot` value for the bound fact. A value below the requirement
+minimum is `FALSE` and makes the requirement unsatisfied. A missing current
+fact is `UNSUPPORTED`. A wrong kind or a value above the profile-declared
+`max_value` is `INVALID`; values are never clamped, saturated, or repaired.
+Task 9 and Task 10 may use only resources representable by the registered
+public facts. A new resource meaning requires an explicit versioned Task-5
+fact-contract change before it can enter a profile.
+
+### 5.5 Goal, line, node, and recovery controller v1
 
 The Task-7 controller evaluates the current participant's reconciled public
 state and the complete supplied candidate domain. It never generates,
@@ -451,17 +494,32 @@ is `UNSUPPORTED`, the alternatives result is `UNSUPPORTED`; otherwise it is
 derived evidence. No match removes that candidate from the authoritative
 evaluation domain.
 
-A recovery edge is evaluated with the pre-reconciliation active
-goal/line/node context and the current proposal's derived invalidation
-evidence as call-local values; neither is added to persistent state. An edge
-is eligible only when its source matches that invalidated
-goal/line/node context, its
-nonempty `invalidation_reason_ids` are all present in the current derived
+Before Task-6 reconciliation clears stale plan state, the controller derives
+call-local values `pre_active_goal_id`, `pre_active_line_id`, and
+`pre_ready_node_ids`. `pre_ready_node_ids` is the canonical bytewise-sorted
+set of nodes in the pre-reconciliation active line that are not completed and
+whose every incoming dependency predecessor is completed. These values are
+derived policy data only and are never persisted.
+
+Recovery source matching is exact:
+
+- `GOAL`: `edge.source_id == pre_active_goal_id`;
+- `LINE`: `edge.source_id == pre_active_line_id`;
+- `NODE`: `edge.source_id` occurs in `pre_ready_node_ids`.
+
+For `LINE` or `NODE` recovery edges, when a pre-active line exists,
+`edge.recovery_edge_id` MUST also occur in that line's
+`recovery_edge_ids`. A NODE source is never an arbitrary profile node, the
+first or last vector element, a completed node, or a queued future node. An
+edge is eligible only when its exact source match holds, its nonempty
+`invalidation_reason_ids` are all present in the current derived
 reconciliation evidence, its precondition conjunction is `TRUE`, and its
 profile target references are valid. An empty recovery reason vector is not a
-triggered recovery edge in v1. If multiple edges are eligible, choose by
-`(target goal priority descending, confidence_cap ascending,
-recovery_edge_id ascending)`, where the frozen confidence order is
+triggered recovery edge in v1.
+
+If multiple ready nodes have eligible recovery edges, evaluate every such
+edge and choose by `(target goal priority descending, confidence_cap
+ascending, recovery_edge_id ascending)`, where the frozen confidence order is
 `HIGH=0`, `MEDIUM=1`, `LOW=2`, `FALLBACK=3`. Edge selection changes only
 advisory plan state; it never chooses or stores a future engine action. If no
 edge is fully proven, clear stale plan state and continue with deterministic
@@ -488,7 +546,7 @@ controller contributes evidence and score inputs only; the complete-domain
 resolver remains the sole selection authority. No candidate-zero, first-
 candidate, legality reconstruction, or future-action queue is permitted.
 
-### 5.5 Canonical serialization and identity
+### 5.6 Canonical serialization and identity
 
 Profile canonical bytes use the primitive encoding already accepted by Phase 3: UTF-8 length-prefixed strings, length-prefixed byte vectors, fixed-width big-endian unsigned integers, signed `i32` two's-complement bits, boolean `0`/`1`, and `u32be` vector counts. The profile content identity is:
 
@@ -513,7 +571,7 @@ Canonical ordering is part of the contract:
 
 The codec rejects unknown schema/domain values, invalid enum values, malformed UTF-8, invalid identity tokens, duplicate or unsorted entries, dangling references, duplicate predicate atoms where uniqueness is required, cycles, invalid confidence caps, out-of-range integers, missing required binding fields, and a mismatched derived ID or trailing bytes. The profile/binding validator additionally rejects mismatched deck/rules values. Neither component sorts, merges, defaults, or silently drops malformed data.
 
-### 5.6 Immutable publication and compatibility
+### 5.7 Immutable publication and compatibility
 
 Profile bytes MUST be published through an immutable content-addressed policy registry. A filesystem path can locate bytes for a build, but it is never identity or semantic input. The registry verifies the profile ID before a Teacher session is created and retains the exact canonical bytes for the declared ID. Updating a profile creates new canonical bytes and a new ID; in-place replacement under an old ID is invalid.
 

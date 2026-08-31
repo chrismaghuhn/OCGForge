@@ -402,13 +402,16 @@ strategy controller using profile data.
 
 - Exercise every initial predicate registry entry with its exact scope, ordered atom schema, public/profile-static source, and status semantics.
 - Reject unknown predicate IDs, wrong scopes, wrong arity, wrong atom kinds, invalid fact IDs/kinds/bounds, invalid candidate token domains, invalid profile-static references, and any `ACCEPTED_PUBLIC_HISTORY` predicate because no v1 history owner exists.
+- Prove public-safe `candidate.source_role_contains` and `candidate.target_role_contains` TRUE/FALSE results for visible joins, `UNSUPPORTED` for `RedactedSlot`, `INVALID` for a malformed/missing visible locator join, and rejection of an unknown profile role.
+- Reject unknown, blocked, non-U64, or current-scope-incompatible `ResourceDefinition.public_fact_id` values at profile validation; prove missing resource facts are `UNSUPPORTED`, values below minimum are ineligible, and values above profile `max_value` are `INVALID`.
 - Validate a DAG with independent nodes and assert both supplied orders remain legal policy evaluation inputs.
 - Match candidate intents from public candidate metadata using conjunctions and alternative intent-ID sets without generating actions; retain all matching IDs as sorted evidence.
 - Retain an active eligible goal/line before considering priority/ID selection, then verify deterministic goal `(priority descending, goal_id ascending)` and line `(line preference descending, line_id ascending)` selection.
 - Verify DAG-ready nodes require all incoming predecessors to be completed, independent nodes remain ready, and empty completion predicates do not auto-complete.
 - Complete a node only after an accepted action and a subsequent perspective-safe public observation for the same participant satisfies the declared completion predicate; never assume `StepAccepted.next` belongs to that participant.
 - Invalidate an active line when a public body/resource/target/zone/copy budget disappears or a restriction is observed.
-- Choose a declared recovery edge only when its source, all invalidation reasons, preconditions, and target are proven; verify tie order `(target goal priority descending, confidence cap ascending, recovery_edge_id ascending)` and no queued action.
+- Prove multiple independent ready nodes, and ensure NODE recovery matches only a pre-ready node; completed/non-ready nodes and unlisted LINE/NODE recovery edges do not match.
+- Choose a declared recovery edge only when its source, all invalidation reasons, preconditions, target, and active-line recovery membership are proven; verify tie order `(target goal priority descending, confidence cap ascending, recovery_edge_id ascending)` and no queued action.
 - Verify exact progress contributions `+3` for a ready active-line intent, `+2` for an eligible recovery intent, `max(+3,+2)` when both apply, and zero for a proven nonmatch; unsupported/invalid proof produces no contribution.
 
 **Regression tests:** episodic_replay_test, episodic_paired_world_test, episodic_interrupt_test, and public_action_identity_test.
