@@ -130,6 +130,61 @@ workers; 16 workers is the recommended production concurrency for the measured
 host. M4 remains narrowly the parallel-simulation foundation and baseline
 closure, not a general ML-readiness or M5 claim.
 
+### Phase 4B — Teacher public-only profiles and trusted path
+
+Status: **FINAL PASS** for the fixed certified Swordsoul-versus-Salamangreat
+matchup.
+
+~~~text
+H_exec =
+cd00c3d34cc41c50ac1e7730a26a0e532cd21902
+
+H_evidence =
+32a1adedc50681fd3f5bf2d4b59f8fa3cd7a3030
+
+schema =
+ocgforge.phase4b_acceptance.v1
+
+P4B-G00..G18 = PASS
+~~~
+
+Phase 4B established the public-only Teacher profiles, deterministic
+fallback/diagnostic semantics, participant-safe state lifecycle, trusted
+trajectory path, replay/admission compatibility, and fixed-matchup evidence.
+Its accepted Teacher v1 identities remain immutable. This is not an arbitrary
+deck, general battle-proof, or ML claim.
+
+### Phase 4C — Public battle proof + frozen Teacher evaluation
+
+Phase 4C is the active future layer. Task 1 freezes the public battle facts
+and positive lethal-proof contracts; no Phase-4C implementation or final
+acceptance has started.
+
+~~~text
+Task 1 — Battle Facts / Provable Lethal contract freeze
+CURRENT / AUTHORIZED
+
+Task 2 — Battle snapshot implementation
+NOT AUTHORIZED
+
+Task 3 — Provable lethal implementation
+NOT AUTHORIZED
+
+Task 4 — Teacher v2 semantic integration
+NOT AUTHORIZED
+
+Task 5 — frozen evaluation harness
+NOT AUTHORIZED
+
+Task 6 — Phase-4C acceptance/evidence
+NOT AUTHORIZED
+~~~
+
+Phase 4C does not authorize new public observation bytes, new legality logic,
+private engine queries, future-action search, battle simulation duplication,
+copy-budget inference, ML, or arbitrary-deck support. It is not a Phase-4C
+final-pass claim.
+
 ## Post-M4 work remains separate
 
 The following are candidate directions only and are not started by M4 finalization.
