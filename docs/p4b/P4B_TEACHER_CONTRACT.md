@@ -95,6 +95,7 @@ When a researched line needs one of these facts, the implementation MUST mark th
 | Teacher policy execution | `ygo::policy` | A future `DeterministicTeacherPolicy` adapts the existing `PolicyInput` and `PolicySelection` to V2. It owns session lifecycle, not strategy meaning. |
 | TeacherCore | `ygo::teacher` | Interprets public state, reconciles state, extracts features, controls goals/lines, evaluates every candidate, resolves deterministically, and emits derived explanation data. |
 | StrategyProfile | `ygo::teacher` immutable artifact | Supplies deck/matchup-specific data. It never generates legal actions or owns runtime mutable state. |
+| Teacher predicate registry | Task-7 `ygo::teacher` immutable semantic registry | Owns the exact v1 predicate IDs, scopes, argument schemas, public sources, and runtime statuses; it does not own legality or mutable session state. |
 | Profile identity and content binding | `ygo::teacher` codec plus existing `ygo::trajectory::PolicyArtifact` metadata field | `StrategyProfileV1` and `TeacherPolicyBindingV1` are content-addressed. The binding is carried in existing `PolicyArtifact.artifact_metadata_identity`; no new trajectory field is introduced. |
 | Episode-local strategy state | the participant's `DeterministicTeacherPolicy` session | State is bounded, public-derived, participant/episode-local, reset explicitly, and committed only after accepted V2 transitions. |
 | Candidate feature extraction | generic `TeacherCore` | Reads only public observation, current public candidate metadata, accepted public history, and profile references. It does not own legality. |
@@ -307,7 +308,187 @@ The line graph is a directed acyclic partial order. A node dependency expresses 
 
 The profile enum codes are fixed: `own_deck_role` and `opponent_deck_role` use the accepted `DeckRole` codes `0=FirstLockedDeck` and `1=SecondLockedDeck`; predicate scopes are `0=OBSERVATION`, `1=CANDIDATE`, `2=ACCEPTED_PUBLIC_HISTORY`, `3=PROFILE_STATIC`; predicate atoms are `0=TOKEN`, `1=U64`, `2=I32`, `3=PASSCODE`, `4=BOOLEAN`; recovery sources are `0=GOAL`, `1=LINE`, `2=NODE`; preference subjects are `0=GLOBAL`, `1=GOAL`, `2=LINE`, `3=INTENT`, `4=RESOURCE`, `5=INTERACTION`; confidence caps/classes are `0=HIGH`, `1=MEDIUM`, `2=LOW`, `3=FALLBACK`. Unknown codes fail closed.
 
-### 5.3 Canonical serialization and identity
+### 5.3 Immutable Teacher predicate registry and runtime semantics
+
+Task 7 owns the immutable `TeacherPredicateRegistryV1`. Its versioned registry
+contract is `ocgforge.policy.teacher_predicate.v1`; it is part of the
+TeacherCore semantic artifact and is not a new profile or trajectory field.
+The registry is a fixed, canonically ID-sorted value table with no runtime
+registration, aliases, prefix matching, or `latest` entry. A missing registry
+or registry mismatch fails profile validation. Changing an ID's meaning,
+scope, argument schema, source, or status semantics requires a new versioned
+predicate contract and a new TeacherCore artifact/binding; an existing profile
+must not be reinterpreted under the old artifact identity.
+
+The initial v1 registry is intentionally generic and limited to facts and
+metadata already available at the public boundary:
+
+| Predicate ID | Scope | Ordered argument schema | Exact source/meaning |
+| --- | --- | --- | --- |
+| `observation.fact_u64_equals` | `OBSERVATION` | `TOKEN fact_id`, `U64 expected` | The Task-5 `PublicFactSnapshot` contains the registered U64 fact with exactly `expected`. |
+| `observation.fact_u64_at_least` | `OBSERVATION` | `TOKEN fact_id`, `U64 minimum` | The snapshot contains the registered U64 fact and its value is at least `minimum`. |
+| `observation.fact_u64_at_most` | `OBSERVATION` | `TOKEN fact_id`, `U64 maximum` | The snapshot contains the registered U64 fact and its value is at most `maximum`. |
+| `observation.fact_i32_equals` | `OBSERVATION` | `TOKEN fact_id`, `I32 expected` | The snapshot contains the registered I32 fact with exactly `expected`. |
+| `observation.fact_boolean_equals` | `OBSERVATION` | `TOKEN fact_id`, `BOOLEAN expected` | The snapshot contains the registered BOOLEAN fact with exactly `expected`. |
+| `observation.fact_token_equals` | `OBSERVATION` | `TOKEN fact_id`, `TOKEN expected` | The snapshot contains the registered TOKEN fact with exactly `expected`. |
+| `candidate.action_kind_equals` | `CANDIDATE` | `TOKEN action_kind` | The supplied candidate's public `EnvironmentActionKind` name equals the argument. Allowed names are `idle_command`, `battle_command`, `chain`, `option`, `card_selection`, `announcement`, `place`, `position`, `yes_no`, `pick`, `finish`, `cancel`, `assign_amount`, and `unsupported`. |
+| `candidate.choice_present` | `CANDIDATE` | none | The supplied public candidate has a `choice` descriptor. |
+| `candidate.choice_value_equals` | `CANDIDATE` | `U64 expected` | The supplied candidate has a choice and its public choice value equals `expected`. |
+| `candidate.source_visibility_equals` | `CANDIDATE` | `TOKEN visibility` | The candidate source reference class is exactly `absent`, `visible`, or `redacted`; no locator or card identity is resolved. |
+| `candidate.target_visibility_equals` | `CANDIDATE` | `TOKEN visibility` | The candidate target reference class is exactly `absent`, `visible`, or `redacted`; no locator or card identity is resolved. |
+| `candidate.phase_equals` | `CANDIDATE` | `U64 expected` | The public candidate phase is present and equals `expected`, which MUST be at most `u32` maximum. |
+| `candidate.position_equals` | `CANDIDATE` | `U64 expected` | The public candidate position is present and equals `expected`, which MUST be at most `u8` maximum. |
+| `candidate.source_index_equals` | `CANDIDATE` | `U64 expected` | The public candidate source index is present and equals `expected`, which MUST be at most `u32` maximum. |
+| `candidate.continuation_present` | `CANDIDATE` | none | The public candidate's continuation-operation metadata is nonempty. It does not expose request-wide continuation state. |
+| `candidate.submits_engine_response` | `CANDIDATE` | none | The public candidate's `submits_engine_response` flag is true. |
+| `profile.card_role_exists` | `PROFILE_STATIC` | `PASSCODE passcode` | The immutable profile card-role catalog contains `passcode`. |
+| `profile.resource_exists` | `PROFILE_STATIC` | `TOKEN resource_id` | The immutable profile resource catalog contains `resource_id`. |
+| `profile.intent_exists` | `PROFILE_STATIC` | `TOKEN intent_id` | The immutable profile candidate-intent catalog contains `intent_id`. |
+| `profile.goal_exists` | `PROFILE_STATIC` | `TOKEN goal_id` | The immutable profile goal catalog contains `goal_id`. |
+| `profile.line_exists` | `PROFILE_STATIC` | `TOKEN line_id` | The immutable profile line catalog contains `line_id`. |
+
+For every observation predicate, the `fact_id` argument MUST name a Task-5
+registered non-`BLOCKED` fact with the exact declared kind. Numeric arguments
+MUST satisfy that fact definition's bounds; TOKEN arguments MUST satisfy its
+TOKEN domain. For candidate predicates, token domains and integer ranges are
+part of the table above. For profile-static predicates, the referenced ID or
+passcode MUST exist in the same validated profile. These contextual checks are
+not optional lookup hints.
+
+No v1 predicate has scope `ACCEPTED_PUBLIC_HISTORY`; such a reference is
+unavailable until a registered public-history owner exists and therefore fails
+profile validation. There is no v1 predicate for a card passcode, physical
+identity, private effect state, hidden card, target locator, amount-as-cost, or
+request-wide continuation value. A future identity-dependent predicate that
+encounters a `RedactedSlot` is `UNSUPPORTED`, never inferred or resolved.
+
+Profile validation has one owner: the existing `validate_strategy_profile`
+entry point remains responsible for validating each `PredicateRef`, while the
+Task-7 registry supplies the exact shape, scope, argument-domain, and
+profile-context checks. The registry helper is called from
+`src/teacher/strategy_profile.cpp` before canonical content publication; an
+unknown ID, wrong scope, wrong ordered atom schema, invalid contextual
+argument, or unavailable history scope fails closed. Task 7 explicitly owns
+that integration rather than silently changing the Task-2 codec contract.
+
+Runtime predicate evaluation has the exact derived statuses
+`TRUE=0`, `FALSE=1`, `UNSUPPORTED=2`, and `INVALID=3`. `TRUE` means all required
+public/profile inputs were present and the predicate held. `FALSE` means all
+required inputs were present and the predicate did not hold. `UNSUPPORTED`
+means a required public source is unavailable, a value is redacted, or a
+history owner is absent; it is never converted to FALSE or a score. `INVALID`
+means a malformed/bypassed registry contract or an impossible runtime value;
+profile validation is expected to prevent it for published profiles.
+
+Every predicate vector is evaluated as a conjunction in canonical encoded
+order. Evaluation status precedence is `INVALID` > `UNSUPPORTED` > `FALSE` >
+`TRUE`, so missing proof dominates a known false subpredicate for fail-closed
+controller decisions. Empty conjunctions are `TRUE` at the predicate layer;
+controller-specific empty completion/stop semantics are frozen below.
+Observation predicates consume only the Task-5 `PublicFactSnapshot`. Candidate
+predicates consume only the current supplied public candidate and allowed
+perspective-safe current observation metadata. Profile-static predicates
+consume only immutable profile data. No predicate may call an engine query,
+read a private observation, reconstruct legality, or inspect another
+participant's perspective.
+
+### 5.4 Goal, line, node, and recovery controller v1
+
+The Task-7 controller evaluates the current participant's reconciled public
+state and the complete supplied candidate domain. It never generates,
+filters, queues, or selects a candidate outside the existing resolver.
+
+Goal retention and selection are deterministic:
+
+1. Retain the current active goal when it is profile-valid, not achieved, its
+   precondition conjunction is `TRUE`, and its stop conjunction is `FALSE`.
+   Retention wins over a different goal's priority.
+2. Otherwise select among unachieved goals whose precondition conjunction is
+   `TRUE` and whose stop conjunction is `FALSE` by
+   `(priority descending, goal_id ascending)`. An empty precondition vector is
+   `TRUE`; an empty stop vector is `FALSE`.
+3. A goal with `UNSUPPORTED` or `INVALID` required evidence is not selected.
+   If no fully proven goal exists, the controller returns `UNSUPPORTED` or
+   `BLOCKED` according to the missing dependency; it never guesses.
+
+Line retention and selection are deterministic:
+
+1. Retain the active line only when it belongs to the retained active goal,
+   its applicability conjunction is `TRUE`, and every required resource is
+   proven by the current public snapshot: the profile resource's declared
+   `public_fact_id` is present as a U64 value at least the requirement
+   minimum. Missing or unsupported resource proof makes the line ineligible.
+2. Otherwise select an eligible line for the active goal by
+   `(line preference descending, line_id ascending)`, where line preference is
+   the exact `PreferenceEntry.value` for
+   `(ScoreDimension::ActiveGoalLineOrValidatedRecoveryProgress,
+   PreferenceSubjectKind::Line, line_id)` and is `0` when absent. There is no
+   implicit source-vector or allocation-order tie-break.
+3. An empty line applicability vector is `TRUE`. No line is selected when
+   required public proof is unsupported; no line is fabricated.
+
+The same empty-vector convention makes interaction triggers and recovery
+preconditions `TRUE`; completion and stop vectors are `FALSE` when empty.
+
+A DAG-ready node is a node in the active line that is not completed and for
+which every incoming `NodeDependency` predecessor is in
+`completed_line_node_ids`. Independent nodes are all ready and are considered
+in canonical `node_id` order for derived evidence only. An empty node
+completion vector is `FALSE`, so a node is never completed automatically.
+Node/goal completion occurs only after an accepted action and a subsequent
+perspective-safe public observation for the same participant evaluates the
+declared completion conjunction as `TRUE`. `StepAccepted.next` is not an
+implicit completion observation.
+
+Each `CandidateIntentDefinition.public_predicates` vector is a conjunction.
+An intent matches one supplied candidate only when its conjunction is
+`TRUE`. A `LineNode.candidate_intent_ids`, `RecoveryEdge.candidate_intent_ids`,
+or `InteractionRule.candidate_intent_ids` vector is an alternatives set over
+those registered intents: it matches when at least one referenced intent is
+`TRUE`; an empty intent-ID vector matches no candidate. If none match but one
+is `UNSUPPORTED`, the alternatives result is `UNSUPPORTED`; otherwise it is
+`FALSE`. A candidate may match multiple intent IDs, all retained as sorted
+derived evidence. No match removes that candidate from the authoritative
+evaluation domain.
+
+A recovery edge is evaluated with the pre-reconciliation active
+goal/line/node context and the current proposal's derived invalidation
+evidence as call-local values; neither is added to persistent state. An edge
+is eligible only when its source matches that invalidated
+goal/line/node context, its
+nonempty `invalidation_reason_ids` are all present in the current derived
+reconciliation evidence, its precondition conjunction is `TRUE`, and its
+profile target references are valid. An empty recovery reason vector is not a
+triggered recovery edge in v1. If multiple edges are eligible, choose by
+`(target goal priority descending, confidence_cap ascending,
+recovery_edge_id ascending)`, where the frozen confidence order is
+`HIGH=0`, `MEDIUM=1`, `LOW=2`, `FALLBACK=3`. Edge selection changes only
+advisory plan state; it never chooses or stores a future engine action. If no
+edge is fully proven, clear stale plan state and continue with deterministic
+goal selection or the declared lower fallback.
+
+The exact contribution to
+`ScoreDimension::ActiveGoalLineOrValidatedRecoveryProgress` is evaluated for
+every supplied candidate after the above public checks:
+
+- no retained active line and no eligible recovery edge: `NOT_APPLICABLE`, no
+  contribution;
+- candidate matches one or more ready-node intents in the retained active
+  line: signed i32 contribution `+3`;
+- candidate matches one or more eligible recovery-edge intents: signed i32
+  contribution `+2`;
+- when both apply, use `max(+3,+2)=+3`, never sum duplicate progress claims;
+- proven current controller state with no candidate match: `SUPPORTED` with
+  contribution `0`;
+- any required predicate/resource/recovery proof that is `UNSUPPORTED` or
+  `INVALID`: return that non-score status with no contribution.
+
+All contributions use the already frozen checked Task-4 arithmetic API. The
+controller contributes evidence and score inputs only; the complete-domain
+resolver remains the sole selection authority. No candidate-zero, first-
+candidate, legality reconstruction, or future-action queue is permitted.
+
+### 5.5 Canonical serialization and identity
 
 Profile canonical bytes use the primitive encoding already accepted by Phase 3: UTF-8 length-prefixed strings, length-prefixed byte vectors, fixed-width big-endian unsigned integers, signed `i32` two's-complement bits, boolean `0`/`1`, and `u32be` vector counts. The profile content identity is:
 
@@ -332,7 +513,7 @@ Canonical ordering is part of the contract:
 
 The codec rejects unknown schema/domain values, invalid enum values, malformed UTF-8, invalid identity tokens, duplicate or unsorted entries, dangling references, duplicate predicate atoms where uniqueness is required, cycles, invalid confidence caps, out-of-range integers, missing required binding fields, and a mismatched derived ID or trailing bytes. The profile/binding validator additionally rejects mismatched deck/rules values. Neither component sorts, merges, defaults, or silently drops malformed data.
 
-### 5.4 Immutable publication and compatibility
+### 5.6 Immutable publication and compatibility
 
 Profile bytes MUST be published through an immutable content-addressed policy registry. A filesystem path can locate bytes for a build, but it is never identity or semantic input. The registry verifies the profile ID before a Teacher session is created and retains the exact canonical bytes for the declared ID. Updating a profile creates new canonical bytes and a new ID; in-place replacement under an old ID is invalid.
 
@@ -741,12 +922,12 @@ These are proposed future gates, not Task-1 evidence. Every gate has a named evi
 | P4B-G01 | Preservation of the authoritative supplied domain | `ctest --test-dir build/dev-windows --output-on-failure --no-tests=error --tests-regex "^teacher_domain_preservation_test$"` | For an upstream-supplied vector of `N` candidates, the result contains exactly `N` stable records in supplied order with the same ordered public-action-key vector; this gate does not test legal-domain completeness. | No action; diagnose omission, fabrication, duplication, filtering, or truncation. Upstream completeness remains an Environment/Phase 4A responsibility. |
 | P4B-G02 | Deterministic ranking and tie-break | `ctest --test-dir build/dev-windows --output-on-failure --no-tests=error --tests-regex "^teacher_ranking_test$"` | Fixed score vector ranks correctly; exact ties use bytewise public-key order and never candidate position. | No action; ranking is invalid. |
 | P4B-G03 | Equal-public-world privacy | `python -B tests/teacher/teacher_paired_world_test.py` | Paired hidden worlds with equal public inputs yield identical key, evaluation evidence, explanation, and state delta. | Privacy gate fails; private dependency is a BLOCKER. |
-| P4B-G04 | Canonical StrategyProfile identity | `ctest --test-dir build/dev-windows --output-on-failure --no-tests=error --tests-regex "^strategy_profile_codec_test$"` | Strict encode/decode round-trip is byte-identical and recomputed `ocgforge.strategy_profile.v1.<64 lowercase hex>` matches; path changes do not matter. | Profile is rejected; no fallback profile is loaded. |
-| P4B-G05 | Malformed profile fail-closed | `ctest --test-dir build/dev-windows --output-on-failure --no-tests=error --tests-regex "^strategy_profile_negative_test$"` | Unknown, duplicate, dangling, cyclic, out-of-range, wrong-binding, and trailing-byte profiles all fail before session creation. | No policy session or action is created. |
+| P4B-G04 | Canonical StrategyProfile identity | `ctest --test-dir build/dev-windows --output-on-failure --no-tests=error --tests-regex "^strategy_profile_codec_test$"` | Strict encode/decode round-trip is byte-identical, every referenced predicate is resolved by the immutable v1 registry, and recomputed `ocgforge.strategy_profile.v1.<64 lowercase hex>` matches; path changes do not matter. | Profile is rejected; no fallback profile is loaded. |
+| P4B-G05 | Malformed profile fail-closed | `ctest --test-dir build/dev-windows --output-on-failure --no-tests=error --tests-regex "^strategy_profile_negative_test$"` | Unknown/incompatible predicate IDs or argument schemas, duplicate, dangling, cyclic, out-of-range, wrong-binding, and trailing-byte profiles all fail before session creation. | No policy session or action is created. |
 | P4B-G06 | Exact deck/matchup/rules binding | `python -B tests/teacher/teacher_profile_binding_test.py` | Own/opponent deck IDs and hashes, matchup, format, mode, flags, and rules bundle match certified V2 input for both profile roles and seat mappings. | Profile activation is `BLOCKED`; arbitrary-deck use is forbidden. |
 | P4B-G07 | Episode/participant state isolation | `ctest --test-dir build/dev-windows --output-on-failure --no-tests=error --tests-regex "^teacher_strategy_state_test$"` | Reset, interleaving, mirror seats, and separate participants produce isolated state equal to isolated execution; a participant state is reconciled only with its own perspective-safe actionable observations. | State is discarded and the gate fails. |
 | P4B-G08 | Rejected action has zero state advancement | `ctest --test-dir build/dev-windows --output-on-failure --no-tests=error --tests-regex "^teacher_rejected_transition_test$"` | Rejected/stale/nonmember actions commit no delta, create no record, and follow existing quarantine semantics. | Stop without retry; collection is quarantined or failed as existing V2 requires. |
-| P4B-G09 | Plan invalidation and recovery | `ctest --test-dir build/dev-windows --output-on-failure --no-tests=error --tests-regex "^teacher_recovery_test$"` | Removed/negated resources, restrictions, targets, zones, and copy budgets invalidate stale nodes and select a current public recovery/fallback only after a subsequent same-participant public observation; `StepAccepted.next` is not assumed to belong to the prior participant. | No queued action survives; return structured `BLOCKED` if recovery is unproven. |
+| P4B-G09 | Plan invalidation and recovery | `ctest --test-dir build/dev-windows --output-on-failure --no-tests=error --tests-regex "^teacher_recovery_test$"` | Removed/negated resources, restrictions, targets, zones, and copy budgets invalidate stale nodes and select a current public recovery/fallback only after a subsequent same-participant public observation; eligible recovery edges use the frozen source/reason/precondition/target checks and tie order; `StepAccepted.next` is not assumed to belong to the prior participant. | No queued action survives; return structured `BLOCKED` if recovery is unproven. |
 | P4B-G10 | Independent-process determinism | `python -B tests/teacher/teacher_determinism_test.py --probe build/dev-windows/teacher_probe.exe` | Fresh processes reproduce keys, score vectors, fallback levels, explanations, and state deltas for the same corpus. | Determinism gate fails; no semantic acceptance claim. |
 | P4B-G11 | Explicit deterministic fallback without duplicate evaluations | `ctest --test-dir build/dev-windows --output-on-failure --no-tests=error --tests-regex "^teacher_fallback_test$"` | F0–F4 are explicit; all stages operate on the same `N` stable evaluation records, may annotate stage status/contributions or temporary comparisons, and never append or drop records; no first-candidate, random, or retry path exists; unprovable fallback blocks. | No action and structured diagnostic. |
 | P4B-G12 | Existing policy provenance recording | `ctest --test-dir build/dev-windows --output-on-failure --no-tests=error --tests-regex "^teacher_provenance_test$"` | Existing `PolicyArtifact`, binding metadata, participant assignment, deterministic sampling identity, and `NONE` RNG attribution validate through the production resolver. | No trusted Teacher record; provenance is invalid. |

@@ -380,44 +380,55 @@ participant/frame routing.
 
 **Files:**
 
+- Create: include/ygo/teacher/predicate_registry.hpp
+- Create: src/teacher/predicate_registry.cpp
 - Create: include/ygo/teacher/goal_line_controller.hpp
 - Create: include/ygo/teacher/recovery_controller.hpp
 - Create: src/teacher/goal_line_controller.cpp
 - Create: src/teacher/recovery_controller.cpp
 - Create: tests/teacher/teacher_goal_line_test.cpp
 - Create: tests/teacher/teacher_recovery_test.cpp
+- Modify: src/teacher/strategy_profile.cpp to invoke the immutable Task-7 predicate registry during profile validation.
 - Modify: CMakeLists.txt.
 
-**Owning layer:** Generic TeacherCore strategy controller using profile data.
+**Owning layer:** Task-7 immutable predicate registry and generic TeacherCore
+strategy controller using profile data.
 
-**Invariants affected:** P4B-G01, P4B-G02, P4B-G07, P4B-G09; goals/lines remain declarative, partial-order, public-only, and current-frame driven.
+**Invariants affected:** P4B-G01, P4B-G02, P4B-G04, P4B-G05, P4B-G07, P4B-G09; predicate meaning, goals/lines, recovery, and scoring remain declarative, partial-order, public-only, and current-frame driven.
 
-**Semantic change vs internal implementation:** Goal IDs, line/node dependencies, recovery source/target semantics, invalidation IDs, confidence caps, and candidate-intent matching are versioned. Graph traversal implementation and memoization are internal.
+**Semantic change vs internal implementation:** The `ocgforge.policy.teacher_predicate.v1` registry, exact predicate IDs/scopes/argument schemas, TRUE/FALSE/UNSUPPORTED/INVALID semantics, conjunction status precedence, goal/line/node/recovery controller rules, invalidation IDs, confidence caps, candidate-intent matching, and the exact `ActiveGoalLineOrValidatedRecoveryProgress` contributions are versioned. Graph traversal implementation, registry lookup indexes, and memoization are internal. `src/teacher/strategy_profile.cpp` remains the validation entry point but may not accept a predicate without the Task-7 registry.
 
 **Focused tests:**
 
+- Exercise every initial predicate registry entry with its exact scope, ordered atom schema, public/profile-static source, and status semantics.
+- Reject unknown predicate IDs, wrong scopes, wrong arity, wrong atom kinds, invalid fact IDs/kinds/bounds, invalid candidate token domains, invalid profile-static references, and any `ACCEPTED_PUBLIC_HISTORY` predicate because no v1 history owner exists.
 - Validate a DAG with independent nodes and assert both supplied orders remain legal policy evaluation inputs.
-- Match candidate intents from public candidate metadata without generating actions.
+- Match candidate intents from public candidate metadata using conjunctions and alternative intent-ID sets without generating actions; retain all matching IDs as sorted evidence.
+- Retain an active eligible goal/line before considering priority/ID selection, then verify deterministic goal `(priority descending, goal_id ascending)` and line `(line preference descending, line_id ascending)` selection.
+- Verify DAG-ready nodes require all incoming predecessors to be completed, independent nodes remain ready, and empty completion predicates do not auto-complete.
 - Complete a node only after an accepted action and a subsequent perspective-safe public observation for the same participant satisfies the declared completion predicate; never assume `StepAccepted.next` belongs to that participant.
 - Invalidate an active line when a public body/resource/target/zone/copy budget disappears or a restriction is observed.
-- Choose a declared recovery edge or stop goal from current candidates; never reuse a queued action.
+- Choose a declared recovery edge only when its source, all invalidation reasons, preconditions, and target are proven; verify tie order `(target goal priority descending, confidence cap ascending, recovery_edge_id ascending)` and no queued action.
+- Verify exact progress contributions `+3` for a ready active-line intent, `+2` for an eligible recovery intent, `max(+3,+2)` when both apply, and zero for a proven nonmatch; unsupported/invalid proof produces no contribution.
 
 **Regression tests:** episodic_replay_test, episodic_paired_world_test, episodic_interrupt_test, and public_action_identity_test.
 
-**Privacy implications:** Predicates use only OBSERVATION, CANDIDATE, ACCEPTED_PUBLIC_HISTORY, and PROFILE_STATIC scopes. There is no private predicate scope.
+**Privacy implications:** Predicates use only OBSERVATION, CANDIDATE, and PROFILE_STATIC scopes in v1; no `ACCEPTED_PUBLIC_HISTORY` predicate is registered until a public-history owner exists, and there is no private predicate scope. Redacted references remain redacted and identity-dependent semantics are unsupported.
 
-**Determinism implications:** Evaluate profile IDs and graph edges in canonical order; dependencies are checked for cycles; independent nodes do not gain order from unordered storage.
+**Determinism implications:** Evaluate registry entries, profile IDs, graph edges, ready nodes, goals, lines, intents, and recovery edges in explicit canonical order; dependencies are checked for cycles; independent nodes do not gain order from unordered storage. Controller ties use only the frozen tuples, never candidate vector position or completion order.
 
 **Replay/provenance implications:** Plan progress is policy-local derived state. The engine/replay path receives only the selected current public key.
 
-- [ ] Write failing line-DAG, intent-match, invalidation, and recovery tests.
+- [ ] Write failing predicate-registry/profile-validation, line-DAG, intent-match, invalidation, and recovery tests; `teacher_goal_line_test` owns the registry and profile-validation coverage so the Task-7 focused CTest count remains 2.
 - [ ] Run ctest --test-dir build/dev-windows --output-on-failure --no-tests=error --tests-regex "^(teacher_goal_line_test|teacher_recovery_test)$" and record the expected missing-target failure.
-- [ ] Implement public predicate evaluation, active goal/line selection, node progress, and recovery edge matching.
+- [ ] Implement the immutable `ocgforge.policy.teacher_predicate.v1` registry and integrate it into `validate_strategy_profile` through the explicit `src/teacher/strategy_profile.cpp` hook.
+- [ ] Implement registered public predicate evaluation with exact status precedence and no history/private fallback.
+- [ ] Implement deterministic active goal/line retention and selection, DAG-ready nodes, same-participant post-acceptance completion, candidate-intent matching, recovery eligibility/tie order, and exact progress contributions.
 - [ ] Connect controller output to the Task-4 complete-domain evaluator as score contributions, never as candidate filtering.
 - [ ] Re-run focused tests and the listed episodic regressions.
 - [ ] Run git diff --check, commit with feat: add partial-order teacher recovery, and stop for review.
 
-**Stop condition:** An interruption or intervening participant turn invalidates stale plan state before that participant's next selection, and no graph edge can enqueue an exact future engine action.
+**Stop condition:** Every profile predicate is registry-validated before publication; unsupported or invalid public proof never becomes a score or selection; goals, lines, nodes, and recovery edges resolve only by the frozen deterministic rules; interruption/participant turns invalidate stale plan state before that participant's next selection; and no graph edge can enqueue an exact future engine action.
 
 ## Task 8: Deterministic fallback and derived explanation
 
