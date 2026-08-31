@@ -389,6 +389,8 @@ participant/frame routing.
 - Create: tests/teacher/teacher_goal_line_test.cpp
 - Create: tests/teacher/teacher_recovery_test.cpp
 - Modify: src/teacher/strategy_profile.cpp to invoke the immutable Task-7 predicate registry during profile validation.
+- Modify: tests/teacher/strategy_profile_codec_test.cpp for test-only migration of its valid baseline fixture to registered v1 predicates and Task-5 facts.
+- Modify: tests/teacher/strategy_profile_negative_test.cpp for test-only migration of its valid baseline fixture to registered v1 predicates and Task-5 facts.
 - Modify: CMakeLists.txt.
 
 **Owning layer:** Task-7 immutable predicate registry and generic TeacherCore
@@ -413,6 +415,35 @@ strategy controller using profile data.
 - Prove multiple independent ready nodes, and ensure NODE recovery matches only a pre-ready node; completed/non-ready nodes and unlisted LINE/NODE recovery edges do not match.
 - Choose a declared recovery edge only when its source, all invalidation reasons, preconditions, target, and active-line recovery membership are proven; verify tie order `(target goal priority descending, confidence cap ascending, recovery_edge_id ascending)` and no queued action.
 - Verify exact progress contributions `+3` for a ready active-line intent, `+2` for an eligible recovery intent, `max(+3,+2)` when both apply, and zero for a proven nonmatch; unsupported/invalid proof produces no contribution.
+
+**Task-2 fixture migration boundary:** The two Task-2 test modifications are
+fixture-only compatibility work required by the stronger Task-7 validator.
+Their valid baseline profiles may replace `fact.a`/`fact.b` with exact
+registered v1 PredicateRefs and typed arguments, replace
+`fact.follow_up`/`fact.normal_summon` with registered non-`BLOCKED` U64 Task-5
+fact IDs, adjust test-only resource IDs/references, and preserve canonical
+PredicateRef ordering. They MUST NOT weaken the Task-7 registry, add aliases,
+special-case tests in production, alter StrategyProfileV1 layout/canonical
+codec, change production profile identities, or modify rules/decks. The
+existing Task-2 codec round-trip/identity/binding/order coverage and all
+structural negative mutations remain required.
+
+**Task-2 profile regression gate:**
+
+```text
+ctest --test-dir build/dev-windows \
+  --output-on-failure \
+  --no-tests=error \
+  --tests-regex "^(strategy_profile_codec_test|strategy_profile_negative_test)$"
+
+selected = 2
+passed   = 2
+```
+
+The Task-7 focused CTest cardinality remains exactly `2`: only
+`teacher_goal_line_test` and `teacher_recovery_test` are counted for the
+Task-7 focused gate. The Task-2 profile regression gate above is additional
+regression evidence and does not become a third Task-7 focused target.
 
 **Regression tests:** episodic_replay_test, episodic_paired_world_test, episodic_interrupt_test, and public_action_identity_test.
 
