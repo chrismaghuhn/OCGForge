@@ -156,22 +156,30 @@ deck, general battle-proof, or ML claim.
 
 ### Phase 4C — Public battle proof + frozen Teacher evaluation
 
-Phase 4C is the active future layer. Task 1 freezes the public battle facts
-and positive lethal-proof contracts; no Phase-4C implementation or final
-acceptance has started.
+Phase 4C is the active future layer. Tasks 1, 2, 2A, and 3 are accepted.
+Task 4 records the current Teacher integration decision: Teacher v1 remains
+the active policy and Battle/Lethal are evaluation-only sidecar evidence.
+The positive-lethal capability remains explicitly blocked under the accepted
+current-action contract; Phase 4C is not final.
 
 ~~~text
 Task 1 — Battle Facts / Provable Lethal contract freeze
-CURRENT / AUTHORIZED
+FINAL PASS
 
 Task 2 — Battle snapshot implementation
-NOT AUTHORIZED
+FINAL PASS
+
+Task 2A — Battle/Lethal prerequisite decision
+FINAL PASS
 
 Task 3 — Provable lethal implementation
-NOT AUTHORIZED
+FINAL PASS
 
-Task 4 — Teacher v2 semantic integration
-NOT AUTHORIZED
+Task 4 — Teacher Battle/Lethal integration decision
+CURRENT / AUTHORIZED — docs-only
+
+Decision:
+TEACHER_V1_PLUS_EVALUATION_SIDECAR
 
 Task 5 — frozen evaluation harness
 NOT AUTHORIZED

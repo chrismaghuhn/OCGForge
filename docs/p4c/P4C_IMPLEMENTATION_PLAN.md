@@ -1,12 +1,12 @@
 # OCGForge Phase 4C — Implementation Plan
 
-Status: **Task 2A CURRENT / AUTHORIZED — DOCS-ONLY PREREQUISITE DECISION**
+Status: **Task 4 CURRENT / AUTHORIZED — DOCS-ONLY INTEGRATION DECISION**
 
 This plan is the dependency and acceptance boundary for the future
-Phase-4C public battle-proof work. Task 1 and Task 2 are accepted; this
-branch records the Task-2A prerequisite decision. It does not authorize a
-public-boundary extension, ProvableLethal implementation, Teacher integration,
-or any later Phase-4C task. Phase 4C is not final.
+Phase-4C public battle-proof work. Tasks 1, 2, 2A, and 3 are accepted; this
+branch records the Task-4 Teacher integration decision. It does not authorize
+Teacher v2 production work, the Task-5 harness, or any later Phase-4C task.
+Phase 4C is not final.
 
 Task-1 base:
 
@@ -161,7 +161,7 @@ authorizing Task 3. Do not guess.
 
 ### Task 2A — Battle/Lethal public-boundary prerequisite decision
 
-**Status:** CURRENT / AUTHORIZED — docs-only decision on this branch.
+**Status:** COMPLETED / ACCEPTED at `5d09c3257dc1c2b432d24cc9da3fa715146cf27b`.
 
 **Owning layer:** Contract/architecture documentation, informed by the
 Environment/ocgcore protocol path. No runtime owner changes.
@@ -200,8 +200,8 @@ replay, admission, receipt, or dataset schema changes.
 **Focused acceptance gates:** Docs-only rules/profile Python checks and
 git diff --check. No build or CTest is run.
 
-**Stop condition:** Commit only the two new decision documents and this plan
-update, push, and leave Task 3 unauthorized.
+**Stop condition:** Satisfied by the accepted Task-2A decision. Its decision
+documents are not modified by Task 4.
 
 **Architecture outcome:**
 
@@ -217,8 +217,7 @@ and is not authorized as Task 2B here.
 
 ### Task 3 — fail-closed ProvableLethalV1 evaluator
 
-**Status:** NOT AUTHORIZED; depends on Task 2A decision and any future
-explicit proof-boundary contract.
+**Status:** COMPLETED / ACCEPTED at `baff374cc326f57d04d4d36013e213a51e1004a4`.
 
 **Owning layer:** ygo::teacher/public evaluation layer. The rules bundle
 remains the battle-resolution authority.
@@ -272,64 +271,58 @@ determinism/paired-world producers only to extend public snapshot evidence
 with ProvableLethalV1 evidence. It may not extend or repurpose the Phase-4B
 probe.
 
-**Stop condition:** Any proof that needs a missing public fact, future
-candidate, assumed opponent pass, or duplicated nontrivial rule is left
-UNSUPPORTED/NOT_PROVEN; no positive lethal is published.
+**Stop condition:** Satisfied by the accepted fail-closed evaluator. No
+positive lethal path is available under the current action contract.
 
-### Task 4 — Teacher v2 semantic integration
+### Task 4 — Teacher Battle/Lethal integration decision
 
-**Status:** NOT AUTHORIZED; requires successful Tasks 2 and 3.
+**Status:** CURRENT / AUTHORIZED — docs-only decision on this branch.
 
-**Owning layer:** ygo::teacher owns Battle/Lethal semantics; ygo::policy
-owns the adapter; provenance owns new semantic identity registration.
+**Owning layer:** Contract/architecture documentation, preserving
+ygo::teacher, ygo::policy, and trajectory/provenance ownership. No runtime
+owner changes.
 
-**Proposed exact files, to be confirmed in a pre-implementation scope review:**
+**Exact files:**
 
 ~~~text
-include/ygo/teacher/teacher_core_v2.hpp
-src/teacher/teacher_core_v2.cpp
-include/ygo/policy/teacher_v2.hpp
-src/policy/teacher_v2.cpp
-src/policy/production_provenance.cpp
-tests/teacher/teacher_v2_battle_integration_test.cpp
-CMakeLists.txt
+docs/p4c/P4C_TEACHER_INTEGRATION_DECISION.md
+docs/p4c/P4C_IMPLEMENTATION_PLAN.md
+docs/ROADMAP.md
 ~~~
 
-The final list must be frozen before authorization; these names do not
-authorize changes now.
+**Invariants affected:** None in production. The decision keeps Teacher v1,
+the complete public candidate domain, participant perspective, provenance,
+NONE-RNG, and the trusted trajectory path unchanged.
 
-**Invariants affected:** Phase-4B Teacher v1 behavior remains immutable;
-complete-domain evaluation, policy boundary, participant perspective,
-provenance, NONE-RNG, and trusted trajectory path remain intact.
+**Semantic changes:** Selects Teacher v1 plus an evaluation-only
+BattleSnapshot/ProvableLethal sidecar. It does not change action selection,
+candidate scores, fallback, or strategy state.
 
-**Semantic changes:** A new Teacher semantic version may consume Battle/Lethal
-results. It must not reinterpret ocgforge.policy.teacher_core.v1 or
-ocgforge.policy.teacher_predicate.v1.
+**Internal-only changes:** Documentation of the future Task-5 composition;
+no TeacherCoreV2 or policy adapter implementation.
 
-**Internal-only changes:** Adapter wiring and new versioned composition
-helpers, with no change to environment legality or trajectory codecs.
+**Privacy implications:** The sidecar receives only the same current public
+observation and complete public candidate vector; it cannot bridge private
+information into Teacher v1.
 
-**Privacy implications:** Only the participant's current public frame and
-complete public domain may reach the v2 Teacher.
+**Determinism implications:** Existing Teacher v1 output remains the
+authority. Sidecar evidence is canonical, public-only, and independently
+deterministic without RNG or candidate reordering.
 
-**Determinism implications:** New semantic identity, binding, artifact,
-canonical explanation/evidence, and independent-process determinism are
-required. No RNG or candidate filtering.
+**Replay implications:** No Battle/Lethal fields enter DecisionRecord,
+trajectory, replay, admission, receipt, or dataset schemas.
 
-**Replay implications:** Existing Phase-4B trajectories remain v1. A v2
-Teacher action path requires new provenance identities and compatibility
-evidence; it must not silently alter old replay meaning.
+**Focused acceptance gates:** Docs-only reference checks for this decision;
+future Task-5 sidecar, fixed-matchup, identity, privacy, determinism, and
+trusted-trajectory gates.
 
-**Focused acceptance gates:** New Teacher v2 boundary, identity/binding/
-artifact, paired-world, complete-domain, deterministic process, rejection,
-and trusted-runner tests.
-
-**Stop condition:** If new semantics cannot be separated from Teacher v1
-identity or public-only inputs, do not authorize integration.
+**Stop condition:** Commit only the three authorized decision files, push, and
+leave Task 5 unauthorized.
 
 ### Task 5 — Frozen fixed-matchup Teacher evaluation harness
 
-**Status:** NOT AUTHORIZED; requires Task 4.
+**Status:** NOT AUTHORIZED; requires the accepted Task-4 decision, not a
+Teacher v2 implementation.
 
 **Owning layer:** ygo::policy test/evaluation harness, using existing
 environment, Teacher, trajectory, replay, admission, receipt, and dataset
@@ -352,7 +345,8 @@ is permitted.
 mapping, complete legal domain, public-only Teacher input, deterministic
 selection, and trusted trajectory flow.
 
-**Semantic changes:** Defines a bounded evaluation corpus and reports
+**Semantic changes:** Defines a bounded fixed-matchup Teacher-v1 evaluation
+corpus, computes BattleSnapshot/ProvableLethal sidecar evidence, and reports
 evaluation outcomes; it does not add battle facts to gameplay records.
 
 **Internal-only changes:** Probe/process orchestration and test-only
@@ -369,8 +363,9 @@ and state delta across fresh processes.
 recorder, shard, semantic replay, admission, receipt, and dataset manifest.
 
 **Focused acceptance gates:** Fixed matchup rows for the authorized deck/rule
-binding, public paired worlds, trajectory/replay/admission compatibility,
-process determinism, and Phase-4B regressions.
+binding, Teacher-v1 identity preservation, sidecar paired worlds,
+trajectory/replay/admission compatibility, process determinism, and
+Phase-4B regressions.
 
 **Stop condition:** Any arbitrary-deck claim, hidden-state dependency, or
 Teacher-specific trajectory shortcut stops the harness.
@@ -453,26 +448,29 @@ PASS.
 
 ## Current authorization and non-claims
 
-At the end of this Task 2A decision:
+At the end of this Task 4 decision:
 
 ~~~text
 Task 1 — Battle Facts / Provable Lethal contract freeze
-COMPLETED / ACCEPTED at 250f59f1abda357767b74c276ed2afba5f70329e
+FINAL PASS
 
 Task 2 — Battle snapshot implementation
-COMPLETED / ACCEPTED at 261ded8660780da1ba819e8c639f485e65a49360
+FINAL PASS
 
 Task 2A — Battle/Lethal prerequisite decision
-CURRENT / AUTHORIZED — docs-only
+FINAL PASS
 
 Decision:
 POSITIVE_LETHAL_BLOCKED_UNDER_CURRENT_ACTION_CONTRACT
 
 Task 3 — fail-closed ProvableLethal evaluator
-NOT AUTHORIZED
+FINAL PASS
 
-Task 4 — Teacher v2 semantic integration
-NOT AUTHORIZED
+Task 4 — Teacher Battle/Lethal integration decision
+CURRENT / AUTHORIZED — docs-only
+
+Decision:
+TEACHER_V1_PLUS_EVALUATION_SIDECAR
 
 Task 5 — frozen evaluation harness
 NOT AUTHORIZED
