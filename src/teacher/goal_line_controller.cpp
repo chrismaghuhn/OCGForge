@@ -9,28 +9,14 @@
 #include "ygo/environment/episodic_environment.hpp"
 #include "ygo/teacher/deterministic_resolver.hpp"
 #include "ygo/teacher/recovery_controller.hpp"
+#include "teacher_validation.hpp"
 
 namespace ygo::teacher {
 namespace {
 
-bool canonical_token(const std::string_view value) noexcept {
-    if (value.empty()) {
-        return false;
-    }
-    for (const auto character : value) {
-        const auto byte = static_cast<unsigned char>(character);
-        if (!((byte >= 'a' && byte <= 'z') || (byte >= '0' && byte <= '9') ||
-              byte == '.' || byte == '_' || byte == '-')) {
-            return false;
-        }
-    }
-    return value.front() != '.' && value.back() != '.' &&
-           value.find("..") == std::string_view::npos;
-}
-
 bool sorted_unique_ids(const std::vector<std::string>& values) noexcept {
     for (std::size_t index = 0; index < values.size(); ++index) {
-        if (!canonical_token(values[index]) ||
+        if (!detail::canonical_token(values[index]) ||
             (index > 0 && !(values[index - 1] < values[index]))) {
             return false;
         }

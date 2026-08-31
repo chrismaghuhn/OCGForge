@@ -10,6 +10,7 @@
 
 #include "ygo/environment/public_action_identity.hpp"
 #include "ygo/trajectory/codec.hpp"
+#include "teacher_validation.hpp"
 
 namespace ygo::teacher {
 namespace {
@@ -28,21 +29,6 @@ trajectory::DecodeResult<T> success(T value) noexcept {
     return result;
 }
 
-bool canonical_token(const std::string_view value) noexcept {
-    if (value.empty()) {
-        return false;
-    }
-    for (const auto character : value) {
-        const auto byte = static_cast<unsigned char>(character);
-        if (!((byte >= 'a' && byte <= 'z') || (byte >= '0' && byte <= '9') ||
-              byte == '.' || byte == '_' || byte == '-')) {
-            return false;
-        }
-    }
-    return value.front() != '.' && value.back() != '.' &&
-           value.find("..") == std::string_view::npos;
-}
-
 bool valid_confidence(const ConfidenceClass value) noexcept {
     return static_cast<std::uint8_t>(value) <=
            static_cast<std::uint8_t>(ConfidenceClass::Fallback);
@@ -55,7 +41,7 @@ bool valid_fallback_level(const TeacherFallbackLevel value) noexcept {
 
 bool valid_id_vector(const std::vector<std::string>& values) noexcept {
     for (std::size_t index = 0; index < values.size(); ++index) {
-        if (!canonical_token(values[index]) ||
+        if (!detail::canonical_token(values[index]) ||
             (index > 0 && !(values[index - 1] < values[index]))) {
             return false;
         }
@@ -286,11 +272,11 @@ bool validate_teacher_decision_explanation(
     try {
         return environment::is_public_action_key(value.selected_public_action_key) &&
                (!value.active_goal_id.has_value() ||
-                canonical_token(*value.active_goal_id)) &&
+                detail::canonical_token(*value.active_goal_id)) &&
                (!value.active_line_id.has_value() ||
-                canonical_token(*value.active_line_id)) &&
+                detail::canonical_token(*value.active_line_id)) &&
                (!value.active_line_node_id.has_value() ||
-                canonical_token(*value.active_line_node_id)) &&
+                detail::canonical_token(*value.active_line_node_id)) &&
                valid_id_vector(value.matched_intent_ids) &&
                valid_id_vector(value.invalidation_reason_ids) &&
                std::all_of(value.invalidation_reason_ids.begin(),

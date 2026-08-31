@@ -9,24 +9,10 @@
 #include "ygo/observation/visible_event.hpp"
 #include "ygo/environment/public_safe_state.hpp"
 #include "ygo/trajectory/codec.hpp"
+#include "teacher_validation.hpp"
 
 namespace ygo::teacher {
 namespace {
-
-bool canonical_token(const std::string_view value) noexcept {
-    if (value.empty()) {
-        return false;
-    }
-    for (const auto character : value) {
-        const auto byte = static_cast<unsigned char>(character);
-        if (!((byte >= 'a' && byte <= 'z') || (byte >= '0' && byte <= '9') ||
-              byte == '.' || byte == '_' || byte == '-')) {
-            return false;
-        }
-    }
-    return value.front() != '.' && value.back() != '.' &&
-           value.find("..") == std::string_view::npos;
-}
 
 bool valid_kind(const PublicFactValueKind value) noexcept {
     return static_cast<std::uint8_t>(value) <= 3;
@@ -290,7 +276,7 @@ std::string_view public_fact_source_name(
 }
 
 bool validate_public_fact_value(const PublicFactValue& value) noexcept {
-    if (!canonical_token(value.fact_id) || !valid_kind(value.value_kind) ||
+    if (!detail::canonical_token(value.fact_id) || !valid_kind(value.value_kind) ||
         !valid_scope(value.validity_scope)) {
         return false;
     }
@@ -303,7 +289,7 @@ bool validate_public_fact_value(const PublicFactValue& value) noexcept {
         return !value.boolean_value && value.u64_value == 0 && value.token_value.empty();
     case PublicFactValueKind::Token:
         return !value.boolean_value && value.u64_value == 0 && value.i32_value == 0 &&
-               canonical_token(value.token_value);
+               detail::canonical_token(value.token_value);
     }
     return false;
 }

@@ -10,24 +10,10 @@
 #include "ygo/environment/episodic_environment.hpp"
 #include "ygo/environment/public_safe_state.hpp"
 #include "ygo/trajectory/codec.hpp"
+#include "teacher_validation.hpp"
 
 namespace ygo::teacher {
 namespace {
-
-bool canonical_token(const std::string_view value) noexcept {
-    if (value.empty()) {
-        return false;
-    }
-    for (const auto character : value) {
-        const auto byte = static_cast<unsigned char>(character);
-        if (!((byte >= 'a' && byte <= 'z') || (byte >= '0' && byte <= '9') ||
-              byte == '.' || byte == '_' || byte == '-')) {
-            return false;
-        }
-    }
-    return value.front() != '.' && value.back() != '.' &&
-           value.find("..") == std::string_view::npos;
-}
 
 bool valid_predicate_scope(const PredicateScope value) noexcept {
     return static_cast<std::uint8_t>(value) <=
@@ -45,7 +31,7 @@ bool canonical_atom(const PredicateAtom& value) noexcept {
     }
     switch (value.kind) {
     case PredicateAtomKind::Token:
-        return canonical_token(value.token) && value.u64 == 0 && value.i32 == 0 &&
+        return detail::canonical_token(value.token) && value.u64 == 0 && value.i32 == 0 &&
                value.passcode == 0 && !value.boolean;
     case PredicateAtomKind::U64:
         return value.token.empty() && value.i32 == 0 && value.passcode == 0 &&
@@ -269,7 +255,7 @@ bool valid_candidate_metadata(const environment::EnvironmentActionCandidate& can
         }
     }
     if (!candidate.continuation_operation.empty() &&
-        !canonical_token(candidate.continuation_operation)) {
+        !detail::canonical_token(candidate.continuation_operation)) {
         return false;
     }
     return true;
@@ -373,7 +359,7 @@ bool TeacherPredicateRegistryV1::validate_shape(const PredicateRef& value,
             }
             return false;
         };
-        if (!valid_predicate_scope(value.scope) || !canonical_token(value.predicate_id)) {
+        if (!valid_predicate_scope(value.scope) || !detail::canonical_token(value.predicate_id)) {
             return fail("predicate scope or ID is not canonical");
         }
         const auto* expected = find_definition(value.predicate_id);

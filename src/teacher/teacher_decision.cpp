@@ -9,6 +9,7 @@
 
 #include "ygo/environment/public_action_identity.hpp"
 #include "ygo/policy/policy.hpp"
+#include "teacher_validation.hpp"
 
 namespace ygo::teacher {
 namespace {
@@ -23,26 +24,11 @@ bool valid_ranking_status(const std::uint8_t value) noexcept { return value <= 3
 bool valid_evaluation_status(const std::uint8_t value) noexcept { return value <= 3; }
 bool valid_fallback_level(const std::uint8_t value) noexcept { return value <= 4; }
 
-bool canonical_token(const std::string_view value) noexcept {
-    if (value.empty()) {
-        return false;
-    }
-    for (const auto character : value) {
-        const auto byte = static_cast<unsigned char>(character);
-        if (!((byte >= 'a' && byte <= 'z') || (byte >= '0' && byte <= '9') ||
-              byte == '.' || byte == '_' || byte == '-')) {
-            return false;
-        }
-    }
-    return value.front() != '.' && value.back() != '.' &&
-           value.find("..") == std::string_view::npos;
-}
-
 bool validate_canonical_id_vector(const std::vector<std::string>& values,
                                   const char* field,
                                   std::string* diagnostic) {
     for (std::size_t index = 0; index < values.size(); ++index) {
-        if (!canonical_token(values[index])) {
+        if (!detail::canonical_token(values[index])) {
             set_diagnostic(diagnostic,
                            std::string("teacher ") + field +
                                " contains a noncanonical token");

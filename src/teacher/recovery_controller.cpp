@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "ygo/teacher/strategy_state.hpp"
+#include "teacher_validation.hpp"
 
 namespace ygo::teacher {
 namespace {
@@ -17,24 +18,9 @@ struct PreReconciliationPlanContext final {
     std::vector<std::string> ready_node_ids;
 };
 
-bool canonical_token(const std::string_view value) noexcept {
-    if (value.empty()) {
-        return false;
-    }
-    for (const auto character : value) {
-        const auto byte = static_cast<unsigned char>(character);
-        if (!((byte >= 'a' && byte <= 'z') || (byte >= '0' && byte <= '9') ||
-              byte == '.' || byte == '_' || byte == '-')) {
-            return false;
-        }
-    }
-    return value.front() != '.' && value.back() != '.' &&
-           value.find("..") == std::string_view::npos;
-}
-
 bool sorted_unique_ids(const std::vector<std::string>& values) noexcept {
     for (std::size_t index = 0; index < values.size(); ++index) {
-        if (!canonical_token(values[index]) ||
+        if (!detail::canonical_token(values[index]) ||
             (index > 0 && !(values[index - 1] < values[index]))) {
             return false;
         }
@@ -187,8 +173,10 @@ RecoverySelection select_recovery_edge_internal(
     RecoverySelection result;
     try {
         if (!valid_snapshot(public_facts) || !sorted_unique_ids(context.ready_node_ids) ||
-            (context.active_goal_id.has_value() && !canonical_token(*context.active_goal_id)) ||
-            (context.active_line_id.has_value() && !canonical_token(*context.active_line_id)) ||
+            (context.active_goal_id.has_value() &&
+             !detail::canonical_token(*context.active_goal_id)) ||
+            (context.active_line_id.has_value() &&
+             !detail::canonical_token(*context.active_line_id)) ||
             !sorted_unique_ids(invalidation_reason_ids)) {
             result.status = PredicateEvaluationStatus::Invalid;
             return result;

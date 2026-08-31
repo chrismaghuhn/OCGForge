@@ -16,6 +16,7 @@
 #include "ygo/teacher/public_fact_registry.hpp"
 #include "ygo/trace/sha256.hpp"
 #include "ygo/trajectory/codec.hpp"
+#include "teacher_validation.hpp"
 
 namespace ygo::teacher {
 namespace {
@@ -34,31 +35,13 @@ void require_count(const std::size_t size, const char* field) {
     }
 }
 
-bool canonical_token(const std::string_view value) noexcept {
-    if (value.empty()) {
-        return false;
-    }
-    for (const auto character : value) {
-        const auto byte = static_cast<unsigned char>(character);
-        if (!((byte >= 'a' && byte <= 'z') || (byte >= '0' && byte <= '9') ||
-              byte == '.' || byte == '_' || byte == '-')) {
-            return false;
-        }
-    }
-    if (value.front() == '.' || value.back() == '.' ||
-        value.find("..") != std::string_view::npos) {
-        return false;
-    }
-    return true;
-}
-
 void require_text(const std::string& value, const char* field) {
     require_condition(!value.empty() && trajectory::is_valid_utf8(value),
                       (std::string("profile ") + field + " is invalid").c_str());
 }
 
 void require_token(const std::string& value, const char* field) {
-    require_condition(canonical_token(value),
+    require_condition(detail::canonical_token(value),
                       (std::string("profile ") + field + " is not a canonical token").c_str());
 }
 

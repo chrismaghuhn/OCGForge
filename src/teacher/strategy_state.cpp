@@ -10,36 +10,22 @@
 #include "ygo/environment/episodic_environment.hpp"
 #include "ygo/environment/public_action_identity.hpp"
 #include "ygo/trajectory/codec.hpp"
+#include "teacher_validation.hpp"
 
 namespace ygo::teacher {
 namespace {
-
-bool canonical_token(const std::string_view value) noexcept {
-    if (value.empty()) {
-        return false;
-    }
-    for (const auto character : value) {
-        const auto byte = static_cast<unsigned char>(character);
-        if (!((byte >= 'a' && byte <= 'z') || (byte >= '0' && byte <= '9') ||
-              byte == '.' || byte == '_' || byte == '-')) {
-            return false;
-        }
-    }
-    return value.front() != '.' && value.back() != '.' &&
-           value.find("..") == std::string_view::npos;
-}
 
 bool valid_profile_id(const std::string_view value) noexcept {
     return trajectory::is_canonical_identity(value, kStrategyProfileIdentityPrefix);
 }
 
 bool valid_optional_id(const std::optional<std::string>& value) noexcept {
-    return !value.has_value() || canonical_token(*value);
+    return !value.has_value() || detail::canonical_token(*value);
 }
 
 bool valid_id_vector(const std::vector<std::string>& values) noexcept {
     for (std::size_t index = 0; index < values.size(); ++index) {
-        if (!canonical_token(values[index]) ||
+        if (!detail::canonical_token(values[index]) ||
             (index > 0 && !(values[index - 1] < values[index]))) {
             return false;
         }
@@ -87,7 +73,7 @@ bool delta_current_facts_match_snapshot(const TeacherStateDeltaV1& delta,
 
 bool valid_reason_vector(const std::vector<std::string>& values) noexcept {
     for (std::size_t index = 0; index < values.size(); ++index) {
-        if (!canonical_token(values[index]) ||
+        if (!detail::canonical_token(values[index]) ||
             !is_registered_invalidation_reason(values[index]) ||
             (index > 0 && !(values[index - 1] < values[index]))) {
             return false;
