@@ -6,6 +6,8 @@
 #include <string>
 #include <vector>
 
+#include "ygo/teacher/strategy_state.hpp"
+
 namespace ygo::policy {
 struct PolicySelection;
 }
@@ -63,10 +65,10 @@ struct TeacherRankingResult final {
     std::optional<std::string> selected_public_action_key;
     std::optional<ScoreVector> selected_score_vector;
     std::optional<TeacherFallbackLevel> fallback_level;
+    std::optional<TeacherStateDeltaV1> proposed_state_delta;
 
-    // This is the intentionally minimal Task-3 staging shape. The future
-    // owning tasks add value-owned explanation, state-delta, and diagnostic
-    // fields; Task 3 does not invent placeholder semantics for them.
+    // The state-delta field is value-owned and is introduced by Task 6. The
+    // future explanation/diagnostic fields remain owned by their later tasks.
 };
 
 bool validate_teacher_ranking_result(const TeacherRankingResult& value,

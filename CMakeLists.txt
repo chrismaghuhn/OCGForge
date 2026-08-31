@@ -214,6 +214,8 @@ add_library(ygo_teacher STATIC
     src/teacher/public_fact_registry.cpp
     src/teacher/strategy_profile.cpp
     src/teacher/strategy_profile_codec.cpp
+    src/teacher/strategy_state.cpp
+    src/teacher/strategy_state_reconciler.cpp
     src/teacher/target_evaluator.cpp
     src/teacher/tactical_evaluator.cpp
     src/teacher/teacher_policy_binding.cpp
@@ -320,6 +322,16 @@ add_test(NAME teacher_ranking_test COMMAND teacher_ranking_test)
 add_executable(teacher_evaluator_test tests/teacher/teacher_evaluator_test.cpp)
 target_link_libraries(teacher_evaluator_test PRIVATE ygo_teacher)
 add_test(NAME teacher_evaluator_test COMMAND teacher_evaluator_test)
+
+add_executable(teacher_strategy_state_test tests/teacher/teacher_strategy_state_test.cpp)
+target_link_libraries(teacher_strategy_state_test PRIVATE ygo_teacher)
+add_test(NAME teacher_strategy_state_test COMMAND teacher_strategy_state_test)
+
+add_executable(teacher_rejected_transition_test
+               tests/teacher/teacher_rejected_transition_test.cpp)
+target_link_libraries(teacher_rejected_transition_test PRIVATE ygo_teacher)
+add_test(NAME teacher_rejected_transition_test
+         COMMAND teacher_rejected_transition_test)
 
 add_executable(ygo_core_probe tools/ygo_core_probe/main.cpp)
 target_link_libraries(ygo_core_probe PRIVATE ygo_m4)
