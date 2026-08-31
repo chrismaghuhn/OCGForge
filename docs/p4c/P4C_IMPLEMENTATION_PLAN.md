@@ -1,10 +1,12 @@
 # OCGForge Phase 4C — Implementation Plan
 
-Status: **Task 1 CURRENT / AUTHORIZED — CONTRACT FREEZE ONLY**
+Status: **Task 2A CURRENT / AUTHORIZED — DOCS-ONLY PREREQUISITE DECISION**
 
 This plan is the dependency and acceptance boundary for the future
-Phase-4C public battle-proof work. It does not authorize any implementation
-task beyond the four Task-1 documents. Phase 4C is not final.
+Phase-4C public battle-proof work. Task 1 and Task 2 are accepted; this
+branch records the Task-2A prerequisite decision. It does not authorize a
+public-boundary extension, ProvableLethal implementation, Teacher integration,
+or any later Phase-4C task. Phase 4C is not final.
 
 Task-1 base:
 
@@ -58,7 +60,7 @@ by implication.
 
 ### Task 1 — Battle Facts / Provable Lethal contract freeze
 
-**Status:** CURRENT / AUTHORIZED. This task is the current docs-only change.
+**Status:** COMPLETED / ACCEPTED at `250f59f1abda357767b74c276ed2afba5f70329e`.
 
 **Owning layer:** Project contract and acceptance documentation; no runtime
 owner is changed.
@@ -97,17 +99,17 @@ dataset schema changes are authorized.
 existing rules/profile Python checks, git diff --check, and exact four-file
 scope inspection. No CTest or build is run.
 
-**Stop condition:** Commit only the four authorized documents, push the new
-branch, and stop. Task 2 remains unauthorized.
+**Stop condition:** Satisfied by the accepted Task-1 contract freeze. No
+Task-1 document is modified by Task 2A.
 
 ### Task 2 — PublicBattleSnapshotV1 DTO and extractor
 
-**Status:** NOT AUTHORIZED; depends on this contract freeze.
+**Status:** COMPLETED / ACCEPTED at `261ded8660780da1ba819e8c639f485e65a49360`.
 
 **Owning layer:** ygo::teacher owns the value DTO/extractor. ygo::environment
 continues to own the public observation and complete candidate inputs.
 
-**Proposed exact files:**
+**Accepted implementation files:**
 
 ~~~text
 include/ygo/teacher/public_battle_snapshot.hpp
@@ -120,7 +122,8 @@ tests/teacher/phase4c_battle_paired_world_test.py
 CMakeLists.txt                  # registration only, if required
 ~~~
 
-These files are a proposed future scope, not current authorization.
+These files are the accepted Task-2 implementation scope. They remain
+unchanged by Task 2A.
 
 **Invariants affected:** Exact one-to-one candidate facts, supplied order,
 public action-key membership, same-perspective visible joins,
@@ -156,52 +159,66 @@ owned by Phase 4C and is not a modification of the accepted Phase-4B probe.
 be proven, stop with that capability BLOCKED and insert Task 2A below before
 authorizing Task 3. Do not guess.
 
-### Task 2A — Public Battle Boundary Extension Contract (conditional)
+### Task 2A — Battle/Lethal public-boundary prerequisite decision
 
-**Status:** CONDITIONAL / NOT AUTHORIZED.
+**Status:** CURRENT / AUTHORIZED — docs-only decision on this branch.
 
-This task is inserted before Task 3 only if Task 2 demonstrates that a
-required positive-proof input is absent from the accepted public boundary.
-Task 1 does not authorize it.
+**Owning layer:** Contract/architecture documentation, informed by the
+Environment/ocgcore protocol path. No runtime owner changes.
 
-**Owning layer:** ygo::environment and the owner of the existing public
-observation/projection contract.
+**Exact files:**
 
-**Exact files:** No files are authorized by Task 1. A separate scope
-amendment must enumerate the exact versioned contract, DTO/codec, projection,
-and test files after Task 2 provides evidence of the missing capability.
-The amendment must not silently alter the v1 observation bytes.
+~~~text
+docs/p4c/P4C_BATTLE_PROTOCOL_FLOW.md
+docs/p4c/P4C_LETHAL_PREREQUISITE_DECISION.md
+docs/p4c/P4C_IMPLEMENTATION_PLAN.md
+~~~
 
-**Invariants affected:** Only the explicitly versioned public boundary
-capability named by the separate contract. Existing privacy, completeness,
-identity, and replay invariants remain unchanged unless that contract
-explicitly versions them.
+**Invariants affected:** None in production. The decision preserves the
+accepted public observation, snapshot, candidate-domain, privacy, determinism,
+identity, and replay boundaries.
 
-**Semantic changes:** A narrowly specified public fact or candidate-shape
-extension only; never a hidden-state export or legality shortcut.
+**Semantic changes:** Selects
+POSITIVE_LETHAL_BLOCKED_UNDER_CURRENT_ACTION_CONTRACT. The live source proves
+only that phase=1 selects an attackable-list entry; later target, response,
+damage, and terminal semantics are not part of the current candidate.
 
-**Internal-only changes:** Projection and conformance plumbing may change
-only within the separately approved scope.
+**Internal-only changes:** The protocol-flow document records source-grounded
+control flow and does not create a runtime semantic classifier.
 
-**Privacy implications:** The extension must pass equal-public-world and
-knowledge-destroying tests before use by Battle or Lethal code.
+**Privacy implications:** Hidden response availability, hidden effect-use
+state, private card identity, and CoreHost state remain inaccessible. No
+response-absence oracle is authorized.
 
-**Determinism implications:** New fields require canonical bytes, stable
-ordering, schema/domain identity, and independent-process equality.
+**Determinism implications:** No bytes, keys, ordering, or process behavior
+change. Future proof work remains integer-only, canonical, and current-input
+bound.
 
-**Replay implications:** Any observation-byte or identity impact requires an
-explicit compatibility decision; no Task 2A change is assumed replay-safe.
+**Replay implications:** No observation, action, DecisionRecord, trajectory,
+replay, admission, receipt, or dataset schema changes.
 
-**Focused acceptance gates:** A new boundary-specific matrix, privacy pair,
-decoder-shape oracle, canonical codec, and compatibility review must be
-named before implementation.
+**Focused acceptance gates:** Docs-only rules/profile Python checks and
+git diff --check. No build or CTest is run.
 
-**Stop condition:** If privacy or complete-public proof is not established,
-leave the capability BLOCKED; do not continue to lethal implementation.
+**Stop condition:** Commit only the two new decision documents and this plan
+update, push, and leave Task 3 unauthorized.
 
-### Task 3 — ProvableLethalV1 positive-proof evaluator
+**Architecture outcome:**
 
-**Status:** NOT AUTHORIZED; depends on Task 2 and, if needed, Task 2A.
+~~~text
+PREREQUISITE_DECISION =
+POSITIVE_LETHAL_BLOCKED_UNDER_CURRENT_ACTION_CONTRACT
+TASK2A_REQUIRED_FOR_POSITIVE_LETHAL = YES
+~~~
+
+The exact marker mapping remains useful descriptive evidence, but a separate
+derived BattleCommand classifier is not sufficient to make lethal provable
+and is not authorized as Task 2B here.
+
+### Task 3 — fail-closed ProvableLethalV1 evaluator
+
+**Status:** NOT AUTHORIZED; depends on Task 2A decision and any future
+explicit proof-boundary contract.
 
 **Owning layer:** ygo::teacher/public evaluation layer. The rules bundle
 remains the battle-resolution authority.
@@ -223,9 +240,11 @@ CMakeLists.txt                  # registration only, if required
 complete candidate membership, no optimistic damage/lethal conversion,
 checked arithmetic, and NOT_PROVEN != PROVEN_NON_LETHAL.
 
-**Semantic changes:** Adds ProvableLethalV1 results. PROVEN_LETHAL is allowed
-only when every frozen proof requirement is satisfied; otherwise the result
-is NOT_PROVEN, UNSUPPORTED, INVALID, or NOT_APPLICABLE.
+**Semantic changes:** Adds the ProvableLethalV1 result boundary with a
+fail-closed current implementation. PROVEN_LETHAL is allowed only when every
+frozen proof requirement is satisfied by a separately available public or
+equivalence proof; under the current Task-2A decision, current candidates
+remain NOT_PROVEN/UNSUPPORTED.
 
 **Internal-only changes:** A proof helper may compose snapshot facts and
 rules-equivalence evidence, but may not simulate private state or duplicate
@@ -242,10 +261,11 @@ process equality are required. No float/RNG/future search.
 **Replay implications:** Lethal results remain derived evaluation data and
 are outside trajectory/replay/admission schemas.
 
-**Focused acceptance gates:** Positive proof matrix, no-optimistic-false-
-positive matrix, missing-response/effect negative matrix, checked integer
-matrix, no-future-queue test, paired-world privacy, and independent-process
-determinism.
+**Focused acceptance gates:** Positive-proof negative matrix,
+no-optimistic-false-positive matrix, missing-response/effect negative matrix,
+checked-integer matrix, no-future-queue test, paired-world privacy, and
+independent-process determinism. A positive example cannot be added without
+closing the classified prerequisites.
 
 Task 3 may modify the already authorized Phase-4C probe and the two named
 determinism/paired-world producers only to extend public snapshot evidence
@@ -433,16 +453,22 @@ PASS.
 
 ## Current authorization and non-claims
 
-At the end of this Task 1:
+At the end of this Task 2A decision:
 
 ~~~text
 Task 1 — Battle Facts / Provable Lethal contract freeze
-CURRENT / AUTHORIZED
+COMPLETED / ACCEPTED at 250f59f1abda357767b74c276ed2afba5f70329e
 
 Task 2 — Battle snapshot implementation
-NOT AUTHORIZED
+COMPLETED / ACCEPTED at 261ded8660780da1ba819e8c639f485e65a49360
 
-Task 3 — Provable lethal implementation
+Task 2A — Battle/Lethal prerequisite decision
+CURRENT / AUTHORIZED — docs-only
+
+Decision:
+POSITIVE_LETHAL_BLOCKED_UNDER_CURRENT_ACTION_CONTRACT
+
+Task 3 — fail-closed ProvableLethal evaluator
 NOT AUTHORIZED
 
 Task 4 — Teacher v2 semantic integration
