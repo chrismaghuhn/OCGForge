@@ -1,0 +1,1057 @@
+{
+    "schema_version":  "ocgforge.phase4a_acceptance.v2",
+    "status":  "PASS",
+    "acceptance_profile":  "h-exec-fast-normal-plus-heavy",
+    "heavy_evidence_mode":  "executed-at-h-exec",
+    "source_head":  "66d30967018c6ce106d131c7e02147ffaf194a56",
+    "source_base":  "d61824b8436598ed461f83b3b73c291c5420c191",
+    "h_exec":  "66d30967018c6ce106d131c7e02147ffaf194a56",
+    "environment":  {
+                        "rules_bundle_id":  "3adfe6b4cfe2c2805e50b389fc0eb4e70a3b0b6107436614d328fddc865e585f",
+                        "matchup_id":  "ocgforge.matchup.swordsoul_salamangreat.v1",
+                        "deck_a_id":  "ocgforge.swordsoul_tenyi.ml_v1",
+                        "deck_a_sha256":  "8ee4b699de19ff256e388d46f35b8696a60ff6ec59f0324f060a2468876711b7",
+                        "deck_b_id":  "ocgforge.salamangreat.ml_v1",
+                        "deck_b_sha256":  "6041abe0a59463d0715ae1da9100090ad487de02a02794e8ec0686d4c0513188",
+                        "main_deck_counts":  {
+                                                 "deck_a":  40,
+                                                 "deck_b":  40
+                                             },
+                        "extra_deck_counts":  {
+                                                  "deck_a":  15,
+                                                  "deck_b":  15
+                                              },
+                        "core_patchset_id":  "ocgforge.ocgcore.api_hardening.v1",
+                        "core_patchset_sha256":  "6b5421b3a852085f48fa161a5ba1540f902aa00784a337694b21c9efc34f69bd"
+                    },
+    "gates":  [
+                  {
+                      "gate":  "P4A-G00",
+                      "invariant":  "Public-fact sufficiency matrix is complete for the planned Teacher scope",
+                      "status":  "PASS",
+                      "exact_evidence":  [
+                                             "public-fact-matrix"
+                                         ],
+                      "pass_condition":  "All frozen rows have exact sources, executable evidence, availability, and explicit BLOCKED reasons."
+                  },
+                  {
+                      "gate":  "P4A-G01",
+                      "invariant":  "Existing full CTest remains green",
+                      "status":  "PASS",
+                      "exact_evidence":  [
+                                             "debug-configure",
+                                             "debug-build",
+                                             "debug-normal-ctest"
+                                         ],
+                      "pass_condition":  "Debug configure, Debug build, and every non-heavy registered Debug CTest test pass; heavy tests are covered by their dedicated H_exec evidence."
+                  },
+                  {
+                      "gate":  "P4A-G02",
+                      "invariant":  "Existing Python verification remains green",
+                      "status":  "PASS",
+                      "exact_evidence":  [
+                                             "repository-python",
+                                             "m3-python",
+                                             "m4-python"
+                                         ],
+                      "pass_condition":  "Repository, M3, and M4 Python suites all pass."
+                  },
+                  {
+                      "gate":  "P4A-G03",
+                      "invariant":  "Required M4 acceptance remains green",
+                      "status":  "PASS",
+                      "exact_evidence":  [
+                                             "release-configure",
+                                             "release-build",
+                                             "release-normal-ctest",
+                                             "heavy-replay-release",
+                                             "heavy-lifecycle-stress",
+                                             "m4-canonical-full-game",
+                                             "m4-recommended-concurrency-soak"
+                                         ],
+                      "pass_condition":  "Release configure, Release build, non-heavy Release CTest, Heavy Replay, lifecycle stress, fixed-game, and recommended-concurrency soak all pass; clean checkouts inherit only the exact H_exec heavy evidence."
+                  },
+                  {
+                      "gate":  "P4A-G04",
+                      "invariant":  "Rules bundle and locked deck identities are unchanged",
+                      "status":  "PASS",
+                      "exact_evidence":  [
+                                             "rules-deck-identity",
+                                             "rules-bundle-verification"
+                                         ],
+                      "pass_condition":  "The frozen rules/deck identity test passes."
+                  },
+                  {
+                      "gate":  "P4A-G05",
+                      "invariant":  "PublicSafeState strict typed decode succeeds",
+                      "status":  "PASS",
+                      "exact_evidence":  [
+                                             "focused-policy-ctest"
+                                         ],
+                      "pass_condition":  "The safe-state regression test passes."
+                  },
+                  {
+                      "gate":  "P4A-G06",
+                      "invariant":  "Typed safe-state round-trip is byte-identical",
+                      "status":  "PASS",
+                      "exact_evidence":  [
+                                             "focused-policy-ctest"
+                                         ],
+                      "pass_condition":  "The focused public-safe/action identity tests pass."
+                  },
+                  {
+                      "gate":  "P4A-G07",
+                      "invariant":  "Safe-state malformed inputs fail closed",
+                      "status":  "PASS",
+                      "exact_evidence":  [
+                                             "focused-policy-ctest"
+                                         ],
+                      "pass_condition":  "The focused public-safe-state negative cases pass."
+                  },
+                  {
+                      "gate":  "P4A-G08",
+                      "invariant":  "Selector API has no private-state dependency",
+                      "status":  "PASS",
+                      "exact_evidence":  [
+                                             "focused-policy-ctest",
+                                             "policy-boundary"
+                                         ],
+                      "pass_condition":  "Policy boundary Python and compile tests pass."
+                  },
+                  {
+                      "gate":  "P4A-G09",
+                      "invariant":  "Candidate domain is preserved exactly",
+                      "status":  "PASS",
+                      "exact_evidence":  [
+                                             "focused-policy-ctest"
+                                         ],
+                      "pass_condition":  "The RandomLegal domain instrumentation passes."
+                  },
+                  {
+                      "gate":  "P4A-G10",
+                      "invariant":  "Empty RandomLegal domain fails closed",
+                      "status":  "PASS",
+                      "exact_evidence":  [
+                                             "focused-policy-ctest"
+                                         ],
+                      "pass_condition":  "The RandomLegal empty-domain test passes."
+                  },
+                  {
+                      "gate":  "P4A-G11",
+                      "invariant":  "RNG initialization is canonical",
+                      "status":  "PASS",
+                      "exact_evidence":  [
+                                             "focused-policy-ctest"
+                                         ],
+                      "pass_condition":  "Policy RNG and trajectory codec focused tests pass."
+                  },
+                  {
+                      "gate":  "P4A-G12",
+                      "invariant":  "SHA-256-counter golden vectors match",
+                      "status":  "PASS",
+                      "exact_evidence":  [
+                                             "focused-policy-ctest"
+                                         ],
+                      "pass_condition":  "The policy RNG focused test passes."
+                  },
+                  {
+                      "gate":  "P4A-G13",
+                      "invariant":  "Cursor advancement and rejection semantics are exact",
+                      "status":  "PASS",
+                      "exact_evidence":  [
+                                             "focused-policy-ctest"
+                                         ],
+                      "pass_condition":  "The policy RNG focused test passes."
+                  },
+                  {
+                      "gate":  "P4A-G14",
+                      "invariant":  "Bounded sampler is unbiased under forced rejection",
+                      "status":  "PASS",
+                      "exact_evidence":  [
+                                             "focused-policy-ctest"
+                                         ],
+                      "pass_condition":  "The policy RNG focused test passes."
+                  },
+                  {
+                      "gate":  "P4A-G15",
+                      "invariant":  "Production provenance registrations are typed and complete",
+                      "status":  "PASS",
+                      "exact_evidence":  [
+                                             "focused-policy-ctest"
+                                         ],
+                      "pass_condition":  "The RandomLegal provenance tests pass."
+                  },
+                  {
+                      "gate":  "P4A-G16",
+                      "invariant":  "RandomLegal with NONE RNG is rejected",
+                      "status":  "PASS",
+                      "exact_evidence":  [
+                                             "focused-policy-ctest"
+                                         ],
+                      "pass_condition":  "The RandomLegal/codec negative tests pass."
+                  },
+                  {
+                      "gate":  "P4A-G17",
+                      "invariant":  "RandomLegal with deterministic sampling is rejected",
+                      "status":  "PASS",
+                      "exact_evidence":  [
+                                             "focused-policy-ctest"
+                                         ],
+                      "pass_condition":  "The RandomLegal/codec negative tests pass."
+                  },
+                  {
+                      "gate":  "P4A-G18",
+                      "invariant":  "No production identity uses ocgforge.test.*",
+                      "status":  "PASS",
+                      "exact_evidence":  [
+                                             "production-identity-source-scan"
+                                         ],
+                      "pass_condition":  "The production source scan finds no test identity."
+                  },
+                  {
+                      "gate":  "P4A-G19",
+                      "invariant":  "Accepted RandomLegal key is an existing public_action_key",
+                      "status":  "PASS",
+                      "exact_evidence":  [
+                                             "focused-policy-ctest"
+                                         ],
+                      "pass_condition":  "The RandomLegal domain test passes."
+                  },
+                  {
+                      "gate":  "P4A-G20",
+                      "invariant":  "No candidate-zero or first-candidate fallback exists",
+                      "status":  "PASS",
+                      "exact_evidence":  [
+                                             "focused-policy-ctest"
+                                         ],
+                      "pass_condition":  "RandomLegal empty/error and nonzero-domain tests pass."
+                  },
+                  {
+                      "gate":  "P4A-G21",
+                      "invariant":  "RandomLegal is deterministic across independent processes",
+                      "status":  "PASS",
+                      "exact_evidence":  [
+                                             "policy-determinism"
+                                         ],
+                      "pass_condition":  "The policy determinism probe passes against the configured build."
+                  },
+                  {
+                      "gate":  "P4A-G22",
+                      "invariant":  "Paired hidden worlds produce equal policy output",
+                      "status":  "PASS",
+                      "exact_evidence":  [
+                                             "focused-policy-ctest"
+                                         ],
+                      "pass_condition":  "The paired-world RandomLegal test passes."
+                  },
+                  {
+                      "gate":  "P4A-G23",
+                      "invariant":  "Policy state resets and isolates episodes/participants",
+                      "status":  "PASS",
+                      "exact_evidence":  [
+                                             "policy-determinism"
+                                         ],
+                      "pass_condition":  "The policy determinism probe proves fresh cursor and interleaving isolation."
+                  },
+                  {
+                      "gate":  "P4A-G24",
+                      "invariant":  "Policy-origin StepRejected creates zero record and quarantine",
+                      "status":  "PASS",
+                      "exact_evidence":  [
+                                             "focused-policy-ctest"
+                                         ],
+                      "pass_condition":  "The Runner integration test proves no retry and quarantine."
+                  },
+                  {
+                      "gate":  "P4A-G25",
+                      "invariant":  "RandomLegal accepted actions record trusted provenance",
+                      "status":  "PASS",
+                      "exact_evidence":  [
+                                             "focused-policy-ctest"
+                                         ],
+                      "pass_condition":  "The Runner integration test proves exact accepted attribution."
+                  },
+                  {
+                      "gate":  "P4A-G26",
+                      "invariant":  "V2 semantic replay admission remains strict",
+                      "status":  "PASS",
+                      "exact_evidence":  [
+                                             "heavy-replay-release"
+                                         ],
+                      "pass_condition":  "The dedicated Release Heavy Replay command exits zero and runs trajectory_replay_admission_test; clean checkouts use the exact H_exec result without rerunning it."
+                  },
+                  {
+                      "gate":  "P4A-G27",
+                      "invariant":  "Candidate shard, restricted evidence, receipt, and DatasetManifest integrate",
+                      "status":  "PASS",
+                      "exact_evidence":  [
+                                             "focused-policy-ctest"
+                                         ],
+                      "pass_condition":  "The Runner integration test proves all persistence artifacts."
+                  },
+                  {
+                      "gate":  "P4A-G28",
+                      "invariant":  "Public-fact matrix is complete and executable",
+                      "status":  "PASS",
+                      "exact_evidence":  [
+                                             "public-fact-matrix"
+                                         ],
+                      "pass_condition":  "The matrix validator passes at the frozen source head."
+                  },
+                  {
+                      "gate":  "P4A-G29",
+                      "invariant":  "Evidence is reproducible from a clean checkout",
+                      "status":  "PASS",
+                      "exact_evidence":  [
+                                             "clean-checkout-reproduction"
+                                         ],
+                      "pass_condition":  "The exact H_exec and clean-checkout profiles, Heavy-run cardinalities, inherited Heavy evidence, semantic fingerprints, and stable artifact hashes all match."
+                  }
+              ],
+    "runs":  [
+                 {
+                     "label":  "debug-configure",
+                     "command":  "cmake --preset dev-windows-zig",
+                     "exit_code":  0,
+                     "result":  "PASS",
+                     "elapsed_seconds":  20.815,
+                     "output_summary":  {
+                                            "sha256":  "b72e50177ecc143e9252b6f00d724bd470e4176f1c6376f6ccd37fde181bd937",
+                                            "utf8_bytes":  888,
+                                            "line_count":  5,
+                                            "first_line":  "-- {\"bundle_id\": \"3adfe6b4cfe2c2805e50b389fc0eb4e70a3b0b6107436614d328fddc865e585f\", \"checkouts\": [\"core: 9a0c558c2d686542f7914a6d529fd7aa57746aed (161849049d34de7ea60b2f370cc35f903262c14769e399d0bf43a381d295d7f3)\", \"cardscripts: f337c87018ca723c1aded5143e616bb649555273 (ce53e1033ea7a3057745bbe143c1803a4a0c7db7f6cded4c28b0170536320e3c)\", \"babelcdb: 89ad6837b0766a52984d8c715a7d5d4f8447946b (acef726f8fb74d7f2b3a43dc14088f117012dbf9c7eab35612716cb8e79df4d1)\"], \"core_api_version\": \"11.0\", \"ok\": true}",
+                                            "last_line":  "-- Build files have been written to: C:/p4a/build/windows-zig"
+                                        }
+                 },
+                 {
+                     "label":  "debug-build",
+                     "command":  "cmake --build --preset dev-windows-zig --parallel",
+                     "exit_code":  0,
+                     "result":  "PASS",
+                     "elapsed_seconds":  0.114,
+                     "output_summary":  {
+                                            "sha256":  "50c2ccef9cc15f9339d9d77e014d38b2ef775903fb14c3144ac6c0d4da7749db",
+                                            "utf8_bytes":  21,
+                                            "line_count":  1,
+                                            "first_line":  "n",
+                                            "last_line":  "n"
+                                        }
+                 },
+                 {
+                     "label":  "focused-policy-ctest",
+                     "command":  "ctest --preset dev-windows-zig -R ^(trajectory_codec_test|trajectory_recorder_test|trajectory_shard_test|trajectory_restricted_evidence_test|trajectory_receipt_test|trajectory_dataset_manifest_test|public_action_identity_test|public_safe_state_test|policy_boundary_compile_test|policy_rng_test|random_legal_test|policy_runner_integration_test)$ --output-on-failure",
+                     "exit_code":  0,
+                     "result":  "PASS",
+                     "elapsed_seconds":  10.634,
+                     "output_summary":  {
+                                            "sha256":  "f4a7d9e744d0c2ffb6ad89b0b82ca9efb1db091d9d2cc6b8db7321e10fb2163f",
+                                            "utf8_bytes":  1542,
+                                            "line_count":  29,
+                                            "first_line":  "Test project C:/p4a/build/windows-zig",
+                                            "last_line":  "Total Test time (real) =  10.60 sec"
+                                        },
+                     "test_counts":  {
+                                         "kind":  "CTest",
+                                         "passed":  12,
+                                         "failed":  0,
+                                         "total":  12
+                                     }
+                 },
+                 {
+                     "label":  "debug-normal-ctest",
+                     "command":  "ctest --preset dev-windows-zig -E ^(trajectory_replay_admission_test|m4_failure_isolation_test)$ --output-on-failure",
+                     "exit_code":  0,
+                     "result":  "PASS",
+                     "elapsed_seconds":  1393.861,
+                     "output_summary":  {
+                                            "sha256":  "c23acbae6353afe5c9f7eb25d8d71565c2ef357ac479cad75e4a6c7816134801",
+                                            "utf8_bytes":  17184,
+                                            "line_count":  264,
+                                            "first_line":  "Test project C:/p4a/build/windows-zig",
+                                            "last_line":  "Total Test time (real) = 1393.83 sec"
+                                        },
+                     "test_counts":  {
+                                         "kind":  "CTest",
+                                         "passed":  127,
+                                         "failed":  0,
+                                         "total":  127
+                                     }
+                 },
+                 {
+                     "label":  "release-configure",
+                     "command":  "cmake --preset release-windows-zig",
+                     "exit_code":  0,
+                     "result":  "PASS",
+                     "elapsed_seconds":  14.396,
+                     "output_summary":  {
+                                            "sha256":  "5b348d390984e3b89df0cafdc2ac731c855ce99ebcbb2c09dd020a4d59b50a39",
+                                            "utf8_bytes":  896,
+                                            "line_count":  5,
+                                            "first_line":  "-- {\"bundle_id\": \"3adfe6b4cfe2c2805e50b389fc0eb4e70a3b0b6107436614d328fddc865e585f\", \"checkouts\": [\"core: 9a0c558c2d686542f7914a6d529fd7aa57746aed (161849049d34de7ea60b2f370cc35f903262c14769e399d0bf43a381d295d7f3)\", \"cardscripts: f337c87018ca723c1aded5143e616bb649555273 (ce53e1033ea7a3057745bbe143c1803a4a0c7db7f6cded4c28b0170536320e3c)\", \"babelcdb: 89ad6837b0766a52984d8c715a7d5d4f8447946b (acef726f8fb74d7f2b3a43dc14088f117012dbf9c7eab35612716cb8e79df4d1)\"], \"core_api_version\": \"11.0\", \"ok\": true}",
+                                            "last_line":  "-- Build files have been written to: C:/p4a/build/release-windows-zig"
+                                        }
+                 },
+                 {
+                     "label":  "release-build",
+                     "command":  "cmake --build --preset release-windows-zig --parallel",
+                     "exit_code":  0,
+                     "result":  "PASS",
+                     "elapsed_seconds":  0.073,
+                     "output_summary":  {
+                                            "sha256":  "50c2ccef9cc15f9339d9d77e014d38b2ef775903fb14c3144ac6c0d4da7749db",
+                                            "utf8_bytes":  21,
+                                            "line_count":  1,
+                                            "first_line":  "n",
+                                            "last_line":  "n"
+                                        }
+                 },
+                 {
+                     "label":  "release-normal-ctest",
+                     "command":  "ctest --preset release-windows-zig -E ^(trajectory_replay_admission_test|m4_failure_isolation_test)$ --output-on-failure",
+                     "exit_code":  0,
+                     "result":  "PASS",
+                     "elapsed_seconds":  69.66,
+                     "output_summary":  {
+                                            "sha256":  "ee0670a3968f4f69ed951898ee7a1d3d38c23303e8a7c654191ac9b761bc13b2",
+                                            "utf8_bytes":  17191,
+                                            "line_count":  264,
+                                            "first_line":  "Test project C:/p4a/build/release-windows-zig",
+                                            "last_line":  "Total Test time (real) =  69.63 sec"
+                                        },
+                     "test_counts":  {
+                                         "kind":  "CTest",
+                                         "passed":  127,
+                                         "failed":  0,
+                                         "total":  127
+                                     }
+                 },
+                 {
+                     "label":  "heavy-replay-release",
+                     "command":  "ctest --preset release-windows-zig -R ^trajectory_replay_admission_test$ --output-on-failure",
+                     "exit_code":  0,
+                     "result":  "PASS",
+                     "elapsed_seconds":  253.306,
+                     "output_summary":  {
+                                            "sha256":  "9357195c082390ed8731dd78a834623389048346f14f336aa9defaf98b2ab945",
+                                            "utf8_bytes":  311,
+                                            "line_count":  10,
+                                            "first_line":  "Test project C:/p4a/build/release-windows-zig",
+                                            "last_line":  "Total Test time (real) = 253.28 sec"
+                                        },
+                     "test_counts":  {
+                                         "kind":  "CTest",
+                                         "passed":  1,
+                                         "failed":  0,
+                                         "total":  1
+                                     }
+                 },
+                 {
+                     "label":  "repository-python",
+                     "command":  "python -B -m unittest discover -s tests/python -v",
+                     "exit_code":  0,
+                     "result":  "PASS",
+                     "elapsed_seconds":  0.305,
+                     "output_summary":  {
+                                            "sha256":  "c7b4b4e2b7acd49127f55696504340280f41b5023f4fc9d2f64683a6a8cb8d60",
+                                            "utf8_bytes":  2681,
+                                            "line_count":  20,
+                                            "first_line":  "test_canonicalize_evidence_line_canonicalizes_all_runner_timings (test_episodic_acceptance.EpisodicAcceptanceEvidenceTests.test_canonicalize_evidence_line_canonicalizes_all_runner_timings) ... ok",
+                                            "last_line":  "OK"
+                                        },
+                     "test_counts":  {
+                                         "kind":  "unittest",
+                                         "passed":  15,
+                                         "failed":  0,
+                                         "total":  15
+                                     }
+                 },
+                 {
+                     "label":  "m3-python",
+                     "command":  "python -B -m unittest discover -s tests/m3 -v",
+                     "exit_code":  0,
+                     "result":  "PASS",
+                     "elapsed_seconds":  0.484,
+                     "output_summary":  {
+                                            "sha256":  "b0c6d6a51f31c54a543326694dadc920cb73f96e4129a002501630033ef415b2",
+                                            "utf8_bytes":  2807,
+                                            "line_count":  22,
+                                            "first_line":  "test_audit_reports_are_machine_verifiable_and_deterministic (test_card_compatibility.CardCompatibilityTests.test_audit_reports_are_machine_verifiable_and_deterministic) ... ok",
+                                            "last_line":  "OK"
+                                        },
+                     "test_counts":  {
+                                         "kind":  "unittest",
+                                         "passed":  17,
+                                         "failed":  0,
+                                         "total":  17
+                                     }
+                 },
+                 {
+                     "label":  "m4-python",
+                     "command":  "YGO_M4_WORKER=build/windows-zig/ygo_m4_worker.exe python -B tools/m4/run_fast_suite.py -v",
+                     "exit_code":  0,
+                     "result":  "PASS",
+                     "elapsed_seconds":  1012.529,
+                     "output_summary":  {
+                                            "sha256":  "852511a2fb08deb4993a2310ecdf3e3b742581bc61f751547ac74d46bd55ec18",
+                                            "utf8_bytes":  22612,
+                                            "line_count":  132,
+                                            "first_line":  "test_aggregation_sums_native_fields_and_keeps_coordinator_domain_separate (tests.m4.test_benchmark_integrity.BenchmarkIntegrityTests.test_aggregation_sums_native_fields_and_keeps_coordinator_domain_separate) ... ok",
+                                            "last_line":  "OK"
+                                        },
+                     "test_counts":  {
+                                         "kind":  "unittest",
+                                         "passed":  127,
+                                         "failed":  0,
+                                         "total":  127
+                                     }
+                 },
+                 {
+                     "label":  "public-fact-matrix",
+                     "command":  "python -B tests/policy/public_fact_matrix_test.py",
+                     "exit_code":  0,
+                     "result":  "PASS",
+                     "elapsed_seconds":  0.178,
+                     "output_summary":  {
+                                            "sha256":  "083ea6086bc6b0e689e848a2ea219490a210af991a24560bf07ae11e12bc601f",
+                                            "utf8_bytes":  29,
+                                            "line_count":  1,
+                                            "first_line":  "p",
+                                            "last_line":  "p"
+                                        }
+                 },
+                 {
+                     "label":  "rules-deck-identity",
+                     "command":  "python -B tests/policy/rules_deck_identity_test.py",
+                     "exit_code":  0,
+                     "result":  "PASS",
+                     "elapsed_seconds":  0.138,
+                     "output_summary":  {
+                                            "sha256":  "7f116ce2afa6df65374ff59f7abd1b85ff0a24d1a2356b02bf7de5ef9237e5e0",
+                                            "utf8_bytes":  22,
+                                            "line_count":  1,
+                                            "first_line":  "r",
+                                            "last_line":  "r"
+                                        }
+                 },
+                 {
+                     "label":  "policy-determinism",
+                     "command":  "python -B tests/policy/policy_determinism_test.py",
+                     "exit_code":  0,
+                     "result":  "PASS",
+                     "elapsed_seconds":  0.204,
+                     "output_summary":  {
+                                            "sha256":  "046199898490ae22f2d251ee72f9eb06824fb2721fb51d214ae6e2b9227acefc",
+                                            "utf8_bytes":  21,
+                                            "line_count":  1,
+                                            "first_line":  "p",
+                                            "last_line":  "p"
+                                        }
+                 },
+                 {
+                     "label":  "policy-boundary",
+                     "command":  "python -B tests/policy/policy_boundary_test.py",
+                     "exit_code":  0,
+                     "result":  "PASS",
+                     "elapsed_seconds":  0.128,
+                     "output_summary":  {
+                                            "sha256":  "a63dc12bda566c2aaeb6231a6d6070deb104cefe5e391987e0d0742c4a9864eb",
+                                            "utf8_bytes":  18,
+                                            "line_count":  1,
+                                            "first_line":  "p",
+                                            "last_line":  "p"
+                                        }
+                 },
+                 {
+                     "label":  "rules-bundle-verification",
+                     "command":  "python -B tools/verify_rules_bundle.py --lock third_party/rules_bundle.lock.json --cache .cache/rules_bundle",
+                     "exit_code":  0,
+                     "result":  "PASS",
+                     "elapsed_seconds":  3.593,
+                     "output_summary":  {
+                                            "sha256":  "c64624f10ffd919dc3fbc329d6bf2a242451594af4d31e7a1450e3ca6bb37315",
+                                            "utf8_bytes":  498,
+                                            "line_count":  1,
+                                            "first_line":  "{",
+                                            "last_line":  "{"
+                                        }
+                 },
+                 {
+                     "label":  "production-identity-source-scan",
+                     "command":  "source scan include/ygo and src for ocgforge.test.*",
+                     "exit_code":  0,
+                     "result":  "PASS",
+                     "elapsed_seconds":  0.129,
+                     "output_summary":  {
+                                            "sha256":  "69d1e5bdd9943041f66b8b396eec09d8f325685697e43c0b34532de68a149b52",
+                                            "utf8_bytes":  58,
+                                            "line_count":  1,
+                                            "first_line":  "no ocgforge.test.* identity found under include/ygo or src",
+                                            "last_line":  "no ocgforge.test.* identity found under include/ygo or src"
+                                        }
+                 },
+                 {
+                     "label":  "m4-canonical-full-game",
+                     "command":  "python -B tests/m3/full_game/full_fixed_deck_test.py --probe build/release-windows-zig/ygo_core_probe.exe --games 16 --max-steps 2200 --timeout 300 --output artifacts/p4a/h-exec/m4/full_game",
+                     "exit_code":  0,
+                     "result":  "PASS",
+                     "elapsed_seconds":  4.425,
+                     "output_summary":  {
+                                            "sha256":  "d2017531bda0c6604b0c702120f3d2cf1fefe3d11a192a5f5da9b1bf15b31a1a",
+                                            "utf8_bytes":  233,
+                                            "line_count":  1,
+                                            "first_line":  "{",
+                                            "last_line":  "{"
+                                        }
+                 },
+                 {
+                     "label":  "heavy-lifecycle-stress",
+                     "command":  "python -B tools/m4/record_lifecycle_stress_evidence.py --repetitions 5 --output artifacts/p4a/h-exec/m4/lifecycle_stress.json",
+                     "exit_code":  0,
+                     "result":  "PASS",
+                     "elapsed_seconds":  188.558,
+                     "output_summary":  {
+                                            "sha256":  "371cb0edacf31e3aaf0c44d85b1a99c5abbd21bbf77db6fad367b56515974364",
+                                            "utf8_bytes":  1172,
+                                            "line_count":  54,
+                                            "first_line":  "{",
+                                            "last_line":  "}"
+                                        }
+                 },
+                 {
+                     "label":  "m4-recommended-concurrency-soak",
+                     "command":  "python -B -m tools.m4.benchmark --worker-executable build/release-windows-zig/ygo_m4_worker.exe --games 128 --workers 16 --master-seed 20260815 --mode throughput --warmup-games 4 --observation-mode full --output artifacts/p4a/h-exec/m4/soak.json",
+                     "exit_code":  0,
+                     "result":  "PASS",
+                     "elapsed_seconds":  18.089,
+                     "output_summary":  {
+                                            "sha256":  "2f0cf9381418024189d11a65ac208af6e64bc592a8c9948aa12800ab239e541b",
+                                            "utf8_bytes":  85,
+                                            "line_count":  1,
+                                            "first_line":  "M",
+                                            "last_line":  "M"
+                                        }
+                 }
+             ],
+    "artifacts":  [
+                      {
+                          "path":  "artifacts/p4a/h-exec/m4/full_game/full_fixed_deck_results.json",
+                          "sha256":  "81437213a66dc548dd85cf6f2145a3728c4b3b4b811eb41bf69e5cdcd86045b6",
+                          "bytes":  28374
+                      },
+                      {
+                          "path":  "artifacts/p4a/h-exec/m4/full_game/seed-1-mirror-start-0.jsonl",
+                          "sha256":  "efaeb06f27d12a3b08558c455e348b3549f017bc688f036a9050620bd32bbb56",
+                          "bytes":  697913
+                      },
+                      {
+                          "path":  "artifacts/p4a/h-exec/m4/full_game/seed-1-mirror-start-1.jsonl",
+                          "sha256":  "dce4d872e41dde0a1136ba4ca56839ce9e72b8e11fbfb5a1c7298cb244860ed0",
+                          "bytes":  687868
+                      },
+                      {
+                          "path":  "artifacts/p4a/h-exec/m4/full_game/seed-1-normal-start-0.jsonl",
+                          "sha256":  "84d6e8860fd642d713ba138c68c8199ed159ddc5069d972c0009c7d6d10a11cb",
+                          "bytes":  687868
+                      },
+                      {
+                          "path":  "artifacts/p4a/h-exec/m4/full_game/seed-1-normal-start-1.jsonl",
+                          "sha256":  "937f8e0d40d330727d34f9394991c314ebc09aeb9e524bb1035ef5bae9e77a83",
+                          "bytes":  697913
+                      },
+                      {
+                          "path":  "artifacts/p4a/h-exec/m4/full_game/seed-2-mirror-start-0.jsonl",
+                          "sha256":  "a9c98e8724ffaa8238ec025d265913ab331c9e906cb2bea65b796e02a32e071a",
+                          "bytes":  697706
+                      },
+                      {
+                          "path":  "artifacts/p4a/h-exec/m4/full_game/seed-2-mirror-start-1.jsonl",
+                          "sha256":  "bc33ac87e3baf90bfae07068cbf7faa32c43b959087808f94aa0bb04c7d73afc",
+                          "bytes":  687661
+                      },
+                      {
+                          "path":  "artifacts/p4a/h-exec/m4/full_game/seed-2-normal-start-0.jsonl",
+                          "sha256":  "4a0961ae76f9bb4310b11b4aaa4f434cfe28a4bcbec549489776c7926271cabc",
+                          "bytes":  687661
+                      },
+                      {
+                          "path":  "artifacts/p4a/h-exec/m4/full_game/seed-2-normal-start-1.jsonl",
+                          "sha256":  "3c2391c53b9c261ec5f9e193ba8f9c522fff53ef57c51d97e148c5ffc5c268d5",
+                          "bytes":  697706
+                      },
+                      {
+                          "path":  "artifacts/p4a/h-exec/m4/full_game/seed-3-mirror-start-0.jsonl",
+                          "sha256":  "4d797e3427330d9b1428ec7199174ba2ef1e28d76e7366136f10c1bf7189cb05",
+                          "bytes":  697557
+                      },
+                      {
+                          "path":  "artifacts/p4a/h-exec/m4/full_game/seed-3-mirror-start-1.jsonl",
+                          "sha256":  "669e15c67ec58c0c2a2b90f62b6de1ccefb4ac8ac30c2a36ceba7b7fead3484b",
+                          "bytes":  687512
+                      },
+                      {
+                          "path":  "artifacts/p4a/h-exec/m4/full_game/seed-3-normal-start-0.jsonl",
+                          "sha256":  "c529ab248ea6262a946ad0b11b7be0a5d0260159812015001b5716230285cb60",
+                          "bytes":  687512
+                      },
+                      {
+                          "path":  "artifacts/p4a/h-exec/m4/full_game/seed-3-normal-start-1.jsonl",
+                          "sha256":  "9ea4d6c5a478b0bd56b63824345b36b4678f61aecd92f5f80ce2205bfce6d465",
+                          "bytes":  697557
+                      },
+                      {
+                          "path":  "artifacts/p4a/h-exec/m4/full_game/seed-4-mirror-start-0.jsonl",
+                          "sha256":  "72b9bf1aa286ff88b3e1ed37017d1bd39bf407b0a780f7a56ea9d700cccbada8",
+                          "bytes":  697504
+                      },
+                      {
+                          "path":  "artifacts/p4a/h-exec/m4/full_game/seed-4-mirror-start-1.jsonl",
+                          "sha256":  "f180c03799d38c720dd5bbcd60a59b67282aedbf5f8e8b2b0535c2aa65efbe68",
+                          "bytes":  687460
+                      },
+                      {
+                          "path":  "artifacts/p4a/h-exec/m4/full_game/seed-4-normal-start-0.jsonl",
+                          "sha256":  "9ddb17b6efe7d6b592857f7a0138305d474beb29da07dd7359b7f6c64691fd40",
+                          "bytes":  687460
+                      },
+                      {
+                          "path":  "artifacts/p4a/h-exec/m4/full_game/seed-4-normal-start-1.jsonl",
+                          "sha256":  "e5ec42984b4dcf07766a24418d8a9b916eb21f71691ff1954be5b736b25b79e9",
+                          "bytes":  697504
+                      },
+                      {
+                          "path":  "artifacts/p4a/h-exec/m4/lifecycle_stress.json",
+                          "sha256":  "f3723d80034df9054b37912c91651f99238120deb2f2b02ef638e627e93a3c77",
+                          "bytes":  1227
+                      },
+                      {
+                          "path":  "artifacts/p4a/h-exec/m4/soak.json",
+                          "sha256":  "2bb15461aa65b780dbe4eac5a13a87fd30040351ac54cc51da07793bbbb3306f",
+                          "bytes":  284263
+                      },
+                      {
+                          "path":  "artifacts/p4a/h-exec/m4/soak.workers/worker-000.stderr.log",
+                          "sha256":  "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                          "bytes":  0
+                      },
+                      {
+                          "path":  "artifacts/p4a/h-exec/m4/soak.workers/worker-001.stderr.log",
+                          "sha256":  "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                          "bytes":  0
+                      },
+                      {
+                          "path":  "artifacts/p4a/h-exec/m4/soak.workers/worker-002.stderr.log",
+                          "sha256":  "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                          "bytes":  0
+                      },
+                      {
+                          "path":  "artifacts/p4a/h-exec/m4/soak.workers/worker-003.stderr.log",
+                          "sha256":  "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                          "bytes":  0
+                      },
+                      {
+                          "path":  "artifacts/p4a/h-exec/m4/soak.workers/worker-004.stderr.log",
+                          "sha256":  "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                          "bytes":  0
+                      },
+                      {
+                          "path":  "artifacts/p4a/h-exec/m4/soak.workers/worker-005.stderr.log",
+                          "sha256":  "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                          "bytes":  0
+                      },
+                      {
+                          "path":  "artifacts/p4a/h-exec/m4/soak.workers/worker-006.stderr.log",
+                          "sha256":  "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                          "bytes":  0
+                      },
+                      {
+                          "path":  "artifacts/p4a/h-exec/m4/soak.workers/worker-007.stderr.log",
+                          "sha256":  "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                          "bytes":  0
+                      },
+                      {
+                          "path":  "artifacts/p4a/h-exec/m4/soak.workers/worker-008.stderr.log",
+                          "sha256":  "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                          "bytes":  0
+                      },
+                      {
+                          "path":  "artifacts/p4a/h-exec/m4/soak.workers/worker-009.stderr.log",
+                          "sha256":  "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                          "bytes":  0
+                      },
+                      {
+                          "path":  "artifacts/p4a/h-exec/m4/soak.workers/worker-010.stderr.log",
+                          "sha256":  "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                          "bytes":  0
+                      },
+                      {
+                          "path":  "artifacts/p4a/h-exec/m4/soak.workers/worker-011.stderr.log",
+                          "sha256":  "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                          "bytes":  0
+                      },
+                      {
+                          "path":  "artifacts/p4a/h-exec/m4/soak.workers/worker-012.stderr.log",
+                          "sha256":  "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                          "bytes":  0
+                      },
+                      {
+                          "path":  "artifacts/p4a/h-exec/m4/soak.workers/worker-013.stderr.log",
+                          "sha256":  "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                          "bytes":  0
+                      },
+                      {
+                          "path":  "artifacts/p4a/h-exec/m4/soak.workers/worker-014.stderr.log",
+                          "sha256":  "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                          "bytes":  0
+                      },
+                      {
+                          "path":  "artifacts/p4a/h-exec/m4/soak.workers/worker-015.stderr.log",
+                          "sha256":  "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                          "bytes":  0
+                      }
+                  ],
+    "heavy_evidence":  {
+                           "source_head":  "66d30967018c6ce106d131c7e02147ffaf194a56",
+                           "replay":  {
+                                          "label":  "heavy-replay-release",
+                                          "result":  "PASS",
+                                          "exit_code":  0,
+                                          "output_sha256":  "9357195c082390ed8731dd78a834623389048346f14f336aa9defaf98b2ab945",
+                                          "output_contains_required_text":  true,
+                                          "test_counts":  {
+                                                              "kind":  "CTest",
+                                                              "passed":  1,
+                                                              "failed":  0,
+                                                              "total":  1
+                                                          },
+                                          "semantic_artifact":  null
+                                      },
+                           "lifecycle":  {
+                                             "label":  "heavy-lifecycle-stress",
+                                             "result":  "PASS",
+                                             "exit_code":  0,
+                                             "output_sha256":  "371cb0edacf31e3aaf0c44d85b1a99c5abbd21bbf77db6fad367b56515974364",
+                                             "output_contains_required_text":  true,
+                                             "test_counts":  null,
+                                             "semantic_artifact":  {
+                                                                       "role":  "lifecycle-stress",
+                                                                       "sha256":  "f3723d80034df9054b37912c91651f99238120deb2f2b02ef638e627e93a3c77",
+                                                                       "bytes":  1227
+                                                                   }
+                                         }
+                       },
+    "runtime_budget":  {
+                           "normal_seconds":  2549.755,
+                           "heavy_seconds":  441.864,
+                           "measured_seconds":  2991.619,
+                           "combined_acceptance_seconds":  2991.619,
+                           "heavy_inherited":  false
+                       },
+    "reproduction":  {
+                         "status":  "PASS",
+                         "clean_checkout_report":  "C:/p4a-clean-66d3096/artifacts/p4a/clean-checkout/p4a_acceptance.json",
+                         "clean_checkout_report_sha256":  "eb634d13a2dcc45d9f0c92d3bfe921385c67ac8785d506001b225eb9d13889ac",
+                         "profile_match":  true,
+                         "base_profile_valid":  true,
+                         "clean_profile_valid":  true,
+                         "base_profile_error":  null,
+                         "clean_profile_error":  null,
+                         "heavy_evidence_match":  true,
+                         "semantic_gate_match":  true,
+                         "semantic_fingerprint_match":  true,
+                         "artifact_hash_match":  true,
+                         "compared_head":  "66d30967018c6ce106d131c7e02147ffaf194a56"
+                     },
+    "semantic_fingerprint":  {
+                                 "gate_results":  {
+                                                      "P4A-G00":  "PASS",
+                                                      "P4A-G01":  "PASS",
+                                                      "P4A-G02":  "PASS",
+                                                      "P4A-G03":  "PASS",
+                                                      "P4A-G04":  "PASS",
+                                                      "P4A-G05":  "PASS",
+                                                      "P4A-G06":  "PASS",
+                                                      "P4A-G07":  "PASS",
+                                                      "P4A-G08":  "PASS",
+                                                      "P4A-G09":  "PASS",
+                                                      "P4A-G10":  "PASS",
+                                                      "P4A-G11":  "PASS",
+                                                      "P4A-G12":  "PASS",
+                                                      "P4A-G13":  "PASS",
+                                                      "P4A-G14":  "PASS",
+                                                      "P4A-G15":  "PASS",
+                                                      "P4A-G16":  "PASS",
+                                                      "P4A-G17":  "PASS",
+                                                      "P4A-G18":  "PASS",
+                                                      "P4A-G19":  "PASS",
+                                                      "P4A-G20":  "PASS",
+                                                      "P4A-G21":  "PASS",
+                                                      "P4A-G22":  "PASS",
+                                                      "P4A-G23":  "PASS",
+                                                      "P4A-G24":  "PASS",
+                                                      "P4A-G25":  "PASS",
+                                                      "P4A-G26":  "PASS",
+                                                      "P4A-G27":  "PASS",
+                                                      "P4A-G28":  "PASS"
+                                                  },
+                                 "normal_run_results":  {
+                                                            "debug-configure":  "PASS",
+                                                            "debug-build":  "PASS",
+                                                            "focused-policy-ctest":  "PASS",
+                                                            "debug-normal-ctest":  "PASS",
+                                                            "release-configure":  "PASS",
+                                                            "release-build":  "PASS",
+                                                            "release-normal-ctest":  "PASS",
+                                                            "repository-python":  "PASS",
+                                                            "m3-python":  "PASS",
+                                                            "m4-python":  "PASS",
+                                                            "public-fact-matrix":  "PASS",
+                                                            "rules-deck-identity":  "PASS",
+                                                            "policy-determinism":  "PASS",
+                                                            "policy-boundary":  "PASS",
+                                                            "rules-bundle-verification":  "PASS",
+                                                            "production-identity-source-scan":  "PASS",
+                                                            "m4-canonical-full-game":  "PASS",
+                                                            "m4-recommended-concurrency-soak":  "PASS"
+                                                        },
+                                 "normal_command_counts":  {
+                                                               "focused-policy-ctest":  {
+                                                                                            "kind":  "CTest",
+                                                                                            "passed":  12,
+                                                                                            "failed":  0,
+                                                                                            "total":  12
+                                                                                        },
+                                                               "debug-normal-ctest":  {
+                                                                                          "kind":  "CTest",
+                                                                                          "passed":  127,
+                                                                                          "failed":  0,
+                                                                                          "total":  127
+                                                                                      },
+                                                               "release-normal-ctest":  {
+                                                                                            "kind":  "CTest",
+                                                                                            "passed":  127,
+                                                                                            "failed":  0,
+                                                                                            "total":  127
+                                                                                        },
+                                                               "repository-python":  {
+                                                                                         "kind":  "unittest",
+                                                                                         "passed":  15,
+                                                                                         "failed":  0,
+                                                                                         "total":  15
+                                                                                     },
+                                                               "m3-python":  {
+                                                                                 "kind":  "unittest",
+                                                                                 "passed":  17,
+                                                                                 "failed":  0,
+                                                                                 "total":  17
+                                                                             },
+                                                               "m4-python":  {
+                                                                                 "kind":  "unittest",
+                                                                                 "passed":  127,
+                                                                                 "failed":  0,
+                                                                                 "total":  127
+                                                                             }
+                                                           },
+                                 "command_counts":  {
+                                                        "focused-policy-ctest":  {
+                                                                                     "kind":  "CTest",
+                                                                                     "passed":  12,
+                                                                                     "failed":  0,
+                                                                                     "total":  12
+                                                                                 },
+                                                        "debug-normal-ctest":  {
+                                                                                   "kind":  "CTest",
+                                                                                   "passed":  127,
+                                                                                   "failed":  0,
+                                                                                   "total":  127
+                                                                               },
+                                                        "release-normal-ctest":  {
+                                                                                     "kind":  "CTest",
+                                                                                     "passed":  127,
+                                                                                     "failed":  0,
+                                                                                     "total":  127
+                                                                                 },
+                                                        "repository-python":  {
+                                                                                  "kind":  "unittest",
+                                                                                  "passed":  15,
+                                                                                  "failed":  0,
+                                                                                  "total":  15
+                                                                              },
+                                                        "m3-python":  {
+                                                                          "kind":  "unittest",
+                                                                          "passed":  17,
+                                                                          "failed":  0,
+                                                                          "total":  17
+                                                                      },
+                                                        "m4-python":  {
+                                                                          "kind":  "unittest",
+                                                                          "passed":  127,
+                                                                          "failed":  0,
+                                                                          "total":  127
+                                                                      }
+                                                    },
+                                 "heavy_evidence":  {
+                                                        "source_head":  "66d30967018c6ce106d131c7e02147ffaf194a56",
+                                                        "replay":  {
+                                                                       "label":  "heavy-replay-release",
+                                                                       "result":  "PASS",
+                                                                       "exit_code":  0,
+                                                                       "output_sha256":  "9357195c082390ed8731dd78a834623389048346f14f336aa9defaf98b2ab945",
+                                                                       "output_contains_required_text":  true,
+                                                                       "test_counts":  {
+                                                                                           "kind":  "CTest",
+                                                                                           "passed":  1,
+                                                                                           "failed":  0,
+                                                                                           "total":  1
+                                                                                       },
+                                                                       "semantic_artifact":  null
+                                                                   },
+                                                        "lifecycle":  {
+                                                                          "label":  "heavy-lifecycle-stress",
+                                                                          "result":  "PASS",
+                                                                          "exit_code":  0,
+                                                                          "output_sha256":  "371cb0edacf31e3aaf0c44d85b1a99c5abbd21bbf77db6fad367b56515974364",
+                                                                          "output_contains_required_text":  true,
+                                                                          "test_counts":  null,
+                                                                          "semantic_artifact":  {
+                                                                                                    "role":  "lifecycle-stress",
+                                                                                                    "sha256":  "f3723d80034df9054b37912c91651f99238120deb2f2b02ef638e627e93a3c77",
+                                                                                                    "bytes":  1227
+                                                                                                }
+                                                                      }
+                                                    },
+                                 "semantic_artifacts":  [
+                                                            {
+                                                                "role":  "lifecycle-stress",
+                                                                "sha256":  "f3723d80034df9054b37912c91651f99238120deb2f2b02ef638e627e93a3c77",
+                                                                "bytes":  1227
+                                                            },
+                                                            {
+                                                                "role":  "canonical-full-game",
+                                                                "semantic_digest":  "40c4d3379a879ba3db7d48abc965d1b22cd4df78aa62c67d11d1ce7e5747de86",
+                                                                "trace_count":  16,
+                                                                "trace_leaf_names":  [
+                                                                                         "seed-1-mirror-start-0.jsonl",
+                                                                                         "seed-1-mirror-start-1.jsonl",
+                                                                                         "seed-1-normal-start-0.jsonl",
+                                                                                         "seed-1-normal-start-1.jsonl",
+                                                                                         "seed-2-mirror-start-0.jsonl",
+                                                                                         "seed-2-mirror-start-1.jsonl",
+                                                                                         "seed-2-normal-start-0.jsonl",
+                                                                                         "seed-2-normal-start-1.jsonl",
+                                                                                         "seed-3-mirror-start-0.jsonl",
+                                                                                         "seed-3-mirror-start-1.jsonl",
+                                                                                         "seed-3-normal-start-0.jsonl",
+                                                                                         "seed-3-normal-start-1.jsonl",
+                                                                                         "seed-4-mirror-start-0.jsonl",
+                                                                                         "seed-4-mirror-start-1.jsonl",
+                                                                                         "seed-4-normal-start-0.jsonl",
+                                                                                         "seed-4-normal-start-1.jsonl"
+                                                                                     ]
+                                                            }
+                                                        ]
+                             },
+    "limitations":  [
+                        "This report is bound to the immutable H_exec source head.",
+                        "TeacherCore and both StrategyProfiles are outside Phase 4A."
+                    ]
+}
