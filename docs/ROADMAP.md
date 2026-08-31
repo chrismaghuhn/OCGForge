@@ -273,6 +273,52 @@ Cross-platform actors must not become training-data sources until deterministic 
 
 See `docs/PORTABLE_ACTOR_LEARNER_COMPUTE_STRATEGY.md` for the preserved architecture note. This is future intent only and does not authorize distributed ML before the episodic, trajectory, model-facing, and data-trust layers exist.
 
+### H. Post-Phase-4B public battle facts and provable lethal
+
+This workstream is intentionally **not part of Phase 4B**. It begins only after
+Phase-4B Task 12 has reached independently reviewed **FINAL PASS**. Phase 4B
+must remain fail-closed when lethal cannot be proven from its existing public
+facts; profile-local heuristics, hidden engine state, hardcoded private
+knowledge, or guessed damage are not acceptable substitutes.
+
+Before large-scale Teacher trajectory generation, Teacher-strength evaluation,
+or ML training-data production, define a separate versioned contract task
+(tentatively Phase 4C) for public battle/combat capability.
+
+Potential scope:
+
+- perspective-safe public ATK/DEF and other combat-relevant visible values;
+- public attack eligibility and already-attacked state where semantically
+  required;
+- exact battle-phase context and public battle restrictions;
+- deterministic, checked public damage bounds;
+- a derived `guaranteed_lethal`/provable-lethal class only when every required
+  input is public and complete;
+- negative paired-world tests proving hidden hand/deck/face-down identities do
+  not influence lethal classification;
+- canonical observation/public-fact identities and explicit migration rules for
+  any new versioned fields or fact meanings.
+
+The owning layer for new facts remains the public observation/public-fact
+contract, not an individual deck profile. Swordsoul and Salamangreat profiles
+may consume the new facts only after that contract is accepted. Missing or
+unprovable combat evidence remains `UNSUPPORTED`/`BLOCKED`; it must never be
+reconstructed from CoreHost or omniscient state.
+
+Required ordering:
+
+```text
+Phase 4B Task 12 / FINAL PASS
+→ versioned public battle-fact + provable-lethal contract
+→ focused privacy/determinism/conformance acceptance
+→ Teacher-strength evaluation and larger trusted trajectory generation
+→ later ML work
+```
+
+This roadmap entry records future intent only. It does not authorize Phase 4C,
+change Phase-4B acceptance, or claim that the listed battle facts are already
+available.
+
 ## Milestone admission rule
 
 Before assigning a future milestone a `PASS`, define:
