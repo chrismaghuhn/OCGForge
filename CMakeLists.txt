@@ -209,6 +209,7 @@ add_library(ygo_teacher STATIC
     src/teacher/strategy_profile.cpp
     src/teacher/strategy_profile_codec.cpp
     src/teacher/teacher_policy_binding.cpp
+    src/teacher/teacher_decision.cpp
 )
 target_include_directories(ygo_teacher PUBLIC "${CMAKE_SOURCE_DIR}/include")
 target_link_libraries(ygo_teacher PUBLIC ygo_trajectory)
@@ -287,6 +288,17 @@ add_test(NAME strategy_profile_codec_test COMMAND strategy_profile_codec_test)
 add_executable(strategy_profile_negative_test tests/teacher/strategy_profile_negative_test.cpp)
 target_link_libraries(strategy_profile_negative_test PRIVATE ygo_teacher)
 add_test(NAME strategy_profile_negative_test COMMAND strategy_profile_negative_test)
+
+add_executable(teacher_policy_boundary_compile_test
+               tests/teacher/teacher_policy_boundary_compile_test.cpp)
+target_include_directories(teacher_policy_boundary_compile_test PRIVATE
+                           "${CMAKE_SOURCE_DIR}/include")
+add_test(NAME teacher_policy_boundary_compile_test
+         COMMAND teacher_policy_boundary_compile_test)
+
+add_executable(teacher_decision_dto_test tests/teacher/teacher_decision_dto_test.cpp)
+target_link_libraries(teacher_decision_dto_test PRIVATE ygo_teacher)
+add_test(NAME teacher_decision_dto_test COMMAND teacher_decision_dto_test)
 
 add_executable(ygo_core_probe tools/ygo_core_probe/main.cpp)
 target_link_libraries(ygo_core_probe PRIVATE ygo_m4)
