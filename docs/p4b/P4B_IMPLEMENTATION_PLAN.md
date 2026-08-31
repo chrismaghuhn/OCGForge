@@ -12,7 +12,7 @@
 
 ## Frozen execution constraints
 
-- Start each implementation task from the exact prior task head and a clean worktree. Task 2 starts only from TASK1_ACCEPTED_HEAD; TASK1_INITIAL_HEAD is historical context for the pre-review-fix commit.
+- Start each implementation task from the exact prior task head and a clean worktree. The next-task authorization message owns the exact Task-2 base; Task 2 must verify that its base contains all Task-1 review fixes.
 - Do not modify fixtures/decks/, third_party/rules_bundle.lock.json, the pinned rules materialization, Phase-3 contract meanings, or Phase-4A public-policy meanings.
 - Use only the existing ygo::policy::PolicyInput boundary:
 
@@ -24,7 +24,7 @@
   ~~~
 
 - DecisionFrame, SubmissionToken, PlayerObservation, CoreHost, internal semantic keys, protocol IDs, continuation IDs, raw response bytes, and private state remain runner/control-plane values. They never reach TeacherCore.
-- Every valid nonempty supplied domain produces one evaluation record per candidate in supplied order. No profile or evaluator filters, truncates, deduplicates, reconstructs, or reorders the domain.
+- Every valid nonempty authoritative supplied vector produces one evaluation record per candidate in supplied order. No profile or evaluator filters, truncates, deduplicates, reconstructs, or reorders the vector.
 - Deterministic Teacher v1 returns an existing public_action_key and no policy RNG. Accepted records use existing PolicyArtifact, participant assignment, PolicyRngDecisionProvenance::NONE, TrajectoryRecorder, shard, semantic replay, admission, receipt, and dataset path.
 - Missing public facts are BLOCKED; no private lookup compensates for them.
 - The locked first profiles are ocgforge.swordsoul_tenyi.ml_v1 versus ocgforge.salamangreat.ml_v1 and the reverse, under the exact certified rules bundle and matchup identities in P4B_TEACHER_CONTRACT.md.
@@ -73,11 +73,19 @@ The JSON authoring files are convenience inputs. The strict C++ codec and canoni
 
 **Status:** Task-1 review-fix finalization.
 
-TASK1_INITIAL_HEAD = 6f46c3c7d10692356ac2d7f085c58f1fefcc88e7
+TASK1_INITIAL_HEAD =
+6f46c3c7d10692356ac2d7f085c58f1fefcc88e7
 
-TASK1_ACCEPTED_HEAD = 989707b3f867d5e1fc7a313ed07549efc3abe8fb
+TASK1_REVIEW_FIX_1_HEAD =
+989707b3f867d5e1fc7a313ed07549efc3abe8fb
 
-Task 2 MUST start from TASK1_ACCEPTED_HEAD, not TASK1_INITIAL_HEAD.
+The final accepted Task-1 head is supplied externally by independent review after the final Task-1 commit exists.
+
+Task 2 MUST start from the exact externally authorized Task-1 head. It MUST verify that its base contains all Task-1 review fixes.
+
+A Git commit MUST NOT attempt to embed its own commit SHA as an authoritative self-identity, because changing that content changes the commit SHA.
+
+The next-task authorization message owns the exact Task-2 base SHA.
 
 **Files:**
 
