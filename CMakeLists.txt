@@ -207,9 +207,15 @@ endif()
 
 add_library(ygo_teacher STATIC
     src/teacher/candidate_evaluator.cpp
+    src/teacher/candidate_features.cpp
     src/teacher/deterministic_resolver.cpp
+    src/teacher/interaction_evaluator.cpp
+    src/teacher/material_evaluator.cpp
+    src/teacher/public_fact_registry.cpp
     src/teacher/strategy_profile.cpp
     src/teacher/strategy_profile_codec.cpp
+    src/teacher/target_evaluator.cpp
+    src/teacher/tactical_evaluator.cpp
     src/teacher/teacher_policy_binding.cpp
     src/teacher/teacher_decision.cpp
 )
@@ -310,6 +316,10 @@ add_test(NAME teacher_domain_preservation_test COMMAND teacher_domain_preservati
 add_executable(teacher_ranking_test tests/teacher/teacher_ranking_test.cpp)
 target_link_libraries(teacher_ranking_test PRIVATE ygo_teacher)
 add_test(NAME teacher_ranking_test COMMAND teacher_ranking_test)
+
+add_executable(teacher_evaluator_test tests/teacher/teacher_evaluator_test.cpp)
+target_link_libraries(teacher_evaluator_test PRIVATE ygo_teacher)
+add_test(NAME teacher_evaluator_test COMMAND teacher_evaluator_test)
 
 add_executable(ygo_core_probe tools/ygo_core_probe/main.cpp)
 target_link_libraries(ygo_core_probe PRIVATE ygo_m4)
