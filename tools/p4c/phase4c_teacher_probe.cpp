@@ -61,6 +61,65 @@ const ParticipantPolicyAssignment& assignment_for_player(
     throw std::runtime_error("Teacher assignment is missing a player");
 }
 
+void verify_record_provenance(
+    const DecisionRecord& record,
+    const EpisodeEnvelope& envelope,
+    const SeatAssignment seat_assignment,
+    const std::uint8_t starting_player) {
+    const ParticipantPolicyAssignment* assignment = nullptr;
+    for (const auto& candidate :
+         envelope.manifest.policy_provenance.participant_assignments) {
+        if (candidate.participant_policy_assignment_id !=
+            record.acting_policy_assignment_id) {
+            continue;
+        }
+        require(assignment == nullptr,
+                "record assignment ID resolved to multiple participant assignments");
+        assignment = &candidate;
+    }
+    require(assignment != nullptr,
+            "record assignment ID did not resolve to the sealed assignment manifest");
+    require(assignment->player == record.frame.acting_player,
+            "record assignment player does not match the acting frame player");
+
+    const auto& attribution = record.policy_rng_decision_provenance;
+    require(attribution.acting_policy_assignment_id ==
+                record.acting_policy_assignment_id &&
+                attribution.decision_index == record.frame.decision_index,
+            "record policy attribution does not match its frame");
+
+    const auto expected_deck_role =
+        seat_assignment == SeatAssignment::Mirror
+            ? (assignment->player == 0 ? DeckRole::SecondLockedDeck
+                                       : DeckRole::FirstLockedDeck)
+            : (assignment->player == 0 ? DeckRole::FirstLockedDeck
+                                       : DeckRole::SecondLockedDeck);
+    const auto expected_artifact =
+        expected_deck_role == DeckRole::FirstLockedDeck ? kSwordsoulArtifactId
+                                                         : kSalamangreatArtifactId;
+    require(assignment->deck_role == expected_deck_role &&
+                assignment->policy_artifact_id == expected_artifact,
+            "record assignment deck role or PolicyArtifact attribution changed");
+    require(assignment->seat_role ==
+                (assignment->player == starting_player
+                     ? SeatRole::StartingPlayer
+                     : SeatRole::NonStartingPlayer),
+            "record assignment seat role does not match the matrix row");
+
+    require(attribution.mode == PolicyRngMode::None &&
+                attribution.policy_rng_identity == kNoPolicyRngContractId &&
+                attribution.policy_rng_contract_identity ==
+                    kNoPolicyRngContractId &&
+                attribution.policy_rng_stream_id == kNoPolicyRngContractId &&
+                attribution.policy_rng_initialization_identity ==
+                    kNoPolicyRngContractId &&
+                !attribution.pre_cursor.has_value() &&
+                !attribution.post_cursor.has_value() &&
+                !attribution.pre_state.has_value() &&
+                !attribution.post_state.has_value(),
+            "record does not carry canonical NONE policy RNG provenance");
+}
+
 TeacherRunnerConfig make_config(const SeatAssignment seat_assignment,
                                 const std::uint8_t starting_player) {
     const auto swordsoul = make_swordsoul_tenyi_profile();
@@ -211,6 +270,8 @@ RowSummary run_teacher_row(const SeatAssignment seat_assignment,
             "Teacher evaluation row contains no DecisionRecord");
 
     for (const auto& record : result.envelope->records) {
+        verify_record_provenance(record, *result.envelope, seat_assignment,
+                                 starting_player);
         const auto& candidates = record.frame.request.candidates;
         const auto snapshot = extract_public_battle_snapshot(
             record.frame.public_observation, candidates);
