@@ -1,12 +1,12 @@
 #pragma once
 
-#include <array>
 #include <cstdint>
 #include <optional>
 #include <string>
 #include <vector>
 
 #include "ygo/teacher/strategy_state.hpp"
+#include "ygo/teacher/teacher_explanation.hpp"
 
 namespace ygo::policy {
 struct PolicySelection;
@@ -21,32 +21,11 @@ enum class TeacherRankingStatus : std::uint8_t {
     Unsupported = 3,
 };
 
-enum class TeacherFallbackLevel : std::uint8_t {
-    F0 = 0,
-    F1 = 1,
-    F2 = 2,
-    F3 = 3,
-    F4 = 4,
-};
-
 enum class CandidateEvaluationStatus : std::uint8_t {
     Supported = 0,
     NotApplicable = 1,
     Unsupported = 2,
     Invalid = 3,
-};
-
-inline constexpr std::size_t kTeacherScoreDimensionCount = 9;
-
-struct ScoreVector final {
-    std::array<std::int64_t, kTeacherScoreDimensionCount> values{};
-
-    bool operator==(const ScoreVector& other) const noexcept {
-        return values == other.values;
-    }
-    bool operator!=(const ScoreVector& other) const noexcept {
-        return !(*this == other);
-    }
 };
 
 struct CandidateEvaluation final {
@@ -65,10 +44,13 @@ struct TeacherRankingResult final {
     std::optional<std::string> selected_public_action_key;
     std::optional<ScoreVector> selected_score_vector;
     std::optional<TeacherFallbackLevel> fallback_level;
+    std::optional<TeacherDecisionExplanation> explanation;
     std::optional<TeacherStateDeltaV1> proposed_state_delta;
 
     // The state-delta field is value-owned and is introduced by Task 6. The
-    // future explanation/diagnostic fields remain owned by their later tasks.
+    // explanation field is value-owned and is introduced by Task 8. Optional
+    // explanation data is derived audit data and is not gameplay identity;
+    // its codec gate is deliberately separate from gameplay-result validation.
 };
 
 bool validate_teacher_ranking_result(const TeacherRankingResult& value,

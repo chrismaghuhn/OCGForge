@@ -106,7 +106,6 @@ bool validate_teacher_ranking_result(const TeacherRankingResult& value,
             set_diagnostic(diagnostic, "teacher state delta is invalid");
             return false;
         }
-
         for (std::size_t index = 0; index < value.evaluations.size(); ++index) {
             if (!validate_candidate_evaluation(value.evaluations[index], diagnostic)) {
                 return false;
@@ -125,6 +124,7 @@ bool validate_teacher_ranking_result(const TeacherRankingResult& value,
             if (value.selected_public_action_key.has_value() ||
                 value.selected_score_vector.has_value() ||
                 value.fallback_level.has_value() ||
+                value.explanation.has_value() ||
                 value.proposed_state_delta.has_value()) {
                 set_diagnostic(diagnostic,
                                "non-selected teacher result carries an actionable result");
@@ -147,7 +147,6 @@ bool validate_teacher_ranking_result(const TeacherRankingResult& value,
                            "teacher state delta does not match selected public action key");
             return false;
         }
-
         const CandidateEvaluation* selected = nullptr;
         for (const auto& evaluation : value.evaluations) {
             if (evaluation.public_action_key == *value.selected_public_action_key) {

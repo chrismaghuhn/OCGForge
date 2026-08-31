@@ -209,6 +209,7 @@ add_library(ygo_teacher STATIC
     src/teacher/candidate_evaluator.cpp
     src/teacher/candidate_features.cpp
     src/teacher/deterministic_resolver.cpp
+    src/teacher/fallback_resolver.cpp
     src/teacher/interaction_evaluator.cpp
     src/teacher/material_evaluator.cpp
     src/teacher/goal_line_controller.cpp
@@ -221,6 +222,7 @@ add_library(ygo_teacher STATIC
     src/teacher/strategy_state_reconciler.cpp
     src/teacher/target_evaluator.cpp
     src/teacher/tactical_evaluator.cpp
+    src/teacher/teacher_explanation_codec.cpp
     src/teacher/teacher_policy_binding.cpp
     src/teacher/teacher_decision.cpp
 )
@@ -343,6 +345,14 @@ add_test(NAME teacher_goal_line_test COMMAND teacher_goal_line_test)
 add_executable(teacher_recovery_test tests/teacher/teacher_recovery_test.cpp)
 target_link_libraries(teacher_recovery_test PRIVATE ygo_teacher)
 add_test(NAME teacher_recovery_test COMMAND teacher_recovery_test)
+
+add_executable(teacher_fallback_test tests/teacher/teacher_fallback_test.cpp)
+target_link_libraries(teacher_fallback_test PRIVATE ygo_teacher)
+add_test(NAME teacher_fallback_test COMMAND teacher_fallback_test)
+
+add_executable(teacher_explanation_test tests/teacher/teacher_explanation_test.cpp)
+target_link_libraries(teacher_explanation_test PRIVATE ygo_teacher)
+add_test(NAME teacher_explanation_test COMMAND teacher_explanation_test)
 
 add_executable(ygo_core_probe tools/ygo_core_probe/main.cpp)
 target_link_libraries(ygo_core_probe PRIVATE ygo_m4)
