@@ -273,6 +273,62 @@ Cross-platform actors must not become training-data sources until deterministic 
 
 See `docs/PORTABLE_ACTOR_LEARNER_COMPUTE_STRATEGY.md` for the preserved architecture note. This is future intent only and does not authorize distributed ML before the episodic, trajectory, model-facing, and data-trust layers exist.
 
+### H. ML tooling integration sequence
+
+Hugging Face tooling is optional infrastructure around OCGForge-owned contracts. It must never become the authority for gameplay semantics, dataset admission, replay, checkpoint identity, policy identity, evaluation acceptance, or deterministic semantic hashes.
+
+The current research direction is recorded in [`docs/research/ml_tooling/HUGGING_FACE_TOOL_EVALUATION_2026-08-31.md`](research/ml_tooling/HUGGING_FACE_TOOL_EVALUATION_2026-08-31.md).
+
+Planned introduction points:
+
+```text
+Phase 4B — deterministic TeacherCore + StrategyProfiles
+  → no Hugging Face runtime dependency
+
+Phase 4C — frozen Teacher evaluation
+  → optional Trackio read-only dashboard/export pilot
+
+Phase 5 — model-facing candidate-scoring adapter
+  → remain framework-neutral at the semantic boundary
+  → custom PyTorch model contract may be designed here
+
+Phase 6 — Behavior Cloning baseline
+  → Accelerate for learner execution/distributed training
+  → Safetensors for physical neural-weight storage
+  → OCGForge checkpoint manifest remains authoritative
+  → pilot HF Datasets against a thin PyArrow/PyTorch loader before adoption
+  → optional huggingface_hub transport only after manifest/hash verification exists
+
+Phase 7 — controlled RL comparison
+  → retain Accelerate only as learner-execution infrastructure
+  → experiment tracking remains optional/presentation-only
+
+Post-baseline / deployment
+  → PEFT only after a stable multi-deck base model and measured fine-tuning need
+  → Optimum/Kernels only after measured bottlenecks and semantic-action equivalence gates
+```
+
+Tools explicitly not planned as core semantic authorities:
+
+- Transformers for the initial candidate-scoring model;
+- Tokenizers for structured gameplay state/action fields;
+- TRL for game-RL orchestration;
+- Evaluate as the canonical evaluator;
+- OpenEnv as the authoritative environment;
+- mutable Hugging Face Storage Buckets as trusted artifact storage.
+
+For every adopted tool, keep this boundary:
+
+```text
+OCGForge canonical/admitted artifact
+        ↓
+thin verified adapter
+        ↓
+replaceable external tooling
+```
+
+Mutable branch/tag aliases, run names, local cache paths, provider IDs, and library-internal fingerprints are execution or presentation metadata only. They must not replace OCGForge versioned/content-addressed identities.
+
 ## Milestone admission rule
 
 Before assigning a future milestone a `PASS`, define:
