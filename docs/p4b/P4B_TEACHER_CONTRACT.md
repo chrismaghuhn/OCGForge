@@ -368,10 +368,12 @@ decoded `PublicSafeStateView` and requires exactly one matching entity with
 `identity_known=true` and a present public `passcode`. An exact locator miss,
 duplicate match, or otherwise non-exact locator resolution is `INVALID`; it is
 never repaired or downgraded to `FALSE`. Exactly one matched entity with
-`identity_known=false` or no public passcode is `FALSE`, not an inferred role.
-When the identity is known, the resolved passcode is looked up in the
-immutable profile card-role catalog, and the predicate is `TRUE` exactly when
-the requested role ID is present for that passcode; otherwise it is `FALSE`.
+`identity_known=false` or no public passcode is also `INVALID`, because the
+V2 projection would have emitted a `RedactedSlot` instead of that inconsistent
+`VisibleCard` reference. When the identity is known, the resolved passcode is
+looked up in the immutable profile card-role catalog, and the predicate is
+`TRUE` exactly when the requested role ID is present for that passcode;
+otherwise it is `FALSE`.
 The locator and passcode are derivation inputs only and MUST NOT be emitted as
 Teacher evidence. No v1 predicate directly exposes or compares a candidate
 passcode or locator, and a redacted identity is never inferred.

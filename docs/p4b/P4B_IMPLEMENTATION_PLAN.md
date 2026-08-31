@@ -402,7 +402,7 @@ strategy controller using profile data.
 
 - Exercise every initial predicate registry entry with its exact scope, ordered atom schema, public/profile-static source, and status semantics.
 - Reject unknown predicate IDs, wrong scopes, wrong arity, wrong atom kinds, invalid fact IDs/kinds/bounds, invalid candidate token domains, invalid profile-static references, and any `ACCEPTED_PUBLIC_HISTORY` predicate because no v1 history owner exists.
-- Prove public-safe `candidate.source_role_contains` and `candidate.target_role_contains` TRUE/FALSE results for visible joins, `UNSUPPORTED` for `RedactedSlot`, `INVALID` for a malformed/missing visible locator join, and rejection of an unknown profile role.
+- Prove public-safe `candidate.source_role_contains` and `candidate.target_role_contains`: visible + known matching role is `TRUE`; visible + known nonmatching role is `FALSE`; `RedactedSlot` is `UNSUPPORTED`; absent is `FALSE`; visible + unknown entity or missing passcode is `INVALID`; and missing/duplicate locator resolution is `INVALID`. Reject an unknown profile role.
 - Reject unknown, blocked, non-U64, or current-scope-incompatible `ResourceDefinition.public_fact_id` values at profile validation; prove missing resource facts are `UNSUPPORTED`, values below minimum are ineligible, and values above profile `max_value` are `INVALID`.
 - Validate a DAG with independent nodes and assert both supplied orders remain legal policy evaluation inputs.
 - Match candidate intents from public candidate metadata using conjunctions and alternative intent-ID sets without generating actions; retain all matching IDs as sorted evidence.
