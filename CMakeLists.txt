@@ -222,6 +222,7 @@ add_library(ygo_teacher STATIC
     src/teacher/strategy_state_reconciler.cpp
     src/teacher/target_evaluator.cpp
     src/teacher/tactical_evaluator.cpp
+    src/teacher/swordsoul_tenyi_profile.cpp
     src/teacher/teacher_explanation_codec.cpp
     src/teacher/teacher_policy_binding.cpp
     src/teacher/teacher_decision.cpp
@@ -353,6 +354,16 @@ add_test(NAME teacher_fallback_test COMMAND teacher_fallback_test)
 add_executable(teacher_explanation_test tests/teacher/teacher_explanation_test.cpp)
 target_link_libraries(teacher_explanation_test PRIVATE ygo_teacher)
 add_test(NAME teacher_explanation_test COMMAND teacher_explanation_test)
+
+add_executable(swordsoul_profile_test tests/teacher/swordsoul_profile_test.cpp)
+target_link_libraries(swordsoul_profile_test PRIVATE ygo_teacher)
+add_test(NAME swordsoul_profile_test COMMAND swordsoul_profile_test)
+
+add_executable(swordsoul_teacher_scenarios_test
+               tests/teacher/swordsoul_teacher_scenarios_test.cpp)
+target_link_libraries(swordsoul_teacher_scenarios_test PRIVATE ygo_teacher)
+add_test(NAME swordsoul_teacher_scenarios_test
+         COMMAND swordsoul_teacher_scenarios_test)
 
 add_executable(ygo_core_probe tools/ygo_core_probe/main.cpp)
 target_link_libraries(ygo_core_probe PRIVATE ygo_m4)
