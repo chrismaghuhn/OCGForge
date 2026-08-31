@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -30,6 +31,12 @@ inline constexpr std::string_view kTeacherTieBreakContractId =
     "ocgforge.policy.public_key_tiebreak.v1";
 inline constexpr std::string_view kTeacherDiagnosticContractId =
     "ocgforge.teacher_decision_explanation.v1";
+inline constexpr std::array<std::string_view, 10> kStrategyProfileInvalidationReasonIds = {
+    "starter_not_resolved",       "expected_body_removed", "resource_consumed",
+    "restriction_active",         "zone_unavailable",      "copy_unavailable",
+    "target_absent",              "payoff_answered",        "lethal_unproven",
+    "public_state_contradiction",
+};
 
 enum class PredicateScope : std::uint8_t {
     Observation = 0,
@@ -210,6 +217,8 @@ struct TeacherPolicyBindingV1 final {
     std::optional<std::string> diagnostic_contract_identity;
     std::string teacher_policy_binding_id;
 };
+
+bool is_registered_invalidation_reason(std::string_view value) noexcept;
 
 std::vector<std::uint8_t> canonical_predicate_ref_bytes(const PredicateRef& value);
 std::vector<std::uint8_t> canonical_strategy_profile_content_bytes(

@@ -191,6 +191,11 @@ void test_profile_value_rejections() {
                   "dangling recovery reference was accepted");
 
     value = valid_profile();
+    value.recovery_edges[0].invalidation_reason_ids = {"unknown_reason"};
+    require_throw([&] { (void)canonical_strategy_profile_content_bytes(value); },
+                  "unregistered invalidation reason was accepted");
+
+    value = valid_profile();
     value.lines[0].dependencies = {{"node.first", "node.missing"}};
     require_throw([&] { (void)canonical_strategy_profile_content_bytes(value); },
                   "dangling node reference was accepted");
@@ -331,6 +336,12 @@ void test_decode_rejections() {
     require(bytes.size() > 4, "profile encoding unexpectedly short");
     bytes[4] = static_cast<std::uint8_t>('x');
     require(!decode_strategy_profile(bytes), "unknown profile domain was accepted");
+
+    bytes = canonical_strategy_profile_bytes(profile);
+    const auto schema_offset = 4 + kStrategyProfileSchemaId.size() + 4;
+    require(bytes.size() > schema_offset, "profile schema offset is out of range");
+    bytes[schema_offset] = static_cast<std::uint8_t>('x');
+    require(!decode_strategy_profile(bytes), "unknown profile schema was accepted");
 
     auto binding = valid_binding(profile);
     auto binding_bytes = canonical_teacher_policy_binding_bytes(binding);

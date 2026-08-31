@@ -340,6 +340,10 @@ void validate_profile_content(const StrategyProfileV1& value) {
                           "recovery source kind is unknown");
         require_token(edge.source_id, "recovery source ID");
         require_sorted_strings(edge.invalidation_reason_ids, "invalidation reason IDs");
+        for (const auto& reason : edge.invalidation_reason_ids) {
+            require_condition(is_registered_invalidation_reason(reason),
+                              "profile invalidation reason is not registered in v1");
+        }
         require_predicate_vector(edge.preconditions, "recovery preconditions");
         require_sorted_strings(edge.candidate_intent_ids, "recovery candidate intent IDs");
         require_token(edge.target_goal_id, "recovery target goal ID");
@@ -678,6 +682,12 @@ void set_diagnostic(std::string* diagnostic, const std::string& message) {
 }
 
 }  // namespace
+
+bool is_registered_invalidation_reason(const std::string_view value) noexcept {
+    return std::find(kStrategyProfileInvalidationReasonIds.begin(),
+                     kStrategyProfileInvalidationReasonIds.end(), value) !=
+           kStrategyProfileInvalidationReasonIds.end();
+}
 
 std::vector<std::uint8_t> canonical_predicate_ref_bytes(const PredicateRef& value) {
     trajectory::ByteWriter writer;
