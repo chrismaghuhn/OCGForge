@@ -110,9 +110,18 @@ void test_status_mapping_and_complete_alignment() {
         require(result.candidates[index].public_action_key ==
                     snapshot.candidate_facts[index].public_action_key,
                 "lethal evaluator changed candidate order or public key");
+        require(result.candidates[index].status !=
+                    ProvableLethalStatus::ProvenLethal,
+                "current corpus emitted PROVEN_LETHAL");
         require(!result.candidates[index]
                      .guaranteed_opponent_lp_loss_lower_bound.has_value(),
                 "current fail-closed evaluator emitted a lower bound");
+        if (snapshot.candidate_facts[index].battle_candidate_class ==
+            PublicBattleCandidateClass::BattleCommandUnclassified) {
+            require(result.candidates[index].status ==
+                        ProvableLethalStatus::Unsupported,
+                    "current BattleCommand was not UNSUPPORTED");
+        }
     }
 
     require(result.candidates[0].status ==
@@ -131,6 +140,31 @@ void test_status_mapping_and_complete_alignment() {
     require(result.candidates[2].proof_reason_ids ==
                 result.candidates[1].proof_reason_ids,
             "redacted current action received an optimistic lethal status");
+}
+
+void test_valid_snapshot_preserves_candidate_level_invalid() {
+    auto snapshot = valid_snapshot();
+    snapshot.candidate_facts[1].status =
+        PublicBattleCandidateStatus::Invalid;
+    require(ygo::teacher::validate_public_battle_snapshot(snapshot),
+            "candidate-level INVALID made the whole snapshot invalid");
+
+    const auto result = ygo::teacher::evaluate_provable_lethal(snapshot);
+    require(result.valid &&
+                result.candidates.size() == snapshot.candidate_facts.size(),
+            "candidate-level INVALID did not preserve a valid evaluation");
+    for (std::size_t index = 0; index < result.candidates.size(); ++index) {
+        require(result.candidates[index].public_action_key ==
+                    snapshot.candidate_facts[index].public_action_key,
+                "candidate-level INVALID changed N-domain order or key");
+    }
+    require(result.candidates[1].status == ProvableLethalStatus::Invalid &&
+                !result.candidates[1]
+                     .guaranteed_opponent_lp_loss_lower_bound.has_value() &&
+                result.candidates[1].proof_reason_ids ==
+                    std::vector<std::string>{
+                        "lethal.snapshot_candidate_invalid"},
+            "candidate-level INVALID did not map to the required lethal result");
 }
 
 void test_atk_lp_trap_and_missing_proof_remain_closed() {
@@ -234,6 +268,7 @@ void test_canonical_candidate_bytes_are_strict_and_deterministic() {
 int main() {
     try {
         test_status_mapping_and_complete_alignment();
+        test_valid_snapshot_preserves_candidate_level_invalid();
         test_atk_lp_trap_and_missing_proof_remain_closed();
         test_invalid_snapshot_fails_without_partial_output();
         test_canonical_candidate_bytes_are_strict_and_deterministic();
