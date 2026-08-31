@@ -391,6 +391,15 @@ add_executable(teacher_runner_trajectory_test
 target_link_libraries(teacher_runner_trajectory_test PRIVATE ygo_policy)
 add_test(NAME teacher_runner_trajectory_test COMMAND teacher_runner_trajectory_test)
 
+add_executable(teacher_probe tools/p4b/teacher_probe.cpp)
+target_include_directories(teacher_probe PRIVATE
+                           "${CMAKE_SOURCE_DIR}/src/environment")
+target_link_libraries(teacher_probe PRIVATE ygo_policy)
+add_test(NAME teacher_knowledge_boundary_test
+         COMMAND teacher_probe --knowledge-boundary)
+add_test(NAME teacher_profile_registry_test
+         COMMAND teacher_probe --profile-registry)
+
 add_executable(ygo_core_probe tools/ygo_core_probe/main.cpp)
 target_link_libraries(ygo_core_probe PRIVATE ygo_m4)
 target_compile_definitions(ygo_core_probe PRIVATE
