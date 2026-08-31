@@ -300,6 +300,8 @@ bool validate_teacher_decision_explanation(
                valid_fact_vector(value.relevant_public_feature_values) &&
                valid_confidence(value.confidence_class) &&
                valid_fallback_level(value.fallback_level) &&
+               (value.fallback_level != TeacherFallbackLevel::F4 ||
+                value.confidence_class == ConfidenceClass::Fallback) &&
                value.explanation_schema_id == kTeacherDiagnosticContractId;
     } catch (...) {
         return false;

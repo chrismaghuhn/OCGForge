@@ -171,6 +171,47 @@ void test_malformed_explanations_fail_closed_without_fallback() {
             "trailing explanation bytes were accepted");
 }
 
+void test_f4_confidence_contract() {
+    const auto key = candidate(1).public_action_key;
+    const auto non_fallback_confidences = {
+        ConfidenceClass::High,
+        ConfidenceClass::Medium,
+        ConfidenceClass::Low,
+    };
+    for (const auto confidence : non_fallback_confidences) {
+        auto value = explanation(key);
+        value.fallback_level = TeacherFallbackLevel::F4;
+        value.confidence_class = confidence;
+        require(!validate_teacher_decision_explanation(value),
+                "F4 explanation accepted a non-FALLBACK confidence");
+    }
+
+    auto accepted = explanation(key);
+    accepted.runner_up_score_vector.reset();
+    accepted.fallback_level = TeacherFallbackLevel::F4;
+    accepted.confidence_class = ConfidenceClass::Fallback;
+    require(validate_teacher_decision_explanation(accepted),
+            "F4/FALLBACK explanation was rejected");
+
+    const auto bytes = canonical_teacher_decision_explanation_bytes(accepted);
+    constexpr std::size_t score_byte_count = 9U * sizeof(std::uint64_t);
+    const auto confidence_offset =
+        4U + kTeacherDiagnosticContractId.size() +
+        4U + kTeacherDiagnosticContractId.size() +
+        4U + key.size() + score_byte_count + 1U;
+
+    auto malformed_confidence = bytes;
+    malformed_confidence[confidence_offset] =
+        static_cast<std::uint8_t>(ConfidenceClass::High);
+    require(!decode_teacher_decision_explanation(malformed_confidence),
+            "F4 explanation with HIGH confidence bytes was decoded");
+
+    auto invalid_confidence = bytes;
+    invalid_confidence[confidence_offset] = 4U;
+    require(!decode_teacher_decision_explanation(invalid_confidence),
+            "F4 explanation with an invalid confidence byte was decoded");
+}
+
 }  // namespace
 
 int main() {
@@ -178,6 +219,7 @@ int main() {
         test_value_owned_canonical_round_trip();
         test_optional_explanation_does_not_change_policy_selection();
         test_malformed_explanations_fail_closed_without_fallback();
+        test_f4_confidence_contract();
         std::cout << "teacher_explanation_test: PASS\n";
         return 0;
     } catch (const std::exception& error) {
