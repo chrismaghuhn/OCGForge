@@ -1,9 +1,13 @@
 #include "ygo/teacher/candidate_features.hpp"
+#include "ygo/teacher/candidate_evaluator.hpp"
+#include "ygo/teacher/fallback_resolver.hpp"
 #include "ygo/teacher/goal_line_controller.hpp"
 #include "ygo/teacher/recovery_controller.hpp"
 #include "ygo/teacher/salamangreat_profile.hpp"
 #include "ygo/teacher/strategy_profile.hpp"
 #include "ygo/teacher/strategy_state.hpp"
+#include "ygo/teacher/teacher_decision.hpp"
+#include "ygo/teacher/teacher_explanation_codec.hpp"
 
 #include <cstdint>
 #include <iostream>
@@ -37,7 +41,8 @@ PublicEnvironmentObservation public_observation(
     const ygo::observation::SemanticZone visible_zone =
         ygo::observation::SemanticZone::Hand,
     const PublicCardReferenceKind visible_reference_kind =
-        PublicCardReferenceKind::VisibleCard) {
+        PublicCardReferenceKind::VisibleCard,
+    const std::string& private_world_marker = {}) {
     ygo::observation::PlayerObservation source;
     source.schema_version = "ygo.player_observation.v1";
     source.perspective_player = 0;
@@ -54,6 +59,13 @@ PublicEnvironmentObservation public_observation(
     source.match_context.knowledge.opponent_decklist_known = false;
     source.decision_context.kind = decision_kind;
     source.decision_context.player = 0;
+    if (!private_world_marker.empty()) {
+        // The source marker stands for hidden/control-plane world variation;
+        // project_public_observation deliberately excludes these fields.
+        source.decision_context.decision_id = private_world_marker;
+        source.decision_context.continuation_id = private_world_marker;
+        source.engine_step_index = private_world_marker == "world-a" ? 101 : 202;
+    }
 
     if (visible_passcode.has_value()) {
         ygo::observation::ObservedCard entity;
@@ -70,6 +82,16 @@ PublicEnvironmentObservation public_observation(
         entity.face_up = false;
         entity.face_down = !entity.identity_known;
         source.entities.push_back(entity);
+    }
+    if (!private_world_marker.empty()) {
+        ygo::observation::ObservedCard hidden_opponent_entity;
+        hidden_opponent_entity.locator = {"p1:HAND:0"};
+        hidden_opponent_entity.owner = 1;
+        hidden_opponent_entity.controller = 1;
+        hidden_opponent_entity.zone = ygo::observation::SemanticZone::Hand;
+        hidden_opponent_entity.sequence = 0;
+        hidden_opponent_entity.face_down = true;
+        source.entities.push_back(hidden_opponent_entity);
     }
     return project_public_observation(source);
 }
@@ -272,16 +294,58 @@ void test_main1_and_action_specific_intents() {
             "Miragestallio bridge did not match its public bridge intent");
     require_progress(profile, selection, miragestallio, miragestallio_observation, 3);
 
-    for (const auto passcode : {1295111U, 52155219U, 57160136U}) {
-        const auto searcher = idle_card(5);
-        const auto search_observation =
-            public_observation(10, 0x04, 0, "idle_command", passcode);
-        matched.clear();
-        require(match_candidate_intent_set(profile, {"intent.search"}, searcher,
-                                           search_observation, 0, matched) ==
-                    PredicateEvaluationStatus::True,
-                "locked searcher did not match its public search intent");
-    }
+    const auto code_of_soul_phase_one = idle_card(1);
+    const auto code_of_soul_observation =
+        public_observation(10, 0x04, 0, "idle_command", 74652966);
+    matched.clear();
+    require(match_candidate_intent_set(profile, {"intent.code.of.soul"},
+                                       code_of_soul_phase_one, code_of_soul_observation, 0,
+                                       matched) == PredicateEvaluationStatus::False,
+            "Code of Soul phase-1 procedure matched its Ignition intent");
+    const auto code_of_soul = idle_card(5);
+    matched.clear();
+    require(match_candidate_intent_set(profile, {"intent.code.of.soul"}, code_of_soul,
+                                       code_of_soul_observation, 0, matched) ==
+                PredicateEvaluationStatus::True,
+            "Code of Soul phase-5 activation did not match its access intent");
+
+    const auto circle = idle_card(5);
+    const auto circle_observation =
+        public_observation(10, 0x04, 0, "idle_command", 52155219);
+    matched.clear();
+    require(match_candidate_intent_set(profile, {"intent.circle.access"}, circle,
+                                       circle_observation, 0, matched) ==
+                PredicateEvaluationStatus::True,
+            "Circle did not match its dedicated access intent");
+    matched.clear();
+    require(match_candidate_intent_set(profile, {"intent.search"}, circle,
+                                       circle_observation, 0, matched) ==
+                PredicateEvaluationStatus::False,
+            "Circle was incorrectly classified as generic search");
+
+    const auto sanctuary = idle_card(5);
+    const auto sanctuary_observation =
+        public_observation(10, 0x04, 0, "idle_command", 1295111);
+    matched.clear();
+    require(match_candidate_intent_set(profile, {"intent.sanctuary.access"}, sanctuary,
+                                       sanctuary_observation, 0, matched) ==
+                PredicateEvaluationStatus::True,
+            "Sanctuary did not match its dedicated access intent");
+    matched.clear();
+    require(match_candidate_intent_set(profile, {"intent.search"}, sanctuary,
+                                       sanctuary_observation, 0, matched) ==
+                PredicateEvaluationStatus::False,
+            "Sanctuary was incorrectly classified as a searcher");
+
+    const auto mining = idle_card(5);
+    const auto mining_observation =
+        public_observation(10, 0x04, 0, "idle_command", 57160136);
+    matched.clear();
+    require(match_candidate_intent_set(profile, {"intent.search"}, mining,
+                                       mining_observation, 0, matched) ==
+                PredicateEvaluationStatus::True,
+            "Cynet Mining did not match the generic search intent");
+
     const auto will = idle_card(5);
     const auto will_observation = public_observation(10, 0x04, 0, "idle_command", 64178424);
     matched.clear();
@@ -289,6 +353,70 @@ void test_main1_and_action_specific_intents() {
                                        will_observation, 0, matched) ==
                 PredicateEvaluationStatus::True,
             "Will did not match its public extension intent");
+
+    const auto wolf = idle_card(1, ygo::observation::SemanticZone::ExtraDeck);
+    const auto wolf_observation =
+        public_observation(10, 0x04, 0, "idle_command", 87871125,
+                           ygo::observation::SemanticZone::ExtraDeck);
+    matched.clear();
+    require(match_candidate_intent_set(profile, {"intent.link2.payoff"}, wolf,
+                                       wolf_observation, 0, matched) ==
+                PredicateEvaluationStatus::True,
+            "Sunlight Wolf Link summon did not match Link-2 payoff");
+    matched.clear();
+    require(match_candidate_intent_set(profile, {"intent.wolf.recovery.ignition"}, wolf,
+                                       wolf_observation, 0, matched) ==
+                PredicateEvaluationStatus::False,
+            "Sunlight Wolf Link summon matched ignition recovery");
+    const auto wolf_ignition = idle_card(5, ygo::observation::SemanticZone::Graveyard);
+    const auto wolf_recovery_observation =
+        public_observation(10, 0x04, 0, "idle_command", 87871125,
+                           ygo::observation::SemanticZone::Graveyard);
+    matched.clear();
+    require(match_candidate_intent_set(profile, {"intent.wolf.recovery.ignition"},
+                                       wolf_ignition, wolf_recovery_observation, 0, matched) ==
+                PredicateEvaluationStatus::True,
+            "Sunlight Wolf phase-5 recovery did not match ignition intent");
+
+    const auto princess = idle_card(1, ygo::observation::SemanticZone::ExtraDeck);
+    const auto princess_observation =
+        public_observation(10, 0x04, 0, "idle_command", 2772337,
+                           ygo::observation::SemanticZone::ExtraDeck);
+    matched.clear();
+    require(match_candidate_intent_set(profile, {"intent.link3.payoff"}, princess,
+                                       princess_observation, 0, matched) ==
+                PredicateEvaluationStatus::True,
+            "Princess Link summon did not match Link-3 payoff");
+    matched.clear();
+    require(match_candidate_intent_set(profile, {"intent.princess.recovery.ignition"},
+                                       princess, princess_observation, 0, matched) ==
+                PredicateEvaluationStatus::False,
+            "Princess Link summon matched ignition recovery");
+    const auto princess_ignition = idle_card(5, ygo::observation::SemanticZone::Graveyard);
+    const auto princess_recovery_observation =
+        public_observation(10, 0x04, 0, "idle_command", 2772337,
+                           ygo::observation::SemanticZone::Graveyard);
+    matched.clear();
+    require(match_candidate_intent_set(profile, {"intent.princess.recovery.ignition"},
+                                       princess_ignition, princess_recovery_observation, 0,
+                                       matched) ==
+                PredicateEvaluationStatus::True,
+            "Princess phase-5 recovery did not match ignition intent");
+
+    const auto weasel_phase_one = idle_card(1);
+    const auto weasel_observation =
+        public_observation(10, 0x04, 0, "idle_command", 57357130);
+    matched.clear();
+    require(match_candidate_intent_set(profile, {"intent.weasel.extension"},
+                                       weasel_phase_one, weasel_observation, 0, matched) ==
+                PredicateEvaluationStatus::False,
+            "Weasel phase-1 procedure matched its Ignition extension");
+    const auto weasel_extension = idle_card(5);
+    matched.clear();
+    require(match_candidate_intent_set(profile, {"intent.weasel.extension"},
+                                       weasel_extension, weasel_observation, 0, matched) ==
+                PredicateEvaluationStatus::True,
+            "Weasel phase-5 activation did not match extension intent");
 
     std::vector<std::string> all_intents;
     for (const auto& intent : profile.candidate_intents) {
@@ -308,12 +436,58 @@ void test_interaction_recovery_and_domain_preservation() {
     const auto chain_selection = select_goal_and_line(
         profile, reset_state(profile), public_facts(chain_observation));
     require(chain_selection.goal_id ==
-                std::optional<std::string>("goal.interaction.preservation") &&
-                chain_selection.line_id == std::optional<std::string>("line.interaction.preserve"),
-            "interaction line was not selected from public chain context");
+                std::optional<std::string>("goal.chain.salamangreat") &&
+                chain_selection.line_id == std::optional<std::string>("line.chain.salamangreat") &&
+                chain_selection.ready_node_ids ==
+                    std::vector<std::string>{
+                        "node.chain.gazelle_trigger", "node.chain.interaction",
+                        "node.chain.of_fire_trigger", "node.chain.princess_conversion",
+                        "node.chain.weasel_conversion", "node.chain.wolf_recovery"},
+            "Salamangreat chain strategy line was not selected from public chain context");
+
+    const auto chain_construction = public_observation(20, 0x04, 0, "chain", 14558127);
+    const auto chain_construction_selection = select_goal_and_line(
+        profile, reset_state(profile), public_facts(chain_construction));
+    require(chain_construction_selection.status == PredicateEvaluationStatus::True &&
+                chain_construction_selection.line_id ==
+                    std::optional<std::string>("line.chain.salamangreat"),
+            "chain construction with no existing chain length was incorrectly blocked");
+
+    std::vector<std::string> matched;
+    const auto trigger_cases = std::vector<std::pair<std::uint32_t, const char*>>{
+        {26889158U, "intent.gazelle.trigger"},
+        {11962031U, "intent.of_fire.trigger"},
+        {87871125U, "intent.wolf.recovery.chain"},
+        {2772337U, "intent.princess.recovery.chain"},
+        {57357130U, "intent.weasel.conversion"},
+    };
+    for (const auto& [passcode, intent_id] : trigger_cases) {
+        const auto trigger = chain_source(card_reference());
+        const auto trigger_observation = public_observation(20, 0x04, 1, "chain", passcode);
+        matched.clear();
+        require(match_candidate_intent_set(profile, {intent_id}, trigger,
+                                           trigger_observation, 0, matched) ==
+                    PredicateEvaluationStatus::True,
+                std::string("public Chain trigger did not match ") + intent_id);
+        require_progress(profile, chain_selection, trigger, trigger_observation, 3);
+    }
+    const auto wolf_chain = chain_source(card_reference());
+    const auto wolf_chain_observation = public_observation(20, 0x04, 1, "chain", 87871125);
+    matched.clear();
+    require(match_candidate_intent_set(profile, {"intent.wolf.recovery.ignition"}, wolf_chain,
+                                       wolf_chain_observation, 0, matched) ==
+                PredicateEvaluationStatus::False,
+            "Sunlight Wolf Chain trigger matched its Ignition-only intent");
+    const auto princess_chain = chain_source(card_reference());
+    const auto princess_chain_observation =
+        public_observation(20, 0x04, 1, "chain", 2772337);
+    matched.clear();
+    require(match_candidate_intent_set(profile, {"intent.princess.recovery.ignition"},
+                                       princess_chain, princess_chain_observation, 0, matched) ==
+                PredicateEvaluationStatus::False,
+            "Princess Chain trigger matched its Ignition-only intent");
 
     const auto ash_chain = chain_source(card_reference());
-    std::vector<std::string> matched;
     require(match_candidate_intent_set(
                 profile, {"intent.interaction.chain"}, ash_chain, chain_observation, 0, matched) ==
                 PredicateEvaluationStatus::True,
@@ -362,15 +536,15 @@ void test_interaction_recovery_and_domain_preservation() {
     }
 
     auto interaction_state = reset_state(profile);
-    interaction_state.active_goal_id = "goal.interaction.preservation";
-    interaction_state.active_line_id = "line.interaction.preserve";
+    interaction_state.active_goal_id = "goal.chain.salamangreat";
+    interaction_state.active_line_id = "line.chain.salamangreat";
     interaction_state.public_resource_facts = {u64_fact("public.chain.length", 1)};
     const auto main_observation =
         public_observation(21, 0x04, 0, "idle_command", 11962031);
     const auto recovery = select_recovery_edge(profile, interaction_state, main_observation, 0);
     require(recovery.status == PredicateEvaluationStatus::True &&
                 recovery.recovery_edge_id ==
-                    std::optional<std::string>("recovery.interaction.main1") &&
+                    std::optional<std::string>("recovery.chain.main1") &&
                 recovery.target_line_id ==
                     std::optional<std::string>("line.main1.salamangreat"),
             "public interaction-window contradiction did not select Main1 recovery");
@@ -388,6 +562,20 @@ void test_interaction_recovery_and_domain_preservation() {
     require(wrong_participant.status == PredicateEvaluationStatus::Invalid,
             "cross-participant recovery observation was accepted");
 
+    auto main_state = reset_state(profile);
+    main_state.active_goal_id = "goal.main1.salamangreat";
+    main_state.active_line_id = "line.main1.salamangreat";
+    main_state.public_resource_facts = {u64_fact("public.chain.length", 0)};
+    const auto chain_opening = public_observation(22, 0x04, 1, "chain", 14558127);
+    const auto chain_recovery =
+        select_recovery_edge(profile, main_state, chain_opening, 0);
+    require(chain_recovery.status == PredicateEvaluationStatus::True &&
+                chain_recovery.recovery_edge_id ==
+                    std::optional<std::string>("recovery.main1.chain") &&
+                chain_recovery.target_line_id ==
+                    std::optional<std::string>("line.chain.salamangreat"),
+            "public chain opening did not select the Salamangreat chain strategy");
+
     const std::vector<EnvironmentActionCandidate> supplied = {ash_chain, chain_pass_candidate};
     std::vector<std::string> keys;
     std::vector<std::vector<std::string>> evidence;
@@ -404,12 +592,137 @@ void test_interaction_recovery_and_domain_preservation() {
             "profile intent evaluation changed the complete supplied candidate domain");
 }
 
+struct PublicTeacherOutputs final {
+    TeacherRankingResult ranking;
+    std::vector<std::uint8_t> explanation_bytes;
+};
+
+bool same_candidate_evaluation(const CandidateEvaluation& left,
+                               const CandidateEvaluation& right) {
+    return left.public_action_key == right.public_action_key &&
+           left.status == right.status && left.score == right.score &&
+           left.matched_intent_ids == right.matched_intent_ids &&
+           left.matched_goal_ids == right.matched_goal_ids &&
+           left.matched_line_ids == right.matched_line_ids &&
+           left.reason_ids == right.reason_ids;
+}
+
+bool same_ranking_result(const TeacherRankingResult& left,
+                         const TeacherRankingResult& right) {
+    if (left.status != right.status ||
+        left.selected_public_action_key != right.selected_public_action_key ||
+        left.selected_score_vector != right.selected_score_vector ||
+        left.fallback_level != right.fallback_level || left.explanation != right.explanation ||
+        left.proposed_state_delta != right.proposed_state_delta ||
+        left.evaluations.size() != right.evaluations.size()) {
+        return false;
+    }
+    for (std::size_t index = 0; index < left.evaluations.size(); ++index) {
+        if (!same_candidate_evaluation(left.evaluations[index], right.evaluations[index])) {
+            return false;
+        }
+    }
+    return true;
+}
+
+PublicTeacherOutputs compose_public_teacher_outputs(
+    const StrategyProfileV1& profile,
+    const EpisodeLocalStrategyStateV1& state,
+    const PublicEnvironmentObservation& observation,
+    const std::vector<EnvironmentActionCandidate>& candidates) {
+    const auto facts = public_facts(observation);
+    const auto selection = select_goal_and_line(profile, state, facts);
+    require(selection.status == PredicateEvaluationStatus::True,
+            "paired-world Main1 selection was not publicly supported");
+
+    std::vector<TeacherFallbackCandidateValue> stage;
+    stage.reserve(candidates.size());
+    for (const auto& candidate : candidates) {
+        const auto outcome = evaluate_goal_line_progress(
+            profile, selection, RecoverySelection{}, candidate, observation, 0);
+        require(outcome.status == CandidateEvaluationStatus::Supported,
+                "paired-world candidate did not have a supported public outcome");
+
+        TeacherFallbackCandidateValue value;
+        value.public_action_key = candidate.public_action_key;
+        value.status = outcome.status;
+        value.score = ScoreVector{};
+        value.contributions = outcome.contributions;
+        for (const auto& contribution : value.contributions) {
+            require(add_score_contribution(*value.score, contribution.dimension,
+                                           contribution.value),
+                    "paired-world score contribution could not be composed");
+        }
+        value.matched_intent_ids = outcome.matched_intent_ids;
+        value.matched_goal_ids = outcome.matched_goal_ids;
+        value.matched_line_ids = outcome.matched_line_ids;
+        value.reason_ids = outcome.reason_ids;
+        stage.push_back(std::move(value));
+    }
+
+    TeacherFallbackStageSet stages;
+    stages.stage_evaluations[0] = std::move(stage);
+    PublicTeacherOutputs output;
+    output.ranking = resolve_teacher_fallback(candidates, stages);
+    require(output.ranking.status == TeacherRankingStatus::Selected &&
+                output.ranking.selected_public_action_key.has_value() &&
+                output.ranking.explanation.has_value(),
+            "paired-world fallback composition did not select a public action with explanation");
+
+    TeacherStateDeltaV1 requested;
+    requested.strategy_profile_id = profile.profile_id;
+    requested.proposed_for_public_action_key = *output.ranking.selected_public_action_key;
+    requested.active_goal_id = selection.goal_id;
+    requested.active_line_id = selection.line_id;
+    requested.public_resource_facts = {u64_fact("public.chain.length", 0)};
+    const auto delta = propose_teacher_state_delta(
+        state, observation, 0, profile, requested);
+    require(delta.has_value(), "paired-world state proposal was not accepted");
+    output.ranking.proposed_state_delta = *delta;
+    std::string diagnostic;
+    require(validate_teacher_ranking_result(output.ranking, &diagnostic),
+            "paired-world ranking plus state delta is invalid: " + diagnostic);
+    output.explanation_bytes = canonical_teacher_decision_explanation_bytes(
+        *output.ranking.explanation);
+    return output;
+}
+
+void test_equal_public_worlds_are_identical() {
+    const auto profile = make_salamangreat_profile();
+    const auto world_a =
+        public_observation(50, 0x04, 0, "idle_command", 11962031,
+                           ygo::observation::SemanticZone::Hand,
+                           PublicCardReferenceKind::VisibleCard, "world-a");
+    const auto world_b =
+        public_observation(50, 0x04, 0, "idle_command", 11962031,
+                           ygo::observation::SemanticZone::Hand,
+                           PublicCardReferenceKind::VisibleCard, "world-b");
+    require(canonical_public_environment_observation_bytes(world_a) ==
+                canonical_public_environment_observation_bytes(world_b),
+            "paired worlds did not produce identical public observation bytes");
+
+    const auto candidates = std::vector<EnvironmentActionCandidate>{idle_card(0)};
+    const auto state_a = reset_state(profile);
+    const auto state_b = reset_state(profile);
+    require(state_a == state_b, "paired-world initial states differ");
+    const auto output_a = compose_public_teacher_outputs(profile, state_a, world_a, candidates);
+    const auto output_b = compose_public_teacher_outputs(profile, state_b, world_b, candidates);
+    require(same_ranking_result(output_a.ranking, output_b.ranking),
+            "equal public worlds produced different ranking evidence or state delta");
+    require(output_a.explanation_bytes == output_b.explanation_bytes,
+            "equal public worlds produced different explanation bytes");
+    require(output_a.ranking.explanation->invalidation_reason_ids.empty() &&
+                output_b.ranking.explanation->invalidation_reason_ids.empty(),
+            "paired-world explanation carried unexpected invalidation evidence");
+}
+
 }  // namespace
 
 int main() {
     try {
         test_main1_and_action_specific_intents();
         test_interaction_recovery_and_domain_preservation();
+        test_equal_public_worlds_are_identical();
         std::cout << "salamangreat_teacher_scenarios_test: PASS\n";
         return 0;
     } catch (const std::exception& error) {

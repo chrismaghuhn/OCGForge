@@ -105,6 +105,9 @@ void test_locked_roles_and_shape() {
 
     require(has_role(profile, 11962031, "role.starter.of_fire"),
             "Of Fire starter role is missing");
+    require(has_role(profile, 11962031, "role.trigger.of_fire") &&
+                has_role(profile, 26889158, "role.trigger.gazelle"),
+            "engine-trigger roles are missing");
     require(has_role(profile, 26889158, "role.starter.gazelle"),
             "Gazelle starter role is missing");
     require(has_role(profile, 52277807, "role.extender.spinny"),
@@ -117,6 +120,11 @@ void test_locked_roles_and_shape() {
     require(has_role(profile, 87327776, "role.bridge.rank3") &&
                 has_role(profile, 2772337, "role.recovery.princess"),
             "bridge/recovery roles are incomplete");
+    require(has_role(profile, 1295111, "role.sanctuary.access") &&
+                !has_role(profile, 1295111, "role.searcher") &&
+                has_role(profile, 52155219, "role.circle.access") &&
+                !has_role(profile, 52155219, "role.searcher"),
+            "Sanctuary/Circle access roles are not separated from search");
     for (const auto passcode : {14558127U, 73642296U, 97268402U, 10045474U,
                                 24224830U, 51339637U, 14934922U}) {
         require(has_role(profile, passcode, "role.interaction"),
@@ -128,6 +136,13 @@ void test_locked_roles_and_shape() {
 
     require(profile.goals.size() == 2 && profile.lines.size() == 2,
             "minimal Salamangreat profile has an unexpected plan surface");
+    const auto chain_line = std::find_if(
+        profile.lines.begin(), profile.lines.end(), [](const auto& line) {
+            return line.line_id == "line.chain.salamangreat";
+        });
+    require(chain_line != profile.lines.end() && chain_line->required_resources.empty() &&
+                chain_line->nodes.size() == 6,
+            "Salamangreat chain strategy does not expose its independent trigger nodes");
     for (const auto& line : profile.lines) {
         require(line.dependencies.empty(),
                 "minimal Salamangreat profile contains an unproven dependency");
