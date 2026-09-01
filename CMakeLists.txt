@@ -221,6 +221,18 @@ else()
 endif()
 target_link_libraries(ygo_model PUBLIC ygo_trajectory)
 
+add_library(ygo_phase6 STATIC
+    src/phase6/supervision_dataset.cpp
+    src/phase6/model_input_inspector.cpp
+)
+target_include_directories(ygo_phase6 PUBLIC "${CMAKE_SOURCE_DIR}/include")
+target_link_libraries(ygo_phase6 PUBLIC ygo_model)
+if(MSVC)
+    target_compile_options(ygo_phase6 PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(ygo_phase6 PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
 add_library(ygo_teacher STATIC
     src/teacher/candidate_evaluator.cpp
     src/teacher/candidate_features.cpp
@@ -661,6 +673,12 @@ add_test(NAME model_batch_layout_test COMMAND model_batch_layout_test)
 add_executable(model_supervision_sample_test tests/model/model_supervision_sample_test.cpp)
 target_link_libraries(model_supervision_sample_test PRIVATE ygo_model ygo_policy)
 add_test(NAME model_supervision_sample_test COMMAND model_supervision_sample_test)
+
+add_executable(phase6_supervision_split_inspector_test
+               tests/phase6/phase6_supervision_split_inspector_test.cpp)
+target_link_libraries(phase6_supervision_split_inspector_test PRIVATE ygo_phase6 ygo_policy)
+add_test(NAME phase6_supervision_split_inspector_test
+         COMMAND phase6_supervision_split_inspector_test)
 
 add_test(NAME logical_model_public_boundary_test
          COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tests/model/logical_model_public_boundary_test.py"
