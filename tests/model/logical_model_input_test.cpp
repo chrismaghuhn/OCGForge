@@ -3,19 +3,27 @@
 #include <algorithm>
 #include <cstdlib>
 #include <iostream>
+#include <memory>
 #include <optional>
 #include <stdexcept>
 #include <string>
 #include <vector>
 
+#include "episodic_environment_test_access.hpp"
+#include "ygo/environment/episodic_environment.hpp"
 #include "ygo/environment/public_safe_state.hpp"
+#include "ygo/observation/decision_integration.hpp"
 #include "ygo/observation/player_observation.hpp"
 #include "ygo/observation/serialization.hpp"
+#include "ygo/protocol/continuation.hpp"
 
 namespace {
 
 using ygo::environment::EnvironmentActionCandidate;
 using ygo::environment::EnvironmentActionKind;
+using ygo::environment::CertifiedEnvironmentConfig;
+using ygo::environment::DecisionFrame;
+using ygo::environment::EpisodicEnvironment;
 using ygo::environment::PublicActionKeyInput;
 using ygo::environment::PublicCardReference;
 using ygo::environment::PublicCardReferenceKind;
@@ -25,6 +33,11 @@ using ygo::environment::PublicEnvironmentObservation;
 using ygo::model::LogicalModelInput;
 using ygo::model::LogicalModelProjectionErrorCode;
 using ygo::model::LogicalModelProjectionResult;
+
+using ygo::observation::ObservedCard;
+using ygo::observation::PlayerObservation;
+using ygo::protocol::ActionCandidate;
+using ygo::protocol::DecisionRequest;
 
 constexpr std::string_view kCurrentLocator = "p0:MONSTER_ZONE:0";
 constexpr std::string_view kHistoricalHiddenLocator = "p1:SPELL_TRAP_ZONE:0";
@@ -158,6 +171,85 @@ PublicEnvironmentObservation public_observation(const std::string& private_marke
         private_source_observation(private_marker));
 }
 
+std::unique_ptr<EpisodicEnvironment> make_real_paired_environment() {
+    auto factory = EpisodicEnvironment::create(CertifiedEnvironmentConfig::canonical());
+    require(std::holds_alternative<std::unique_ptr<EpisodicEnvironment>>(factory),
+            "real paired-world fixture could not create the canonical environment");
+    return std::move(std::get<std::unique_ptr<EpisodicEnvironment>>(factory));
+}
+
+PlayerObservation real_hidden_observation(const std::uint8_t perspective,
+                                          const std::uint32_t hidden_code,
+                                          const std::uint64_t engine_step_index = 91) {
+    PlayerObservation observation;
+    observation.perspective_player = perspective;
+    observation.engine_step_index = engine_step_index;
+    observation.globals.life_points = {8000, 8000};
+    observation.globals.terminal = false;
+    observation.match_context.perspective_player = perspective;
+
+    const auto hidden_controller = static_cast<std::uint8_t>(1 - perspective);
+    const auto locator = std::string("p") + std::to_string(hidden_controller) +
+                         ":SPELL_TRAP_ZONE:0";
+    observation.zones.push_back(
+        {hidden_controller, ygo::observation::SemanticZone::SpellTrapZone, 1, 0, 1, false});
+    ObservedCard hidden;
+    hidden.locator = {locator};
+    hidden.identity_known = false;
+    hidden.controller = hidden_controller;
+    hidden.zone = ygo::observation::SemanticZone::SpellTrapZone;
+    hidden.sequence = 0;
+    hidden.face_down = true;
+    observation.entities.push_back(std::move(hidden));
+
+    // The hidden identity belongs to the internal request below. It is
+    // deliberately not copied into this perspective-safe observation.
+    (void)hidden_code;
+    observation.observation_hash = ygo::observation::observation_hash(observation);
+    return observation;
+}
+
+DecisionRequest real_atomic_hidden_request(const std::uint32_t hidden_code) {
+    DecisionRequest request;
+    request.kind = ygo::protocol::DecisionRequestKind::CardSelection;
+    request.decision_id = "private-decision.card." + std::to_string(hidden_code);
+    request.engine_step_index = 91;
+    request.player = 1;
+    request.engine_message_type = 15;
+    request.engine_message_name = "MSG_SELECT_CARD";
+    request.raw_message_hash = "private-raw." + std::to_string(hidden_code);
+
+    ActionCandidate candidate;
+    candidate.action_kind = ygo::protocol::ActionKind::CardSelection;
+    candidate.semantic_key = "card.0.3." + std::to_string(hidden_code) + ".0.8.0";
+    candidate.source_card = hidden_code;
+    candidate.source_controller = 0;
+    candidate.source_location = 8;
+    candidate.source_sequence = 0;
+    candidate.source_index = 3;
+    candidate.exact_response_bytes = {3, 0, 0, 0};
+    request.candidates.push_back(std::move(candidate));
+    return request;
+}
+
+PlayerObservation real_observation_for_request(const DecisionRequest& request,
+                                               const std::uint32_t hidden_code) {
+    auto observation = real_hidden_observation(request.player, hidden_code,
+                                                request.engine_step_index);
+    ygo::observation::attach_decision_context(observation, request);
+    ygo::observation::VisibleGameEvent historical_event;
+    historical_event.event_index = 3;
+    historical_event.engine_step_index = 80;
+    historical_event.kind = ygo::observation::VisibleEventKind::CardRevealed;
+    historical_event.player = 0;
+    historical_event.entity = ygo::observation::ObservationLocator{
+        "p0:SPELL_TRAP_ZONE:0"};
+    historical_event.to_zone = ygo::observation::SemanticZone::SpellTrapZone;
+    observation.visible_events.push_back(std::move(historical_event));
+    observation.observation_hash = ygo::observation::observation_hash(observation);
+    return observation;
+}
+
 EnvironmentActionCandidate candidate_with_index(const std::uint32_t source_index) {
     PublicActionKeyInput key;
     key.action_kind = "card_selection";
@@ -216,6 +308,382 @@ void require_error(
     require(result.error.has_value(), context + " returned no structured error");
     require(result.error->code == expected, context + " returned the wrong error code");
     require(!result.error->diagnostic.empty(), context + " returned no diagnostic");
+}
+
+bool same_public_choice(const std::optional<PublicChoice>& left,
+                        const std::optional<PublicChoice>& right) {
+    if (left.has_value() != right.has_value()) {
+        return false;
+    }
+    return !left.has_value() ||
+           (left->kind == right->kind && left->value == right->value &&
+            left->response_index == right->response_index);
+}
+
+bool same_public_reference(const std::optional<PublicCardReference>& left,
+                           const std::optional<PublicCardReference>& right) {
+    if (left.has_value() != right.has_value()) {
+        return false;
+    }
+    return !left.has_value() ||
+           (left->kind == right->kind &&
+            left->observation_locator == right->observation_locator);
+}
+
+bool same_public_candidate(const EnvironmentActionCandidate& left,
+                           const EnvironmentActionCandidate& right) {
+    return left.action_kind == right.action_kind &&
+           left.public_action_key == right.public_action_key &&
+           same_public_choice(left.choice, right.choice) &&
+           same_public_reference(left.source_reference, right.source_reference) &&
+           same_public_reference(left.target_reference, right.target_reference) &&
+           left.phase == right.phase && left.position == right.position &&
+           left.source_index == right.source_index && left.amount == right.amount &&
+           left.continuation_operation == right.continuation_operation &&
+           left.submits_engine_response == right.submits_engine_response;
+}
+
+void require_same_public_candidate_domain(const DecisionFrame& left,
+                                          const DecisionFrame& right) {
+    require(left.request.kind == right.request.kind &&
+                left.request.player == right.request.player,
+            "real paired public request context differs");
+    require(left.request.candidates.size() == right.request.candidates.size(),
+            "real paired public candidate counts differ");
+    for (std::size_t index = 0; index < left.request.candidates.size(); ++index) {
+        require(same_public_candidate(left.request.candidates[index],
+                                      right.request.candidates[index]),
+                "real paired public candidate domain differs");
+    }
+    require(left.public_candidate_domain_digest == right.public_candidate_domain_digest,
+            "real paired public candidate-domain digests differ");
+}
+
+bool same_logical_locator(const ygo::model::LogicalPublicLocator& left,
+                          const ygo::model::LogicalPublicLocator& right) {
+    return left.value == right.value &&
+           left.public_locator_ordinal == right.public_locator_ordinal;
+}
+
+bool same_logical_locator_vector(
+    const std::vector<ygo::model::LogicalPublicLocator>& left,
+    const std::vector<ygo::model::LogicalPublicLocator>& right) {
+    if (left.size() != right.size()) {
+        return false;
+    }
+    for (std::size_t index = 0; index < left.size(); ++index) {
+        if (!same_logical_locator(left[index], right[index])) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool same_logical_current_reference(const ygo::model::LogicalCurrentReference& left,
+                                    const ygo::model::LogicalCurrentReference& right) {
+    return same_logical_locator(left.locator, right.locator) &&
+           left.current_entity_ordinal == right.current_entity_ordinal;
+}
+
+bool same_logical_historical_reference(
+    const ygo::model::LogicalHistoricalReference& left,
+    const ygo::model::LogicalHistoricalReference& right) {
+    return same_logical_locator(left.locator, right.locator);
+}
+
+bool same_logical_card_properties(
+    const std::optional<ygo::observation::CardProperties>& left,
+    const std::optional<ygo::observation::CardProperties>& right) {
+    if (left.has_value() != right.has_value()) {
+        return false;
+    }
+    if (!left.has_value()) {
+        return true;
+    }
+    if (left->type != right->type || left->attribute != right->attribute ||
+        left->race != right->race || left->attack != right->attack ||
+        left->defense != right->defense || left->base_attack != right->base_attack ||
+        left->base_defense != right->base_defense || left->level != right->level ||
+        left->rank != right->rank || left->link_rating != right->link_rating ||
+        left->link_markers != right->link_markers || left->left_scale != right->left_scale ||
+        left->right_scale != right->right_scale || left->status_flags != right->status_flags ||
+        left->counters.size() != right->counters.size()) {
+        return false;
+    }
+    for (std::size_t index = 0; index < left->counters.size(); ++index) {
+        if (left->counters[index].type != right->counters[index].type ||
+            left->counters[index].count != right->counters[index].count) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool same_observed_card(const ObservedCard& left, const ObservedCard& right) {
+    return left.locator == right.locator && left.identity_known == right.identity_known &&
+           left.passcode == right.passcode && left.owner == right.owner &&
+           left.controller == right.controller && left.zone == right.zone &&
+           left.sequence == right.sequence && left.overlay_sequence == right.overlay_sequence &&
+           left.position == right.position && left.face_up == right.face_up &&
+           left.face_down == right.face_down &&
+           same_logical_card_properties(left.printed, right.printed) &&
+           same_logical_card_properties(left.current, right.current);
+}
+
+bool same_globals(const ygo::observation::ObservedPlayerGlobals& left,
+                  const ygo::observation::ObservedPlayerGlobals& right) {
+    return left.duel_flags == right.duel_flags && left.life_points == right.life_points &&
+           left.player_to_act == right.player_to_act && left.turn_player == right.turn_player &&
+           left.turn_count == right.turn_count && left.phase == right.phase &&
+           left.chain_length == right.chain_length && left.winner == right.winner &&
+           left.win_reason == right.win_reason && left.terminal == right.terminal;
+}
+
+bool same_zones(const std::vector<ygo::observation::ObservedZone>& left,
+                const std::vector<ygo::observation::ObservedZone>& right) {
+    if (left.size() != right.size()) {
+        return false;
+    }
+    for (std::size_t index = 0; index < left.size(); ++index) {
+        if (left[index].player != right[index].player ||
+            left[index].kind != right[index].kind ||
+            left[index].total_count != right[index].total_count ||
+            left[index].public_identity_count != right[index].public_identity_count ||
+            left[index].hidden_count != right[index].hidden_count ||
+            left[index].player_observable_order != right[index].player_observable_order) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool same_match_context(const ygo::observation::MatchContext& left,
+                        const ygo::observation::MatchContext& right) {
+    return left.perspective_player == right.perspective_player &&
+           left.duel_flags == right.duel_flags &&
+           left.knowledge.own_decklist_known == right.knowledge.own_decklist_known &&
+           left.knowledge.opponent_decklist_known == right.knowledge.opponent_decklist_known &&
+           left.own_deck.known == right.own_deck.known &&
+           left.own_deck.main_deck == right.own_deck.main_deck &&
+           left.own_deck.extra_deck == right.own_deck.extra_deck &&
+           left.opponent_deck.known == right.opponent_deck.known &&
+           left.opponent_deck.main_deck == right.opponent_deck.main_deck &&
+           left.opponent_deck.extra_deck == right.opponent_deck.extra_deck;
+}
+
+bool same_logical_card_reference(
+    const std::optional<ygo::model::LogicalPublicCardReference>& left,
+    const std::optional<ygo::model::LogicalPublicCardReference>& right) {
+    if (left.has_value() != right.has_value()) {
+        return false;
+    }
+    return !left.has_value() ||
+           (left->kind == right->kind &&
+            same_logical_current_reference(left->reference, right->reference));
+}
+
+bool same_logical_entities(const std::vector<ygo::model::LogicalEntity>& left,
+                           const std::vector<ygo::model::LogicalEntity>& right) {
+    if (left.size() != right.size()) {
+        return false;
+    }
+    for (std::size_t index = 0; index < left.size(); ++index) {
+        if (!same_observed_card(left[index].card, right[index].card) ||
+            left[index].public_locator_ordinal != right[index].public_locator_ordinal ||
+            left[index].current_entity_ordinal != right[index].current_entity_ordinal) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool same_logical_relationships(
+    const std::vector<ygo::model::LogicalRelationship>& left,
+    const std::vector<ygo::model::LogicalRelationship>& right) {
+    if (left.size() != right.size()) {
+        return false;
+    }
+    for (std::size_t index = 0; index < left.size(); ++index) {
+        if (left[index].kind != right[index].kind ||
+            !same_logical_current_reference(left[index].source, right[index].source) ||
+            !same_logical_current_reference(left[index].target, right[index].target)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool same_logical_chain(
+    const ygo::model::LogicalChainState& left,
+    const ygo::model::LogicalChainState& right) {
+    if (left.length != right.length || left.links.size() != right.links.size()) {
+        return false;
+    }
+    for (std::size_t index = 0; index < left.links.size(); ++index) {
+        const auto& left_link = left.links[index];
+        const auto& right_link = right.links[index];
+        if (left_link.index != right_link.index ||
+            left_link.activating_player != right_link.activating_player ||
+            left_link.activation_zone != right_link.activation_zone ||
+            left_link.effect_description != right_link.effect_description ||
+            left_link.source.has_value() != right_link.source.has_value() ||
+            left_link.targets.size() != right_link.targets.size()) {
+            return false;
+        }
+        if (left_link.source.has_value() &&
+            !same_logical_current_reference(*left_link.source, *right_link.source)) {
+            return false;
+        }
+        for (std::size_t target = 0; target < left_link.targets.size(); ++target) {
+            if (!same_logical_current_reference(left_link.targets[target],
+                                                 right_link.targets[target])) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+bool same_logical_visible_events(
+    const std::vector<ygo::model::LogicalVisibleEvent>& left,
+    const std::vector<ygo::model::LogicalVisibleEvent>& right) {
+    if (left.size() != right.size()) {
+        return false;
+    }
+    for (std::size_t index = 0; index < left.size(); ++index) {
+        const auto& left_event = left[index];
+        const auto& right_event = right[index];
+        if (left_event.event_index != right_event.event_index ||
+            left_event.kind != right_event.kind || left_event.player != right_event.player ||
+            left_event.public_passcode != right_event.public_passcode ||
+            left_event.from_zone != right_event.from_zone ||
+            left_event.to_zone != right_event.to_zone || left_event.count != right_event.count ||
+            left_event.amount != right_event.amount ||
+            left_event.counter_type != right_event.counter_type ||
+            left_event.phase != right_event.phase || left_event.winner != right_event.winner ||
+            left_event.win_reason != right_event.win_reason ||
+            left_event.effect_description != right_event.effect_description ||
+            left_event.entity.has_value() != right_event.entity.has_value() ||
+            left_event.targets.size() != right_event.targets.size()) {
+            return false;
+        }
+        if (left_event.entity.has_value() &&
+            !same_logical_historical_reference(*left_event.entity, *right_event.entity)) {
+            return false;
+        }
+        for (std::size_t target = 0; target < left_event.targets.size(); ++target) {
+            if (!same_logical_historical_reference(left_event.targets[target],
+                                                   right_event.targets[target])) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+bool same_logical_state(const ygo::model::LogicalPublicState& left,
+                        const ygo::model::LogicalPublicState& right) {
+    return same_globals(left.globals, right.globals) && same_zones(left.zones, right.zones) &&
+           same_logical_entities(left.entities, right.entities) &&
+           same_logical_relationships(left.relationships, right.relationships) &&
+           same_logical_chain(left.chain, right.chain) &&
+           same_logical_visible_events(left.visible_events, right.visible_events) &&
+           same_match_context(left.match_context, right.match_context);
+}
+
+bool same_logical_candidate(const ygo::model::LogicalCandidate& left,
+                            const ygo::model::LogicalCandidate& right) {
+    return left.action_kind == right.action_kind &&
+           same_public_choice(left.choice, right.choice) &&
+           same_logical_card_reference(left.source_reference, right.source_reference) &&
+           same_logical_card_reference(left.target_reference, right.target_reference) &&
+           left.phase == right.phase && left.position == right.position &&
+           left.source_index == right.source_index && left.amount == right.amount &&
+           left.continuation_operation == right.continuation_operation &&
+           left.submits_engine_response == right.submits_engine_response;
+}
+
+bool same_logical_input(const LogicalModelInput& left,
+                        const LogicalModelInput& right) {
+    if (left.schema_id != right.schema_id ||
+        left.public_observation_digest != right.public_observation_digest ||
+        left.public_candidate_domain_digest != right.public_candidate_domain_digest ||
+        left.perspective_player != right.perspective_player ||
+        left.decision_index != right.decision_index ||
+        left.public_observation_context_kind != right.public_observation_context_kind ||
+        left.public_observation_context_player != right.public_observation_context_player ||
+        !same_logical_locator_vector(left.referenced_public_entities,
+                                     right.referenced_public_entities) ||
+        !same_logical_locator_vector(left.public_locator_table,
+                                     right.public_locator_table) ||
+        !same_logical_state(left.public_safe_state, right.public_safe_state) ||
+        left.candidate_routing.size() != right.candidate_routing.size() ||
+        left.candidate_features.size() != right.candidate_features.size()) {
+        return false;
+    }
+    for (std::size_t index = 0; index < left.candidate_routing.size(); ++index) {
+        if (left.candidate_routing[index].public_action_key !=
+            right.candidate_routing[index].public_action_key) {
+            return false;
+        }
+        if (!same_logical_candidate(left.candidate_features[index],
+                                    right.candidate_features[index])) {
+            return false;
+        }
+    }
+    return true;
+}
+
+std::string logical_string_fields(const LogicalModelInput& input) {
+    std::string result = input.schema_id + input.public_observation_digest;
+    if (input.public_candidate_domain_digest.has_value()) {
+        result += *input.public_candidate_domain_digest;
+    }
+    if (input.public_observation_context_kind.has_value()) {
+        result += *input.public_observation_context_kind;
+    }
+    for (const auto& locator : input.referenced_public_entities) {
+        result += locator.value;
+    }
+    for (const auto& locator : input.public_locator_table) {
+        result += locator.value;
+    }
+    for (const auto& candidate : input.candidate_routing) {
+        result += candidate.public_action_key;
+    }
+    for (const auto& candidate : input.candidate_features) {
+        if (candidate.source_reference.has_value()) {
+            result += candidate.source_reference->reference.locator.value;
+        }
+        if (candidate.target_reference.has_value()) {
+            result += candidate.target_reference->reference.locator.value;
+        }
+        result += candidate.continuation_operation;
+    }
+    for (const auto& entity : input.public_safe_state.entities) {
+        result += entity.card.locator.value;
+    }
+    for (const auto& relationship : input.public_safe_state.relationships) {
+        result += relationship.source.locator.value;
+        result += relationship.target.locator.value;
+    }
+    for (const auto& link : input.public_safe_state.chain.links) {
+        if (link.source.has_value()) {
+            result += link.source->locator.value;
+        }
+        for (const auto& target : link.targets) {
+            result += target.locator.value;
+        }
+    }
+    for (const auto& event : input.public_safe_state.visible_events) {
+        if (event.entity.has_value()) {
+            result += event.entity->locator.value;
+        }
+        for (const auto& target : event.targets) {
+            result += target.locator.value;
+        }
+    }
+    return result;
 }
 
 void test_full_public_descriptor_is_copied() {
@@ -495,7 +963,7 @@ void test_historical_event_is_not_rebound_to_current_entity() {
             "logical event passcode was not preserved exactly");
 }
 
-void test_paired_hidden_worlds_have_equal_logical_inputs() {
+void test_private_decision_and_continuation_metadata_are_ignored() {
     const auto observation_a = public_observation("world-a");
     const auto observation_b = public_observation("world-b");
     const auto candidates = std::vector<EnvironmentActionCandidate>{
@@ -542,6 +1010,115 @@ void test_paired_hidden_worlds_have_equal_logical_inputs() {
                 left.public_safe_state.visible_events[0].public_passcode ==
                     right.public_safe_state.visible_events[0].public_passcode,
             "paired worlds changed logical visible event");
+}
+
+void test_real_paired_hidden_worlds_have_equal_logical_inputs() {
+    constexpr std::uint32_t hidden_code_a = 14821890;
+    constexpr std::uint32_t hidden_code_b = 7654321;
+
+    auto environment = make_real_paired_environment();
+    const auto request_a = real_atomic_hidden_request(hidden_code_a);
+    const auto request_b = real_atomic_hidden_request(hidden_code_b);
+    require(request_a.candidates.size() == 1 && request_b.candidates.size() == 1,
+            "real paired-world fixture did not create one internal candidate per world");
+    require(request_a.candidates.front().source_card == hidden_code_a &&
+                request_b.candidates.front().source_card == hidden_code_b &&
+                request_a.candidates.front().source_card !=
+                    request_b.candidates.front().source_card,
+            "real paired worlds did not differ in hidden internal card identity");
+    require(request_a.candidates.front().semantic_key !=
+                request_b.candidates.front().semantic_key,
+            "real paired worlds did not differ in internal semantic key");
+
+    auto observation_a = real_observation_for_request(request_a, hidden_code_a);
+    auto observation_b = real_observation_for_request(request_b, hidden_code_b);
+    require(ygo::observation::canonical_serialize(observation_a) !=
+                ygo::observation::canonical_serialize(observation_b),
+            "real paired worlds did not differ before public projection");
+
+    const auto frame_a = ygo::environment::detail::EpisodicEnvironmentTestAccess::
+        project_frame_for_test(*environment, request_a, observation_a, std::string(64, 'a'), 7);
+    const auto frame_b = ygo::environment::detail::EpisodicEnvironmentTestAccess::
+        project_frame_for_test(*environment, request_b, observation_b, std::string(64, 'a'), 7);
+
+    require(ygo::environment::canonical_public_environment_observation_bytes(
+                frame_a.public_observation) ==
+                ygo::environment::canonical_public_environment_observation_bytes(
+                    frame_b.public_observation),
+            "real paired worlds did not produce equal public observations");
+    require(frame_a.public_observation_digest == frame_b.public_observation_digest,
+            "real paired public observation digests differ");
+    require_same_public_candidate_domain(frame_a, frame_b);
+    require(frame_a.request.candidates.front().source_reference.has_value() &&
+                frame_a.request.candidates.front().source_reference->kind ==
+                    PublicCardReferenceKind::RedactedSlot,
+            "real paired hidden candidate was not redacted by the public facade");
+
+    // These are the only inputs passed to the model layer. In particular, the
+    // internal request, PlayerObservation, and any continuation view stay in
+    // this test's fixture setup and never cross the model boundary.
+    const auto result_a = ygo::model::project_logical_model_input_v1(
+        frame_a.public_observation, frame_a.request.candidates);
+    const auto result_b = ygo::model::project_logical_model_input_v1(
+        frame_b.public_observation, frame_b.request.candidates);
+    const auto& left = require_value(result_a, "real paired logical world A");
+    const auto& right = require_value(result_b, "real paired logical world B");
+
+    require(same_logical_input(left, right),
+            "real paired worlds produced different logical model inputs");
+    require(same_logical_state(left.public_safe_state, right.public_safe_state),
+            "real paired public-safe logical states differ");
+    require(left.candidate_count() == frame_a.request.candidates.size() &&
+                right.candidate_count() == frame_b.request.candidates.size() &&
+                left.candidate_count() == right.candidate_count(),
+            "real paired logical candidate count changed");
+    for (std::size_t index = 0; index < left.candidate_count(); ++index) {
+        require(left.candidate_routing[index].public_action_key ==
+                    frame_a.request.candidates[index].public_action_key &&
+                    right.candidate_routing[index].public_action_key ==
+                        frame_b.request.candidates[index].public_action_key &&
+                    left.candidate_routing[index].public_action_key ==
+                        right.candidate_routing[index].public_action_key,
+                "real paired logical candidate routing key/order changed");
+    }
+    require(same_logical_visible_events(left.public_safe_state.visible_events,
+                                        right.public_safe_state.visible_events),
+            "real paired historical event representations differ");
+    require(left.public_safe_state.visible_events.size() == 1 &&
+                left.public_safe_state.visible_events.front().entity.has_value() &&
+                right.public_safe_state.visible_events.front().entity.has_value(),
+            "real paired fixture did not retain its historical event");
+
+    const auto public_bytes =
+        ygo::environment::canonical_public_environment_observation_bytes(
+            frame_a.public_observation);
+    const std::string public_text(public_bytes.begin(), public_bytes.end());
+    const auto contains_hidden_code = [](const std::string& text,
+                                         const std::uint32_t code) {
+        return text.find(std::to_string(code)) != std::string::npos;
+    };
+    require(!contains_hidden_code(public_text, hidden_code_a) &&
+                !contains_hidden_code(public_text, hidden_code_b),
+            "real paired public facade leaked a hidden passcode");
+    require(!contains_hidden_code(logical_string_fields(left), hidden_code_a) &&
+                !contains_hidden_code(logical_string_fields(left), hidden_code_b),
+            "real paired logical output leaked a hidden passcode");
+    for (const auto& entity : left.public_safe_state.entities) {
+        if (!entity.card.identity_known) {
+            require(!entity.card.passcode.has_value(),
+                    "real paired logical redacted entity acquired a passcode");
+        }
+    }
+
+    auto malformed = frame_a.request.candidates.front();
+    malformed.public_action_key = "malformed-hidden." + std::to_string(hidden_code_a);
+    const auto rejected = ygo::model::project_logical_model_input_v1(
+        frame_a.public_observation, {malformed});
+    require_error(rejected, LogicalModelProjectionErrorCode::InvalidPublicActionKey,
+                  "real paired hidden diagnostic boundary");
+    require(!contains_hidden_code(rejected.error->diagnostic, hidden_code_a) &&
+                !contains_hidden_code(rejected.error->diagnostic, hidden_code_b),
+            "real paired projection diagnostic leaked a hidden passcode");
 }
 
 void test_candidate_boundaries_and_missing_context_digest() {
@@ -604,7 +1181,8 @@ int main() {
         test_public_safe_decoder_failure_is_rejected();
         test_locator_table_is_deterministic();
         test_historical_event_is_not_rebound_to_current_entity();
-        test_paired_hidden_worlds_have_equal_logical_inputs();
+        test_private_decision_and_continuation_metadata_are_ignored();
+        test_real_paired_hidden_worlds_have_equal_logical_inputs();
         test_candidate_boundaries_and_missing_context_digest();
         test_no_private_identity_in_logical_values();
         std::cout << "logical_model_input_tests=passed\n";

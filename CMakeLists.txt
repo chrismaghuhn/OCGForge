@@ -634,6 +634,8 @@ target_compile_definitions(public_safe_state_test PRIVATE
 add_test(NAME public_safe_state_test COMMAND public_safe_state_test)
 
 add_executable(logical_model_input_test tests/model/logical_model_input_test.cpp)
+target_include_directories(logical_model_input_test PRIVATE
+                           "${CMAKE_SOURCE_DIR}/src/environment")
 target_link_libraries(logical_model_input_test PRIVATE ygo_model)
 add_test(NAME logical_model_input_test COMMAND logical_model_input_test)
 
