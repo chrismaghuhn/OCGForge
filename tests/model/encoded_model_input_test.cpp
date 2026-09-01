@@ -32,6 +32,8 @@ using ygo::environment::PublicEnvironmentObservation;
 using ygo::model::CardVocabularyV1;
 using ygo::model::EncodedModelInputErrorCode;
 using ygo::model::EncodedModelInputV1;
+using ygo::model::EncodedChainLink;
+using ygo::model::EncodedCurrentReference;
 using ygo::model::LogicalModelInputV1;
 using ygo::observation::ObservedCard;
 using ygo::observation::PlayerObservation;
@@ -355,6 +357,25 @@ CardVocabularyV1 vocabulary_with_all_fixture_cards() {
     return std::move(*result.value);
 }
 
+LogicalModelInputV1 logical_input_with_card_properties(const bool printed,
+                                                       const bool current) {
+    auto source = source_observation();
+    auto known = std::find_if(source.entities.begin(), source.entities.end(),
+                              [](const ObservedCard& card) {
+                                  return card.locator.value == kKnownLocator;
+                              });
+    require(known != source.entities.end(), "property fixture lost its known card");
+    if (!printed) known->printed.reset();
+    if (!current) known->current.reset();
+    source.observation_hash = ygo::observation::observation_hash(source);
+    const auto result = ygo::model::project_logical_model_input_v1(
+        ygo::environment::project_public_observation(source),
+        {candidate_with_index(1)});
+    require(result && result.value.has_value(),
+            "property-presence fixture did not produce a logical input");
+    return std::move(*result.value);
+}
+
 void test_public_cards_events_and_decks_use_vocabulary() {
     const auto logical = logical_input(3);
     const auto vocabulary = vocabulary_with_all_fixture_cards();
@@ -393,6 +414,30 @@ void test_public_cards_events_and_decks_use_vocabulary() {
                     encoded.routing_keys[index] == logical.candidate_routing[index].public_action_key,
                 "encoded candidate order or routing key changed");
     }
+}
+
+void test_card_properties_presence_is_preserved() {
+    const auto vocabulary = vocabulary_with_all_fixture_cards();
+    const auto check = [&](const bool printed, const bool current,
+                           const std::string& context) {
+        const auto logical = logical_input_with_card_properties(printed, current);
+        const auto result = ygo::model::encode_model_input_v1(logical, vocabulary);
+        require(result && result.value.has_value(), context + " encoding failed");
+        const auto known = std::find_if(
+            result.value->entities.begin(), result.value->entities.end(),
+            [&](const auto& entity) {
+                return result.value->public_locator_table[entity.public_locator_ordinal] ==
+                       kKnownLocator;
+            });
+        require(known != result.value->entities.end(), context + " lost known entity");
+        require(known->printed.has_value() == printed &&
+                    known->current.has_value() == current,
+                context + " changed CardProperties optional presence");
+    };
+
+    check(false, false, "both properties absent");
+    check(true, false, "only printed properties present");
+    check(false, true, "only current properties present");
 }
 
 void test_all_public_candidate_fields_map_to_fixed_encoded_values() {
@@ -528,8 +573,12 @@ void test_encoded_codec_field_order_and_presence_bits() {
     encoded.observation_context_reference_ordinals = {0};
     encoded.match_context.perspective_player = 1;
     const auto key_input = ygo::environment::PublicActionKeyInput{
-        "card_selection", std::nullopt, std::nullopt, std::nullopt, std::nullopt,
-        std::nullopt, std::uint32_t{0}, std::nullopt, {}};
+        "card_selection", std::nullopt,
+        ygo::environment::PublicCardReference{
+            ygo::environment::PublicCardReferenceKind::RedactedSlot,
+            "p1:MONSTER_ZONE:0"},
+        std::nullopt, std::nullopt, std::nullopt, std::uint32_t{0},
+        std::int32_t{-17}, {}};
     const auto key = ygo::environment::public_action_key(key_input);
     encoded.public_candidate_domain_digest =
         ygo::environment::public_candidate_domain_digest("card_selection", {key});
@@ -619,6 +668,96 @@ void test_encoded_codec_field_order_and_presence_bits() {
             "encoded routing sidecar order changed");
 }
 
+EncodedModelInputV1 minimal_encoded_input_for_chain(const bool source_present) {
+    EncodedModelInputV1 encoded;
+    encoded.card_vocabulary_identity =
+        std::string(ygo::model::kCardVocabularyIdentityPrefix) + std::string(64, '0');
+    encoded.public_observation_digest = std::string(64, '1');
+    encoded.perspective_player = 1;
+    encoded.decision_index = 42;
+    encoded.public_locator_table = {"p1:MONSTER_ZONE:0"};
+    encoded.public_observation_context_kind_code = std::uint16_t{5};
+    encoded.public_observation_context_player = std::uint8_t{1};
+    encoded.observation_context_reference_ordinals = {0};
+    encoded.match_context.perspective_player = 1;
+    const auto key = ygo::environment::public_action_key(
+        ygo::environment::PublicActionKeyInput{
+            "card_selection", std::nullopt, std::nullopt, std::nullopt, std::nullopt,
+            std::nullopt, std::uint32_t{0}, std::nullopt, {}});
+    encoded.public_candidate_domain_digest =
+        ygo::environment::public_candidate_domain_digest("card_selection", {key});
+    EncodedChainLink link;
+    link.index = 0;
+    if (source_present) {
+        link.source = EncodedCurrentReference{0, std::nullopt};
+    }
+    encoded.chain.length = 1;
+    encoded.chain.links.push_back(std::move(link));
+    encoded.candidate_features.push_back(
+        ygo::model::EncodedCandidate{5, std::nullopt, std::nullopt, std::nullopt,
+                                     std::nullopt, std::nullopt, std::uint32_t{0},
+                                     std::nullopt, 0, true});
+    encoded.routing_keys = {key};
+    return encoded;
+}
+
+void assert_minimal_chain_source_encoding(const std::vector<std::uint8_t>& bytes,
+                                          const bool expected_present) {
+    Reader reader(bytes);
+    std::string value;
+    std::uint8_t u8 = 0;
+    std::uint16_t u16 = 0;
+    std::uint32_t u32 = 0;
+    std::uint64_t u64 = 0;
+    require(reader.string(value) && reader.string(value) && reader.string(value) &&
+                reader.string(value) && reader.string(value) && reader.u8(u8) &&
+                reader.u64(u64),
+            "chain KAT header is truncated");
+    require(reader.u32(u32) && u32 == 1 && reader.string(value),
+            "chain KAT locator table is malformed");
+    require(reader.u8(u8) && u8 == 1 && reader.u16(u16) && u16 == 5 &&
+                reader.u8(u8) && u8 == 1 && reader.u8(u8) && u8 == 1 &&
+                reader.u32(u32) && u32 == 1 && reader.u32(u32) && u32 == 0,
+            "chain KAT context order is malformed");
+    require(reader.u64(u64) && reader.u32(u32) && u32 == 0,
+            "chain KAT globals are malformed");
+    for (int optional = 0; optional < 2; ++optional) {
+        require(reader.u8(u8) && u8 == 0, "chain KAT player presence is malformed");
+    }
+    for (int optional = 0; optional < 2; ++optional) {
+        require(reader.u8(u8) && u8 == 0, "chain KAT integer presence is malformed");
+    }
+    require(reader.u32(u32) && u32 == 0, "chain KAT global chain length is malformed");
+    for (int optional = 0; optional < 2; ++optional) {
+        require(reader.u8(u8) && u8 == 0, "chain KAT terminal presence is malformed");
+    }
+    require(reader.u8(u8) && u8 == 0, "chain KAT terminal flag is malformed");
+    require(reader.u32(u32) && u32 == 0 && reader.u32(u32) && u32 == 0 &&
+                reader.u32(u32) && u32 == 0 && reader.u32(u32) && u32 == 1 &&
+                reader.u32(u32) && u32 == 1,
+            "chain KAT state collection order is malformed");
+    require(reader.u32(u32) && u32 == 0 && reader.u8(u8) && u8 == 0,
+            "chain KAT link prefix is malformed");
+    require(reader.u8(u8) && (u8 == (expected_present ? 1 : 0)),
+            "chain source does not have exactly one presence bit");
+    if (expected_present) {
+        require(reader.u32(u32) && u32 == 0 && reader.u8(u8) && u8 == 0,
+                "chain source payload is malformed");
+    }
+    require(reader.u8(u8) && u8 == 0 && reader.u8(u8) && u8 == 0 &&
+                reader.u32(u32) && u32 == 0,
+            "chain source tail order is malformed");
+}
+
+void test_chain_source_presence_is_encoded_once() {
+    const auto present = minimal_encoded_input_for_chain(true);
+    const auto absent = minimal_encoded_input_for_chain(false);
+    assert_minimal_chain_source_encoding(
+        ygo::model::canonical_encoded_model_input_bytes(present), true);
+    assert_minimal_chain_source_encoding(
+        ygo::model::canonical_encoded_model_input_bytes(absent), false);
+}
+
 void test_encoded_presence_and_signed_integer_representation() {
     const auto logical = logical_input(1, false, -17);
     const auto vocabulary = vocabulary_with_all_fixture_cards();
@@ -664,6 +803,16 @@ void test_malformed_logical_and_encoded_values_fail_closed() {
         threw = true;
     }
     require(threw, "encoded routing cardinality mismatch was not rejected");
+
+    auto mismatched_row = *encoded.value;
+    mismatched_row.candidate_features.front().source_index = 7;
+    threw = false;
+    try {
+        (void)ygo::model::canonical_encoded_model_input_bytes(mismatched_row);
+    } catch (const std::invalid_argument&) {
+        threw = true;
+    }
+    require(threw, "encoded candidate row/key mismatch was not rejected");
 }
 
 void test_real_paired_hidden_worlds_have_equal_encoded_inputs() {
@@ -797,10 +946,12 @@ void test_candidate_boundaries_remain_exactly_n_to_n() {
 int main() {
     try {
         test_public_cards_events_and_decks_use_vocabulary();
+        test_card_properties_presence_is_preserved();
         test_all_public_candidate_fields_map_to_fixed_encoded_values();
         test_historical_event_passcode_uses_vocabulary_without_entity_resolution();
         test_logical_codec_contains_the_existing_canonical_safe_state();
         test_encoded_codec_field_order_and_presence_bits();
+        test_chain_source_presence_is_encoded_once();
         test_encoded_presence_and_signed_integer_representation();
         test_malformed_logical_and_encoded_values_fail_closed();
         test_real_paired_hidden_worlds_have_equal_encoded_inputs();

@@ -443,6 +443,39 @@ std::string_view action_kind_token(const ygo::environment::EnvironmentActionKind
     fail_logical();
 }
 
+std::string_view action_kind_token_from_code(const std::uint16_t value) {
+    switch (value) {
+    case 1:
+        return "idle_command";
+    case 2:
+        return "battle_command";
+    case 3:
+        return "chain";
+    case 4:
+        return "option";
+    case 5:
+        return "card_selection";
+    case 6:
+        return "announcement";
+    case 7:
+        return "place";
+    case 8:
+        return "position";
+    case 9:
+        return "yes_no";
+    case 10:
+        return "pick";
+    case 11:
+        return "finish";
+    case 12:
+        return "cancel";
+    case 13:
+        return "assign_amount";
+    default:
+        fail_encoded();
+    }
+}
+
 std::optional<std::uint16_t> request_kind_code(const std::string_view value) {
     if (value == "idle_command") return std::uint16_t{1};
     if (value == "battle_command") return std::uint16_t{2};
@@ -504,6 +537,38 @@ std::uint8_t continuation_code(const std::string_view value) {
     if (value == "cancel") return 4;
     if (value == "bypass") return 5;
     fail_logical();
+}
+
+ygo::environment::PublicChoiceKind public_choice_kind_from_code(
+    const std::uint8_t value) {
+    using ygo::environment::PublicChoiceKind;
+    switch (value) {
+    case 1:
+        return PublicChoiceKind::YesNo;
+    case 2:
+        return PublicChoiceKind::EffectYesNo;
+    case 3:
+        return PublicChoiceKind::EffectChoice;
+    case 4:
+        return PublicChoiceKind::OptionValue;
+    case 5:
+        return PublicChoiceKind::AnnouncementNumber;
+    default:
+        fail_encoded();
+    }
+}
+
+ygo::environment::PublicCardReferenceKind public_reference_kind_from_code(
+    const std::uint8_t value) {
+    using ygo::environment::PublicCardReferenceKind;
+    switch (value) {
+    case 0:
+        return PublicCardReferenceKind::VisibleCard;
+    case 1:
+        return PublicCardReferenceKind::RedactedSlot;
+    default:
+        fail_encoded();
+    }
 }
 
 std::string_view continuation_token(const std::uint8_t value) {
@@ -1143,9 +1208,10 @@ std::vector<std::uint8_t> canonical_logical_bytes_unchecked(
     return std::move(writer).take();
 }
 
-EncodedCardProperties encode_properties(const std::optional<ygo::observation::CardProperties>& value) {
+std::optional<EncodedCardProperties> encode_properties(
+    const std::optional<ygo::observation::CardProperties>& value) {
+    if (!value.has_value()) return std::nullopt;
     EncodedCardProperties result;
-    if (!value.has_value()) return result;
     result.type = value->type;
     result.attribute = value->attribute;
     result.race = value->race;
@@ -1163,7 +1229,7 @@ EncodedCardProperties encode_properties(const std::optional<ygo::observation::Ca
     for (const auto& counter : value->counters) {
         result.counters.push_back({counter.type, counter.count});
     }
-    return result;
+    return std::optional<EncodedCardProperties>(std::move(result));
 }
 
 std::uint32_t vocabulary_id(const CardVocabularyV1& vocabulary,
@@ -1350,6 +1416,47 @@ void validate_encoded_reference(const EncodedCurrentReference& reference,
     }
 }
 
+void validate_encoded_candidate_routing(
+    const EncodedCandidate& candidate,
+    const std::vector<std::string>& locator_table,
+    const std::string& routing_key) {
+    ygo::environment::PublicActionKeyInput key;
+    key.action_kind = std::string(action_kind_token_from_code(candidate.action_kind_code));
+    if (candidate.choice.has_value()) {
+        key.choice = ygo::environment::PublicChoice{
+            public_choice_kind_from_code(candidate.choice->kind_code),
+            candidate.choice->value,
+            candidate.choice->response_index};
+    }
+    const auto make_public_reference = [&locator_table](
+                                           const EncodedCardReference& reference) {
+        return ygo::environment::PublicCardReference{
+            public_reference_kind_from_code(reference.kind_code),
+            locator_table[reference.reference.public_locator_ordinal]};
+    };
+    if (candidate.source_reference.has_value()) {
+        key.source_reference = make_public_reference(*candidate.source_reference);
+    }
+    if (candidate.target_reference.has_value()) {
+        key.target_reference = make_public_reference(*candidate.target_reference);
+    }
+    key.phase = candidate.phase;
+    key.position = candidate.position;
+    key.source_index = candidate.source_index;
+    key.amount = candidate.amount;
+    key.continuation_operation = std::string(
+        continuation_token(candidate.continuation_operation_code));
+    try {
+        if (ygo::environment::public_action_key(key) != routing_key) {
+            fail_encoded();
+        }
+    } catch (const EncodingFailure&) {
+        throw;
+    } catch (...) {
+        fail_encoded();
+    }
+}
+
 void validate_encoded(const EncodedModelInputV1& encoded) {
     if (encoded.schema_id != kEncodedModelInputSchemaId ||
         !valid_digest(encoded.public_observation_digest) || encoded.perspective_player > 1 ||
@@ -1469,7 +1576,19 @@ void validate_encoded(const EncodedModelInputV1& encoded) {
     };
     validate_deck(encoded.match_context.own_deck);
     validate_deck(encoded.match_context.opponent_deck);
-    for (const auto& candidate : encoded.candidate_features) {
+
+    std::vector<std::string> keys;
+    keys.reserve(encoded.routing_keys.size());
+    for (const auto& key : encoded.routing_keys) {
+        if (!ygo::environment::is_public_action_key(key) ||
+            std::find(keys.begin(), keys.end(), key) != keys.end()) {
+            fail_encoded();
+        }
+        keys.push_back(key);
+    }
+
+    for (std::size_t index = 0; index < encoded.candidate_features.size(); ++index) {
+        const auto& candidate = encoded.candidate_features[index];
         if (candidate.action_kind_code == 0 || candidate.action_kind_code > 13 ||
             candidate.choice.has_value() && candidate.choice->kind_code == 0 ||
             candidate.choice.has_value() && candidate.choice->kind_code > 5 ||
@@ -1497,13 +1616,8 @@ void validate_encoded(const EncodedModelInputV1& encoded) {
             validate_encoded_reference(candidate.target_reference->reference,
                                        encoded.public_locator_table, encoded.entities);
         }
-    }
-    std::vector<std::string> keys;
-    keys.reserve(encoded.routing_keys.size());
-    for (const auto& key : encoded.routing_keys) {
-        if (!ygo::environment::is_public_action_key(key) ||
-            std::find(keys.begin(), keys.end(), key) != keys.end()) fail_encoded();
-        keys.push_back(key);
+        validate_encoded_candidate_routing(candidate, encoded.public_locator_table,
+                                           encoded.routing_keys[index]);
     }
     if (encoded.public_observation_context_kind_code.has_value()) {
         if (!encoded.public_candidate_domain_digest.has_value() ||
@@ -1558,7 +1672,7 @@ void write_encoded_reference(Writer& writer, const EncodedCurrentReference& refe
 void write_optional_encoded_reference(Writer& writer,
                                      const std::optional<EncodedCurrentReference>& reference) {
     writer.boolean(reference.has_value());
-    if (reference.has_value()) write_encoded_reference(writer, *reference);
+    if (reference.has_value()) write_encoded_reference_payload(writer, *reference);
 }
 
 void write_encoded_globals(Writer& writer, const EncodedGlobals& globals) {
