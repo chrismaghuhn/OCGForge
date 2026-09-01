@@ -1,4 +1,5 @@
 #include "ygo/model/encoded_model_input.hpp"
+#include "ygo/model/model_batch_layout.hpp"
 
 #include <algorithm>
 #include <cstddef>
@@ -35,6 +36,8 @@ using ygo::model::EncodedModelInputV1;
 using ygo::model::EncodedChainLink;
 using ygo::model::EncodedCurrentReference;
 using ygo::model::LogicalModelInputV1;
+using ygo::model::ModelBatchPaddingRequestV1;
+using ygo::model::RaggedModelBatchV1;
 using ygo::observation::ObservedCard;
 using ygo::observation::PlayerObservation;
 using ygo::protocol::ActionCandidate;
@@ -968,6 +971,131 @@ void test_candidate_boundaries_remain_exactly_n_to_n() {
     }
 }
 
+void test_batch_layout_identity_and_boundary_evidence() {
+    const auto vocabulary = vocabulary_with_all_fixture_cards();
+    const auto logical_a = logical_input(2);
+    const auto logical_b = logical_input(3);
+    const auto encoded_a_result =
+        ygo::model::encode_model_input_v1(logical_a, vocabulary);
+    const auto encoded_b_result =
+        ygo::model::encode_model_input_v1(logical_b, vocabulary);
+    require(encoded_a_result && encoded_a_result.value.has_value() &&
+                encoded_b_result && encoded_b_result.value.has_value(),
+            "batch identity fixtures failed to encode");
+    const auto encoded_a = *encoded_a_result.value;
+    const auto encoded_b = *encoded_b_result.value;
+    const auto identity_a =
+        ygo::model::model_input_identity(logical_a, encoded_a);
+    const auto identity_b =
+        ygo::model::model_input_identity(logical_b, encoded_b);
+
+    const auto ragged_a = ygo::model::make_ragged_model_batch_v1({encoded_a});
+    require(ragged_a && ragged_a.value.has_value() &&
+                ragged_a.value->candidate_offsets ==
+                    std::vector<std::uint64_t>{0, 2},
+            "single-sample ragged layout did not preserve N=2");
+
+    const auto unpad_after = [&](const RaggedModelBatchV1& ragged,
+                                 const std::uint64_t width,
+                                 const std::size_t sample_index) {
+        ModelBatchPaddingRequestV1 request;
+        request.candidate_width = width;
+        const auto padded = ygo::model::pad_model_batch_v1(ragged, request);
+        require(padded && padded.value.has_value(),
+                "valid batch padding was rejected");
+        const auto unpadded = ygo::model::unpad_model_batch_v1(*padded.value);
+        require(unpadded && unpadded.value.has_value(),
+                "valid batch unpadding was rejected");
+        return ygo::model::reconstruct_model_batch_sample_v1(
+            *unpadded.value, sample_index);
+    };
+
+    const auto exact_a = unpad_after(*ragged_a.value, 2, 0);
+    const auto wide_a = unpad_after(*ragged_a.value, 7, 0);
+    require(identity_a == ygo::model::model_input_identity(logical_a, exact_a) &&
+                identity_a == ygo::model::model_input_identity(logical_a, wide_a),
+            "padding width changed the sample model_input identity");
+
+    const auto ragged_ab =
+        ygo::model::make_ragged_model_batch_v1({encoded_a, encoded_b});
+    const auto ragged_ba =
+        ygo::model::make_ragged_model_batch_v1({encoded_b, encoded_a});
+    require(ragged_ab && ragged_ab.value.has_value() &&
+                ragged_ba && ragged_ba.value.has_value(),
+            "composed batch fixtures were rejected");
+    const auto composed_a = unpad_after(*ragged_ab.value, 3, 0);
+    const auto composed_b = unpad_after(*ragged_ab.value, 3, 1);
+    const auto reordered_a = unpad_after(*ragged_ba.value, 3, 1);
+    const auto reordered_b = unpad_after(*ragged_ba.value, 3, 0);
+    require(identity_a == ygo::model::model_input_identity(logical_a, composed_a) &&
+                identity_a == ygo::model::model_input_identity(logical_a, reordered_a) &&
+                identity_b == ygo::model::model_input_identity(logical_b, composed_b) &&
+                identity_b == ygo::model::model_input_identity(logical_b, reordered_b),
+            "batch composition or order changed a sample model_input identity");
+
+    for (const std::uint32_t count : {24U, 25U, 129U}) {
+        const auto logical = logical_input(count);
+        const auto encoded_result =
+            ygo::model::encode_model_input_v1(logical, vocabulary);
+        require(encoded_result && encoded_result.value.has_value(),
+                "boundary fixture failed to encode");
+        const auto encoded = *encoded_result.value;
+        const auto identity = ygo::model::model_input_identity(logical, encoded);
+        require(logical.candidate_count() == count &&
+                    encoded.candidate_features.size() == count &&
+                    encoded.routing_keys.size() == count &&
+                    encoded.public_candidate_domain_digest.has_value(),
+                "boundary projection changed candidate count or digest");
+        for (std::uint32_t index = 0; index < count; ++index) {
+            require(encoded.routing_keys[index] ==
+                        logical.candidate_routing[index].public_action_key,
+                    "boundary projection changed ordered routing keys");
+        }
+
+        const auto ragged = ygo::model::make_ragged_model_batch_v1({encoded});
+        require(ragged && ragged.value.has_value() &&
+                    ragged.value->candidate_offsets ==
+                        std::vector<std::uint64_t>{0, count},
+                "boundary ragged layout changed N");
+        for (const auto width : {count, count + 1}) {
+            ModelBatchPaddingRequestV1 request;
+            request.candidate_width = width;
+            const auto padded = ygo::model::pad_model_batch_v1(
+                *ragged.value, request);
+            require(padded && padded.value.has_value() &&
+                        padded.value->candidate_row_mask.size() == width &&
+                        std::count(padded.value->candidate_row_mask.begin(),
+                                   padded.value->candidate_row_mask.end(), 1) ==
+                            static_cast<std::ptrdiff_t>(count),
+                    "boundary W=N or W>N padding changed the real-row count");
+            const auto unpadded =
+                ygo::model::unpad_model_batch_v1(*padded.value);
+            require(unpadded && unpadded.value.has_value(),
+                    "boundary unpadding failed");
+            const auto reconstructed =
+                ygo::model::reconstruct_model_batch_sample_v1(
+                    *unpadded.value, 0);
+            require(ygo::model::canonical_encoded_model_input_bytes(encoded) ==
+                        ygo::model::canonical_encoded_model_input_bytes(reconstructed) &&
+                        identity ==
+                            ygo::model::model_input_identity(logical, reconstructed),
+                    "boundary pad/unpad changed bytes or identity");
+        }
+
+        ModelBatchPaddingRequestV1 too_small;
+        too_small.candidate_width = count - 1;
+        const auto rejected =
+            ygo::model::pad_model_batch_v1(*ragged.value, too_small);
+        require(!rejected && rejected.error.has_value() &&
+                    rejected.error->code ==
+                        ygo::model::ModelBatchLayoutErrorCode::CapacityTooSmall &&
+                    ragged.value->candidate_offsets ==
+                        std::vector<std::uint64_t>{0, count} &&
+                    ragged.value->candidate_rows.size() == count,
+                "boundary W<N did not fail closed without mutation");
+    }
+}
+
 }  // namespace
 
 int main() {
@@ -986,6 +1114,7 @@ int main() {
         test_unknown_known_passcode_fails_closed();
         test_canonical_bytes_and_identity_bind_logical_encoded_and_vocabulary();
         test_candidate_boundaries_remain_exactly_n_to_n();
+        test_batch_layout_identity_and_boundary_evidence();
         std::cout << "encoded_model_input_tests=passed\n";
         return EXIT_SUCCESS;
     } catch (const std::exception& error) {
