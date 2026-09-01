@@ -119,6 +119,13 @@ sources, immutable code commit, backend/version, optimizer/schedule, batch and
 RNG configuration, precision, device/distributed provenance, initial checkpoint,
 and final exported checkpoint.
 
+Task 1 freezes these as ownership/provenance fields. Configuration, precision,
+execution, architecture, and canonical-weight values that are not already
+existing scalar contract identities are represented by explicit versioned
+sub-identity fields. Their exact nested codecs and numeric byte
+representations remain deferred until the later implementation tasks; no
+training-run or weight-content hash is issued by this task.
+
 Training-run identity, semantic checkpoint identity, framework-native training
 state, and execution-environment identity remain distinct. Native optimizer,
 sharding, gradient, and worker state is not canonical inference state.
@@ -137,6 +144,10 @@ contracts, CardVocabulary, dataset/split, BC training contract, optional parent,
 and canonical weight-content identity. Hardware and framework provenance may be
 attached without automatically changing semantic checkpoint identity. Mutable
 aliases such as `latest`, `best`, `prod`, or `run-17` are locators only.
+
+The checkpoint manifest's top-level field order is frozen, but its identity is
+materializable only after the referenced architecture/configuration, export
+codec, and weight-content sub-identities have accepted versioned codecs.
 
 ### 5. Inference is bound to the current public decision
 

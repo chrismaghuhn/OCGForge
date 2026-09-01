@@ -18,8 +18,8 @@ normative.
 
 | Surface | Contract identity | Authority |
 | --- | --- | --- |
-| training run manifest | `ocgforge.phase6.training_run.v1` | Phase-6 provenance contract |
-| canonical weight export | `ocgforge.phase6.canonical_weight_export.v1` | OCGForge export boundary |
+| training run manifest | `ocgforge.phase6.training_run.v1` | Phase-6 provenance requirements; sub-codecs deferred |
+| canonical weight export | `ocgforge.phase6.canonical_weight_export.v1` | OCGForge export boundary; content codec deferred |
 | checkpoint manifest | `ocgforge.phase6.checkpoint_manifest.v1` | immutable OCGForge checkpoint identity |
 | inference request | `ocgforge.phase6.inference_request.v1` | current-decision request binding |
 | inference response | `ocgforge.phase6.inference_response.v1` | one validated score/selection response |
@@ -30,11 +30,16 @@ directory, and transport are implementation details. A physical artifact is
 usable only after it resolves to and validates against the OCGForge manifest
 and identity contracts below.
 
+The training-run and canonical-export rows in the table are frozen future
+contract surfaces. Task 1 does not ratify a nested configuration codec,
+numeric weight codec, or content-addressed artifact under either surface.
+
 ## 2. Training-run provenance
 
-`TrainingRunManifestV1` records how a training run was conducted. Its identity
-is distinct from both the semantic model/checkpoint identity and the physical
-framework state:
+`TrainingRunManifestV1` records how a training run was conducted. Its future
+identity is distinct from both the semantic model/checkpoint identity and the
+physical framework state. Task 1 freezes the required fields and their
+ownership, not the codecs for the configuration sub-identities:
 
 ```text
 TrainingRunManifestV1 {
@@ -42,7 +47,9 @@ TrainingRunManifestV1 {
     training_contract_identity: "ocgforge.phase6.bc_contract.v1"
     source_dataset_identity: exact dataset_semantic_id
     dataset_split_identity: exact Phase-6 split identity
-    phase5_model_contract_identities: exact Phase-5 IDs
+    phase5_logical_model_input_contract_identity: exact Phase-5 ID
+    phase5_encoded_model_input_contract_identity: exact Phase-5 ID
+    phase5_batch_layout_contract_identity: exact Phase-5 ID
     card_vocabulary_identity: exact model_card_vocabulary.v1 identity
     model_architecture_config_identity: immutable architecture/config identity
     behavior_policy_source_identities: exact eligible Teacher source IDs
@@ -50,36 +57,42 @@ TrainingRunManifestV1 {
     training_code_commit: immutable source commit
     framework_backend_identity: backend/adapter identity
     framework_version: exact implementation version
-    optimizer_configuration: canonical future training configuration
-    learning_rate_schedule: canonical future schedule configuration
-    batch_configuration: physical execution configuration
-    gradient_accumulation_configuration: explicit training configuration
+    optimizer_configuration_identity: versioned future sub-identity
+    learning_rate_schedule_identity: versioned future sub-identity
+    batch_configuration_identity: versioned future sub-identity
+    gradient_accumulation_configuration_identity: versioned future sub-identity
     training_rng_contract_identity: versioned training RNG contract
-    training_seed: explicit seed or seed derivation identity
+    training_seed_or_initialization_identity: versioned future sub-identity
     initial_checkpoint_identity: optional immutable checkpoint identity
-    precision_mode: explicit execution provenance
-    device_and_distributed_provenance: execution provenance
+    precision_mode_identity: versioned future sub-identity
+    device_and_distributed_provenance_identity: versioned future sub-identity
     final_exported_checkpoint_identity: exact immutable checkpoint identity
 }
 ```
 
-The Phase-5 identities MUST include the logical model-input, encoded
+The Phase-5 identity fields MUST include the logical model-input, encoded
 model-input, model-batch-layout, and card-vocabulary contract identities. The
 manifest MUST record the concrete `CardVocabularyV1` identity, not merely the
-catalog name or database path.
+catalog name or database path. Policy-source identity vectors use an explicit
+contract order (unsigned UTF-8 identity order with no duplicates); they are
+not unordered map/set material.
 
-The training-run identity is:
+The future training-run identity is issued only after every referenced
+configuration and provenance sub-identity has a separately accepted versioned
+codec. Its top-level identity, when that later codec is frozen, is:
 
 ```text
 phase6_training_run.v1.<lowercase hexadecimal SHA-256 of canonical manifest bytes>
 ```
 
-All configuration values that affect the run are canonicalized under this
-manifest. `training_code_commit` MUST be an immutable commit, not a branch or
-mutable workspace. Framework version, optimizer, learning-rate schedule,
-batching, precision, devices, world size, distributed strategy, and execution
-environment are provenance; they MUST NOT silently become gameplay, sample,
-model-input, or checkpoint semantic identity.
+Task 1 does not define or issue that hash. The later sub-identity codecs MUST
+make every top-level field a canonical scalar identity/value or an explicitly
+ordered identity vector before a run can be content-addressed.
+`training_code_commit` MUST be an immutable commit, not a branch or mutable
+workspace. Framework version, optimizer, learning-rate schedule, batching,
+gradient accumulation, precision, devices, world size, distributed strategy,
+and execution environment are provenance; they MUST NOT silently become
+gameplay, sample, model-input, or checkpoint semantic identity.
 
 The manifest MUST distinguish:
 
@@ -93,7 +106,14 @@ execution-environment identity
 Changing an optimizer, batch size, device, or worker layout can create a new
 training-run identity without changing the semantic checkpoint identity when
 the canonical exported model/config content and all checkpoint identity
-inputs remain equal.
+inputs remain equal. Until the sub-identity codecs are frozen, these are
+required provenance fields only and no reproducible training-run hash is
+claimed.
+
+Task 4 is blocked until the required configuration, precision, execution,
+architecture, and canonical-weight sub-identity codecs have been versioned and
+independently validated. A provisional framework state cannot be promoted to
+an accepted training-run or checkpoint identity before that boundary.
 
 ## 3. Canonical weight export boundary
 
@@ -123,7 +143,8 @@ canonical exported weight-content identity
 OCGForge checkpoint identity
 ```
 
-The canonical export contract MUST define an ordered, framework-neutral
+Task 1 freezes the export boundary and the required contents. The later
+canonical export codec MUST define an ordered, framework-neutral
 representation of inference parameters, including:
 
 - the architecture/config identity;
@@ -133,10 +154,12 @@ representation of inference parameters, including:
 - the export codec identity and its canonical bytes;
 - no optimizer, gradient, sharding, device, process, or cache state.
 
-The exact tensor serialization library is intentionally not selected here.
-Safetensors or another exact serialization may later implement the export
-codec, but the library is not checkpoint authority. The canonical export
-codec and content digest MUST be versioned before a checkpoint can be
+The exact tensor serialization library and the semantic numeric
+representation are intentionally not selected here. Safetensors or another
+exact serialization may later implement the export codec, but the library is
+not checkpoint authority. No `canonical_weight_content_identity` can be
+issued by Task 1; the later export codec MUST define its canonical bytes,
+numeric representation, and content digest before a checkpoint can be
 accepted.
 
 Equivalent inference weights exported from different distributed layouts or
@@ -155,25 +178,31 @@ CheckpointManifestV1 {
     schema_id: "ocgforge.phase6.checkpoint_manifest.v1"
     checkpoint_schema_version: "ocgforge.phase6.checkpoint_manifest.v1"
     model_architecture_config_identity: exact immutable identity
-    phase5_input_contract_identities: exact logical/encoded/layout IDs
+    phase5_logical_model_input_contract_identity: exact Phase-5 ID
+    phase5_encoded_model_input_contract_identity: exact Phase-5 ID
+    phase5_batch_layout_contract_identity: exact Phase-5 ID
     card_vocabulary_identity: exact model_card_vocabulary.v1 identity
     dataset_identity: exact dataset_semantic_id
     dataset_split_identity: exact Phase-6 split identity
     training_contract_identity: exact BC training contract identity
     parent_checkpoint_identity: optional immutable checkpoint identity
-    canonical_weight_export_contract_identity: exact export contract identity
-    canonical_weight_content_identity: exact content identity
+    canonical_weight_export_codec_identity: versioned future codec identity
+    canonical_weight_content_identity: versioned future content identity
 }
 ```
 
-The checkpoint identity is:
+The checkpoint identity is a future content identity over the canonical
+top-level manifest fields above. Its lexical form is:
 
 ```text
 phase6_checkpoint.v1.<lowercase hexadecimal SHA-256 of canonical manifest bytes>
 ```
 
-The canonical identity input includes the fields above in the listed order,
-using the accepted Phase-3/Phase-5 primitive encoding. It binds at least:
+The field order is frozen now; the identity is materializable only when the
+referenced architecture/configuration, export codec, and weight-content
+sub-identities have valid versioned codecs. The later checkpoint codec uses
+the accepted Phase-3/Phase-5 primitive encoding for these scalar fields. It
+binds at least:
 
 ```text
 checkpoint schema/version
@@ -186,11 +215,12 @@ parent checkpoint identity when applicable
 canonical exported weight-content identity
 ```
 
-The checkpoint manifest MAY reference `training_run_identity`, hardware,
-framework, exporter process, or publication records as provenance sidecars,
-but those values do not automatically enter checkpoint semantic identity. A
-checkpoint provenance reference MUST resolve to an immutable training-run
-manifest; a mutable path is not enough.
+The checkpoint manifest MAY reference a later `training_run_identity`,
+hardware, framework, exporter process, or publication records as provenance
+sidecars, but those values do not automatically enter checkpoint semantic
+identity. A checkpoint provenance reference MUST resolve to an immutable
+training-run manifest whose required sub-identity codecs are accepted; a
+mutable path is not enough.
 
 No mutable alias is an identity:
 
@@ -273,7 +303,7 @@ InferenceResponseV1 {
     scores: finite score[N] in exact source order
     selected_candidate_ordinal: u32
     selected_public_action_key: exact key at that ordinal
-    response_identity: immutable response digest
+    response_identity: immutable selection-envelope digest
 }
 ```
 
@@ -293,6 +323,34 @@ resolve it:
 the routing sidecar. The semantic selection and externally resolvable identity
 remain the existing `public_action_key`; the ordinal is not replay identity,
 public action identity, or a replacement for the key.
+
+`response_identity` deliberately excludes the score vector and score-count
+encoding. It is the identity of the validated selection envelope, not a hash
+of under-specified numeric diagnostics. Its future canonical fields are
+already fully scalar and ordered:
+
+```text
+identity domain:string = ocgforge.phase6.inference_response_identity.v1
+identity schema:string = ocgforge.phase6.inference_response_identity.v1
+request_identity:string
+checkpoint_identity:string
+model_input_identity:string
+ordered_candidate_domain_identity:string
+selected_candidate_ordinal:u32be
+selected_public_action_key:string
+```
+
+Its lexical form is:
+
+```text
+phase6_inference_response.v1.<lowercase hexadecimal SHA-256 of those canonical selection-envelope bytes>
+```
+
+The score vector remains versioned diagnostic evidence under
+`ocgforge.phase6.inference_numeric.v1`. That later numeric contract owns its
+score representation, tolerance, and ambiguity rule; changing diagnostic
+scores without changing this validated selection envelope does not
+retroactively change `response_identity`.
 
 The response selects one supplied public candidate; it never submits response
 bytes or an internal semantic key. The Environment alone resolves the
