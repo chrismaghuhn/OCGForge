@@ -1032,6 +1032,10 @@ void test_batch_layout_identity_and_boundary_evidence() {
                 identity_b == ygo::model::model_input_identity(logical_b, composed_b) &&
                 identity_b == ygo::model::model_input_identity(logical_b, reordered_b),
             "batch composition or order changed a sample model_input identity");
+    std::cout << "P5_G08_SAMPLE_A_IDENTITY=" << identity_a << '\n';
+    std::cout << "P5_G08_SAMPLE_B_IDENTITY=" << identity_b << '\n';
+    std::cout << "P5_G08_LAYOUT_VARIANTS=ragged,padded_W_max,padded_W_greater,"
+                 "composed,reordered\n";
 
     for (const std::uint32_t count : {24U, 25U, 129U}) {
         const auto logical = logical_input(count);
@@ -1093,6 +1097,11 @@ void test_batch_layout_identity_and_boundary_evidence() {
                         std::vector<std::uint64_t>{0, count} &&
                     ragged.value->candidate_rows.size() == count,
                 "boundary W<N did not fail closed without mutation");
+        std::cout << "P5_G10_N=" << count <<
+                  " CANDIDATE_DOMAIN_DIGEST="
+                  << *encoded.public_candidate_domain_digest
+                  << " W_EQ=" << count << " W_GT=" << (count + 1)
+                  << " W_LT=" << (count - 1) << " PASS\n";
     }
 }
 
