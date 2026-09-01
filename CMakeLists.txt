@@ -186,6 +186,8 @@ else()
 endif()
 
 add_library(ygo_model STATIC
+    src/model/card_vocabulary.cpp
+    src/model/encoded_model_input.cpp
     src/model/logical_model_input.cpp
 )
 target_include_directories(ygo_model PUBLIC "${CMAKE_SOURCE_DIR}/include")
@@ -638,6 +640,16 @@ target_include_directories(logical_model_input_test PRIVATE
                            "${CMAKE_SOURCE_DIR}/src/environment")
 target_link_libraries(logical_model_input_test PRIVATE ygo_model)
 add_test(NAME logical_model_input_test COMMAND logical_model_input_test)
+
+add_executable(card_vocabulary_test tests/model/card_vocabulary_test.cpp)
+target_link_libraries(card_vocabulary_test PRIVATE ygo_model)
+add_test(NAME card_vocabulary_test COMMAND card_vocabulary_test)
+
+add_executable(encoded_model_input_test tests/model/encoded_model_input_test.cpp)
+target_include_directories(encoded_model_input_test PRIVATE
+                           "${CMAKE_SOURCE_DIR}/src/environment")
+target_link_libraries(encoded_model_input_test PRIVATE ygo_model)
+add_test(NAME encoded_model_input_test COMMAND encoded_model_input_test)
 
 add_test(NAME logical_model_public_boundary_test
          COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tests/model/logical_model_public_boundary_test.py"
