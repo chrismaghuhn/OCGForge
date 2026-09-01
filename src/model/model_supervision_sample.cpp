@@ -7,10 +7,13 @@
 #include <new>
 #include <string>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include "ygo/environment/public_action_identity.hpp"
 #include "ygo/trajectory/codec.hpp"
+#include "ygo/trajectory/receipt.hpp"
+#include "ygo/trace/sha256.hpp"
 
 namespace ygo::model {
 namespace {
@@ -35,6 +38,12 @@ ModelSupervisionSampleResult failure(
     ModelSupervisionSampleResult result;
     result.error = ModelSupervisionSampleError{code, {}};
     switch (code) {
+    case ModelSupervisionSampleErrorCode::AdmissionBindingFailure:
+        result.error->diagnostic = "admission binding is invalid";
+        break;
+    case ModelSupervisionSampleErrorCode::RecordIndexOutOfRange:
+        result.error->diagnostic = "trajectory record index is out of range";
+        break;
     case ModelSupervisionSampleErrorCode::InvalidDecisionRecord:
         result.error->diagnostic = "trusted decision record is invalid";
         break;
@@ -77,14 +86,71 @@ void validate_sample(const ModelSupervisionSampleV1& sample) {
     }
 }
 
-}  // namespace
+void validate_admitted_envelope(
+    const ygo::trajectory::EpisodeEnvelope& envelope,
+    const ygo::trajectory::VerifiedAdmissionReceipt& admission_receipt,
+    const std::size_t record_index) {
+    if (record_index >= envelope.records.size()) {
+        fail(ModelSupervisionSampleErrorCode::RecordIndexOutOfRange);
+    }
+    try {
+        const auto envelope_bytes =
+            ygo::trajectory::canonical_episode_envelope_bytes(envelope);
+        const auto envelope_sha256 = ygo::trace::sha256_bytes(envelope_bytes);
+        const auto record_id = ygo::trajectory::trajectory_record_id(envelope);
+        const auto gameplay_id =
+            ygo::trajectory::public_gameplay_trajectory_id(envelope);
+        const auto& receipt = admission_receipt.receipt();
+        (void)ygo::trajectory::canonical_admission_receipt_bytes(receipt);
 
-ModelSupervisionSampleResult materialize_model_supervision_sample_v1(
+        std::size_t matches = 0;
+        const ygo::trajectory::AdmissionEntryCommitment* commitment = nullptr;
+        for (const auto& entry : receipt.entries) {
+            if (entry.trajectory_record_id == record_id) {
+                ++matches;
+                commitment = &entry;
+            }
+        }
+        if (matches != 1 || commitment == nullptr ||
+            commitment->public_gameplay_trajectory_id != gameplay_id ||
+            commitment->environment_semantic_id !=
+                envelope.manifest.environment_semantic_id ||
+            commitment->episode_semantic_id !=
+                envelope.manifest.episode_semantic_id ||
+            commitment->episode_envelope_sha256 != envelope_sha256) {
+            fail(ModelSupervisionSampleErrorCode::AdmissionBindingFailure);
+        }
+        const auto closure_kind =
+            std::holds_alternative<ygo::trajectory::TerminalClosure>(
+                envelope.closure)
+                ? std::uint8_t{0}
+                : std::holds_alternative<ygo::trajectory::InterruptedClosure>(
+                      envelope.closure)
+                      ? std::uint8_t{1}
+                      : std::uint8_t{255};
+        if (commitment->closure_kind != closure_kind) {
+            fail(ModelSupervisionSampleErrorCode::AdmissionBindingFailure);
+        }
+    } catch (const SupervisionFailure&) {
+        throw;
+    } catch (...) {
+        fail(ModelSupervisionSampleErrorCode::AdmissionBindingFailure);
+    }
+}
+
+ModelSupervisionSampleResult materialize_record_v1(
     const ygo::trajectory::DecisionRecord& record,
     const LogicalModelInputV1& logical,
     const EncodedModelInputV1& encoded,
     const CardVocabularyV1& vocabulary) noexcept {
     try {
+        try {
+            (void)ygo::trajectory::canonical_collection_decision_record_bytes(
+                record);
+        } catch (...) {
+            fail(ModelSupervisionSampleErrorCode::InvalidDecisionRecord);
+        }
+
         if (!ygo::environment::is_public_action_key(
                 record.selected_public_action_key)) {
             fail(ModelSupervisionSampleErrorCode::InvalidSelectedPublicActionKey);
@@ -108,12 +174,6 @@ ModelSupervisionSampleResult materialize_model_supervision_sample_v1(
         }
         if (selected_ordinal > std::numeric_limits<std::uint32_t>::max()) {
             fail(ModelSupervisionSampleErrorCode::CandidateOrdinalOverflow);
-        }
-
-        try {
-            (void)ygo::trajectory::canonical_public_decision_record_bytes(record);
-        } catch (...) {
-            fail(ModelSupervisionSampleErrorCode::InvalidDecisionRecord);
         }
 
         const auto projected = project_logical_model_input_v1(
@@ -167,6 +227,29 @@ ModelSupervisionSampleResult materialize_model_supervision_sample_v1(
     }
 }
 
+}  // namespace
+
+ModelSupervisionSampleResult materialize_model_supervision_sample_v1(
+    const ygo::trajectory::EpisodeEnvelope& admitted_envelope,
+    const ygo::trajectory::VerifiedAdmissionReceipt& admission_receipt,
+    const std::size_t record_index,
+    const LogicalModelInputV1& logical,
+    const EncodedModelInputV1& encoded,
+    const CardVocabularyV1& vocabulary) noexcept {
+    try {
+        validate_admitted_envelope(admitted_envelope, admission_receipt,
+                                  record_index);
+    } catch (const SupervisionFailure& error) {
+        return failure(error.code());
+    } catch (const std::bad_alloc&) {
+        return failure(ModelSupervisionSampleErrorCode::InternalFailure);
+    } catch (...) {
+        return failure(ModelSupervisionSampleErrorCode::AdmissionBindingFailure);
+    }
+    return materialize_record_v1(admitted_envelope.records[record_index], logical,
+                                 encoded, vocabulary);
+}
+
 std::vector<std::uint8_t> canonical_model_supervision_sample_bytes(
     const ModelSupervisionSampleV1& sample) {
     validate_sample(sample);
@@ -183,6 +266,10 @@ std::vector<std::uint8_t> canonical_model_supervision_sample_bytes(
 std::string_view model_supervision_sample_error_code_name(
     const ModelSupervisionSampleErrorCode code) noexcept {
     switch (code) {
+    case ModelSupervisionSampleErrorCode::AdmissionBindingFailure:
+        return "admission_binding_failure";
+    case ModelSupervisionSampleErrorCode::RecordIndexOutOfRange:
+        return "record_index_out_of_range";
     case ModelSupervisionSampleErrorCode::InvalidDecisionRecord:
         return "invalid_decision_record";
     case ModelSupervisionSampleErrorCode::PublicProjectionFailure:

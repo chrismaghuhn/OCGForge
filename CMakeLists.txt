@@ -659,7 +659,7 @@ target_link_libraries(model_batch_layout_test PRIVATE ygo_model)
 add_test(NAME model_batch_layout_test COMMAND model_batch_layout_test)
 
 add_executable(model_supervision_sample_test tests/model/model_supervision_sample_test.cpp)
-target_link_libraries(model_supervision_sample_test PRIVATE ygo_model)
+target_link_libraries(model_supervision_sample_test PRIVATE ygo_model ygo_policy)
 add_test(NAME model_supervision_sample_test COMMAND model_supervision_sample_test)
 
 add_test(NAME logical_model_public_boundary_test

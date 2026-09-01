@@ -1,249 +1,329 @@
 #include "ygo/model/model_supervision_sample.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <cstdlib>
 #include <iostream>
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
-#include "ygo/environment/public_action_identity.hpp"
-#include "ygo/environment/public_decision.hpp"
+#include "ygo/environment/episodic_environment.hpp"
 #include "ygo/environment/public_environment_observation.hpp"
-#include "ygo/observation/player_observation.hpp"
-#include "ygo/trace/sha256.hpp"
+#include "ygo/policy/production.hpp"
+#include "ygo/policy/runner.hpp"
 #include "ygo/trajectory/codec.hpp"
 #include "ygo/trajectory/types.hpp"
 
 namespace {
 
-using ygo::environment::EnvironmentActionCandidate;
-using ygo::environment::EnvironmentActionKind;
-using ygo::environment::EnvironmentDecisionKind;
-using ygo::environment::PublicActionKeyInput;
-using ygo::environment::PublicChoice;
-using ygo::environment::PublicChoiceKind;
-using ygo::environment::PublicEnvironmentObservation;
 using ygo::model::CardVocabularyV1;
 using ygo::model::EncodedModelInputV1;
 using ygo::model::LogicalModelInputV1;
 using ygo::model::ModelSupervisionSampleErrorCode;
+using ygo::model::ModelSupervisionSampleResult;
 using ygo::model::ModelSupervisionSampleV1;
+using ygo::trajectory::CollectionDispositionKind;
 using ygo::trajectory::DecisionRecord;
-using ygo::trajectory::PublicFrameSnapshot;
+using ygo::trajectory::EpisodeEnvelope;
 using ygo::trajectory::SuccessorKind;
+using ygo::trajectory::TerminalClosure;
 using ygo::trajectory::TransitionClass;
+using ygo::trajectory::VerifiedAdmissionReceipt;
 
 void require(const bool condition, const std::string& message) {
     if (!condition) throw std::runtime_error(message);
 }
 
-struct Fixture final {
-    DecisionRecord record;
+struct AdmittedFixture final {
+    EpisodeEnvelope envelope;
+    VerifiedAdmissionReceipt admission_receipt;
     LogicalModelInputV1 logical;
     EncodedModelInputV1 encoded;
-    std::optional<CardVocabularyV1> vocabulary;
+    CardVocabularyV1 vocabulary;
 };
 
-PublicEnvironmentObservation public_observation(const std::uint64_t decision_index) {
-    ygo::observation::PlayerObservation source;
-    source.perspective_player = 0;
-    source.decision_index = decision_index;
-    source.match_context.perspective_player = 0;
-    source.match_context.own_deck.known = true;
-    source.match_context.opponent_deck.known = false;
-    source.decision_context.kind = "option";
-    source.decision_context.player = 0;
-    return ygo::environment::project_public_observation(source);
+void append_public_passcode(std::vector<std::uint32_t>& output,
+                            const std::optional<std::uint32_t>& passcode) {
+    if (passcode.has_value()) output.push_back(*passcode);
 }
 
-EnvironmentActionCandidate candidate(const std::uint32_t index) {
-    EnvironmentActionCandidate value;
-    value.action_kind = EnvironmentActionKind::Option;
-    value.choice = PublicChoice{PublicChoiceKind::EffectChoice, index, std::nullopt};
-    PublicActionKeyInput key;
-    key.action_kind = "option";
-    key.choice = value.choice;
-    value.public_action_key = ygo::environment::public_action_key(key);
-    return value;
-}
-
-Fixture fixture(const std::uint32_t candidate_count,
-                const std::uint32_t selected_ordinal) {
-    require(candidate_count > 0 && selected_ordinal < candidate_count,
-            "invalid supervision fixture dimensions");
-    Fixture result;
-    const auto observation = public_observation(17);
-    result.record.frame.episode_semantic_id = std::string(64, 'a');
-    result.record.frame.public_observation = observation;
-    result.record.frame.decision_index = observation.decision_index;
-    result.record.frame.acting_player = 0;
-    result.record.frame.public_observation_digest =
-        ygo::environment::public_observation_digest(observation);
-    result.record.frame.request.kind = EnvironmentDecisionKind::Option;
-    result.record.frame.request.player = 0;
-    std::vector<std::string> keys;
-    keys.reserve(candidate_count);
-    for (std::uint32_t index = 0; index < candidate_count; ++index) {
-        result.record.frame.request.candidates.push_back(candidate(index));
-        keys.push_back(result.record.frame.request.candidates.back().public_action_key);
+std::vector<std::uint32_t> public_passcodes(const LogicalModelInputV1& logical) {
+    std::vector<std::uint32_t> result;
+    for (const auto& entity : logical.public_safe_state.entities) {
+        if (entity.card.identity_known) {
+            append_public_passcode(result, entity.card.passcode);
+        }
     }
-    result.record.frame.public_candidate_domain_digest =
-        ygo::environment::public_candidate_domain_digest("option", keys);
-    ygo::environment::PublicSemanticDecisionIdentityInput decision_identity;
-    decision_identity.episode_semantic_id = result.record.frame.episode_semantic_id;
-    decision_identity.decision_index = result.record.frame.decision_index;
-    decision_identity.acting_player = result.record.frame.acting_player;
-    decision_identity.request_kind = "option";
-    decision_identity.public_observation_digest =
-        result.record.frame.public_observation_digest;
-    decision_identity.public_candidate_domain_digest =
-        result.record.frame.public_candidate_domain_digest;
-    result.record.frame.public_semantic_decision_id =
-        ygo::environment::public_semantic_decision_id(decision_identity);
-    result.record.selected_public_action_key = keys[selected_ordinal];
-    result.record.transition_class = TransitionClass::AtomicEngineResponse;
-    result.record.successor.kind = SuccessorKind::Terminal;
-
-    const auto logical_result = ygo::model::project_logical_model_input_v1(
-        result.record.frame.public_observation,
-        result.record.frame.request.candidates);
-    require(logical_result && logical_result.value.has_value(),
-            "supervision logical fixture was rejected");
-    result.logical = std::move(*logical_result.value);
-    const auto vocabulary_result = CardVocabularyV1::from_ascending_passcodes({});
-    require(vocabulary_result && vocabulary_result.value.has_value(),
-            "empty supervision vocabulary was rejected");
-    result.vocabulary = std::move(*vocabulary_result.value);
-    const auto encoded_result =
-        ygo::model::encode_model_input_v1(result.logical, *result.vocabulary);
-    require(encoded_result && encoded_result.value.has_value(),
-            "supervision encoded fixture was rejected");
-    result.encoded = std::move(*encoded_result.value);
+    for (const auto& event : logical.public_safe_state.visible_events) {
+        append_public_passcode(result, event.public_passcode);
+    }
+    const auto append_deck = [&result](const auto& deck) {
+        result.insert(result.end(), deck.main_deck.begin(), deck.main_deck.end());
+        result.insert(result.end(), deck.extra_deck.begin(), deck.extra_deck.end());
+    };
+    append_deck(logical.public_safe_state.match_context.own_deck);
+    append_deck(logical.public_safe_state.match_context.opponent_deck);
+    std::sort(result.begin(), result.end());
+    result.erase(std::unique(result.begin(), result.end()), result.end());
     return result;
 }
 
-ModelSupervisionSampleV1 require_value(
-    const ygo::model::ModelSupervisionSampleResult& result,
-    const std::string& context) {
+AdmittedFixture admitted_fixture() {
+    ygo::policy::PolicyRunnerConfig config;
+    config.environment_config =
+        ygo::environment::CertifiedEnvironmentConfig::canonical();
+    config.episode_spec.contract_id =
+        std::string(ygo::environment::kEpisodicEnvironmentV2ContractId);
+    config.episode_spec.root_seed = 2;
+    config.episode_spec.seat_assignment = ygo::environment::SeatAssignment::Normal;
+    config.episode_spec.starting_player = 0;
+    config.run_control.engine_process_budget = 512;
+    config.run_control.semantic_action_budget = 1;
+    config.run_control.cancellation.reason = "ADMINISTRATIVE_CANCEL";
+    config.run_control.cancellation.source = "model-supervision-sample-test";
+
+    const auto artifact = ygo::policy::make_random_legal_policy_artifact();
+    const std::array<ygo::trajectory::PolicyRole, 2> roles = {
+        ygo::trajectory::PolicyRole::Behavior,
+        ygo::trajectory::PolicyRole::Opponent};
+    const auto assignments = ygo::policy::make_random_legal_participant_assignments(
+        artifact, config.environment_config, config.episode_spec.seat_assignment,
+        config.episode_spec.starting_player, roles);
+    config.policy_provenance.policy_artifacts = {artifact};
+    config.policy_provenance.participant_assignments = assignments;
+    for (std::uint8_t player = 0; player < 2; ++player) {
+        const auto assignment = std::find_if(
+            assignments.begin(), assignments.end(),
+            [player](const auto& value) { return value.player == player; });
+        require(assignment != assignments.end(),
+                "admitted fixture lacks a participant assignment");
+        const auto session = ygo::policy::create_random_legal_policy_session(
+            artifact, *assignment,
+            player == 0 ? 0x1111111111111111ULL : 0x2222222222222222ULL,
+            player == 0 ? "model-test-player0" : "model-test-player1");
+        require(session && session.value.has_value(),
+                "admitted fixture RandomLegal session construction failed");
+        config.sessions[player] = std::move(*session.value);
+    }
+
+    auto created = ygo::policy::PolicyRunner::create(std::move(config));
+    require(created && created.value.has_value(),
+            "admitted fixture policy runner construction failed");
+    auto run = created.value->run();
+    require(run.disposition == ygo::policy::PolicyRunnerDisposition::CleanAdmitted,
+            "admitted fixture did not complete clean admission");
+    require(run.envelope.has_value() && run.admission_receipt.has_value() &&
+                !run.envelope->records.empty(),
+            "admitted fixture lacks an envelope, receipt, or decision record");
+
+    const auto& record = run.envelope->records.front();
+    const auto logical_result = ygo::model::project_logical_model_input_v1(
+        record.frame.public_observation, record.frame.request.candidates);
+    require(logical_result && logical_result.value.has_value(),
+            "admitted fixture logical projection failed");
+    auto logical = std::move(*logical_result.value);
+    const auto vocabulary_result = CardVocabularyV1::from_ascending_passcodes(
+        public_passcodes(logical));
+    require(vocabulary_result && vocabulary_result.value.has_value(),
+            "admitted fixture vocabulary construction failed");
+    auto vocabulary = std::move(*vocabulary_result.value);
+    const auto encoded_result =
+        ygo::model::encode_model_input_v1(logical, vocabulary);
+    require(encoded_result && encoded_result.value.has_value(),
+            "admitted fixture encoded projection failed");
+    auto encoded = std::move(*encoded_result.value);
+    return AdmittedFixture{std::move(*run.envelope), std::move(*run.admission_receipt),
+                           std::move(logical), std::move(encoded),
+                           std::move(vocabulary)};
+}
+
+ModelSupervisionSampleResult materialize(const AdmittedFixture& fixture,
+                                          const std::size_t record_index = 0) {
+    return ygo::model::materialize_model_supervision_sample_v1(
+        fixture.envelope, fixture.admission_receipt, record_index, fixture.logical,
+        fixture.encoded, fixture.vocabulary);
+}
+
+ModelSupervisionSampleV1 require_value(const ModelSupervisionSampleResult& result,
+                                       const std::string& context) {
     require(result && result.value.has_value(), context + " was rejected");
     return *result.value;
 }
 
-void require_rejected(
-    const ygo::model::ModelSupervisionSampleResult& result,
-    const std::string& context) {
+void require_rejected(const ModelSupervisionSampleResult& result,
+                      const std::string& context,
+                      const std::optional<ModelSupervisionSampleErrorCode>& code = {}) {
     require(!result && !result.value.has_value() && result.error.has_value(),
             context + " was accepted");
-}
-
-void test_first_middle_last_and_repeatability() {
-    for (const std::uint32_t count : {24U, 25U, 129U}) {
-        for (const std::uint32_t ordinal : {0U, count / 2U, count - 1U}) {
-            auto value = fixture(count, ordinal);
-            const auto first = require_value(
-                ygo::model::materialize_model_supervision_sample_v1(
-                    value.record, value.logical, value.encoded, *value.vocabulary),
-                "N=" + std::to_string(count) + " ordinal=" +
-                    std::to_string(ordinal));
-            require(first.candidate_ordinal == ordinal &&
-                        first.selected_public_action_key ==
-                            value.record.selected_public_action_key &&
-                        first.source_public_semantic_decision_id ==
-                            value.record.frame.public_semantic_decision_id,
-                    "selected public key did not map to its exact ordinal");
-            require(value.logical.candidate_count() == count &&
-                        value.encoded.candidate_count() == count,
-                    "supervision fixture changed candidate N");
-            const auto second = require_value(
-                ygo::model::materialize_model_supervision_sample_v1(
-                    value.record, value.logical, value.encoded, *value.vocabulary),
-                "repeat materialization");
-            require(ygo::model::canonical_model_supervision_sample_bytes(first) ==
-                        ygo::model::canonical_model_supervision_sample_bytes(second),
-                    "supervision materialization was not deterministic");
-        }
+    if (code.has_value()) {
+        require(result.error->code == *code,
+                context + " returned the wrong rejection code");
     }
 }
 
-void test_missing_duplicate_malformed_and_mismatched_inputs_fail_closed() {
-    auto value = fixture(5, 2);
-    auto missing = value.record;
-    missing.selected_public_action_key = "public_action.v1." + std::string(64, 'f');
-    require_rejected(
-        ygo::model::materialize_model_supervision_sample_v1(
-            missing, value.logical, value.encoded, *value.vocabulary),
-        "missing selected public key");
-
-    auto duplicate = value.record;
-    duplicate.frame.request.candidates[1].public_action_key =
-        duplicate.frame.request.candidates[0].public_action_key;
-    require_rejected(
-        ygo::model::materialize_model_supervision_sample_v1(
-            duplicate, value.logical, value.encoded, *value.vocabulary),
-        "duplicate public candidate key");
-
-    auto malformed = value.record;
-    malformed.selected_public_action_key = "not-a-public-action-key";
-    require_rejected(
-        ygo::model::materialize_model_supervision_sample_v1(
-            malformed, value.logical, value.encoded, *value.vocabulary),
-        "malformed selected public key");
-
-    auto wrong_logical = value.logical;
-    wrong_logical.decision_index++;
-    require_rejected(
-        ygo::model::materialize_model_supervision_sample_v1(
-            value.record, wrong_logical, value.encoded, *value.vocabulary),
-        "mismatched logical model input");
-
-    auto wrong_encoded = value.encoded;
-    wrong_encoded.globals.duel_flags++;
-    require_rejected(
-        ygo::model::materialize_model_supervision_sample_v1(
-            value.record, value.logical, wrong_encoded, *value.vocabulary),
-        "mismatched encoded model input");
+std::size_t selected_ordinal(const DecisionRecord& record) {
+    std::size_t matches = 0;
+    std::size_t ordinal = 0;
+    for (std::size_t index = 0; index < record.frame.request.candidates.size(); ++index) {
+        if (record.frame.request.candidates[index].public_action_key ==
+            record.selected_public_action_key) {
+            ++matches;
+            ordinal = index;
+        }
+    }
+    require(matches == 1, "admitted fixture selection is not unique");
+    return ordinal;
 }
 
-void test_trajectory_and_private_metadata_are_not_changed_or_exported() {
-    auto value = fixture(3, 1);
-    const auto before = ygo::trajectory::canonical_public_decision_record_bytes(
-        value.record);
-    const auto sample = require_value(
-        ygo::model::materialize_model_supervision_sample_v1(
-            value.record, value.logical, value.encoded, *value.vocabulary),
-        "trajectory preservation");
-    const auto after = ygo::trajectory::canonical_public_decision_record_bytes(
-        value.record);
-    require(before == after, "supervision materialization changed trajectory bytes");
-    require(sample.schema_id == ygo::model::kModelSupervisionSampleSchemaId &&
-                sample.model_input_identity.rfind("model_input.v1.", 0) == 0 &&
-                sample.source_public_semantic_decision_id.size() == 64 &&
-                sample.selected_public_action_key.find("public_action.v1.") == 0,
-            "supervision sample contains an invalid or non-public field");
+void test_real_admitted_record_maps_exact_key_and_binds_identity() {
+    auto fixture = admitted_fixture();
+    const auto& record = fixture.envelope.records.front();
+    const auto trajectory_bytes_before =
+        ygo::trajectory::canonical_collection_decision_record_bytes(record);
+    const auto sample = require_value(materialize(fixture), "admitted supervision sample");
+    require(sample.candidate_ordinal == selected_ordinal(record),
+            "admitted selected key mapped to the wrong candidate ordinal");
+    require(sample.selected_public_action_key == record.selected_public_action_key &&
+                sample.source_public_semantic_decision_id ==
+                    record.frame.public_semantic_decision_id,
+            "admitted public selection metadata was not retained exactly");
+    require(sample.model_input_identity ==
+                ygo::model::model_input_identity(fixture.logical, fixture.encoded),
+            "supervision sample did not bind model_input.v1 identity");
+    require(fixture.logical.candidate_count() == record.frame.request.candidates.size() &&
+                fixture.encoded.candidate_count() == record.frame.request.candidates.size(),
+            "admitted model values changed the complete candidate domain");
+    require(ygo::trajectory::canonical_collection_decision_record_bytes(record) ==
+                trajectory_bytes_before,
+            "materialization mutated the trusted trajectory record");
 
-    auto private_metadata_changed = value.record;
-    private_metadata_changed.acting_policy_assignment_id = "private-value-that-is-not-output";
-    private_metadata_changed.policy_rng_decision_provenance.policy_rng_identity =
-        "private-rng-value-that-is-not-output";
-    const auto changed_metadata_sample = require_value(
+    const auto first_bytes =
+        ygo::model::canonical_model_supervision_sample_bytes(sample);
+    const auto second_bytes =
+        ygo::model::canonical_model_supervision_sample_bytes(sample);
+    require(first_bytes == second_bytes, "supervision canonical bytes are not deterministic");
+}
+
+void test_full_attribution_and_rng_validation_are_required() {
+    auto fixture = admitted_fixture();
+    auto bad_assignment = fixture.envelope;
+    bad_assignment.records.front().acting_policy_assignment_id = "malformed-assignment";
+    require_rejected(
         ygo::model::materialize_model_supervision_sample_v1(
-            private_metadata_changed, value.logical, value.encoded, *value.vocabulary),
-        "private metadata shielding");
-    require(ygo::model::canonical_model_supervision_sample_bytes(sample) ==
-                ygo::model::canonical_model_supervision_sample_bytes(changed_metadata_sample),
-            "private trajectory metadata reached the supervision sample");
+            bad_assignment, fixture.admission_receipt, 0, fixture.logical,
+            fixture.encoded, fixture.vocabulary),
+        "malformed policy attribution",
+        ModelSupervisionSampleErrorCode::AdmissionBindingFailure);
+
+    auto bad_rng = fixture.envelope;
+    bad_rng.records.front().policy_rng_decision_provenance.policy_rng_identity =
+        "malformed-rng-identity";
+    require_rejected(
+        ygo::model::materialize_model_supervision_sample_v1(
+            bad_rng, fixture.admission_receipt, 0, fixture.logical,
+            fixture.encoded, fixture.vocabulary),
+        "malformed RNG provenance",
+        ModelSupervisionSampleErrorCode::AdmissionBindingFailure);
+}
+
+void test_non_admitted_envelope_and_record_index_fail_closed() {
+    auto fixture = admitted_fixture();
+    auto quarantined = fixture.envelope;
+    quarantined.manifest.collection_disposition.kind =
+        CollectionDispositionKind::QuarantinedAfterPolicyRejection;
+    quarantined.manifest.collection_disposition.policy_rejections = {
+        ygo::environment::RejectionCode::StaleSubmissionToken};
+    (void)ygo::trajectory::canonical_episode_envelope_bytes(quarantined);
+    require_rejected(
+        ygo::model::materialize_model_supervision_sample_v1(
+            quarantined, fixture.admission_receipt, 0, fixture.logical,
+            fixture.encoded, fixture.vocabulary),
+        "canonical but non-admitted envelope",
+        ModelSupervisionSampleErrorCode::AdmissionBindingFailure);
+
+    require_rejected(materialize(fixture, 1), "out-of-range admitted record index",
+                     ModelSupervisionSampleErrorCode::RecordIndexOutOfRange);
+}
+
+void test_selection_and_model_mismatches_fail_closed() {
+    auto fixture = admitted_fixture();
+    auto missing = fixture.envelope;
+    missing.records.front().selected_public_action_key =
+        "public_action.v1." + std::string(64, 'f');
+    require_rejected(
+        ygo::model::materialize_model_supervision_sample_v1(
+            missing, fixture.admission_receipt, 0, fixture.logical,
+            fixture.encoded, fixture.vocabulary),
+        "missing selected public key");
+
+    auto duplicate = fixture.envelope;
+    duplicate.records.front().frame.request.candidates[1].public_action_key =
+        duplicate.records.front().frame.request.candidates[0].public_action_key;
+    require_rejected(
+        ygo::model::materialize_model_supervision_sample_v1(
+            duplicate, fixture.admission_receipt, 0, fixture.logical,
+            fixture.encoded, fixture.vocabulary),
+        "duplicate public candidate key");
+
+    auto malformed = fixture.envelope;
+    malformed.records.front().selected_public_action_key = "not-a-public-action-key";
+    require_rejected(
+        ygo::model::materialize_model_supervision_sample_v1(
+            malformed, fixture.admission_receipt, 0, fixture.logical,
+            fixture.encoded, fixture.vocabulary),
+        "malformed selected public key");
+
+    auto wrong_logical = fixture.logical;
+    ++wrong_logical.decision_index;
+    require_rejected(
+        ygo::model::materialize_model_supervision_sample_v1(
+            fixture.envelope, fixture.admission_receipt, 0, wrong_logical,
+            fixture.encoded, fixture.vocabulary),
+        "mismatched logical model input",
+        ModelSupervisionSampleErrorCode::ModelInputMismatch);
+
+    auto wrong_encoded = fixture.encoded;
+    ++wrong_encoded.globals.duel_flags;
+    require_rejected(
+        ygo::model::materialize_model_supervision_sample_v1(
+            fixture.envelope, fixture.admission_receipt, 0, fixture.logical,
+            wrong_encoded, fixture.vocabulary),
+        "mismatched encoded model input",
+        ModelSupervisionSampleErrorCode::ModelInputMismatch);
+}
+
+void test_u32_label_boundaries_and_trajectory_schema_stability() {
+    auto fixture = admitted_fixture();
+    const auto base = require_value(materialize(fixture), "boundary base sample");
+    require(base.candidate_ordinal <= std::numeric_limits<std::uint32_t>::max(),
+            "base candidate ordinal is not a u32 label");
+    for (const auto value : {24U, 25U, 129U}) {
+        auto boundary = base;
+        boundary.candidate_ordinal = value - 1;
+        const auto first =
+            ygo::model::canonical_model_supervision_sample_bytes(boundary);
+        const auto second =
+            ygo::model::canonical_model_supervision_sample_bytes(boundary);
+        require(first == second, "u32 boundary label bytes are not deterministic");
+    }
+    require(std::string(ygo::trajectory::kTrustedTrajectoryContractId) ==
+                "ocgforge.trusted_trajectory.v1",
+            "trusted trajectory schema identifier changed");
 }
 
 }  // namespace
 
 int main() {
     try {
-        test_first_middle_last_and_repeatability();
-        test_missing_duplicate_malformed_and_mismatched_inputs_fail_closed();
-        test_trajectory_and_private_metadata_are_not_changed_or_exported();
+        test_real_admitted_record_maps_exact_key_and_binds_identity();
+        test_full_attribution_and_rng_validation_are_required();
+        test_non_admitted_envelope_and_record_index_fail_closed();
+        test_selection_and_model_mismatches_fail_closed();
+        test_u32_label_boundaries_and_trajectory_schema_stability();
         return EXIT_SUCCESS;
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n';
