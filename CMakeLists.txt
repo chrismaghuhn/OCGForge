@@ -190,6 +190,7 @@ add_library(ygo_model STATIC
     src/model/encoded_model_input.cpp
     src/model/logical_model_input.cpp
     src/model/model_batch_layout.cpp
+    src/model/model_supervision_sample.cpp
 )
 target_include_directories(ygo_model PUBLIC "${CMAKE_SOURCE_DIR}/include")
 target_link_libraries(ygo_model PUBLIC ygo_m4)
@@ -218,6 +219,7 @@ if(MSVC)
 else()
     target_compile_options(ygo_trajectory PRIVATE -Wall -Wextra -Wpedantic)
 endif()
+target_link_libraries(ygo_model PUBLIC ygo_trajectory)
 
 add_library(ygo_teacher STATIC
     src/teacher/candidate_evaluator.cpp
@@ -655,6 +657,10 @@ add_test(NAME encoded_model_input_test COMMAND encoded_model_input_test)
 add_executable(model_batch_layout_test tests/model/model_batch_layout_test.cpp)
 target_link_libraries(model_batch_layout_test PRIVATE ygo_model)
 add_test(NAME model_batch_layout_test COMMAND model_batch_layout_test)
+
+add_executable(model_supervision_sample_test tests/model/model_supervision_sample_test.cpp)
+target_link_libraries(model_supervision_sample_test PRIVATE ygo_model)
+add_test(NAME model_supervision_sample_test COMMAND model_supervision_sample_test)
 
 add_test(NAME logical_model_public_boundary_test
          COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tests/model/logical_model_public_boundary_test.py"
