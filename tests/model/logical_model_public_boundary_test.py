@@ -11,6 +11,17 @@ FORBIDDEN_IDENTIFIERS = (
     "EnvironmentContinuationView",
     "raw_message_hash",
     "continuation_id",
+    "ModelBatchLayout",
+    "PyTorch",
+    "JAX",
+    "NumPy",
+    "Trackio",
+    "Accelerate",
+    "neural_network",
+    "Behavior_Cloning",
+    "optimizer",
+    "loss",
+    "RL",
 )
 
 
