@@ -209,6 +209,11 @@ defined in section 4.5. A logical reference retains the exact public locator
 token. It does not claim that a token occurring in different state components
 denotes one physical card or one persistent entity.
 
+At the logical layer, a decoded VisibleEvent retains its already-public
+public_passcode as the exact optional u32 value supplied by
+PublicSafeStateView. The encoded layer maps that value through CardVocabularyV1;
+this logical fact is not a current-entity reference and does not require one.
+
 ### 4.3 Candidate projection
 
 For each public EnvironmentActionCandidate, the logical candidate retains all
@@ -535,7 +540,7 @@ canonical_logical_model_input_bytes is the exact ordered sequence below:
 | 11..n | candidate record | one exact logical public candidate record per candidate, in source order |
 | n+1 | public candidate-domain digest | optional derived lowercase SHA-256 string; absent when no public request kind is available from the observation context |
 
-Each candidate record at order 13..n contains, in this order:
+Each candidate record at order 11..n contains, in this order:
 
 ~~~text
 action_kind:canonical token string
@@ -569,28 +574,27 @@ deterministic integer representation. Its complete top-level order is:
 | 1 | identity schema | string ocgforge.model_encoded_input.v1 |
 | 2 | logical input schema | string ocgforge.model_logical_input.v1 |
 | 3 | card vocabulary identity | string model_card_vocabulary.v1.<digest> |
-| 4 | canonical logical input | length-prefixed canonical_logical_model_input_bytes |
-| 5 | public observation digest | lowercase SHA-256 string |
-| 6 | perspective player | u8 |
-| 7 | decision index | u64 |
-| 8 | public locator token table | u32 count followed by tokens in unsigned UTF-8 byte order |
-| 9 | public observation context kind | optional encoded request-kind code |
-| 10 | public observation context player | optional u8 |
-| 11 | observation context references | u32 count followed by public_locator_ordinal values in public-observation order |
-| 12 | globals payload | exact field order in section 8.3.1 |
-| 13 | zones payload | exact field order in section 8.3.2 |
-| 14 | entities payload | exact field order in section 8.3.3 |
-| 15 | relationships payload | exact field order in section 8.3.4 |
-| 16 | chain payload | exact field order in section 8.3.5 |
-| 17 | visible-events payload | exact field order in section 8.3.6 |
-| 18 | match-context/decks payload | exact field order in section 8.3.7 |
-| 19 | public candidate-domain digest | optional derived lowercase SHA-256 string |
-| 20 | encoded candidate count | u32 |
-| 21..n | candidate feature row | one row per source candidate, in source order, as specified in section 8.3.8 |
+| 4 | public observation digest | lowercase SHA-256 string |
+| 5 | perspective player | u8 |
+| 6 | decision index | u64 |
+| 7 | public locator token table | u32 count followed by tokens in unsigned UTF-8 byte order |
+| 8 | public observation context kind | optional encoded request-kind code |
+| 9 | public observation context player | optional u8 |
+| 10 | observation context references | u32 count followed by public_locator_ordinal values in public-observation order |
+| 11 | globals payload | exact field order in section 8.3.1 |
+| 12 | zones payload | exact field order in section 8.3.2 |
+| 13 | entities payload | exact field order in section 8.3.3 |
+| 14 | relationships payload | exact field order in section 8.3.4 |
+| 15 | chain payload | exact field order in section 8.3.5 |
+| 16 | visible-events payload | exact field order in section 8.3.6 |
+| 17 | match-context/decks payload | exact field order in section 8.3.7 |
+| 18 | public candidate-domain digest | optional derived lowercase SHA-256 string |
+| 19 | encoded candidate count | u32 |
+| 20..n | candidate feature row | one row per source candidate, in source order, as specified in section 8.3.8 |
 | n+1 | routing-key count | u32, equal to candidate count |
 | n+2..m | routing key | one exact public_action_key string per candidate, in source order |
 
-The public observation context kind/player in orders 9 and 10 are copied only
+The public observation context kind/player in orders 8 and 9 are copied only
 from the accepted PublicEnvironmentObservation. A same-frame public request
 kind/player, when available outside the observation context, is an equality
 check and is not a second encoded field. EnvironmentContinuationView is not
@@ -743,7 +747,7 @@ event_index:u64
 kind:u8
 player:optional u8
 entity:optional HistoricalReference
-public_passcode:optional u32
+public_card_vocabulary_id:optional u32
 from_zone:optional u8
 to_zone:optional u8
 count:optional u32
@@ -766,6 +770,13 @@ public_locator_ordinal:u32
 It MUST NOT contain current_entity_ordinal. A historical event locator is
 never rebound to the current entity occupying the same locator. The internal
 engine_step_index remains omitted, as required by public_safe_state.v1.
+
+The logical VisibleEvent public_passcode is transformed as follows in this
+encoded record: absent public_passcode stays absent; a present already-public
+passcode is mapped to its exact immutable CardVocabularyV1 ID, which MUST be
+at least 2. A present passcode missing from that vocabulary fails closed. No
+current-entity resolution is required for this historical card value, and no
+database lookup may fill an absent passcode.
 
 ### 8.3.7 Match-context and deck payload
 

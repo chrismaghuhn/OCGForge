@@ -104,8 +104,8 @@ not the scope of a later implementation head. Verify all of the following:
 
 - TASK1_FREEZE_BASE is
   c2fe44a1eb84d88a9b10c6c906eec46e216e4335;
-- TASK1_FREEZE_HEAD is
-  5b8c8c49279ab2767f26470ea2f4de123175562b;
+- TASK1_FREEZE_HEAD is supplied by externally recorded accepted final Task-1
+  acceptance evidence; it is not hard-coded in this contract or plan;
 - the owning namespace is ygo::model;
 - the only accepted semantic source is the public observation plus its complete
   ordered public candidate vector;
@@ -113,7 +113,8 @@ not the scope of a later implementation head. Verify all of the following:
 - ADR-0006 is indexed exactly once and marked as the Task 1 freeze;
 - no implementation or model/training dependency is present at the historical
   freeze; and
-- BASE to TASK1_FREEZE_HEAD changes exactly the four Task-1 documents:
+- TASK1_FREEZE_BASE to the externally recorded TASK1_FREEZE_HEAD changes
+  exactly the four Task-1 documents:
   ADR-0006, the ADR index, P5_MODEL_CONTRACT.md, and P5_ACCEPTANCE_PLAN.md.
 
 The gate must record the exact base and head. It must not interpret the presence
@@ -207,6 +208,11 @@ Use an explicit immutable vocabulary manifest and known-answer vectors. Prove:
 - the reserved IDs are 0 for physical PAD and 1 for a real public
   unknown/redacted identity;
 - a known public passcode absent from the manifest fails closed;
+- a present VisibleEvent public_passcode maps to an exact
+  public_card_vocabulary_id at least 2 even when no current entity matches its
+  historical locator;
+- an absent VisibleEvent public_passcode remains an absent vocabulary ID and
+  never triggers a catalog lookup;
 - an unknown/redacted entity never triggers a catalog lookup;
 - a static unknown opponent deck remains unknown/empty;
 - an unsorted, duplicate, or dynamically extended vocabulary is rejected, not
@@ -217,13 +223,17 @@ The test may use catalog/database data only for already-public passcodes.
 ### P5-G06 — deterministic integer and categorical encoding
 
 Use fixed vectors for every encoded public request/action category, public choice
-kind, reference kind, continuation kind, continuation operation, optional
-presence bit, signed amount, and public-safe enum value. Assert:
+kind, reference kind, candidate continuation operation, optional presence bit,
+signed amount, public-safe enum value, and visible-event card vocabulary ID.
+Assert:
 
 - codes match the frozen tables;
 - integer values are exact;
 - signed values preserve their two's-complement bits;
 - optional absence is distinct from a present zero;
+- an encoded VisibleEvent carries public_card_vocabulary_id instead of a raw
+  public_passcode; absent, known, and vocabulary-missing passcodes follow the
+  rules in P5_MODEL_CONTRACT.md;
 - no floating-point field or normalization is needed;
 - unknown codes fail closed.
 
