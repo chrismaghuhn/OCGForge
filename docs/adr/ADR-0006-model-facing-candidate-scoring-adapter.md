@@ -92,8 +92,12 @@ labels or physical rows, but it is never a replay identity or a substitute for
 
 ### 4. Public-only state and candidate inputs
 
-The model layer accepts only the already-public observation and public request
-values. A `PublicSafeState` is decoded only by the existing
+The model layer accepts exactly the already-public observation and its complete
+ordered public candidate vector. Request kind/player values may be copied only
+from the observation's already-public decision context or used as an equality
+check against that context when available. `EnvironmentContinuationView` and
+any other request-only state are not independent Phase 5 model inputs. A
+`PublicSafeState` is decoded only by the existing
 `decode_canonical_public_safe_state` path. The model layer never accepts or
 constructs a `PlayerObservation`, queries `CoreHost`, reads an internal
 `semantic_key`, consumes response bytes or a `SubmissionToken`, or accesses a
@@ -102,6 +106,12 @@ private/physical locator.
 An already-public card passcode may be mapped through the owned vocabulary.
 Database/catalog lookup is forbidden from filling an unknown or redacted card,
 revealing a hidden deck entry, or reconstructing any omitted property.
+
+Public locator references use a frame-local deterministic ordinal over exact
+public locator tokens. The ordinal means token equality only. Candidate, chain,
+and relationship references may additionally carry a proven current-entity
+ordinal; accumulated visible-event references never do, even when an old token
+matches the locator of a current entity in the same slot.
 
 ### 5. Vocabulary ownership and versioning
 

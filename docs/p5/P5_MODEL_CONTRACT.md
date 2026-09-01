@@ -22,10 +22,12 @@ PublicEnvironmentObservation
 + complete ordered EnvironmentActionCandidate[]
 ~~~
 
-The public request kind, acting player, and optional public continuation view
-are request metadata belonging to that same already-public V2 frame. They are
-not a second authority and may not be reconstructed from private or internal
-values.
+The public request kind and acting player are used only when they are already
+present in the observation's public decision context, or as equality checks
+against that context when the surrounding public frame provides them. They are
+not a second authority. EnvironmentContinuationView and any other request-only
+state are not independent Phase 5 model inputs and may not be reconstructed
+from private or internal values.
 
 Normative terms such as MUST, MUST NOT, SHOULD, and MAY have their usual
 contract meaning. A representation that cannot satisfy a MUST fails closed for
@@ -71,7 +73,7 @@ environment:
 | Allowed value | Use |
 | --- | --- |
 | PublicEnvironmentObservation | public perspective, decision index, safe-state bytes, and safe decision context |
-| public request metadata | public request kind, acting player, and public continuation view |
+| public observation context | already-public request kind/player and safe referenced locators; request metadata from elsewhere is an integrity check only |
 | complete ordered EnvironmentActionCandidate[] | every current legal public candidate, including its public descriptors and key |
 | explicit immutable CardVocabularyV1 | deterministic encoding of already-public passcodes |
 | accepted trusted_trajectory.v1 public frame/record | only for a later derived supervision sample |
@@ -93,6 +95,7 @@ following as model input or model identity material:
 | exact engine response bytes or response hashes | internal control/audit material, not public model input |
 | SubmissionToken | live freshness/control-plane value, not semantic input |
 | internal decision/continuation IDs, raw message hashes, or engine-step identity | internal protocol/audit values |
+| EnvironmentContinuationView or other request-only state | not part of the frozen P5 input boundary |
 | private, physical, persistent, or hidden-card locators | may preserve identity across a knowledge-destroying transition |
 | hidden card passcodes, hidden deck entries, inferred properties, beliefs, or archetypes | information leak or speculative reconstruction |
 | candidate-vector position as replay/action identity | position is only a local derived coordinate |
@@ -155,10 +158,10 @@ values. It is conceptually:
 LogicalModelInputV1 {
     schema_id: "ocgforge.model_logical_input.v1"
     public_observation_digest: lowercase SHA-256 string
-    public_candidate_domain_digest: lowercase SHA-256 string
+    public_candidate_domain_digest: optional lowercase SHA-256 string
     perspective_player: u8
     decision_index: u64
-    public_request: LogicalPublicRequestV1
+    public_decision_context: LogicalPublicDecisionContextV1
     public_safe_state: LogicalPublicSafeStateV1
     candidate_routing: CandidateRoutingMetadata[N]
     candidate_features: LogicalCandidateV1[N]
@@ -171,10 +174,15 @@ feature. candidate_features[i] contains the public descriptor for that same
 candidate. The two vectors MUST have equal length and equal source order.
 
 public_observation_digest is recomputed from the accepted public observation
-bytes. public_candidate_domain_digest is recomputed from the public request
-kind and the ordered public-key vector under
-ocgforge.public_candidate_domain.v1. A mismatching caller-supplied value fails
-closed.
+bytes. When the observation context contains a request kind, the
+public_candidate_domain_digest is recomputed from that kind and the ordered
+public-key vector under ocgforge.public_candidate_domain.v1. A mismatching
+caller-supplied value fails closed. A request kind/player supplied by an
+associated public frame is an equality check against the observation context;
+it does not extend the model input boundary or add request state. If the
+observation context does not contain a request kind, no candidate-domain
+digest is fabricated or accepted as an independent input; the complete key
+vector remains part of the model representation and identity.
 
 ### 4.2 Public-safe state projection
 
@@ -195,6 +203,11 @@ There are no fixed entity, relationship, event, deck, or candidate limits in
 the logical contract. Unknown values rejected by the public-safe decoder are
 not assigned a model code. An unknown/redacted card remains an unknown/redacted
 card.
+
+The logical representation includes the frame-local public locator token table
+defined in section 4.5. A logical reference retains the exact public locator
+token. It does not claim that a token occurring in different state components
+denotes one physical card or one persistent entity.
 
 ### 4.3 Candidate projection
 
@@ -218,32 +231,46 @@ public fields:
 An absent optional value is not replaced with zero, an unknown category, or a
 default. Its presence remains explicit.
 
-### 4.4 Public continuation view
+### 4.4 No independent continuation input
 
-When the V2 request carries a public EnvironmentContinuationView, the logical
-representation retains every field and its source order:
+P5-v1 does not consume EnvironmentContinuationView, continuation_kind,
+selected_indices, remaining_indices, assigned_amounts, or continuation
+cardinality/mask fields as an independent model input. A continuation action
+is represented only through the public EnvironmentActionCandidate fields
+already present in the frozen input vector, including action_kind,
+source_index, amount, continuation_operation, submits_engine_response, and
+public_action_key. The complete ordered candidate vector remains the sole
+representation of the current legal choice domain.
 
-~~~text
-continuation_kind: canonical lower-case token
-continuation_step: u32
-selected_indices: ordered u32 vector
-remaining_indices: ordered u32 vector
-assigned_amounts: ordered u16 vector
-min_count: u32
-max_count: u32
-target_sum: u32
-required_amount: u32
-available_mask: u64
-selected_mask: u64
-continuation_steps: u32
-exact_sum: bool
-greater_sum: bool
-can_finish: bool
-can_cancel: bool
-~~~
+### 4.5 Public locator token table
 
-The public view contains no internal continuation ID. A continuation vector is
-never flattened into a capped action list.
+The logical representation retains each already-public locator token only as a
+current-frame public reference. It derives one frame-local
+public_locator_ordinal table from the exact UTF-8 token values appearing in:
+
+1. public observation decision-context references;
+2. current public-safe entity locators;
+3. relationship source and target locators;
+4. chain source and target locators;
+5. historical visible-event entity and target locators; and
+6. public candidate source and target locators.
+
+The unique non-empty tokens are sorted by unsigned lexicographic UTF-8 byte
+order and assigned zero-based ordinals. Equal tokens receive the same ordinal;
+the ordinal means only token equality. It never means that two occurrences
+refer to the same card, physical object, or persistent entity.
+
+Current candidate, chain, and relationship references MAY additionally carry a
+current_entity_ordinal only when the public projection proves that the token
+matches exactly one current PublicSafeStateView entity. If that proof is not
+available, the current ordinal is absent and the public_locator_ordinal is
+still retained. A source/target zone, sequence, or token shape is not proof.
+
+Visible-event references are historical. They carry only their
+public_locator_ordinal and MUST never receive a current_entity_ordinal, even
+when the historical token happens to equal the locator of the entity currently
+occupying that slot. This preserves event history without rebinding an old
+locator to a new card.
 
 ## 5. Public-safe decoding rule
 
@@ -358,20 +385,10 @@ An unknown or invalid source code is a representation error. It is not mapped
 to unknown unless the owning public contract explicitly represents the value
 as unknown.
 
-### 6.4 Continuation codes
+### 6.4 Candidate continuation-operation codes
 
-The public continuation token tables are fixed:
-
-| Code | continuation_kind token |
-| ---: | --- |
-| 0 | absent |
-| 1 | unordered |
-| 2 | tribute |
-| 3 | sum |
-| 4 | zone |
-| 5 | counter |
-| 6 | ordering |
-| 7 | announce_mask |
+The only continuation-related value encoded by P5-v1 is the public candidate
+field continuation_operation. Its fixed codes are:
 
 | Code | continuation_operation token |
 | ---: | --- |
@@ -384,35 +401,39 @@ The public continuation token tables are fixed:
 
 An unknown non-empty token fails closed. The public spelling amount is
 intentional and remains distinct from the action-kind token assign_amount.
+EnvironmentContinuationView and its continuation_kind/selection-mask fields
+have no P5-v1 model code.
 
 ### 6.5 Frame-local public references
 
-The logical representation retains a public locator for validation and
-current-frame interpretation. The encoded feature payload uses a frame-local
-entity ordinal instead of a locator string:
-
-~~~text
-entity_ordinal = zero-based position in the canonical decoded
-                 PublicSafeStateView.entities() vector
-~~~
-
-For a present source/target/reference:
+The encoded representation contains the sorted frame-local public locator
+token table defined in section 4.5. For every current public reference, the
+encoded feature payload carries:
 
 ~~~text
 reference presence:u8 = 1
-reference kind:u8
-entity ordinal:u32
+public_locator_ordinal:u32
+current_entity_ordinal:optional u32
 ~~~
 
-For an absent reference, only presence:u8 = 0 is encoded. A present public
-locator that does not resolve to exactly one decoded public/redacted entity
-fails closed. No fallback to a physical ID, source index, string hash, or
-candidate ordinal is permitted. The frame-local ordinal is not persisted
-across a knowledge-destroying transition and is not action/replay identity.
+For an absent optional reference, only presence:u8 = 0 is encoded. The
+public_locator_ordinal means only exact equality of the already-public locator
+token. It is not a physical-card ID, persistent identity, or replay identity.
 
-Relationships, chain references, visible-event references, and candidate
-references use the same current decoded entity table. Their public source
-ordering remains the ordering specified by public_safe_state.v1.
+current_entity_ordinal is allowed only for a candidate, chain, or relationship
+reference when the public projection proves that its token matches exactly one
+current PublicSafeStateView entity. A match may not be inferred from a zone,
+sequence, slot shape, or token text. If exact current resolution is not proven,
+the optional current ordinal is absent and the public locator ordinal remains.
+
+Historical VisibleEvent references are different: their entity and target
+references carry only public_locator_ordinal. They MUST never carry a
+current_entity_ordinal, even if the historical token equals the locator of the
+entity currently occupying that slot. Historical event locators are never
+rebound to current entities.
+
+The frame-local table and all derived ordinals are discarded at the frame
+boundary and are never carried across a knowledge-destroying transition.
 
 ## 7. Card vocabulary
 
@@ -505,16 +526,14 @@ canonical_logical_model_input_bytes is the exact ordered sequence below:
 | 2 | public observation digest | lowercase SHA-256 string, recomputed from the public observation |
 | 3 | perspective player | u8 |
 | 4 | decision index | u64 |
-| 5 | public request kind | canonical lower-case token string |
-| 6 | public request player | u8 |
-| 7 | public observation context kind | optional canonical token string |
-| 8 | public observation context player | optional u8 |
-| 9 | referenced public entities | u32 count and current public locator strings in public-observation canonical order |
-| 10 | safe-state | length-prefixed bytes produced by the existing public_safe_state.v1 canonical encoder after the existing decoder |
-| 11 | continuation | optional exact public continuation record, with every field in section 4.4 order |
-| 12 | candidate count | u32 |
-| 13..n | candidate record | one exact logical public candidate record per candidate, in source order |
-| n+1 | public candidate-domain digest | derived lowercase SHA-256 string |
+| 5 | public observation context kind | optional canonical token string copied only from the public observation context |
+| 6 | public observation context player | optional u8 copied only from the public observation context |
+| 7 | referenced public entities | u32 count and current public locator strings in public-observation canonical order |
+| 8 | public locator token table | u32 count and unique public locator strings sorted by unsigned UTF-8 byte order |
+| 9 | safe-state | length-prefixed bytes produced by the existing public_safe_state.v1 canonical encoder after the existing decoder |
+| 10 | candidate count | u32 |
+| 11..n | candidate record | one exact logical public candidate record per candidate, in source order |
+| n+1 | public candidate-domain digest | optional derived lowercase SHA-256 string; absent when no public request kind is available from the observation context |
 
 Each candidate record at order 13..n contains, in this order:
 
@@ -533,14 +552,16 @@ submits_engine_response:bool
 ~~~
 
 The logical candidate record mirrors the already-public V2 candidate fields; it
-does not import internal candidate fields. A missing continuation record is
-encoded as optional absence. Empty candidate domains are invalid public model
-inputs and fail closed before this codec is used.
+does not import internal candidate fields. EnvironmentContinuationView is not
+encoded. If an associated public request supplies a kind or player, it is used
+only to check equality with the observation context and is not an additional
+logical field. Empty candidate domains are invalid public model inputs and
+fail closed before this codec is used.
 
 ### 8.3 Canonical encoded input bytes
 
 canonical_encoded_model_input_bytes binds both the logical source and its
-deterministic integer representation:
+deterministic integer representation. Its complete top-level order is:
 
 | Order | Field | Encoding |
 | ---: | --- | --- |
@@ -549,18 +570,270 @@ deterministic integer representation:
 | 2 | logical input schema | string ocgforge.model_logical_input.v1 |
 | 3 | card vocabulary identity | string model_card_vocabulary.v1.<digest> |
 | 4 | canonical logical input | length-prefixed canonical_logical_model_input_bytes |
-| 5 | encoded scalar/state payload | exact encoded fields in source component order |
-| 6 | encoded candidate count | u32 |
-| 7..n | candidate feature row | one encoded feature row per source candidate, in source order |
+| 5 | public observation digest | lowercase SHA-256 string |
+| 6 | perspective player | u8 |
+| 7 | decision index | u64 |
+| 8 | public locator token table | u32 count followed by tokens in unsigned UTF-8 byte order |
+| 9 | public observation context kind | optional encoded request-kind code |
+| 10 | public observation context player | optional u8 |
+| 11 | observation context references | u32 count followed by public_locator_ordinal values in public-observation order |
+| 12 | globals payload | exact field order in section 8.3.1 |
+| 13 | zones payload | exact field order in section 8.3.2 |
+| 14 | entities payload | exact field order in section 8.3.3 |
+| 15 | relationships payload | exact field order in section 8.3.4 |
+| 16 | chain payload | exact field order in section 8.3.5 |
+| 17 | visible-events payload | exact field order in section 8.3.6 |
+| 18 | match-context/decks payload | exact field order in section 8.3.7 |
+| 19 | public candidate-domain digest | optional derived lowercase SHA-256 string |
+| 20 | encoded candidate count | u32 |
+| 21..n | candidate feature row | one row per source candidate, in source order, as specified in section 8.3.8 |
 | n+1 | routing-key count | u32, equal to candidate count |
 | n+2..m | routing key | one exact public_action_key string per candidate, in source order |
 
+The public observation context kind/player in orders 9 and 10 are copied only
+from the accepted PublicEnvironmentObservation. A same-frame public request
+kind/player, when available outside the observation context, is an equality
+check and is not a second encoded field. EnvironmentContinuationView is not
+encoded anywhere.
+
 The encoded scalar/state payload contains only the integer, categorical, card
-ID, presence-mask, and frame-local-reference values defined by sections 4–7.
-The routing-key vector is a parallel selection sidecar and is not made
-available to a learned feature extractor as a string feature. It is included
-in canonical bytes so that the model-input identity cannot detach a score row
-from the candidate it is allowed to select.
+ID, presence-mask, and frame-local-reference values defined below. The routing-
+key vector is a parallel selection sidecar and is not made available to a
+learned feature extractor as a string feature. It is included in canonical
+bytes so that the model-input identity cannot detach a score row from the
+candidate it is allowed to select.
+
+### 8.3.1 Globals payload
+
+The globals payload is written in this exact order:
+
+~~~text
+duel_flags:u64
+life_points:u32 count followed by ordered u32 values
+player_to_act:optional u8
+turn_player:optional u8
+turn_count:optional u32
+phase:optional u32
+chain_length:u32
+winner:optional u8
+win_reason:optional u8
+terminal:bool
+~~~
+
+These are the decoded public-safe globals. No engine-step, raw-message, or
+internal observation field is added.
+
+### 8.3.2 Zones payload
+
+Write zone count as u32, then every decoded zone in the existing
+public_safe_state.v1 canonical order. Each zone record is:
+
+~~~text
+player:u8
+kind:u8
+total_count:u32
+public_identity_count:u32
+hidden_count:u32
+player_observable_order:bool
+~~~
+
+No zone record is filtered or globally capped.
+
+### 8.3.3 Entities and CardProperties payload
+
+Write entity count as u32, then every current decoded entity in its existing
+canonical locator order. The entity feature row is:
+
+~~~text
+public_locator_ordinal:u32
+identity_known:bool
+card_vocabulary_id:u32
+owner:optional u8
+controller:optional u8
+zone:u8
+sequence:optional u32
+overlay_sequence:optional u32
+position:u8
+face_up:bool
+face_down:bool
+printed:optional CardProperties
+current:optional CardProperties
+~~~
+
+The row position is the current_entity_ordinal for this decoded entity; it is
+frame-local and is not serialized as a persistent identity. A known public
+entity has a vocabulary ID of at least 2. An unknown/redacted real entity has
+identity_known=false, no identity-derived properties, and vocabulary ID 1.
+ID 0 is reserved for masked physical padding only.
+
+Each optional CardProperties value is written as a presence byte followed by
+these fields in exactly this order:
+
+~~~text
+type:optional u32
+attribute:optional u32
+race:optional u64
+attack:optional signed i32 as two's-complement u32 bits
+defense:optional signed i32 as two's-complement u32 bits
+base_attack:optional signed i32 as two's-complement u32 bits
+base_defense:optional signed i32 as two's-complement u32 bits
+level:optional u32
+rank:optional u32
+link_rating:optional u32
+link_markers:u32 count followed by u8 codes in public_safe_state.v1 order
+left_scale:optional u32
+right_scale:optional u32
+status_flags:optional u32
+counters:u32 count followed by type:u32,count:u32 pairs in public_safe_state.v1 order
+~~~
+
+The existing public-safe decoder has already enforced that a redacted entity
+has no passcode, printed properties, or current identity properties. P5 does
+not fill them from a catalog.
+
+### 8.3.4 Relationships payload
+
+Write relationship count as u32, then every relationship in the existing
+canonical relationship order:
+
+~~~text
+kind:u8
+source:CurrentReference
+target:CurrentReference
+~~~
+
+CurrentReference is written as an optional reference. When present its exact
+order is:
+
+~~~text
+presence:u8 = 1
+public_locator_ordinal:u32
+current_entity_ordinal:optional u32
+~~~
+
+The optional current ordinal is present only when the public projection proves
+an exact match to one current decoded entity. It is absent rather than guessed
+when proof is unavailable. A relationship never uses a physical or persistent
+identity.
+
+### 8.3.5 Chain-links payload
+
+Write chain length as u32, link count as u32, then every link in authoritative
+chain-link order:
+
+~~~text
+index:u32
+activating_player:optional u8
+source:optional CurrentReference
+activation_zone:optional u8
+effect_description:optional u64
+targets:u32 count followed by CurrentReference values
+~~~
+
+The same exact-current-resolution rule applies to source and target
+references. Chain order and target order are not sorted by P5.
+
+### 8.3.6 Visible-events payload
+
+Write visible-event count as u32, then every event in the existing canonical
+event-index order:
+
+~~~text
+event_index:u64
+kind:u8
+player:optional u8
+entity:optional HistoricalReference
+public_passcode:optional u32
+from_zone:optional u8
+to_zone:optional u8
+count:optional u32
+amount:optional signed i32 as two's-complement u32 bits
+counter_type:optional u32
+phase:optional u32
+winner:optional u8
+win_reason:optional u8
+effect_description:optional u64
+targets:u32 count followed by HistoricalReference values
+~~~
+
+HistoricalReference contains only:
+
+~~~text
+presence:u8 = 1
+public_locator_ordinal:u32
+~~~
+
+It MUST NOT contain current_entity_ordinal. A historical event locator is
+never rebound to the current entity occupying the same locator. The internal
+engine_step_index remains omitted, as required by public_safe_state.v1.
+
+### 8.3.7 Match-context and deck payload
+
+Write match context in this exact order:
+
+~~~text
+perspective_player:u8
+duel_flags:u64
+own_decklist_known:bool
+opponent_decklist_known:bool
+own_deck
+opponent_deck
+~~~
+
+Each deck is written as:
+
+~~~text
+known:bool
+main_deck:u32 count followed by vocabulary ID:u32 values in public-safe order
+extra_deck:u32 count followed by vocabulary ID:u32 values in public-safe order
+~~~
+
+An unknown deck MUST have zero main/extra counts. A known public passcode is
+mapped through the selected immutable vocabulary; a hidden or absent passcode
+is never reconstructed.
+
+### 8.3.8 Candidate feature rows
+
+Write each candidate row in the exact source vector order. Each row is:
+
+~~~text
+action_kind:u16
+choice:optional {kind:u8, value:u64, response_index:optional u32}
+source_reference:optional {kind:u8, public_locator_ordinal:u32, current_entity_ordinal:optional u32}
+target_reference:optional {kind:u8, public_locator_ordinal:u32, current_entity_ordinal:optional u32}
+phase:optional u32
+position:optional u8
+source_index:optional u32
+amount:optional signed i32 as two's-complement u32 bits
+continuation_operation:u8
+submits_engine_response:bool
+~~~
+
+The candidate row does not contain public_action_key. The key is written only
+in the routing sidecar after all rows. Source/target current ordinals follow
+the exact-current-resolution rule from section 6.5; the public locator ordinal
+is always the token-equality reference. A candidate operation token is encoded
+by the table in section 6.4. No continuation view or hidden response data is
+added.
+
+### 8.3.9 Routing-key sidecar
+
+After all candidate feature rows, write the routing sidecar in this exact
+order:
+
+~~~text
+routing_key_count:u32
+public_action_key[0]:string
+public_action_key[1]:string
+...
+public_action_key[N-1]:string
+~~~
+
+The count MUST equal the source candidate count. Each key is the exact
+public_action_key at the corresponding source position; keys are not sorted,
+hashed into a feature, or replaced with a candidate ordinal. Every key MUST be
+valid and unique under ocgforge.public_action_identity.v1. A sidecar mismatch
+rejects the complete encoded input.
 
 ### 8.4 Model-input identity
 
@@ -629,6 +902,7 @@ relationship_offsets
 chain_link_offsets
 visible_event_offsets
 decision_context_reference_offsets
+public_locator_token_offsets
 own_deck_passcode_offsets
 opponent_deck_passcode_offsets
 ~~~
@@ -780,7 +1054,7 @@ following conditions:
 unknown or incompatible Phase 5 contract ID
 public observation decoder failure
 public-safe decoder failure or non-canonical safe-state bytes
-missing or inconsistent public request metadata
+missing or inconsistent public observation context or same-frame request integrity check
 empty, duplicate, malformed, or reordered candidate domain
 public observation/candidate reference that cannot resolve safely
 candidate count mismatch at any layer
