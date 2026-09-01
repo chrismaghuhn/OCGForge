@@ -704,10 +704,42 @@ void test_typed_public_safe_state_round_trip() {
             "internal engine-step metadata changed public safe-state bytes");
 }
 
+void test_outcome_reason_is_an_exact_optional_u8() {
+    auto source = source_observation();
+    source.globals.winner = 1;
+    source.globals.win_reason = 7;
+    source.visible_events.front().winner = 0;
+    source.visible_events.front().win_reason = 9;
+    const auto bytes = ygo::environment::canonical_public_safe_state_bytes(source);
+    const auto decoded = ygo::environment::decode_canonical_public_safe_state(bytes);
+    require(decoded && decoded.value.has_value(),
+            "non-player outcome u8 values did not decode");
+    require(decoded.value->globals().winner == source.globals.winner &&
+                decoded.value->globals().win_reason == source.globals.win_reason &&
+                decoded.value->visible_events().front().winner ==
+                    source.visible_events.front().winner &&
+                decoded.value->visible_events().front().win_reason ==
+                    source.visible_events.front().win_reason,
+            "safe-state decoder changed exact outcome u8 values");
+    require(ygo::environment::canonical_public_safe_state_bytes(*decoded.value) == bytes,
+            "safe-state outcome u8 decode/re-encode changed canonical bytes");
+
+    auto invalid_player = source;
+    invalid_player.globals.player_to_act = 2;
+    bool rejected = false;
+    try {
+        (void)ygo::environment::canonical_public_safe_state_bytes(invalid_player);
+    } catch (const std::exception&) {
+        rejected = true;
+    }
+    require(rejected, "actual player field validation was weakened");
+}
+
 int run() {
     test_public_header_has_no_private_event_step_or_observation_include();
     test_decoder_enum_mappings_are_explicit();
     test_typed_public_safe_state_round_trip();
+    test_outcome_reason_is_an_exact_optional_u8();
     test_strict_negative_inputs();
     return EXIT_SUCCESS;
 }

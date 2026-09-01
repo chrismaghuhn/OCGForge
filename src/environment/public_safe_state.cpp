@@ -929,10 +929,10 @@ bool decode_visible_event_kind(const std::uint8_t code, VisibleEventKind& value)
     }
 }
 
-bool read_optional_player(Cursor& cursor, std::optional<std::uint8_t>& value) noexcept {
+bool read_optional_u8(Cursor& cursor, std::optional<std::uint8_t>& value) noexcept {
     std::uint8_t decoded = 0;
     bool present = false;
-    if (!cursor.optional_u8(decoded, present) || (present && decoded > 1)) {
+    if (!cursor.optional_u8(decoded, present)) {
         return false;
     }
     if (present) {
@@ -941,6 +941,13 @@ bool read_optional_player(Cursor& cursor, std::optional<std::uint8_t>& value) no
         value.reset();
     }
     return true;
+}
+
+bool read_optional_player(Cursor& cursor, std::optional<std::uint8_t>& value) noexcept {
+    if (!read_optional_u8(cursor, value)) {
+        return false;
+    }
+    return !value.has_value() || *value <= 1;
 }
 
 bool read_optional_u32(Cursor& cursor, std::optional<std::uint32_t>& value) noexcept {
@@ -1156,7 +1163,7 @@ bool read_safe_state(const std::vector<std::uint8_t>& bytes, ParsedSafeState& ou
         !read_optional_u32(cursor, output.globals.phase) ||
         !cursor.u32(output.globals.chain_length) ||
         !read_optional_player(cursor, output.globals.winner) ||
-        !read_optional_player(cursor, output.globals.win_reason) ||
+        !read_optional_u8(cursor, output.globals.win_reason) ||
         !cursor.boolean(output.globals.terminal)) {
         return false;
     }
@@ -1295,7 +1302,7 @@ bool read_safe_state(const std::vector<std::uint8_t>& bytes, ParsedSafeState& ou
             !read_optional_u32(cursor, event.counter_type) ||
             !read_optional_u32(cursor, event.phase) ||
             !read_optional_player(cursor, event.winner) ||
-            !read_optional_player(cursor, event.win_reason) ||
+            !read_optional_u8(cursor, event.win_reason) ||
             !read_optional_u64(cursor, event.effect_description) ||
             !read_sorted_targets(cursor, event.targets)) {
             return false;
