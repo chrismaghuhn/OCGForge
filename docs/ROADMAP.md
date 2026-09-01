@@ -261,13 +261,41 @@ Behavior Cloning, neural training, RL, self-play, or checkpoint training.
 Accepted evidence: `H_exec=3c99e86c487361fc4e0f5f12678b4867e59232b7`,
 `H_evidence=da3376fc2ab645377f9de2dd9fd6195c1aa8c081`.
 
-## Phase 6 — Next milestone
+## Phase 6 — Behavior Cloning baseline
 
-Phase 6 is next and is **not started**. Its scope, contracts, and acceptance
-gates must be defined before implementation. It may add learner/training
-adapters above the accepted public, trajectory, and model-facing boundaries;
-it must not weaken determinism, privacy, candidate completeness, replay, or
-admission semantics.
+Status: **Task 1 CURRENT / AUTHORIZED — docs-only contract freeze**.
+
+Phase 6 now has its first contract boundary, but Phase-6 implementation,
+training, backend selection, and checkpoint generation have not started. Task
+1 defines the semantics and future gates above the accepted public,
+trajectory/admission, and Phase-5 model-facing boundaries; it does not claim a
+learner or a trained policy.
+
+| Phase-6 task | Status |
+| --- | --- |
+| Task 1 — BC/data/checkpoint/evaluation contract freeze | **CURRENT / AUTHORIZED** |
+| Task 2 — admitted supervision materialization, split, and model-input inspector | **NOT AUTHORIZED** |
+| Task 3 — framework-neutral BC architecture and reference interface | **NOT AUTHORIZED** |
+| Task 4 — first backend, smoke training, export, and fail-closed runner | **NOT AUTHORIZED** |
+| Task 5 — frozen offline/gameplay evaluation and first divergence | **NOT AUTHORIZED** |
+| Task 6 — PyTorch/JAX backend bake-off | **NOT AUTHORIZED** |
+| Task 7 — first accepted BC baseline and checkpoint evidence | **NOT AUTHORIZED** |
+
+The current contract set is [P6_BC_CONTRACT.md](p6/P6_BC_CONTRACT.md),
+[P6_DATASET_AND_SPLIT_CONTRACT.md](p6/P6_DATASET_AND_SPLIT_CONTRACT.md),
+[P6_CHECKPOINT_AND_INFERENCE_CONTRACT.md](p6/P6_CHECKPOINT_AND_INFERENCE_CONTRACT.md),
+[P6_EVALUATION_PLAN.md](p6/P6_EVALUATION_PLAN.md), and
+[P6_IMPLEMENTATION_PLAN.md](p6/P6_IMPLEMENTATION_PLAN.md), with the
+architecture rationale in [ADR-0007](adr/ADR-0007-phase6-behavior-cloning-boundary.md).
+
+Later tasks require separate authorization and independent review. They must
+not weaken determinism, privacy, candidate completeness, replay, or admission
+semantics. Phase 7 is **NOT STARTED**.
+
+### Phase 7 — Not started
+
+Status: **NOT STARTED**. Phase 7 has no authorized implementation or
+acceptance scope in this roadmap.
 
 ## Historical M4 measurement notes
 
@@ -305,9 +333,11 @@ Recommended M4 acceptance properties:
 
 M4 does not imply vectorized simulation or framework-specific ML readiness.
 
-## Phase 6 and later candidate workstreams
+## Deferred Phase 6 and later workstreams
 
-These are **candidate directions**, not accepted numbered milestones.
+These are deferred directions, not authorization to begin the later Phase-6
+tasks or accepted numbered-milestone evidence. The active Task-1 contract
+freeze above owns the current Phase-6 boundary.
 
 ### A. Episodic environment API — completed
 
@@ -384,9 +414,10 @@ Future work in this area is limited to explicit Phase-6 data consumers or
 versioned algorithm-specific extensions. The accepted v1 trajectory and
 admission semantics remain unchanged.
 
-Do not begin algorithm selection by assuming PPO, BC, self-play, or another
-method is correct merely because the environment and data semantics are now
-stable; Phase 6 must make that decision explicitly.
+Phase 6 Task 1 has explicitly selected the Behavior Cloning baseline as its
+first learned-policy objective. That selection does not authorize RL,
+self-play, search, or any later algorithm; each needs its own scope and
+contract.
 
 ### G. Portable distributed actor / learner compute
 
