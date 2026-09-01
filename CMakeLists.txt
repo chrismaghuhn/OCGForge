@@ -189,6 +189,7 @@ add_library(ygo_model STATIC
     src/model/card_vocabulary.cpp
     src/model/encoded_model_input.cpp
     src/model/logical_model_input.cpp
+    src/model/model_batch_layout.cpp
 )
 target_include_directories(ygo_model PUBLIC "${CMAKE_SOURCE_DIR}/include")
 target_link_libraries(ygo_model PUBLIC ygo_m4)
@@ -650,6 +651,10 @@ target_include_directories(encoded_model_input_test PRIVATE
                            "${CMAKE_SOURCE_DIR}/src/environment")
 target_link_libraries(encoded_model_input_test PRIVATE ygo_model)
 add_test(NAME encoded_model_input_test COMMAND encoded_model_input_test)
+
+add_executable(model_batch_layout_test tests/model/model_batch_layout_test.cpp)
+target_link_libraries(model_batch_layout_test PRIVATE ygo_model)
+add_test(NAME model_batch_layout_test COMMAND model_batch_layout_test)
 
 add_test(NAME logical_model_public_boundary_test
          COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tests/model/logical_model_public_boundary_test.py"

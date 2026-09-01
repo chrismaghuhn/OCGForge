@@ -11,7 +11,6 @@ FORBIDDEN_IDENTIFIERS = (
     "EnvironmentContinuationView",
     "raw_message_hash",
     "continuation_id",
-    "ModelBatchLayout",
     "PyTorch",
     "JAX",
     "NumPy",
