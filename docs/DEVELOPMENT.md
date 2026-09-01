@@ -1,5 +1,10 @@
 # OCGForge Development Guide
 
+The current repository records FINAL PASS for M0–M4, Episodic V2,
+Phase 3A/3B, Phase 4A/4B/4C, and Phase 5. Phase 6 is next but has not
+started. Keep framework-specific learner work outside the accepted
+framework-neutral `ygo::model` layer.
+
 ## Supported development shape
 
 The repository's canonical integration path is Windows.
@@ -110,6 +115,38 @@ Perspective-safe state/history boundary:
 - observation builder/session;
 - canonical serialization.
 
+### `include/ygo/environment` and `src/environment`
+
+Public Episodic V2 boundary:
+
+- public observation projection;
+- complete ordered public candidate domains;
+- public action/domain identities;
+- reset/step, replay, and fail-closed lifecycle semantics.
+
+### `include/ygo/trajectory` and `src/trajectory`
+
+Trusted collection boundary:
+
+- trajectory records and policy provenance;
+- immutable shard/restricted-evidence storage;
+- replay admission and verified receipts;
+- dataset identity and manifests.
+
+### `include/ygo/model` and `src/model`
+
+Framework-neutral Phase-5 representation:
+
+- `LogicalModelInputV1` public projection;
+- `CardVocabularyV1` and `EncodedModelInputV1`;
+- canonical model-input bytes and identity;
+- `ModelBatchLayoutV1` ragged/padded views;
+- admission-backed `ModelSupervisionSampleV1`.
+
+This layer consumes only `PublicEnvironmentObservation` plus the complete
+ordered `EnvironmentActionCandidate[]` domain. It does not choose a tensor
+framework or implement learning.
+
 ### `include/ygo/trace` and `src/trace`
 
 Trace and hashing support.
@@ -147,6 +184,10 @@ Tests are grouped by semantic concern:
 - trace;
 - M3;
 - M3.5;
+- Episodic V2;
+- Phase 3A/3B trajectory and admission;
+- Phase 4 policy/evaluation;
+- Phase 5 model-facing representations;
 - repository Python tooling.
 
 ## Working on protocol code
@@ -199,6 +240,25 @@ A new fixed matchup should consider:
 - privacy;
 - failure counters;
 - machine-readable acceptance output.
+
+## Working on Phase 5 model-facing code
+
+Preserve the accepted boundary:
+
+```text
+PublicEnvironmentObservation
++ complete ordered EnvironmentActionCandidate[]
+    → LogicalModelInputV1
+    → EncodedModelInputV1
+    → ModelBatchLayoutV1
+```
+
+Keep `public_action_key` as selection/routing identity, preserve exact N→N
+candidate order, and keep `ModelSupervisionSampleV1` admission-backed.
+Physical padding/layout is not model-input identity. Do not introduce
+framework-specific tensors, normalization, losses, optimizers, or training
+behavior in the framework-neutral layer. Phase 6 owns any later learner
+adapter and requires its own contract and acceptance evidence.
 
 ## Diagnostics
 

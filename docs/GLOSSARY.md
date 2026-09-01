@@ -32,6 +32,47 @@ A precisely defined byte encoding for semantic data used for persistence/hashing
 
 Property that the presented legal candidate set contains the full supported legal domain rather than a truncated or heuristic subset.
 
+## Phase 5 model-facing input
+
+The framework-neutral downstream path owned by `ygo::model`:
+
+```text
+PublicEnvironmentObservation
++ complete ordered EnvironmentActionCandidate[]
+    → LogicalModelInputV1
+    → EncodedModelInputV1
+    → ModelBatchLayoutV1
+```
+
+It preserves the complete public candidate domain and does not choose a
+learning framework.
+
+## LogicalModelInputV1
+
+Value-owned structured representation of one public observation and its
+complete ordered public candidate domain. It retains public categorical tokens,
+safe references, optional values, routing keys, and deterministic digests.
+
+## EncodedModelInputV1
+
+Deterministic integer/categorical representation derived from
+`LogicalModelInputV1` through an immutable `CardVocabularyV1`. Its routing
+sidecar retains exact `public_action_key` values; those keys are not learned
+string features.
+
+## ModelBatchLayoutV1
+
+Lossless physical ragged/padded execution view over encoded model inputs. Row
+masks, offsets, padding width, bucket, batch composition, storage dtype, and
+framework are execution details and are excluded from `model_input.v1`
+identity.
+
+## ModelSupervisionSampleV1
+
+Admission-backed derived sample that binds `model_input.v1` and maps the exact
+selected `public_action_key` to a zero-based candidate ordinal. The ordinal is
+training-label metadata, never replay or action identity.
+
 ## Continuation
 
 Adapter-local immutable decision state used to express a complex original engine decision through multiple primitive steps while keeping the OCG engine paused.

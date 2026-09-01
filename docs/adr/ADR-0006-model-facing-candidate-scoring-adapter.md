@@ -2,9 +2,9 @@
 
 ## Status
 
-Accepted — Phase 5 Task 1 contract freeze only. This ADR does not claim that a
-model adapter, scorer, training system, or any P5 executable gate exists or
-passes.
+Accepted — Phase 5 contract freeze. This ADR records the architectural
+decision, not the implementation gate results; the Phase-5 implementation and
+FINAL PASS are recorded in `docs/p5/P5_ACCEPTANCE_EVIDENCE.md`.
 
 ## Context
 

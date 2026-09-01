@@ -79,14 +79,21 @@ Player-facing environment boundary
         ↓
 Observation / trace / replay evidence
         ↓
-Future search, teacher, model, or training adapters
+Trusted trajectory / admission
+        ↓
+Framework-neutral model-facing representation
+        ↓
+Future Phase 6 learner/training adapters
 ```
 
 Python tooling may orchestrate tests, evidence, catalog analysis, or future training workflows. It must not become a second rules engine.
 
 ## Current certified scope
 
-At the current M3/M3.5 checkpoint, the strongest certification is the locked fixed matchup:
+The repository currently records final acceptance for M0–M4, Episodic V2,
+Phase 3A/3B, Phase 4A/4B/4C, and Phase 5 within their defined scopes.
+
+The certified gameplay scope remains the locked fixed matchup:
 
 - `ocgforge.swordsoul_tenyi.ml_v1`;
 - `ocgforge.salamangreat.ml_v1`;
@@ -95,7 +102,20 @@ At the current M3/M3.5 checkpoint, the strongest certification is the locked fix
 - repository-recorded 45/45 required mechanics classified;
 - repository-recorded 16/16 complete deterministic games over the acceptance matrix.
 
-This does not imply arbitrary-deck or global card support.
+Phase 5 additionally provides an accepted framework-neutral model-facing path:
+
+```text
+PublicEnvironmentObservation
++ complete ordered EnvironmentActionCandidate[]
+    → LogicalModelInputV1
+    → EncodedModelInputV1
+    → ModelBatchLayoutV1
+```
+
+It also provides admission-backed `ModelSupervisionSampleV1` derivation. The
+model path preserves exact candidate order and N→N membership; physical batch
+layout is excluded from model-input identity. This does not imply arbitrary-
+deck or global card support, a selected ML framework, or a training system.
 
 ## Non-goals at the current checkpoint
 
@@ -108,6 +128,8 @@ The project does not currently promise:
 - inferred hidden-state beliefs in authoritative observations;
 - a trained policy or competitive bot;
 - fixed-size action or observation tensors in the authoritative C++ contracts;
+- Phase 6 learner/training implementation;
+- Behavior Cloning, PyTorch, JAX, RL, or self-play;
 - silent recovery from unsupported decisions;
 - generalized fixture-only board mutation in production runtime;
 - distributed/vectorized training scale before semantic stabilization.

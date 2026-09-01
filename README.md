@@ -2,9 +2,15 @@
 
 OCGForge is a deterministic Yu-Gi-Oh! simulation and game-AI research environment built around a narrow C++ adapter to a pinned OCG rules stack.
 
-The project is correctness-first. It aims to make engine interaction, legal decisions, player-visible observations, hidden-information handling, deterministic traces, and conformance evidence explicit and reproducible before adding ML-facing scale or training code.
+The project is correctness-first. It aims to make engine interaction, legal
+decisions, player-visible observations, hidden-information handling,
+deterministic traces, model-facing representations, and conformance evidence
+explicit and reproducible before adding learner or training code.
 
-> **Current maturity:** the repository has a verified fixed-matchup M3/M3.5 checkpoint, not general all-deck Yu-Gi-Oh! support.
+> **Current maturity:** M0–M4, Episodic V2, Phase 3A/3B, Phase 4A/4B/4C,
+> and Phase 5 are accepted final checkpoints for their defined scopes. The
+> certified gameplay slice remains fixed-matchup and is not general all-deck
+> Yu-Gi-Oh! support.
 
 ## What OCGForge is
 
@@ -19,7 +25,13 @@ OCGForge currently provides:
 - deterministic engine traces;
 - focused fixtures and conformance inventories;
 - a locked Swordsoul Tenyi vs. Salamangreat fixed-deck validation slice;
-- two narrow repository-versioned ocgcore API-hardening patches.
+- two narrow repository-versioned ocgcore API-hardening patches;
+- the accepted Episodic V2 public environment and trusted trajectory/admission
+  path;
+- a framework-neutral `ygo::model` path from public observations and complete
+  candidate domains through logical input, encoded input, and ragged/padded
+  batch layout;
+- admission-backed `ModelSupervisionSampleV1` derivation.
 
 OCGForge intentionally does **not** currently claim:
 
@@ -47,7 +59,37 @@ Performance work must not weaken the first six properties.
 
 ## Current checkpoint
 
-Documentation baseline: `main` at the M4 finalization base `bafe75b97e03d796b318d6f7757cc555873f1fb9` (2026-08-25).
+Documentation baseline: `main` at post-Phase-5 merge `6c238addb353fc0bf7e68c6dfdc6f19b36c84bf4` (2026-09-01).
+
+The current accepted milestone sequence is:
+
+- M0–M4: **FINAL PASS**;
+- Episodic V2: **FINAL PASS**;
+- Phase 3A / 3B: **FINAL PASS**;
+- Phase 4A / 4B / 4C: **FINAL PASS**;
+- Phase 5: **FINAL PASS**.
+
+Phase 5 is documented by the [model contract](docs/p5/P5_MODEL_CONTRACT.md)
+and [final acceptance evidence](docs/p5/P5_ACCEPTANCE_EVIDENCE.md). Its
+public model-facing path is:
+
+```text
+PublicEnvironmentObservation
+  + complete ordered EnvironmentActionCandidate[]
+    → LogicalModelInputV1
+    → EncodedModelInputV1
+    → ModelBatchLayoutV1
+```
+
+The Phase-5 supervision path derives `ModelSupervisionSampleV1` only from an
+admission-backed trusted trajectory record. Candidate ordinals remain training
+labels, while `public_action_key` remains selection/routing identity.
+
+Phase 6 is the next milestone. It has not started.
+
+The accepted Phase-5 evidence records `H_exec=3c99e86c487361fc4e0f5f12678b4867e59232b7`,
+`H_evidence=da3376fc2ab645377f9de2dd9fd6195c1aa8c081`, and a fresh `163/163`
+CTest regression.
 
 Repository-recorded M3/M3.5 acceptance evidence reports:
 
@@ -65,11 +107,13 @@ M4 adds the parallel-simulation foundation and its benchmark/audit contracts.
 The finalized branch records **M4 FINAL PASS** from fresh Release evidence,
 with semantic validation through 64 workers and 16 workers recommended for
 production concurrency. This is a parallel-simulation foundation result; it
-is not a general ML-readiness or M5 claim. M4.3.5 remains a documented
+is not a general ML-readiness or Phase 6 claim. M4.3.5 remains a documented
 rejected experiment, while accepted internal equivalence-preserving work is
 recorded separately in `docs/m4/M4_FINAL.md`.
 
-These values are acceptance evidence committed to the repository. They are **not a claim that this documentation-only package re-ran the test suite**.
+These values are historical M3/M3.5 acceptance evidence committed to the
+repository. They are not a claim that this documentation refresh re-ran those
+milestone suites.
 
 See [Current Project State](docs/CURRENT_PROJECT_STATE.md) for the exact scope boundary.
 
@@ -104,9 +148,28 @@ Pinned rules bundle
    perspective-safe state
               |
               v
- future search / teacher / model /
-       environment adapters
+ PublicEnvironmentObservation
+ + complete ordered candidates
+              |
+              v
+           Episodic V2
+              |
+              v
+       trusted trajectory /
+       admission-backed data
+              |
+              v
+          ygo::model
+   Logical → Encoded → Batch Layout
+       + supervision samples
+              |
+              v
+         Phase 6 adapters
 ```
+
+The logical/encoded model-input path consumes the public observation and
+complete candidate vector directly. The trusted trajectory/admission path is
+additionally required when deriving supervision samples.
 
 The pinned OCG rules stack remains authoritative for game legality and current engine state. OCGForge contracts define what the environment exposes and how it fails.
 
@@ -181,12 +244,17 @@ Core project documents:
 - [Determinism and Information Safety](docs/DETERMINISM_AND_INFORMATION_SAFETY.md)
 - [Versioning and Compatibility](docs/VERSIONING_AND_COMPATIBILITY.md)
 - [Glossary](docs/GLOSSARY.md)
+- [Phase 5 model contract](docs/p5/P5_MODEL_CONTRACT.md)
+- [Phase 5 acceptance evidence](docs/p5/P5_ACCEPTANCE_EVIDENCE.md)
 
 Existing detailed evidence and contracts remain authoritative within their scope:
 
 - `docs/contracts/`
 - `docs/protocol/`
 - `docs/observation/`
+- `docs/trajectory/`
+- `docs/p4a/`, `docs/p4b/`, `docs/p4c/`
+- `docs/p5/`
 - `docs/m3/`
 - `docs/m3_5/`
 - `docs/adr/`

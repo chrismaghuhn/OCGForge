@@ -8,8 +8,8 @@ Architecture Decision Records (ADRs) document decisions that should remain under
 - [ADR-0002 — Use a shared semantic EpisodeDriver for the episodic environment](ADR-0002-episodic-environment.md) — **Accepted**
 - [ADR-0003 — Ratify Episodic V1 prerequisite identities](ADR-0003-episodic-v1-normative-prerequisites.md) — **Accepted**
 - [ADR-0004 — Define a perspective-safe public episodic action identity](ADR-0004-perspective-safe-episodic-action-identity.md) — **Accepted**
-- [ADR-0005 — Define a trusted trajectory core above EpisodicEnvironment V2](ADR-0005-trusted-trajectory-core.md) — **Accepted Phase 3A**
-- [ADR-0006 — Freeze the framework-neutral model-facing candidate-scoring boundary](ADR-0006-model-facing-candidate-scoring-adapter.md) — **Accepted Phase 5 Task 1 freeze**
+- [ADR-0005 — Define a trusted trajectory core above EpisodicEnvironment V2](ADR-0005-trusted-trajectory-core.md) — **Accepted Phase 3A/3B**
+- [ADR-0006 — Freeze the framework-neutral model-facing candidate-scoring boundary](ADR-0006-model-facing-candidate-scoring-adapter.md) — **Accepted Phase 5 contract freeze; implementation FINAL PASS**
 
 ## When to write an ADR
 

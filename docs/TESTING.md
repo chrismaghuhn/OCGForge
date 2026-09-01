@@ -1,5 +1,10 @@
 # OCGForge Testing and Acceptance
 
+The accepted repository state is M0–M4, Episodic V2, Phase 3A/3B,
+Phase 4A/4B/4C, and Phase 5 **FINAL PASS** for their defined scopes. Phase 6
+is next and is not started. Historical acceptance artifacts remain immutable;
+this document describes current verification entry points.
+
 OCGForge uses layered evidence because “the duel completed” is not sufficient proof for a deterministic game-AI environment.
 
 ## Evidence layers
@@ -20,6 +25,8 @@ focused mechanics
 full fixed games
       ↓
 machine-readable acceptance
+      ↓
+model-facing acceptance
 ```
 
 A higher layer does not replace the lower layers.
@@ -64,7 +71,9 @@ cmake --build --preset dev-windows-zig --parallel
 ctest --preset dev-windows-zig --output-on-failure
 ```
 
-CTest spans core, protocol, observation, privacy, trace, M3 fixtures, and M3.5 public-core behavior.
+CTest spans core, protocol, observation, privacy, trace, M3/M3.5 fixtures,
+Episodic V2, trusted trajectory/policy regressions, Teacher/battle sidecars,
+and Phase-5 model-facing tests.
 
 ## 4. Decision coverage validator
 
@@ -179,7 +188,32 @@ M3.5 specifically covers:
 - opening ownership/state;
 - integration back into M3 full games and determinism.
 
-## 13. CI
+## 13. Phase 5 model-facing acceptance
+
+The accepted Phase-5 model-facing path is verified by the frozen contract and
+the generated [P5 acceptance evidence](p5/P5_ACCEPTANCE_EVIDENCE.md):
+
+```text
+PublicEnvironmentObservation
++ complete ordered EnvironmentActionCandidate[]
+    → LogicalModelInputV1
+    → EncodedModelInputV1
+    → ModelBatchLayoutV1
+    + admission-backed ModelSupervisionSampleV1
+```
+
+The relevant local checks include:
+
+```text
+ctest --test-dir build/dev-windows --output-on-failure -R "^(public_safe_state_test|logical_model_input_test|card_vocabulary_test|encoded_model_input_test|model_batch_layout_test|model_supervision_sample_test|logical_model_public_boundary_test)$"
+```
+
+Phase 5 requires exact candidate N→N preservation, deterministic vocabulary
+and canonical identity, paired-world equality, lossless layout roundtrips,
+and fail-closed malformed-input behavior. It does not select PyTorch, JAX, or
+another framework and does not implement learning.
+
+## 14. CI
 
 The current GitHub Actions workflow is Windows-native and runs on pushes and pull requests.
 
@@ -198,7 +232,7 @@ It performs:
 - generated-lock diff check;
 - failure diagnostic upload.
 
-## 14. Reporting rules
+## 15. Reporting rules
 
 ### Fresh verification
 
@@ -226,7 +260,7 @@ If a required command cannot run, report the exact limitation.
 
 Do not substitute “looks correct” for an acceptance gate.
 
-## 15. Adding a new acceptance gate
+## 16. Adding a new acceptance gate
 
 A useful gate has:
 

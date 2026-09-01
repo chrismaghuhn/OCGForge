@@ -33,7 +33,7 @@ Outcome:
 - trace and diagnostic foundation;
 - initial privacy boundary.
 
-Status: foundation established in repository history.
+Status: **M0 FINAL PASS** recorded in repository history.
 
 ### M1 — Decision protocol and continuation foundation
 
@@ -51,7 +51,7 @@ Important nuance:
 
 M1 did not convert every globally known interactive message family into engine-verified support.
 
-Status: implemented foundation; consult `docs/protocol/decision_coverage.json` for family-level classification.
+Status: **M1 FINAL PASS** recorded; consult `docs/protocol/decision_coverage.json` for family-level classification.
 
 ### M2 — Perspective-safe player observation
 
@@ -65,7 +65,7 @@ Outcome:
 - canonical serialization and observation hash;
 - explicit hidden-information boundaries.
 
-Status: implemented foundation.
+Status: **M2 FINAL PASS** recorded.
 
 ### M2.1 — Xyz material query investigation
 
@@ -75,7 +75,7 @@ Outcome:
 - documented privacy-safe interim behavior;
 - established evidence needed for a narrow fix.
 
-Status: investigation completed; capability later resolved by M3.5 patchset.
+Status: **M2.1 FINAL PASS** recorded; the capability was later resolved by the M3.5 patchset.
 
 ### M3 — Locked fixed-deck conformance
 
@@ -128,7 +128,34 @@ Status: **M4 FINAL PASS**. Fresh Release evidence is committed and independently
 verifiable from a clean checkout. Semantic equivalence is validated through 64
 workers; 16 workers is the recommended production concurrency for the measured
 host. M4 remains narrowly the parallel-simulation foundation and baseline
-closure, not a general ML-readiness or M5 claim.
+closure, not a general ML-readiness or Phase 6 claim.
+
+### Episodic V2 — Public environment boundary
+
+Status: **FINAL PASS**.
+
+The accepted Episodic V2 boundary owns reset/step lifecycle, complete ordered
+public candidate domains, public observation identity, privacy, replay,
+failure-closed behavior, and deterministic semantic execution. See
+`docs/contracts/episodic-environment-v2.md` and the historical Episodic
+acceptance record.
+
+### Phase 3A / 3B — Trusted trajectory and admission
+
+Status: **FINAL PASS**.
+
+Phase 3A/3B owns trusted trajectory values and provenance plus immutable shard
+persistence, restricted evidence, replay admission, receipts, and dataset
+identity. The accepted `ocgforge.trusted_trajectory.v1` schema is unchanged by
+later model-facing work.
+
+### Phase 4A — Public policy boundary
+
+Status: **FINAL PASS** for the defined fixed certified matchup.
+
+Phase 4A establishes the public-only policy boundary and deterministic domain
+preservation. Phase 4B and 4C extend the accepted Teacher and evaluation
+sidecar scopes below.
 
 ### Phase 4B — Teacher public-only profiles and trusted path
 
@@ -205,13 +232,48 @@ direct-attack, response-absence, or terminal-outcome inference. Phase 4C does
 not claim general provable lethal, complete battle resolution, arbitrary-deck
 battle intelligence, Teacher v2, or ML.
 
-With Phase 4A, Phase 4B, and Phase 4C accepted, **Phase 4 is FINAL PASS**. Future
-model-facing or ML work remains a separate milestone and requires its own
-contracts and acceptance gates.
+With Phase 4A, Phase 4B, and Phase 4C accepted, **Phase 4 is FINAL PASS**.
 
-## Post-M4 work remains separate
+### Phase 5 — Framework-neutral model-facing boundary
 
-The following are candidate directions only and are not started by M4 finalization.
+Status: **FINAL PASS**.
+
+Phase 5 is accepted for the framework-neutral path:
+
+```text
+PublicEnvironmentObservation
++ complete ordered EnvironmentActionCandidate[]
+    → LogicalModelInputV1
+    → EncodedModelInputV1
+    → ModelBatchLayoutV1
+```
+
+It also provides admission-backed `ModelSupervisionSampleV1`. The path
+preserves exact candidate order and N→N membership, keeps
+`public_action_key` as selection/routing identity, treats candidate ordinals
+as derived training labels only, and excludes physical layout from
+model-input identity. See `docs/p5/P5_MODEL_CONTRACT.md` and
+`docs/p5/P5_ACCEPTANCE_EVIDENCE.md`.
+
+Phase 5 does not select PyTorch, JAX, or another framework and does not start
+Behavior Cloning, neural training, RL, self-play, or checkpoint training.
+
+Accepted evidence: `H_exec=3c99e86c487361fc4e0f5f12678b4867e59232b7`,
+`H_evidence=da3376fc2ab645377f9de2dd9fd6195c1aa8c081`.
+
+## Phase 6 — Next milestone
+
+Phase 6 is next and is **not started**. Its scope, contracts, and acceptance
+gates must be defined before implementation. It may add learner/training
+adapters above the accepted public, trajectory, and model-facing boundaries;
+it must not weaken determinism, privacy, candidate completeness, replay, or
+admission semantics.
+
+## Historical M4 measurement notes
+
+The following preserves M4-era measurement guidance. M4 and Phase 5 are
+accepted separately; these notes do not reopen either milestone or imply
+learner implementation.
 
 Historical M4 performance characterization is recorded under `docs/m4`.
 M4.3.5 is explicitly **REJECTED — NO MATERIAL BENEFIT** and its reserve-backed
@@ -241,24 +303,20 @@ Recommended M4 acceptance properties:
 - before/after semantic equivalence tests;
 - performance targets stated only after a baseline exists.
 
-M4 does not imply vectorized ML readiness.
+M4 does not imply vectorized simulation or framework-specific ML readiness.
 
-## Post-M4 candidate workstreams
+## Phase 6 and later candidate workstreams
 
 These are **candidate directions**, not accepted numbered milestones.
 
-### A. Episodic environment API
+### A. Episodic environment API — completed
 
-Potential scope:
+Episodic V2 is accepted. Its public reset/step API, complete candidate
+domains, identity, privacy, replay, and failure-closed lifecycle are no longer
+future work. Any incompatible successor requires a new versioned contract.
 
-- explicit reset configuration;
-- decision/observation coupling;
-- step semantics;
-- termination/truncation semantics;
-- rewards as a separate policy layer;
-- stable error model.
-
-Do not let a convenience API redefine engine legality or observation privacy.
+Do not let a future convenience API redefine engine legality or observation
+privacy.
 
 ### B. Checkpoint / fork / replay architecture
 
@@ -283,23 +341,24 @@ Potential scope:
 
 Support should grow by evidence closure, not by assuming that a parser implies card compatibility.
 
-### D. Model-facing adapter
+### D. Model-facing adapter — Phase 5 completed
 
-Potential scope:
+Phase 5 has completed the framework-neutral semantic model-facing adapter:
 
-- versioned vocabulary;
-- tensorization;
-- masks;
-- padding/bucketing;
-- embeddings/card catalog IDs.
+- `LogicalModelInputV1`;
+- `EncodedModelInputV1` and immutable vocabulary mapping;
+- `ModelBatchLayoutV1` ragged/padded views and masks;
+- canonical model-input identity;
+- admission-backed supervision samples.
 
-This layer should consume semantic OCGForge contracts and remain replaceable.
+This layer consumes semantic OCGForge contracts and remains replaceable. A
+framework-specific tensor or learner adapter belongs to Phase 6 or later.
 
 The authoritative environment should not be redesigned around one network architecture.
 
-### E. Vectorized / batched simulation
+### E. Further execution scale
 
-Potential scope:
+Potential later scope:
 
 - multiple independent environments;
 - process/thread architecture;
@@ -309,29 +368,25 @@ Potential scope:
 
 Parallelism must not introduce nondeterministic authoritative ordering.
 
-### F. Trajectory and training interfaces
+### F. Trajectory and training interfaces — trajectory completed
 
-Phase 3A is the accepted contract prerequisite for this work:
+Phase 3A/3B trajectory and admission interfaces are accepted:
 `ocgforge.trusted_trajectory.v1` and
 `ocgforge.policy_provenance.v1`. It fixes logical episode, public action,
 closure, identity, privacy, and producer-attribution semantics. The single
 Phase-3B implementation PR now owns the physical shard, restricted-evidence,
 semantic-replay admission, receipt, and dataset-manifest layers above V2.
 See ADR-0005, `docs/trajectory/PHASE3A_ACCEPTANCE.md`, and the
-[Phase-3B acceptance matrix](trajectory/PHASE3B_ACCEPTANCE.md). The Phase-3B
-implementation remains subject to its exact-head gates and independent
-review; it does not begin Teacher, model, or ML work.
+[Phase-3B acceptance matrix](trajectory/PHASE3B_ACCEPTANCE.md). New learner
+or dataset-consumer behavior must remain above these accepted interfaces.
 
-Potential scope:
+Future work in this area is limited to explicit Phase-6 data consumers or
+versioned algorithm-specific extensions. The accepted v1 trajectory and
+admission semantics remain unchanged.
 
-- versioned trajectory, observation, and action schema identities;
-- observation/action/reward/termination records;
-- rules/environment/bundle provenance;
-- behavior-policy and opponent-policy provenance where applicable;
-- transactional shard publication and hash-verifiable dataset manifests;
-- algorithm-specific metadata only through explicit versioned extensions.
-
-Do not begin algorithm selection by assuming PPO, BC, self-play, or another method is correct before environment and data semantics are stable.
+Do not begin algorithm selection by assuming PPO, BC, self-play, or another
+method is correct merely because the environment and data semantics are now
+stable; Phase 6 must make that decision explicitly.
 
 ### G. Portable distributed actor / learner compute
 
@@ -348,7 +403,7 @@ Potential scope:
 
 Provider quotas, accelerator types, concrete hardware shapes, session counts, and pricing are operational configuration, not gameplay contracts. Provider backends must use normal supported mechanisms and current quotas rather than relying on circumvention behavior.
 
-Cross-platform actors must not become training-data sources until deterministic gameplay, complete candidate domains, perspective-safe observations, and trajectory provenance are proven equivalent under the relevant contracts. This portability gate is post-M4 future work unless separately admitted; it does not silently expand M4's scope.
+Cross-platform actors must not become training-data sources until deterministic gameplay, complete candidate domains, perspective-safe observations, and trajectory provenance are proven equivalent under the relevant contracts. This portability gate remains future work after Phase 5 unless separately admitted; it does not silently expand M4 or Phase 5's scope.
 
 See `docs/PORTABLE_ACTOR_LEARNER_COMPUTE_STRATEGY.md` for the preserved architecture note. This is future intent only and does not authorize distributed ML before the episodic, trajectory, model-facing, and data-trust layers exist.
 

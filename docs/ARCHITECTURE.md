@@ -64,9 +64,37 @@ third_party/rules_bundle.lock.json
 +----------------------------+
               |
               v
- future environment / search /
- teacher / model / ML adapters
++----------------------------+
+| EpisodicEnvironment V2     |
+| public observation +       |
+| complete ordered candidates|
++----------------------------+
+              |
+              v
++----------------------------+
+| ygo::trajectory            |
+| trusted records / replay  |
+| admission / receipts      |
+| dataset identity          |
++----------------------------+
+              |
+              v
++----------------------------+
+| ygo::model                 |
+| LogicalModelInputV1        |
+| EncodedModelInputV1        |
+| ModelBatchLayoutV1         |
+| supervision samples        |
++----------------------------+
+              |
+              v
+       Phase 6 learner adapters
 ```
+
+The `ygo::model` logical/encoded path consumes the public observation and
+complete candidate vector directly. The trusted trajectory/admission path is
+additionally required for deriving supervision samples; it is not a second
+source of model input.
 
 ## 1. Rules bundle
 
@@ -184,11 +212,43 @@ It contains:
 - static match context;
 - canonical public observation digest.
 
-The schema intentionally does not impose fixed tensor dimensions or a model vocabulary.
+The observation schema intentionally does not impose fixed tensor dimensions.
+The accepted Phase-5 `ygo::model` layer is a downstream, framework-neutral
+representation and does not change the public observation contract.
 
-Those belong in downstream ML adapters.
+## 5. `ygo::model` model-facing representation
 
-## 5. Visibility and privacy projection
+Phase 5 consumes exactly:
+
+```text
+PublicEnvironmentObservation
++ complete ordered EnvironmentActionCandidate[]
+```
+
+and provides:
+
+```text
+LogicalModelInputV1
+    → EncodedModelInputV1
+    → ModelBatchLayoutV1
+```
+
+The logical layer preserves public meaning and exact candidate order. The
+encoded layer owns deterministic integer/categorical codes, immutable card
+vocabulary IDs, canonical bytes, and `model_input.v1` identity. The batch
+layout is a lossless ragged/padded execution view; padding, bucketing, batch
+composition, and physical tensor/framework details are excluded from model-
+input identity. `public_action_key` remains a selection/routing sidecar, not a
+learned string feature.
+
+`ModelSupervisionSampleV1` is derived only from an admission-backed trusted
+trajectory record. Its candidate ordinal is training-label metadata and never
+replaces the public action key or replay identity.
+
+Phase 5 does not select PyTorch, JAX, or another framework and does not start
+learner, neural, Behavior Cloning, RL, self-play, or checkpoint-training code.
+
+## 6. Visibility and privacy projection
 
 The engine can know more than the player.
 
@@ -205,7 +265,7 @@ Examples:
 
 A locator is an observation reference, not a persistent hidden physical-card identity.
 
-## 6. Visible history
+## 7. Visible history
 
 `ObservationSession` maintains cumulative perspective-filtered visible events for the supported event subset.
 
@@ -213,7 +273,7 @@ Knowledge-destroying transitions produce explicit randomization boundaries where
 
 Unknown/deferred engine event families are omitted/documented rather than guessed from raw packets.
 
-## 7. `ygo::trace`
+## 8. `ygo::trace`
 
 Trace contracts capture deterministic engine/protocol interaction.
 
@@ -224,7 +284,7 @@ Trace v2 exists for continuation-aware semantics:
 
 Trace/provenance hashes and semantic gameplay hashes are not interchangeable.
 
-## 8. M3 conformance layer
+## 9. M3 conformance layer
 
 M3 is a certification layer over a deliberately locked matchup.
 
@@ -243,7 +303,7 @@ M3 tooling covers:
 - deterministic action re-execution;
 - acceptance reports.
 
-## 9. M3.5 ocgcore API hardening
+## 10. M3.5 ocgcore API hardening
 
 M3.5 adds two narrow capabilities through an ordered repository patchset over an immutable pinned base core:
 
@@ -252,7 +312,7 @@ M3.5 adds two narrow capabilities through an ordered repository patchset over an
 
 The patchset is part of canonical repository identity until/unless an equivalent upstream capability is adopted through a deliberate bundle migration.
 
-## 10. Python boundary
+## 11. Python boundary
 
 Python currently supports orchestration, evidence generation/validation, determinism tests, deck/catalog tooling, and full-game verification.
 
@@ -260,7 +320,7 @@ Python must not independently decide Yu-Gi-Oh! legality.
 
 A future Python ML interface should wrap the authoritative C++/core environment boundary rather than reimplement it.
 
-## 11. Future architecture boundaries
+## 12. Accepted trajectory layer and future architecture boundaries
 
 ### Phase-3A/3B trusted trajectory and admission layers
 
@@ -280,18 +340,18 @@ explicitly owned layers in the same boundary:
 These layers consume only value-owned V2 public frames, ordered public
 candidate values, V2 closures, and explicit collection provenance. They must
 not query the core or trace, reconstruct legal domains, advance V2 outside
-the public API, or consume private observations. The implementation and
-acceptance evidence are being delivered in the single Phase-3B PR; this
-branch's acceptance matrix is [PHASE3B_ACCEPTANCE.md](trajectory/PHASE3B_ACCEPTANCE.md).
-No learner/model projection is introduced here.
+the public API, or consume private observations. Phase 3A/3B is accepted;
+its historical acceptance matrix is
+[PHASE3B_ACCEPTANCE.md](trajectory/PHASE3B_ACCEPTANCE.md). Phase 5 consumes
+the admitted public values downstream without changing trusted trajectory
+semantics.
 
 Future work may add:
 
 - performance/throughput measurement;
 - checkpoint/fork support;
-- vectorized execution;
-- model/action vocabulary adapters;
-- trajectory export;
-- search/teacher/training systems.
+- framework-specific learner adapters;
+- training/data-consumer systems;
+- broader certified deck/card support.
 
 These should be layered above the existing authoritative semantics rather than changing them for convenience.

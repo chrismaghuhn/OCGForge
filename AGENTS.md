@@ -25,7 +25,11 @@ correctness
 
 ## 2. Current maturity
 
-The accepted repository baseline is M3/M3.5 fixed-deck conformance and narrow ocgcore API hardening.
+The accepted repository baseline is M0–M4, Episodic V2, Phase 3A/3B,
+Phase 4A/4B/4C, and Phase 5 FINAL PASS for their defined scopes. Phase 5
+provides the framework-neutral `ygo::model` model-facing path and
+admission-backed supervision derivation. Phase 6 and ML training have not
+started.
 
 Do not silently upgrade this claim into:
 

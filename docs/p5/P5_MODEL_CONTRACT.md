@@ -5,9 +5,11 @@
 **Status:** Accepted as the Phase 5 Task 1 model-facing contract freeze.
 
 This document defines the normative Phase 5 representation boundary. It does
-not implement a model adapter, scorer, learner, training loop, or physical
-tensor backend. A future implementation MUST satisfy this document and the
-acceptance gates in P5_ACCEPTANCE_PLAN.md.
+not select a learner, training loop, or framework-specific tensor backend. The
+Phase-5 implementation and final acceptance are recorded in
+`P5_ACCEPTANCE_EVIDENCE.md`; this document remains the normative semantic
+contract, and the implementation MUST satisfy it and the acceptance gates in
+P5_ACCEPTANCE_PLAN.md.
 
 The owning namespace and layer are:
 
