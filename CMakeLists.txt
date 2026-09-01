@@ -185,6 +185,17 @@ else()
     target_compile_options(ygo_m4 PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
+add_library(ygo_model STATIC
+    src/model/logical_model_input.cpp
+)
+target_include_directories(ygo_model PUBLIC "${CMAKE_SOURCE_DIR}/include")
+target_link_libraries(ygo_model PUBLIC ygo_m4)
+if(MSVC)
+    target_compile_options(ygo_model PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(ygo_model PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
 add_library(ygo_trajectory STATIC
     src/trajectory/codec.cpp
     src/trajectory/policy_provenance.cpp
@@ -621,6 +632,17 @@ target_compile_definitions(public_safe_state_test PRIVATE
     YGO_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
 )
 add_test(NAME public_safe_state_test COMMAND public_safe_state_test)
+
+add_executable(logical_model_input_test tests/model/logical_model_input_test.cpp)
+target_include_directories(logical_model_input_test PRIVATE
+                           "${CMAKE_SOURCE_DIR}/src/environment")
+target_link_libraries(logical_model_input_test PRIVATE ygo_model)
+add_test(NAME logical_model_input_test COMMAND logical_model_input_test)
+
+add_test(NAME logical_model_public_boundary_test
+         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tests/model/logical_model_public_boundary_test.py"
+                 "${CMAKE_SOURCE_DIR}/include/ygo/model"
+                 "${CMAKE_SOURCE_DIR}/src/model")
 
 add_executable(policy_boundary_compile_test tests/policy/policy_boundary_compile_test.cpp)
 target_include_directories(policy_boundary_compile_test PRIVATE
