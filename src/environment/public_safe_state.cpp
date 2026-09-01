@@ -325,7 +325,6 @@ void validate_observation(const PlayerObservation& observation) {
     if (observation.globals.turn_player.has_value() && *observation.globals.turn_player > 1) {
         throw std::invalid_argument("public safe state turn_player is invalid");
     }
-    validate_optional_player(observation.globals.winner, "winner");
     for (const auto& link : observation.chain.links) {
         validate_optional_player(link.activating_player, "chain activating player");
         if (link.source.has_value()) {
@@ -344,7 +343,6 @@ void validate_observation(const PlayerObservation& observation) {
     for (const auto& event : observation.visible_events) {
         (void)visible_event_kind_code(event.kind);
         validate_optional_player(event.player, "visible event player");
-        validate_optional_player(event.winner, "visible event winner");
         if (event.entity.has_value()) {
             validate_locator(*event.entity);
         }
@@ -1162,7 +1160,7 @@ bool read_safe_state(const std::vector<std::uint8_t>& bytes, ParsedSafeState& ou
         !read_optional_u32(cursor, output.globals.turn_count) ||
         !read_optional_u32(cursor, output.globals.phase) ||
         !cursor.u32(output.globals.chain_length) ||
-        !read_optional_player(cursor, output.globals.winner) ||
+        !read_optional_u8(cursor, output.globals.winner) ||
         !read_optional_u8(cursor, output.globals.win_reason) ||
         !cursor.boolean(output.globals.terminal)) {
         return false;
@@ -1301,7 +1299,7 @@ bool read_safe_state(const std::vector<std::uint8_t>& bytes, ParsedSafeState& ou
             !read_optional_u32(cursor, event.count) || !read_optional_i32(cursor, event.amount) ||
             !read_optional_u32(cursor, event.counter_type) ||
             !read_optional_u32(cursor, event.phase) ||
-            !read_optional_player(cursor, event.winner) ||
+            !read_optional_u8(cursor, event.winner) ||
             !read_optional_u8(cursor, event.win_reason) ||
             !read_optional_u64(cursor, event.effect_description) ||
             !read_sorted_targets(cursor, event.targets)) {

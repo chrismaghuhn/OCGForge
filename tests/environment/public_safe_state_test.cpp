@@ -706,9 +706,9 @@ void test_typed_public_safe_state_round_trip() {
 
 void test_outcome_reason_is_an_exact_optional_u8() {
     auto source = source_observation();
-    source.globals.winner = 1;
+    source.globals.winner = 3;
     source.globals.win_reason = 7;
-    source.visible_events.front().winner = 0;
+    source.visible_events.front().winner = 5;
     source.visible_events.front().win_reason = 9;
     const auto bytes = ygo::environment::canonical_public_safe_state_bytes(source);
     const auto decoded = ygo::environment::decode_canonical_public_safe_state(bytes);
