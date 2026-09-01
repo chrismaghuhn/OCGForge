@@ -39,7 +39,9 @@ OCGForge intentionally does **not** currently claim:
 - a stable general-purpose Gym-style API;
 - checkpoint/fork support;
 - high-throughput vectorized simulation;
-- a learned policy, teacher, search system, or training stack;
+- a learned/neural policy;
+- a search system;
+- a training stack;
 - competitive playing strength.
 
 ## Project priorities
@@ -148,28 +150,33 @@ Pinned rules bundle
    perspective-safe state
               |
               v
+ EpisodicEnvironment V2
+ public observation +
+ complete ordered candidates
+              |
+              v
  PublicEnvironmentObservation
  + complete ordered candidates
-              |
-              v
-           Episodic V2
-              |
-              v
-       trusted trajectory /
-       admission-backed data
-              |
-              v
-          ygo::model
-   Logical → Encoded → Batch Layout
-       + supervision samples
-              |
-              v
-         Phase 6 adapters
+          |                         |
+          | direct model input      | trajectory source values
+          v                         v
+   +--------------+          +------------------+
+   | ygo::model   |          | ygo::trajectory  |
+   | Logical      |          | trusted records |
+   | → Encoded    |          | replay/admission|
+   | → Batch      |          +--------+---------+
+   | Supervision  |                   |
+   | Sample       |<------------------+
+   +------+-------+       admitted record
+          |
+          v
+     Phase 6 adapters
 ```
 
 The logical/encoded model-input path consumes the public observation and
-complete candidate vector directly. The trusted trajectory/admission path is
-additionally required when deriving supervision samples.
+complete candidate vector directly from EpisodicEnvironment V2. The trusted
+trajectory/admission path is a separate branch used when deriving
+admission-backed supervision samples; it is not a second model-input authority.
 
 The pinned OCG rules stack remains authoritative for game legality and current engine state. OCGForge contracts define what the environment exposes and how it fails.
 

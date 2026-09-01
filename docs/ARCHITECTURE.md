@@ -72,23 +72,23 @@ third_party/rules_bundle.lock.json
               |
               v
 +----------------------------+
-| ygo::trajectory            |
-| trusted records / replay  |
-| admission / receipts      |
-| dataset identity          |
+| PublicEnvironmentObservation|
+| + complete ordered candidates|
 +----------------------------+
-              |
-              v
-+----------------------------+
-| ygo::model                 |
-| LogicalModelInputV1        |
-| EncodedModelInputV1        |
-| ModelBatchLayoutV1         |
-| supervision samples        |
-+----------------------------+
-              |
-              v
-       Phase 6 learner adapters
+       |                  |
+       | direct model     | trajectory source values
+       v                  v
++------------------+  +----------------------------+
+| ygo::model       |  | ygo::trajectory            |
+| LogicalModelInput|  | trusted records / replay  |
+| EncodedModelInput|  | admission / receipts      |
+| ModelBatchLayout |  | dataset identity          |
+| supervision     |  +----------------------------+
+| samples         |              |
++--------+---------+              | admitted record
+         |<----------------------+
+         v
+  Phase 6 learner adapters
 ```
 
 The `ygo::model` logical/encoded path consumes the public observation and

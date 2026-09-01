@@ -33,7 +33,7 @@ Phase 6 is next and has not started.
 - [ADR-0002 — Shared semantic EpisodeDriver for episodic environment](adr/ADR-0002-episodic-environment.md) — **Accepted**
 - [ADR-0003 — Episodic V1 prerequisite identities](adr/ADR-0003-episodic-v1-normative-prerequisites.md) — **Accepted**
 - [ADR-0004 — Perspective-safe public episodic action identity](adr/ADR-0004-perspective-safe-episodic-action-identity.md) — **Accepted**
-- [ADR-0005 — Trusted trajectory core above EpisodicEnvironment V2](adr/ADR-0005-trusted-trajectory-core.md) — **Accepted Phase 3A/3B**
+- [ADR-0005 — Trusted trajectory core above EpisodicEnvironment V2](adr/ADR-0005-trusted-trajectory-core.md) — **Accepted Phase 3A architectural authority**
 - [ADR-0006 — Framework-neutral model-facing candidate-scoring boundary](adr/ADR-0006-model-facing-candidate-scoring-adapter.md) — **Accepted Phase 5 contract freeze**
 - [ADR index and policy](adr/README.md)
 
@@ -48,7 +48,7 @@ Phase 6 is next and has not started.
 - [Episodic environment v1](contracts/episodic-environment-v1.md) — **Accepted historical predecessor**
 - [Perspective-safe public action identity v1](contracts/public-action-identity-v1.md) — **Accepted and implemented prerequisite**
 - [Episodic environment v2](contracts/episodic-environment-v2.md) — **Accepted and implemented public-identity successor**
-- [Trusted trajectory core v1](contracts/trusted-trajectory-v1.md) — **Accepted Phase-3A/3B logical, persistence, replay, and admission boundary**
+- [Trusted trajectory core v1](contracts/trusted-trajectory-v1.md) — **Accepted Phase-3A logical trajectory contract**
 - [Policy provenance v1](contracts/policy-provenance-v1.md) — **Accepted Phase-3A collection-provenance contract; not learner-visible data**
 - [Candidate trajectory shard v1](contracts/trajectory-shard-v1.md) — **Accepted Phase-3B physical contract**
 - [Restricted collection evidence bundle v1](contracts/restricted-collection-evidence-bundle-v1.md) — **Accepted Phase-3B physical contract**
@@ -72,10 +72,12 @@ do not imply general ML readiness or arbitrary-deck support.
 - [Phase-3A trusted trajectory acceptance matrix](trajectory/PHASE3A_ACCEPTANCE.md) — **Historical accepted Phase-3A evidence**
 - [Phase-3B persistence and replay-admission acceptance matrix](trajectory/PHASE3B_ACCEPTANCE.md) — **Historical accepted Phase-3B evidence**
 
-The PR #17 research record is design provenance only. Phase-3A/3B owns the
-accepted logical, physical persistence, replay, admission, receipt, and
-dataset-manifest layers listed above. Phase 5 consumes those public/admitted
-values without changing the trusted trajectory schema.
+The PR #17 research record is design provenance only. ADR-0005 and
+`trusted_trajectory.v1` are the accepted Phase-3A logical trajectory
+authority. Phase 3B adds the accepted physical persistence, replay/admission,
+receipt, and dataset-manifest contracts layered above that logical contract.
+Phase 5 consumes those public/admitted values without changing the trusted
+trajectory schema.
 
 ## Phase 5 model-facing acceptance
 
