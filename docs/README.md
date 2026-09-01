@@ -10,7 +10,8 @@ This index keeps those layers separate.
 
 Current repository status: M0–M4, Episodic V2, Phase 3A/3B,
 Phase 4A/4B/4C, and Phase 5 are **FINAL PASS** for their defined scopes.
-Phase 6 is next and has not started.
+Phase 6 Task 1 is **CURRENT / AUTHORIZED** as a documentation-only contract
+freeze; Phase-6 implementation and training have not started.
 
 ## Start here
 
@@ -35,6 +36,7 @@ Phase 6 is next and has not started.
 - [ADR-0004 — Perspective-safe public episodic action identity](adr/ADR-0004-perspective-safe-episodic-action-identity.md) — **Accepted**
 - [ADR-0005 — Trusted trajectory core above EpisodicEnvironment V2](adr/ADR-0005-trusted-trajectory-core.md) — **Accepted Phase 3A architectural authority**
 - [ADR-0006 — Framework-neutral model-facing candidate-scoring boundary](adr/ADR-0006-model-facing-candidate-scoring-adapter.md) — **Accepted Phase 5 contract freeze**
+- [ADR-0007 — Phase-6 Behavior Cloning boundary](adr/ADR-0007-phase6-behavior-cloning-boundary.md) — **Accepted Phase 6 Task 1 contract freeze**
 - [ADR index and policy](adr/README.md)
 
 ## Versioned contracts
@@ -98,12 +100,33 @@ PublicEnvironmentObservation
 
 `public_action_key` remains selection/routing identity, candidate ordinals are
 derived training-label metadata, and physical batch layout is excluded from
-model-input identity. Phase 6 is next; no learner, neural network, framework,
-Behavior Cloning, RL, or self-play implementation has started.
+model-input identity. Phase 6 Task 1 is the current documentation-only
+contract freeze; no learner, neural network, framework implementation, RL, or
+self-play implementation has started.
 
 Accepted evidence records `H_exec=3c99e86c487361fc4e0f5f12678b4867e59232b7`,
 `H_evidence=da3376fc2ab645377f9de2dd9fd6195c1aa8c081`, and fresh `163/163`
 native CTest regression.
+
+## Phase 6 Behavior Cloning contract freeze
+
+Task 1 freezes the first framework-neutral BC boundary. It keeps the
+Environment as the legality and complete-candidate authority, accepts only
+admitted DatasetManifest membership, partitions by episode/duel identity, and
+binds training provenance, canonical checkpoint export, deterministic
+inference, offline imitation, frozen gameplay, and first-divergence evaluation
+without adding a learner or selecting PyTorch/JAX.
+
+- [Phase-6 BC contract](p6/P6_BC_CONTRACT.md) — current Task-1 contract
+- [Phase-6 dataset and split contract](p6/P6_DATASET_AND_SPLIT_CONTRACT.md)
+- [Phase-6 checkpoint and inference contract](p6/P6_CHECKPOINT_AND_INFERENCE_CONTRACT.md)
+- [Phase-6 evaluation plan](p6/P6_EVALUATION_PLAN.md) — future gates remain `NOT_RUN`
+- [Phase-6 implementation plan](p6/P6_IMPLEMENTATION_PLAN.md) — later tasks remain `NOT AUTHORIZED`
+
+Task 1 does not authorize neural networks, training, checkpoint generation,
+ML dependencies, Project Ignis/EDOPro, RL, self-play, broader decks, or Phase
+7. See [ADR-0007](adr/ADR-0007-phase6-behavior-cloning-boundary.md) for the
+architecture rationale.
 
 ## Decision-protocol evidence
 
