@@ -793,8 +793,6 @@ void validate_logical(const LogicalModelInputV1& logical) {
     const auto& state = logical.public_safe_state;
     if (!valid_optional_player(state.globals.player_to_act) ||
         !valid_optional_player(state.globals.turn_player) ||
-        !valid_optional_player(state.globals.winner) ||
-        !valid_optional_player(state.globals.win_reason) ||
         !fits_u32_count(state.globals.life_points.size()) ||
         !fits_u32_count(state.zones.size()) || !fits_u32_count(state.entities.size()) ||
         !fits_u32_count(state.relationships.size()) ||
@@ -852,8 +850,7 @@ void validate_logical(const LogicalModelInputV1& logical) {
     for (std::size_t index = 0; index < state.visible_events.size(); ++index) {
         const auto& event = state.visible_events[index];
         (void)visible_event_kind_code(event.kind);
-        if (!valid_optional_player(event.player) || !valid_optional_player(event.winner) ||
-            !valid_optional_player(event.win_reason)) {
+        if (!valid_optional_player(event.player)) {
             fail_logical();
         }
         if (event.entity.has_value()) {
@@ -1547,7 +1544,6 @@ void validate_encoded(const EncodedModelInputV1& encoded) {
     for (std::size_t event_index = 0; event_index < encoded.visible_events.size(); ++event_index) {
         const auto& event = encoded.visible_events[event_index];
         if (event.kind_code > 22 || !valid_optional_player(event.player) ||
-            !valid_optional_player(event.winner) || !valid_optional_player(event.win_reason) ||
             (event.public_locator_ordinal.has_value() &&
              *event.public_locator_ordinal >= encoded.public_locator_table.size()) ||
             (event.from_zone_code.has_value() && *event.from_zone_code > 10) ||

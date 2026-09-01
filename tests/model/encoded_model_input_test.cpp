@@ -815,6 +815,33 @@ void test_malformed_logical_and_encoded_values_fail_closed() {
     require(threw, "encoded candidate row/key mismatch was not rejected");
 }
 
+void test_outcome_u8_values_are_preserved_by_both_canonical_codecs() {
+    auto logical = logical_input(1);
+    logical.public_safe_state.globals.winner = 3;
+    logical.public_safe_state.globals.win_reason = 7;
+    logical.public_safe_state.visible_events.front().winner = 5;
+    logical.public_safe_state.visible_events.front().win_reason = 9;
+
+    const auto logical_bytes = ygo::model::canonical_logical_model_input_bytes(logical);
+    require(!logical_bytes.empty() && logical.public_safe_state.globals.winner == 3 &&
+                logical.public_safe_state.globals.win_reason == 7 &&
+                logical.public_safe_state.visible_events.front().winner == 5 &&
+                logical.public_safe_state.visible_events.front().win_reason == 9,
+            "logical canonical codec changed non-player outcome values");
+
+    const auto vocabulary = vocabulary_with_all_fixture_cards();
+    const auto encoded_result = ygo::model::encode_model_input_v1(logical, vocabulary);
+    require(encoded_result && encoded_result.value.has_value(),
+            "encoded codec rejected non-player outcome values");
+    const auto& encoded = *encoded_result.value;
+    require(encoded.globals.winner == 3 && encoded.globals.win_reason == 7 &&
+                encoded.visible_events.front().winner == 5 &&
+                encoded.visible_events.front().win_reason == 9,
+            "encoded projection changed non-player outcome values");
+    require(!ygo::model::canonical_encoded_model_input_bytes(encoded).empty(),
+            "encoded canonical codec rejected non-player outcome values");
+}
+
 void test_real_paired_hidden_worlds_have_equal_encoded_inputs() {
     constexpr std::uint32_t hidden_code_a = 14821890;
     constexpr std::uint32_t hidden_code_b = 7654321;
@@ -954,6 +981,7 @@ int main() {
         test_chain_source_presence_is_encoded_once();
         test_encoded_presence_and_signed_integer_representation();
         test_malformed_logical_and_encoded_values_fail_closed();
+        test_outcome_u8_values_are_preserved_by_both_canonical_codecs();
         test_real_paired_hidden_worlds_have_equal_encoded_inputs();
         test_unknown_known_passcode_fails_closed();
         test_canonical_bytes_and_identity_bind_logical_encoded_and_vocabulary();
