@@ -53,10 +53,17 @@ void append_offset(std::vector<std::uint64_t>& offsets,
 }
 
 std::uint64_t max_collection_length(const std::vector<std::uint64_t>& offsets) {
-    if (offsets.empty()) {
+    if (offsets.size() < 2) {
         fail(ModelBatchLayoutErrorCode::InvalidRaggedLayout);
     }
-    return offsets.back() - offsets.front();
+    std::uint64_t maximum = 0;
+    for (std::size_t index = 1; index < offsets.size(); ++index) {
+        if (offsets[index - 1] > offsets[index]) {
+            fail(ModelBatchLayoutErrorCode::InvalidRaggedLayout);
+        }
+        maximum = std::max(maximum, offsets[index] - offsets[index - 1]);
+    }
+    return maximum;
 }
 
 void validate_offsets(const std::vector<std::uint64_t>& offsets,

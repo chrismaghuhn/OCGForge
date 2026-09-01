@@ -202,32 +202,37 @@ void test_padding_masks_and_optional_presence_are_distinct() {
     const auto ragged_result = ygo::model::make_ragged_model_batch_v1(samples);
     require(ragged_result && ragged_result.value.has_value(), "padding ragged setup failed");
     ModelBatchPaddingRequestV1 request;
-    request.candidate_width = 5;
-    request.entity_width = 3;
+    request.candidate_width = 3;
     const auto padded_result = ygo::model::pad_model_batch_v1(*ragged_result.value, request);
     require(padded_result && padded_result.value.has_value(), "padding construction failed");
     const auto& padded = *padded_result.value;
-    require(padded.widths.candidate_width == 5 &&
-                padded.candidate_row_mask == std::vector<std::uint8_t>{1, 1, 0, 0, 0,
-                                                                         1, 1, 1, 0, 0},
+    require(padded.widths.candidate_width == 3 &&
+                padded.candidate_row_mask == std::vector<std::uint8_t>{1, 1, 0, 1, 1, 1},
             "candidate row masks do not mark exactly the real rows");
     require(padded.candidate_routing_keys_padded[2].empty() &&
-                padded.candidate_routing_keys_padded[3].empty() &&
-                padded.candidate_routing_keys_padded[4].empty() &&
                 padded.candidate_features_padded[2].action_kind_code == 0,
             "padding rows contain routing or feature values");
+    require(padded.widths.entity_width == 2 &&
+                padded.entities_padded[1].card_vocabulary_id == 0 &&
+                padded.entity_row_mask[1] == 0 &&
+                std::any_of(padded.entities_padded.begin(), padded.entities_padded.end(),
+                            [](const auto& entity) {
+                                return entity.card_vocabulary_id == 1;
+                            }),
+            "automatic entity width used the batch sum or lost real unknown ID 1");
     require(padded.candidate_optional_presence_masks_padded[0].amount == 0 &&
                 padded.candidate_row_mask[0] == 1 &&
                 padded.candidate_optional_presence_masks_padded[2].amount == 0 &&
                 padded.candidate_row_mask[2] == 0,
             "optional presence mask was conflated with row mask");
-    require(padded.entities_padded.back().card_vocabulary_id == 0 &&
-                padded.entity_row_mask.back() == 0 &&
-                std::any_of(padded.entities_padded.begin(), padded.entities_padded.end(),
-                            [](const auto& entity) {
-                                return entity.card_vocabulary_id == 1;
-                            }),
-            "padding entity ID was not separated from real unknown ID 1");
+
+    ModelBatchPaddingRequestV1 wider_request;
+    wider_request.candidate_width = 4;
+    const auto wider_result =
+        ygo::model::pad_model_batch_v1(*ragged_result.value, wider_request);
+    require(wider_result && wider_result.value.has_value() &&
+                wider_result.value->widths.candidate_width == 4,
+            "candidate width greater than the batch maximum was rejected");
 }
 
 void test_pad_unpad_is_lossless_and_capacity_fails_closed() {
