@@ -134,6 +134,26 @@ metadata such as `engine_step_index` from visible-event records. Its bytes are
 generated from the perspective-safe `PlayerObservation` fields and are not a
 caller-supplied string or the v1 observation serialization.
 
+### Phase-5 model-facing identity
+
+The accepted `ygo::model` path applies the same discipline downstream of the
+public boundary:
+
+```text
+PublicEnvironmentObservation
++ complete ordered EnvironmentActionCandidate[]
+    → LogicalModelInputV1
+    → EncodedModelInputV1
+    → ModelBatchLayoutV1
+```
+
+Canonical model-input identity binds the logical bytes, deterministic encoded
+bytes, immutable vocabulary identity, and the ordered routing sidecar. It does
+not bind padding, bucket width, ragged offsets, batch composition, storage
+dtype, device, framework, or physical tensor shape. `public_action_key` is
+selection/routing identity, not a learned string feature; candidate ordinal is
+derived label metadata only.
+
 ## 11. Trace identity vs. gameplay identity
 
 A trace can contain provenance that differs between toolchains or artifact paths.

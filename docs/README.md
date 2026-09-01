@@ -8,6 +8,10 @@ OCGForge has three kinds of documentation:
 
 This index keeps those layers separate.
 
+Current repository status: M0–M4, Episodic V2, Phase 3A/3B,
+Phase 4A/4B/4C, and Phase 5 are **FINAL PASS** for their defined scopes.
+Phase 6 is next and has not started.
+
 ## Start here
 
 | Document | Purpose |
@@ -29,7 +33,8 @@ This index keeps those layers separate.
 - [ADR-0002 — Shared semantic EpisodeDriver for episodic environment](adr/ADR-0002-episodic-environment.md) — **Accepted**
 - [ADR-0003 — Episodic V1 prerequisite identities](adr/ADR-0003-episodic-v1-normative-prerequisites.md) — **Accepted**
 - [ADR-0004 — Perspective-safe public episodic action identity](adr/ADR-0004-perspective-safe-episodic-action-identity.md) — **Accepted**
-- [ADR-0005 — Trusted trajectory core above EpisodicEnvironment V2](adr/ADR-0005-trusted-trajectory-core.md) — **Accepted Phase 3A**
+- [ADR-0005 — Trusted trajectory core above EpisodicEnvironment V2](adr/ADR-0005-trusted-trajectory-core.md) — **Accepted Phase 3A architectural authority**
+- [ADR-0006 — Framework-neutral model-facing candidate-scoring boundary](adr/ADR-0006-model-facing-candidate-scoring-adapter.md) — **Accepted Phase 5 contract freeze**
 - [ADR index and policy](adr/README.md)
 
 ## Versioned contracts
@@ -38,18 +43,18 @@ This index keeps those layers separate.
 - [Engine trace v1](contracts/engine-trace-v1.md)
 - [Engine trace v2](contracts/engine-trace-v2.md)
 - [Player observation v1](contracts/player-observation-v1.md)
-- [Perspective-safe public environment observation v1](contracts/public-environment-observation-v1.md) — **Policy-facing projection; implementation pending**
+- [Perspective-safe public environment observation v1](contracts/public-environment-observation-v1.md) — **Accepted and implemented public projection**
 - [Player view v1](contracts/player-view-v1.md)
-- [Episodic environment v1](contracts/episodic-environment-v1.md) — **Accepted semantics; implementation evidence pending**
-- [Perspective-safe public action identity v1](contracts/public-action-identity-v1.md) — **Accepted prerequisite; implementation pending**
-- [Episodic environment v2](contracts/episodic-environment-v2.md) — **Accepted public-identity successor; implementation pending**
-- [Trusted trajectory core v1](contracts/trusted-trajectory-v1.md) — **Accepted Phase-3A logical trajectory contract; Phase-3B runtime/persistence is implemented in the current PR**
+- [Episodic environment v1](contracts/episodic-environment-v1.md) — **Accepted historical predecessor**
+- [Perspective-safe public action identity v1](contracts/public-action-identity-v1.md) — **Accepted and implemented prerequisite**
+- [Episodic environment v2](contracts/episodic-environment-v2.md) — **Accepted and implemented public-identity successor**
+- [Trusted trajectory core v1](contracts/trusted-trajectory-v1.md) — **Accepted Phase-3A logical trajectory contract**
 - [Policy provenance v1](contracts/policy-provenance-v1.md) — **Accepted Phase-3A collection-provenance contract; not learner-visible data**
-- [Candidate trajectory shard v1](contracts/trajectory-shard-v1.md) — **Phase-3B physical contract; review pending**
-- [Restricted collection evidence bundle v1](contracts/restricted-collection-evidence-bundle-v1.md) — **Phase-3B physical contract; review pending**
-- [Admission receipt v1](contracts/admission-receipt-v1.md) — **Phase-3B admission contract; review pending**
-- [Dataset identity v1](contracts/dataset-identity-v1.md) — **Phase-3B identity contract; review pending**
-- [Dataset manifest v1](contracts/dataset-manifest-v1.md) — **Phase-3B physical contract; review pending**
+- [Candidate trajectory shard v1](contracts/trajectory-shard-v1.md) — **Accepted Phase-3B physical contract**
+- [Restricted collection evidence bundle v1](contracts/restricted-collection-evidence-bundle-v1.md) — **Accepted Phase-3B physical contract**
+- [Admission receipt v1](contracts/admission-receipt-v1.md) — **Accepted Phase-3B admission contract**
+- [Dataset identity v1](contracts/dataset-identity-v1.md) — **Accepted Phase-3B identity contract**
+- [Dataset manifest v1](contracts/dataset-manifest-v1.md) — **Accepted Phase-3B physical contract**
 
 A contract is not a milestone completion claim. It defines semantics for the surface that uses that version. Accepted contract semantics do not imply that an implementation or acceptance milestone has passed.
 
@@ -58,17 +63,47 @@ A contract is not a milestone completion claim. It defines semantics for the sur
 - [Episodic V1 acceptance plan](episodic/EPISODIC_V1_ACCEPTANCE.md)
 - [2026-08-26 episodic research decision record](research/episodic/EPISODIC_CONTRACT_RESEARCH_DECISION_2026-08-26.md)
 
-These documents define accepted post-M4 architecture and the evidence required to implement it. They do not claim episodic implementation, ML readiness, trajectory support, or a new milestone PASS.
+These documents preserve the accepted Episodic V2 design and its historical
+acceptance record. The implementation and final acceptance are complete; they
+do not imply general ML readiness or arbitrary-deck support.
 
 ## Trusted trajectory design and acceptance
 
-- [Phase-3A trusted trajectory acceptance matrix](trajectory/PHASE3A_ACCEPTANCE.md) — **Contract review only; not a trusted-trajectory runtime or final Phase-3 acceptance claim**
-- [Phase-3B persistence and replay-admission acceptance matrix](trajectory/PHASE3B_ACCEPTANCE.md) — **Exact-head implementation evidence; review pending**
+- [Phase-3A trusted trajectory acceptance matrix](trajectory/PHASE3A_ACCEPTANCE.md) — **Historical accepted Phase-3A evidence**
+- [Phase-3B persistence and replay-admission acceptance matrix](trajectory/PHASE3B_ACCEPTANCE.md) — **Historical accepted Phase-3B evidence**
 
-The PR #17 research record is design provenance only. The proposed
-Phase-3A ADR and contracts above are the accepted logical review surface.
-Phase-3B owns the physical persistence and admission implementation listed
-above. Teacher, model, and ML implementation remain out of scope.
+The PR #17 research record is design provenance only. ADR-0005 and
+`trusted_trajectory.v1` are the accepted Phase-3A logical trajectory
+authority. Phase 3B adds the accepted physical persistence, replay/admission,
+receipt, and dataset-manifest contracts layered above that logical contract.
+Phase 5 consumes those public/admitted values without changing the trusted
+trajectory schema.
+
+## Phase 5 model-facing acceptance
+
+- [Phase-5 model contract](p5/P5_MODEL_CONTRACT.md)
+- [Phase-5 acceptance plan](p5/P5_ACCEPTANCE_PLAN.md) — **frozen historical plan**
+- [Phase-5 final acceptance evidence](p5/P5_ACCEPTANCE_EVIDENCE.md) — **FINAL PASS**
+
+The accepted framework-neutral path is:
+
+```text
+PublicEnvironmentObservation
++ complete ordered EnvironmentActionCandidate[]
+    → LogicalModelInputV1
+    → EncodedModelInputV1
+    → ModelBatchLayoutV1
+    + admission-backed ModelSupervisionSampleV1
+```
+
+`public_action_key` remains selection/routing identity, candidate ordinals are
+derived training-label metadata, and physical batch layout is excluded from
+model-input identity. Phase 6 is next; no learner, neural network, framework,
+Behavior Cloning, RL, or self-play implementation has started.
+
+Accepted evidence records `H_exec=3c99e86c487361fc4e0f5f12678b4867e59232b7`,
+`H_evidence=da3376fc2ab645377f9de2dd9fd6195c1aa8c081`, and fresh `163/163`
+native CTest regression.
 
 ## Decision-protocol evidence
 
@@ -100,6 +135,16 @@ above. Teacher, model, and ML implementation remain out of scope.
 - [M3.5 acceptance](m3_5/M3_5_ACCEPTANCE.md)
 - [Public API hardening](m3_5/PUBLIC_API_HARDENING.md)
 - `m3_5/m35_acceptance.json`
+
+## M4 and Phase 4 acceptance
+
+- [M4 final acceptance](m4/M4_FINAL.md) — **FINAL PASS**
+- [Phase-4A acceptance](p4a/P4A_ACCEPTANCE.md) — **FINAL PASS**
+- [Phase-4B acceptance](p4b/P4B_ACCEPTANCE.md) — **FINAL PASS**
+- [Phase-4C acceptance](p4c/P4C_ACCEPTANCE.md) — **FINAL PASS**
+
+These are milestone acceptance records for their defined scopes. Historical
+benchmark values and evidence remain unchanged.
 
 ## Audits and historical implementation material
 

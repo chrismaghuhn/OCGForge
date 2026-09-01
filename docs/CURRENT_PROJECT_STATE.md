@@ -1,8 +1,8 @@
 # OCGForge Current Project State
 
-**Snapshot date:** 2026-08-25
-**Repository baseline inspected:** `main` at `bafe75b97e03d796b318d6f7757cc555873f1fb9` (PR #3 merge)
-**Latest project checkpoint described here:** PR #8 — M4 FINAL parallel-simulation foundation and accepted post-foundation integration; source/evidence checkpoint `a49639bbb7ef8ce3406ac0d9aad295272872dda9`
+**Snapshot date:** 2026-09-01
+**Repository baseline inspected:** `main` at `6c238addb353fc0bf7e68c6dfdc6f19b36c84bf4` (Phase-5 FINAL acceptance merge)
+**Latest project checkpoint described here:** Phase 5 FINAL PASS; execution head `3c99e86c487361fc4e0f5f12678b4867e59232b7`, evidence head `da3376fc2ab645377f9de2dd9fd6195c1aa8c081`
 
 This document is a summary. Detailed acceptance evidence remains in the milestone files.
 
@@ -14,19 +14,28 @@ The current strongest claim is:
 
 > The locked Swordsoul Tenyi ML v1 vs. Salamangreat ML v1 matchup has repository-recorded M3/M3.5 acceptance evidence for rules-bundle identity, card/script/database resolution, required mechanics, decision handling, perspective-safe observations, deterministic execution, semantic-action replay, and complete fixed games.
 
+The repository also records final acceptance for Episodic V2, Phase 3A/3B,
+Phase 4A/4B/4C, and Phase 5. Phase 5 adds a framework-neutral model-facing
+representation and admission-backed supervision derivation; it does not start
+Phase 6 or select an ML framework.
+
 The project must **not** generalize that claim to arbitrary Yu-Gi-Oh! decks.
 
 ## Milestone summary
 
 | Milestone | Repository state | Meaning |
 | --- | --- | --- |
-| M0 | established foundation | deterministic pinned-core spike, lifecycle, trace, basic protocol/privacy gates |
-| M1 | protocol foundation implemented | typed complete candidate protocol and continuation machinery; some global message families remain protocol-only or unsupported |
-| M2 | observation foundation implemented | perspective-safe `PlayerObservation`, canonical serialization/hash, event/history projection |
-| M2.1 | investigated then resolved by M3.5 | individual Xyz-material public-query limitation identified; later fixed through repository patchset |
+| M0 | **FINAL PASS** | deterministic pinned-core foundation, lifecycle, trace, and basic protocol/privacy gates |
+| M1 | **FINAL PASS** | typed complete candidate protocol and continuation machinery; some global message families remain protocol-only or unsupported |
+| M2 | **FINAL PASS** | perspective-safe `PlayerObservation`, canonical serialization/hash, and event/history projection |
+| M2.1 | **FINAL PASS** | Xyz-material public-query limitation investigated and resolved by the M3.5 patchset |
 | M3 | **FINAL PASS recorded** | locked fixed-matchup conformance and mechanics closure |
 | M3.5 | **FINAL PASS recorded** | narrow public API hardening for Xyz material query + starting-player control |
-| M4 | **FINAL PASS** | persistent-worker parallel-simulation foundation with fresh Release acceptance evidence; only accepted semantic-equivalent internal optimizations are integrated; no general ML-readiness or M5 claim |
+| M4 | **FINAL PASS** | persistent-worker parallel-simulation foundation with fresh Release acceptance evidence; only accepted semantic-equivalent internal optimizations are integrated; no general ML-readiness or Phase 6 claim |
+| Episodic V2 | **FINAL PASS** | public reset/step boundary, complete public domains, privacy, determinism, replay, and failure-closed lifecycle |
+| Phase 3A / 3B | **FINAL PASS** | trusted trajectory, provenance, persistence, replay admission, receipts, and dataset identity |
+| Phase 4A / 4B / 4C | **FINAL PASS** | public policy, Teacher, battle-sidecar, and frozen evaluation scope |
+| Phase 5 | **FINAL PASS** | framework-neutral logical/encoded/batch model input plus admission-backed supervision samples |
 
 ## M3/M3.5 recorded acceptance
 
@@ -52,9 +61,10 @@ Recorded regression evidence also reports 85/85 CTest tests, 17/17 M3 Python tes
 
 ### Verification provenance
 
-This status document was prepared from repository content and GitHub history.
-
-The documentation preparation did **not** execute the build or test suite. Therefore the values above are described as *repository-recorded acceptance evidence*, not as a newly verified local run.
+This status document is derived from repository content, GitHub history, and the
+accepted Phase-5 machine-readable evidence. The current-state summary does not
+replace the milestone artifacts or claim that this documentation refresh
+reran every acceptance command.
 
 ## What is implemented
 
@@ -89,6 +99,44 @@ The repository contains trace contracts, gameplay determinism tests, and continu
 ### Fixed-matchup certification
 
 M3 provides a large fixed-matchup evidence set rather than relying on “the duel ran” as proof of support.
+
+### Episodic V2 and trusted trajectory
+
+Episodic V2 is accepted as the public reset/step environment boundary with
+complete ordered public candidate domains, perspective-safe observations,
+deterministic identities, replay, admission, and fail-closed lifecycle
+semantics. Phase 3A/3B is accepted above that boundary for trusted trajectory
+records, provenance, immutable persistence, replay admission, receipts, and
+dataset identity.
+
+### Phase 4 policy and evaluation
+
+Phase 4A/4B/4C is accepted for the defined public-policy, Teacher,
+battle-sidecar, and frozen evaluation scopes. Those results do not expand the
+fixed certified gameplay matchup into arbitrary-deck support.
+
+### Phase 5 model-facing boundary
+
+Phase 5 is accepted as a framework-neutral downstream representation:
+
+```text
+PublicEnvironmentObservation
++ complete ordered EnvironmentActionCandidate[]
+    → LogicalModelInputV1
+    → EncodedModelInputV1
+    → ModelBatchLayoutV1
+```
+
+The accepted path also derives admission-backed
+`ModelSupervisionSampleV1`. `public_action_key` remains selection/routing
+identity; candidate ordinals are training-label metadata only. Padding,
+bucketing, batch composition, and physical tensor details are not model-input
+identity.
+
+The committed Phase-5 evidence records `H_exec`
+`3c99e86c487361fc4e0f5f12678b4867e59232b7`, `H_evidence`
+`da3376fc2ab645377f9de2dd9fd6195c1aa8c081`, and fresh `163/163` native CTest
+regression.
 
 ## Important remaining limitations
 
@@ -131,15 +179,19 @@ Unknown/deferred event families are omitted rather than guessed.
 
 Fixture setup helpers are test infrastructure.
 
-### 5. No authoritative ML tensor schema
+### 5. No framework-specific tensor backend
 
-The authoritative contracts intentionally use variable-length semantic data.
+Phase 5 defines logical and deterministic encoded model representations plus a
+lossless ragged/padded execution layout. It does not select a tensor framework
+or define a fixed-size authoritative gameplay/action schema.
 
-A fixed tensor/action vocabulary should be a downstream versioned adapter.
+A framework-specific tensor adapter remains Phase 6-or-later work.
 
 ### 6. No ML implementation
 
-The repository describes itself as a game-AI research environment but contains no learning algorithm or training stack at the inspected baseline.
+The repository describes itself as a game-AI research environment but contains
+no learner, neural network, loss/optimizer, or training stack. Phase 6 has not
+started.
 
 ### 7. M4 parallel-simulation foundation is finalized
 
@@ -149,7 +201,7 @@ validated through 64 workers; 16 workers is the recommended production
 concurrency for the measured host.
 
 This closes the parallel-simulation foundation only. It does not claim general
-ML readiness or begin M5. M4.3.5 remains explicitly rejected; its negative
+ML readiness or replace the later Phase 5 model-facing acceptance. M4.3.5 remains explicitly rejected; its negative
 experiment evidence is retained without its production implementation.
 
 ### 8. Windows is the canonical CI path
@@ -170,12 +222,18 @@ include/ygo/protocol/      decision/candidate/continuation types
 include/ygo/observation/   player observation types
 include/ygo/trace/         trace/hash types
 include/ygo/m3/            fixed-matchup policy
+include/ygo/environment/   public episodic environment types
+include/ygo/trajectory/    trusted trajectory and admission types
+include/ygo/model/         framework-neutral model-facing types
 
 src/core/
 src/protocol/
 src/observation/
 src/trace/
 src/m3/
+src/environment/
+src/trajectory/
+src/model/
 
 tests/core/
 tests/protocol/
@@ -185,6 +243,8 @@ tests/determinism/
 tests/trace/
 tests/m3/
 tests/m3_5/
+tests/episodic/
+tests/model/
 
 fixtures/
 tools/
@@ -192,16 +252,18 @@ third_party/
 docs/
 ```
 
-## Tracker state at this snapshot
+## Tracker state
 
-No open GitHub Issues were returned during the 2026-08-20 repository inspection.
-
-This is a dated tracker observation, not a project invariant.
+Issue/PR state is external and time-dependent; consult GitHub for current
+tracker status. It is not a repository invariant.
 
 ## Immediate documentation/maintenance priorities
 
-1. keep this current-state document aligned with accepted evidence;
-2. treat M4 as a new milestone with explicit performance methodology rather than ad-hoc optimization;
-3. create issues before broadening certified deck/card scope;
-4. add ADRs for future environment/checkpoint/vectorization architecture rather than encoding them implicitly in code;
-5. preserve the distinction between global protocol coverage and deck-specific conformance.
+1. begin Phase 6 only with an explicit scope, contract, and acceptance plan;
+2. create issues before broadening certified deck/card scope;
+3. add ADRs for future checkpoint/fork or other long-lived architecture rather
+   than encoding it implicitly in code;
+4. preserve the distinction between global protocol coverage and deck-specific
+   conformance;
+5. keep model-facing representations downstream of the public environment and
+   trusted trajectory boundaries.

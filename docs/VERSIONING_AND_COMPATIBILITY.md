@@ -1,6 +1,8 @@
 # Versioning and Compatibility
 
-OCGForge already has versioned traces and observation/decision contracts. Future persistence, model adapters, and replay tooling will make compatibility more important.
+OCGForge has versioned traces, observation/decision contracts, trusted
+trajectory artifacts, and the accepted Phase-5 model-facing contracts.
+Future persistence and learner adapters will make compatibility more important.
 
 This document defines the project-level policy.
 
@@ -30,8 +32,15 @@ Current repository contract families include:
 - engine trace v1;
 - engine trace v2;
 - episodic environment v1;
-- perspective-safe public action identity v1 and episodic environment v2.
-- perspective-safe public environment observation v1.
+- perspective-safe public action identity v1;
+- episodic environment v2;
+- perspective-safe public environment observation v1;
+- logical model input v1;
+- encoded model input v1;
+- card vocabulary v1;
+- model batch layout v1;
+- model input identity v1;
+- model supervision sample v1.
 
 Trace v2 exists specifically because continuation-aware semantics differ from the older atomic trace assumptions.
 
@@ -154,7 +163,23 @@ A future tool should not merge acceptance rows from incompatible environments me
 
 ## 10. Model-facing adapters
 
-Future vocabulary/tensor schemas need their own versions.
+Phase 5 owns the framework-neutral model-facing semantic versions. They are
+downstream of the public environment and trusted trajectory boundaries:
+
+```text
+PublicEnvironmentObservation
++ complete ordered EnvironmentActionCandidate[]
+    → LogicalModelInputV1
+    → EncodedModelInputV1
+    → ModelBatchLayoutV1
+```
+
+`model_input.v1` binds canonical logical/encoded bytes and vocabulary identity;
+physical batch layout is excluded. The accepted supervision sample binds that
+model-input identity and derives candidate ordinal only as label metadata.
+
+Future framework-specific vocabulary/tensor/learner schemas need their own
+versions.
 
 Do not use authoritative card passcodes, observation schema version, and model vocabulary version as if they were the same thing.
 
@@ -167,7 +192,7 @@ A model adapter may define:
 - normalization;
 - reward schema.
 
-Those are downstream contracts.
+Those remain downstream contracts and are not selected by Phase 5.
 
 ## 11. Persistence/checkpoints
 

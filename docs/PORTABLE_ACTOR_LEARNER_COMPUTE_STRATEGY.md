@@ -1,8 +1,9 @@
 # OCGForge — Portable Actor/Learner Compute Strategy
 
-Status: future architecture note; **not an accepted milestone or implementation contract**.
+Status: post-Phase-5 future architecture note; **not an accepted milestone or
+implementation contract**. Phase 6 has not started.
 
-This document preserves a post-M4 compute strategy for using heterogeneous CPU resources — including ephemeral hosted notebook/batch CPUs when available — to generate trustworthy OCGForge trajectories while reserving GPU resources primarily for neural inference and learning.
+This document preserves a post-Phase-5 compute strategy for using heterogeneous CPU resources — including ephemeral hosted notebook/batch CPUs when available — to generate trustworthy OCGForge trajectories while reserving GPU resources primarily for neural inference and learning.
 
 Provider quotas, accelerator models, concurrent-session counts, pricing, and concrete hardware shapes are operational details. They must be discovered and recorded at execution time rather than encoded into OCGForge gameplay or trajectory semantics.
 
@@ -83,7 +84,7 @@ This note does **not** authorize:
 - a provider-specific rules engine;
 - a second environment implementation;
 - provider-specific gameplay behavior;
-- live distributed training before trajectory contracts exist;
+- live distributed training before Phase-6 learner/data contracts exist;
 - omitting `PlayerObservation` fields for hosted actors;
 - candidate truncation to reduce traffic;
 - hidden-state shortcuts;
@@ -391,7 +392,9 @@ Do not require every CPU actor host to own a GPU.
 
 When actors need a neural policy, prefer batched inference or versioned local policy snapshots over one synchronous cross-internet critical path when possible.
 
-The exact inference topology should be decided only after model-facing and trajectory contracts exist.
+The exact inference topology should be decided only after the accepted
+model-facing and trajectory contracts are joined to explicit Phase-6 learner
+contracts.
 
 ## Ephemeral hosted sessions
 
@@ -408,9 +411,10 @@ Design assumptions:
 
 Therefore provider quotas, pricing, hardware shape, accelerator availability, and session limits belong to deployment discovery/metadata, never to a versioned gameplay or trajectory contract.
 
-## M4 dependency and scope boundary
+## Accepted foundation and scope boundary
 
-This strategy depends on M4 proving the parallel environment foundation first.
+This strategy depends on the accepted M4 parallel environment foundation and
+Phase 5 model-facing boundary. It remains future deployment architecture.
 
 M4 should establish on its accepted platform that increasing concurrency does not change authoritative semantics, privacy, or complete legal decisions and should empirically characterize the useful worker range on the measured host.
 
@@ -423,16 +427,19 @@ maximum semantically validated concurrency
 recommended concurrency for this machine
 ```
 
-Cross-platform Linux/hosted equivalence is intentionally kept as a later portability gate rather than silently expanding M4 into a deployment/ML portability milestone.
+Cross-platform Linux/hosted equivalence is intentionally kept as a later
+portability gate rather than silently expanding M4 or Phase 5 into a
+deployment/ML portability milestone.
 
 ## Later prerequisites before real distributed training
 
-Do not implement portable distributed actors merely because M4 passes. The following layers should exist first:
+Do not implement portable distributed actors merely because the preceding
+milestones pass. The following layers should exist first:
 
-1. stable episodic environment semantics;
-2. versioned trajectory contract;
-3. transactional shard writer/validator;
-4. model-facing adapter;
+1. stable accepted episodic environment semantics;
+2. accepted versioned trajectory contract;
+3. accepted transactional shard writer/validator;
+4. accepted framework-neutral model-facing adapter;
 5. `DATA_TRUSTED` validation gates;
 6. checkpoint/behavior/opponent policy provenance;
 7. cross-platform environment equivalence for every trusted platform class;
