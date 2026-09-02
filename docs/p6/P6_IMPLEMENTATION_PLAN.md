@@ -166,8 +166,12 @@ The Task-4B execution configuration is frozen before that later run: train
 samples are ordered by ascending `bc_sample_identity`, `shuffle=false`, step
 `i` selects `train_samples[i % train_sample_count]`, the Adam execution flags
 are all explicitly false (`foreach`, `fused`, `amsgrad`, `maximize`,
-`capturable`, and `differentiable`), deterministic algorithms are strict, and
-float32 matmul precision is `highest`.
+`capturable`, `differentiable`, and `decoupled_weight_decay`), deterministic
+algorithms are strict, and float32 matmul precision is `highest`.
+
+The run manifest keeps the exact frozen Task-1 V1 top-level field set. Task-4B
+step counts, CUDA-preflight attestation, deterministic execution identity, and
+GPU-memory measurements are emitted in a separate smoke-evidence sidecar.
 
 Task 4A does not issue accepted training-run or trained-checkpoint evidence.
 Task 4B requires a separate authorization after independent review.

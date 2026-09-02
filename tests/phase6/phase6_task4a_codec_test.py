@@ -61,7 +61,8 @@ class Task4ACodecTests(unittest.TestCase):
         self.assertIn(b"step_i_modulo_train_sample_count.v1", codec.canonical_batch_config_bytes())
         optimizer_bytes = codec.canonical_optimizer_config_bytes()
         for flag in (b"foreach", b"fused", b"amsgrad", b"maximize",
-                     b"capturable", b"differentiable"):
+                     b"capturable", b"differentiable",
+                     b"decoupled_weight_decay"):
             self.assertIn(flag, optimizer_bytes)
         self.assertIn(b"highest", codec.canonical_deterministic_execution_bytes())
 
@@ -97,13 +98,15 @@ class Task4ACodecTests(unittest.TestCase):
             actual_optimizer_steps=0,
         )
         self.assertTrue(codec.training_run_identity(manifest).startswith("phase6_training_run.v1."))
+        for field in (
+            "maximum_optimizer_steps", "actual_optimizer_steps",
+            "deterministic_execution_configuration_identity", "cuda_preflight_identity",
+        ):
+            self.assertFalse(hasattr(manifest, field))
         self.assertEqual(
             manifest.opponent_policy_source_identities,
             tuple(sorted(codec.TEACHER_SOURCE_IDENTITIES)),
         )
-        with self.assertRaises(codec.CodecError):
-            codec.training_run_identity(codec.replace_training_run(
-                manifest, actual_optimizer_steps=501))
         with self.assertRaises(codec.CodecError):
             codec.training_run_identity(codec.replace_training_run(
                 manifest, opponent_policy_source_identities=()))
@@ -115,16 +118,6 @@ class Task4ACodecTests(unittest.TestCase):
                 training_code_commit="4" * 40,
                 actual_optimizer_steps=1,
             )
-        with self.assertRaises(codec.CodecError):
-            codec.training_run_identity(codec.replace_training_run(
-                manifest, actual_optimizer_steps=1))
-        with self.assertRaises(codec.CodecError):
-            codec.training_run_identity(codec.replace_training_run(
-                manifest,
-                actual_optimizer_steps=1,
-                cuda_preflight_identity=codec.CUDA_PREFLIGHT_ID_PREFIX + "5" * 64,
-            ))
-
         checkpoint = codec.default_checkpoint_manifest(
             architecture_config_identity=manifest.model_architecture_config_identity,
             card_vocabulary_identity=manifest.card_vocabulary_identity,

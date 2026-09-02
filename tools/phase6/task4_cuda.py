@@ -15,6 +15,9 @@ import torch
 from . import task4_codec as codec
 
 
+_CUDA_PREFLIGHT_ATTESTATION = object()
+
+
 class CudaPreflightError(RuntimeError):
     def __init__(self, code: str, message: str, actual_optimizer_steps: int = 0) -> None:
         super().__init__(message)
@@ -28,13 +31,15 @@ class CudaPreflightResultV1:
     device_index: int
     gpu_name: str
     framework_version: str
-    torch_cuda_build: str
-    torch_cuda_version: str
+    torch_cuda_version_reported: str
     device_count: int
     capability_major: int
     capability_minor: int
     actual_optimizer_steps: int = 0
     cpu_fallback: bool = False
+    _attestation: object = dataclasses.field(
+        default=None, repr=False, compare=False
+    )
 
     @property
     def device(self) -> torch.device:
@@ -46,8 +51,7 @@ class CudaPreflightResultV1:
             device_type=self.device_type,
             device_index=self.device_index,
             gpu_name=self.gpu_name,
-            torch_cuda_build=self.torch_cuda_build,
-            torch_cuda_version=self.torch_cuda_version,
+            torch_cuda_version_reported=self.torch_cuda_version_reported,
             capability_major=self.capability_major,
             capability_minor=self.capability_minor,
         )
@@ -65,16 +69,21 @@ class CudaPreflightResultV1:
         ))
 
 
-def training_run_manifest_from_cuda_preflight(
+def smoke_evidence_from_cuda_preflight(
     preflight: CudaPreflightResultV1,
     *,
+    training_run_identity: str,
     source_dataset_identity: str,
     dataset_split_identity: str,
     card_vocabulary_identity: str,
     training_code_commit: str,
     actual_optimizer_steps: int = 0,
-) -> codec.TrainingRunManifestV1:
-    """Bind run provenance to facts returned by the same CUDA preflight."""
+    final_exported_checkpoint_identity: str | None = None,
+    gpu_memory_before: int | None = None,
+    gpu_memory_peak: int | None = None,
+    gpu_memory_after: int | None = None,
+) -> codec.Task4BSmokeEvidenceV1:
+    """Build Task-4B evidence from the same real CUDA preflight result."""
 
     manifest = codec.default_training_run_manifest(
         source_dataset_identity=source_dataset_identity,
@@ -88,14 +97,40 @@ def training_run_manifest_from_cuda_preflight(
             "CUDA_DEVICE_MISMATCH",
             "training provenance requires a clean zero-step CUDA preflight",
         )
-    return dataclasses.replace(
-        manifest,
-        framework_version=preflight.framework_version,
+    if (actual_optimizer_steps > 0 and
+            preflight._attestation is not _CUDA_PREFLIGHT_ATTESTATION):
+        raise CudaPreflightError(
+            "CUDA_DEVICE_MISMATCH",
+            "positive smoke evidence requires the real CUDA preflight path",
+        )
+    evidence = codec.Task4BSmokeEvidenceV1(
+        training_run_identity=training_run_identity,
+        source_dataset_identity=manifest.source_dataset_identity,
+        dataset_split_identity=manifest.dataset_split_identity,
+        model_architecture_config_identity=manifest.model_architecture_config_identity,
+        card_vocabulary_identity=manifest.card_vocabulary_identity,
+        optimizer_configuration_identity=manifest.optimizer_configuration_identity,
+        learning_rate_schedule_identity=manifest.learning_rate_schedule_identity,
+        batch_configuration_identity=manifest.batch_configuration_identity,
+        gradient_accumulation_configuration_identity=manifest.gradient_accumulation_configuration_identity,
+        training_rng_contract_identity=manifest.training_rng_contract_identity,
+        training_seed_or_initialization_identity=manifest.training_seed_or_initialization_identity,
+        precision_mode_identity=manifest.precision_mode_identity,
+        deterministic_execution_configuration_identity=codec.deterministic_execution_identity(),
         device_and_distributed_provenance_identity=preflight.execution_provenance_identity,
         cuda_preflight_identity=preflight.cuda_preflight_identity,
+        maximum_optimizer_steps=codec.SMOKE_MAX_OPTIMIZER_STEPS,
         actual_optimizer_steps=actual_optimizer_steps,
-        _cuda_preflight_attestation=codec._CUDA_PREFLIGHT_ATTESTATION,
+        final_exported_checkpoint_identity=final_exported_checkpoint_identity,
+        gpu_memory_before=gpu_memory_before,
+        gpu_memory_peak=gpu_memory_peak,
+        gpu_memory_after=gpu_memory_after,
     )
+    try:
+        codec.canonical_smoke_evidence_bytes(evidence)
+    except codec.CodecError as error:
+        raise CudaPreflightError("CUDA_DEVICE_MISMATCH", str(error)) from error
+    return evidence
 
 
 def require_task4_cuda() -> CudaPreflightResultV1:
@@ -144,9 +179,9 @@ def require_task4_cuda() -> CudaPreflightResultV1:
         device_index=int(device.index),
         gpu_name=gpu_name,
         framework_version=torch.__version__,
-        torch_cuda_build=cuda_build,
-        torch_cuda_version=cuda_build,
+        torch_cuda_version_reported=cuda_build,
         device_count=int(device_count),
         capability_major=int(capability[0]),
         capability_minor=int(capability[1]),
+        _attestation=_CUDA_PREFLIGHT_ATTESTATION,
     )

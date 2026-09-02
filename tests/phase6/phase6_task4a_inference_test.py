@@ -44,6 +44,10 @@ def _request(checkpoint_identity, model_input=None):
     )
 
 
+def _bound(loaded, request, model_input):
+    return task4_inference.bind_inference_execution(request, model_input, loaded)
+
+
 def _reload(artifact_bytes):
     return task4_inference.reload_model_from_checkpoint(
         artifact_bytes,
@@ -64,6 +68,10 @@ def _rows(count=2):
 
 
 class Task4AInferenceTests(unittest.TestCase):
+    def test_inference_request_v1_has_no_task4_numeric_identity_field(self):
+        self.assertFalse(hasattr(codec.InferenceRequestV1, "numeric_input_identity"))
+        self.assertFalse(hasattr(codec.InferenceRequestV1, "public_candidate_domain_digest"))
+
     def test_canonical_export_mutation_and_wrong_architecture_fail_closed(self):
         exported = _checkpoint()
         loaded = task4_inference.load_checkpoint_artifact(exported.artifact_bytes)
@@ -105,8 +113,9 @@ class Task4AInferenceTests(unittest.TestCase):
         _, second = _reload(exported.artifact_bytes)
         model_input = _model_input()
         request = _request(loaded.checkpoint_identity, model_input)
-        first_response = task4_inference.infer_request(first, loaded, request, model_input)
-        second_response = task4_inference.infer_request(second, loaded, request, model_input)
+        execution = _bound(loaded, request, model_input)
+        first_response = task4_inference.infer_request(first, loaded, execution)
+        second_response = task4_inference.infer_request(second, loaded, execution)
         self.assertEqual(first_response.scores, second_response.scores)
         self.assertEqual(first_response.selected_public_action_key,
                          second_response.selected_public_action_key)
@@ -127,7 +136,8 @@ class Task4AInferenceTests(unittest.TestCase):
             return original_forward(*args, **kwargs)
 
         model.forward = recording_forward
-        response = task4_inference.infer_request(model, loaded, request, model_input)
+        execution = _bound(loaded, request, model_input)
+        response = task4_inference.infer_request(model, loaded, execution)
         self.assertEqual(len(response.scores), len(model_input.candidate_rows))
         self.assertEqual(len(seen), 1)
         args, kwargs = seen[0]
@@ -136,7 +146,7 @@ class Task4AInferenceTests(unittest.TestCase):
         self.assertNotIn("public_action_key", kwargs)
         with self.assertRaises(task4_inference.Task4InferenceError):
             task4_inference.infer_request(
-                model, loaded, request, model_input,
+                model, loaded, execution,
                 physical_candidate_capacity=1,
             )
 
@@ -157,10 +167,12 @@ class Task4AInferenceTests(unittest.TestCase):
             numeric_input_identity=codec.numeric_model_input_identity(changed_rows),
         )
         self.assertNotEqual(
-            changed_rows.numeric_input_identity, request.numeric_input_identity
+            changed_rows.numeric_input_identity, model_input.numeric_input_identity
         )
+        runner = task4_inference.Phase6InferenceRunnerV1(model, loaded)
+        runner.submit_request(request, model_input)
         with self.assertRaises(task4_inference.Task4InferenceError):
-            task4_inference.infer_request(model, loaded, request, changed_rows)
+            runner.infer(request, changed_rows)
 
     def test_tie_uses_bytewise_public_key_only_after_network_scoring(self):
         model = task4_model.Phase6TorchCandidateScorer()
@@ -171,7 +183,9 @@ class Task4AInferenceTests(unittest.TestCase):
         loaded, fresh = _reload(exported.artifact_bytes)
         model_input = _model_input()
         request = _request(loaded.checkpoint_identity, model_input)
-        response = task4_inference.infer_request(fresh, loaded, request, model_input)
+        response = task4_inference.infer_request(
+            fresh, loaded, _bound(loaded, request, model_input)
+        )
         self.assertEqual(response.selected_candidate_ordinal, 1)
         self.assertEqual(response.selected_public_action_key, "public_action.v1.00")
 
@@ -192,14 +206,14 @@ class Task4AInferenceTests(unittest.TestCase):
         # Different decision indices make these distinct request identities.
         second = dataclasses.replace(second, decision_index=8)
         second = dataclasses.replace(second, request_identity=codec.inference_request_identity(second))
-        stale_runner.submit_request(first)
+        stale_runner.submit_request(first, model_input)
         second_response = codec.make_inference_response(second, (1.0, 2.0), 1)
         with self.assertRaises(task4_inference.Task4InferenceError):
             stale_runner.accept_response(first, second_response)
 
         malformed_runner = task4_inference.Phase6InferenceRunnerV1(model, loaded)
         malformed_request = _request(loaded.checkpoint_identity, model_input)
-        malformed_runner.submit_request(malformed_request)
+        malformed_runner.submit_request(malformed_request, model_input)
         valid = codec.make_inference_response(malformed_request, (1.0, 2.0), 1)
         wrong_input = dataclasses.replace(
             valid, model_input_identity="model_input.v1." + "c" * 64
@@ -209,7 +223,7 @@ class Task4AInferenceTests(unittest.TestCase):
 
         domain_runner = task4_inference.Phase6InferenceRunnerV1(model, loaded)
         domain_request = _request(loaded.checkpoint_identity, model_input)
-        domain_runner.submit_request(domain_request)
+        domain_runner.submit_request(domain_request, model_input)
         wrong_domain = dataclasses.replace(
             codec.make_inference_response(domain_request, (1.0, 2.0), 1),
             ordered_candidate_domain_identity=codec.ordered_candidate_domain_identity(
@@ -221,7 +235,7 @@ class Task4AInferenceTests(unittest.TestCase):
 
         cardinality_runner = task4_inference.Phase6InferenceRunnerV1(model, loaded)
         cardinality_request = _request(loaded.checkpoint_identity, model_input)
-        cardinality_runner.submit_request(cardinality_request)
+        cardinality_runner.submit_request(cardinality_request, model_input)
         with self.assertRaises(task4_inference.Task4InferenceError):
             cardinality_runner.accept_response(
                 cardinality_request, dataclasses.replace(valid, request_identity=cardinality_request.request_identity,
@@ -230,7 +244,7 @@ class Task4AInferenceTests(unittest.TestCase):
 
         ordinal_runner = task4_inference.Phase6InferenceRunnerV1(model, loaded)
         ordinal_request = _request(loaded.checkpoint_identity, model_input)
-        ordinal_runner.submit_request(ordinal_request)
+        ordinal_runner.submit_request(ordinal_request, model_input)
         with self.assertRaises(task4_inference.Task4InferenceError):
             ordinal_runner.accept_response(
                 ordinal_request,
@@ -242,7 +256,7 @@ class Task4AInferenceTests(unittest.TestCase):
 
         nonfinite_runner = task4_inference.Phase6InferenceRunnerV1(model, loaded)
         nonfinite_request = _request(loaded.checkpoint_identity, model_input)
-        nonfinite_runner.submit_request(nonfinite_request)
+        nonfinite_runner.submit_request(nonfinite_request, model_input)
         with self.assertRaises(task4_inference.Task4InferenceError):
             nonfinite_runner.accept_response(
                 nonfinite_request, dataclasses.replace(
@@ -253,7 +267,7 @@ class Task4AInferenceTests(unittest.TestCase):
 
         selection_runner = task4_inference.Phase6InferenceRunnerV1(model, loaded)
         selection_request = _request(loaded.checkpoint_identity, model_input)
-        selection_runner.submit_request(selection_request)
+        selection_runner.submit_request(selection_request, model_input)
         with self.assertRaises(task4_inference.Task4InferenceError):
             selection_runner.accept_response(
                 selection_request,
@@ -265,7 +279,9 @@ class Task4AInferenceTests(unittest.TestCase):
         loaded, model = _reload(exported.artifact_bytes)
         wrong = _request("phase6_checkpoint.v1." + "f" * 64)
         with self.assertRaises(task4_inference.Task4InferenceError):
-            task4_inference.Phase6InferenceRunnerV1(model, loaded).submit_request(wrong)
+            task4_inference.Phase6InferenceRunnerV1(model, loaded).submit_request(
+                wrong, _model_input()
+            )
 
 
 if __name__ == "__main__":

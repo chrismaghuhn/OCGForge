@@ -51,6 +51,8 @@ BC_SAMPLE_IDENTITY_DOMAIN = "ocgforge.phase6.bc_sample_identity.v1"
 BC_SAMPLE_IDENTITY_PREFIX = "bc_sample.v1."
 CUDA_PREFLIGHT_DOMAIN = "ocgforge.phase6.cuda_preflight.v1"
 CUDA_PREFLIGHT_ID_PREFIX = "phase6_cuda_preflight.v1."
+SMOKE_EVIDENCE_SCHEMA_ID = "ocgforge.phase6.task4b.smoke_evidence.v1"
+SMOKE_EVIDENCE_ID_PREFIX = "phase6_task4b_smoke_evidence.v1."
 DETERMINISM_CONFIG_DOMAIN = "ocgforge.phase6.determinism_config.v1"
 DETERMINISM_CONFIG_ID_PREFIX = "phase6_determinism_config.v1."
 TRAIN_SAMPLE_ORDER_IDENTITY = "bc_sample_identity_ascending.v1"
@@ -78,7 +80,6 @@ TEACHER_SOURCE_IDENTITIES = (
     "policy_artifact.v1.a68642ee28f0dd53ebe4908994664f178b3d5cea6fb7c06421990729cd9c4527",
 )
 
-_CUDA_PREFLIGHT_ATTESTATION = object()
 
 
 def _text(value: str) -> bytes:
@@ -266,7 +267,8 @@ def canonical_optimizer_config_bytes() -> bytes:
          pack_string("amsgrad"), pack_u8(0),
          pack_string("maximize"), pack_u8(0),
          pack_string("capturable"), pack_u8(0),
-         pack_string("differentiable"), pack_u8(0)),
+         pack_string("differentiable"), pack_u8(0),
+         pack_string("decoupled_weight_decay"), pack_u8(0)),
     )
 
 
@@ -338,12 +340,14 @@ class ExecutionProvenanceV1:
     device_type: str = EXPECTED_DEVICE_TYPE
     device_index: int = EXPECTED_DEVICE_INDEX
     gpu_name: str = EXPECTED_GPU_NAME
-    torch_cuda_build: str = "12.6"
-    torch_cuda_version: str = "12.6"
+    torch_cuda_version_reported: str = "12.6"
     capability_major: int = 8
     capability_minor: int = 9
     distributed_strategy: str = "single_process"
     world_size: int = 1
+    deterministic_algorithms: bool = True
+    deterministic_warn_only: bool = False
+    float32_matmul_precision: str = "highest"
 
 
 EXECUTION_PROVENANCE_DOMAIN = "ocgforge.phase6.execution_provenance.v1"
@@ -357,11 +361,17 @@ def canonical_execution_provenance_bytes(
         raise CodecError("execution provenance integer is invalid")
     if provenance.capability_major < 0 or provenance.capability_minor < 0:
         raise CodecError("execution capability is invalid")
+    if (not isinstance(provenance.deterministic_algorithms, bool) or
+            not isinstance(provenance.deterministic_warn_only, bool) or
+            not provenance.deterministic_algorithms or
+            provenance.deterministic_warn_only or
+            provenance.float32_matmul_precision != "highest"):
+        raise CodecError("Task-4 deterministic execution configuration is not accepted")
     values = (
         provenance.backend_identity, provenance.framework_version,
         provenance.device_type, provenance.gpu_name,
-        provenance.torch_cuda_build, provenance.torch_cuda_version,
-        provenance.distributed_strategy,
+        provenance.torch_cuda_version_reported,
+        provenance.distributed_strategy, provenance.float32_matmul_precision,
     )
     if any(not isinstance(value, str) or not value for value in values):
         raise CodecError("execution provenance string is empty")
@@ -372,12 +382,14 @@ def canonical_execution_provenance_bytes(
                      pack_string(provenance.device_type),
                      pack_u32(provenance.device_index),
                      pack_string(provenance.gpu_name),
-                     pack_string(provenance.torch_cuda_build),
-                     pack_string(provenance.torch_cuda_version),
+                     pack_string(provenance.torch_cuda_version_reported),
                      pack_u32(provenance.capability_major),
                      pack_u32(provenance.capability_minor),
                      pack_string(provenance.distributed_strategy),
-                     pack_u32(provenance.world_size)))
+                     pack_u32(provenance.world_size),
+                     pack_u8(1 if provenance.deterministic_algorithms else 0),
+                     pack_u8(1 if provenance.deterministic_warn_only else 0),
+                     pack_string(provenance.float32_matmul_precision)))
 
 
 def execution_provenance_identity_for(
@@ -394,12 +406,14 @@ def execution_provenance_identity(
     device_type: str = EXPECTED_DEVICE_TYPE,
     device_index: int = EXPECTED_DEVICE_INDEX,
     gpu_name: str = EXPECTED_GPU_NAME,
-    torch_cuda_build: str = "12.6",
-    torch_cuda_version: str = "12.6",
+    torch_cuda_version_reported: str = "12.6",
     capability_major: int = 8,
     capability_minor: int = 9,
     distributed_strategy: str = "single_process",
     world_size: int = 1,
+    deterministic_algorithms: bool = True,
+    deterministic_warn_only: bool = False,
+    float32_matmul_precision: str = "highest",
 ) -> str:
     return execution_provenance_identity_for(ExecutionProvenanceV1(
         backend_identity=backend_identity,
@@ -407,12 +421,14 @@ def execution_provenance_identity(
         device_type=device_type,
         device_index=device_index,
         gpu_name=gpu_name,
-        torch_cuda_build=torch_cuda_build,
-        torch_cuda_version=torch_cuda_version,
+        torch_cuda_version_reported=torch_cuda_version_reported,
         capability_major=capability_major,
         capability_minor=capability_minor,
         distributed_strategy=distributed_strategy,
         world_size=world_size,
+        deterministic_algorithms=deterministic_algorithms,
+        deterministic_warn_only=deterministic_warn_only,
+        float32_matmul_precision=float32_matmul_precision,
     ))
 
 
@@ -434,6 +450,118 @@ def canonical_cuda_preflight_bytes(facts: CudaPreflightFactsV1) -> bytes:
 
 def cuda_preflight_identity_for(facts: CudaPreflightFactsV1) -> str:
     return _digest(CUDA_PREFLIGHT_ID_PREFIX, canonical_cuda_preflight_bytes(facts))
+
+
+@dataclasses.dataclass(frozen=True)
+class Task4BSmokeEvidenceV1:
+    training_run_identity: str
+    source_dataset_identity: str
+    dataset_split_identity: str
+    model_architecture_config_identity: str
+    card_vocabulary_identity: str
+    optimizer_configuration_identity: str
+    learning_rate_schedule_identity: str
+    batch_configuration_identity: str
+    gradient_accumulation_configuration_identity: str
+    training_rng_contract_identity: str
+    training_seed_or_initialization_identity: str
+    precision_mode_identity: str
+    deterministic_execution_configuration_identity: str
+    device_and_distributed_provenance_identity: str
+    cuda_preflight_identity: str
+    maximum_optimizer_steps: int
+    actual_optimizer_steps: int
+    final_exported_checkpoint_identity: Optional[str] = None
+    gpu_memory_before: Optional[int] = None
+    gpu_memory_peak: Optional[int] = None
+    gpu_memory_after: Optional[int] = None
+    schema_id: str = SMOKE_EVIDENCE_SCHEMA_ID
+
+
+def canonical_smoke_evidence_bytes(
+    evidence: Task4BSmokeEvidenceV1,
+) -> bytes:
+    if evidence.schema_id != SMOKE_EVIDENCE_SCHEMA_ID:
+        raise CodecError("unknown Task-4B smoke-evidence schema")
+    _validate_prefixed_digest(evidence.training_run_identity,
+                              TRAINING_RUN_ID_PREFIX,
+                              "smoke training-run identity")
+    _validate_lower_hex_digest(evidence.source_dataset_identity,
+                               "smoke source dataset identity")
+    _validate_prefixed_digest(evidence.dataset_split_identity,
+                              SPLIT_IDENTITY_PREFIX,
+                              "smoke split identity")
+    _validate_prefixed_digest(evidence.model_architecture_config_identity,
+                              ARCHITECTURE_ID_PREFIX,
+                              "smoke architecture identity")
+    _validate_prefixed_digest(evidence.card_vocabulary_identity,
+                              "model_card_vocabulary.v1.",
+                              "smoke vocabulary identity")
+    if evidence.optimizer_configuration_identity != optimizer_config_identity():
+        raise CodecError("smoke optimizer identity is not accepted")
+    if evidence.learning_rate_schedule_identity != schedule_config_identity():
+        raise CodecError("smoke schedule identity is not accepted")
+    if evidence.batch_configuration_identity != batch_config_identity():
+        raise CodecError("smoke batch identity is not accepted")
+    if evidence.gradient_accumulation_configuration_identity != gradient_accumulation_identity():
+        raise CodecError("smoke gradient-accumulation identity is not accepted")
+    if evidence.training_rng_contract_identity != "ocgforge.phase6.training_rng.v1":
+        raise CodecError("smoke RNG contract is not accepted")
+    if evidence.training_seed_or_initialization_identity != rng_initialization_identity():
+        raise CodecError("smoke initialization identity is not accepted")
+    if evidence.precision_mode_identity != precision_identity():
+        raise CodecError("smoke precision identity is not accepted")
+    if evidence.deterministic_execution_configuration_identity != deterministic_execution_identity():
+        raise CodecError("smoke deterministic-execution identity is not accepted")
+    _validate_prefixed_digest(evidence.device_and_distributed_provenance_identity,
+                              EXECUTION_PROVENANCE_ID_PREFIX,
+                              "smoke execution provenance identity")
+    _validate_prefixed_digest(evidence.cuda_preflight_identity,
+                              CUDA_PREFLIGHT_ID_PREFIX,
+                              "smoke CUDA preflight identity")
+    if evidence.maximum_optimizer_steps != SMOKE_MAX_OPTIMIZER_STEPS:
+        raise CodecError("smoke maximum optimizer step contract changed")
+    if not isinstance(evidence.actual_optimizer_steps, int) or isinstance(evidence.actual_optimizer_steps, bool) or not 0 <= evidence.actual_optimizer_steps <= evidence.maximum_optimizer_steps:
+        raise CodecError("smoke actual optimizer step count is outside the hard bound")
+    if evidence.final_exported_checkpoint_identity is not None:
+        _validate_prefixed_digest(evidence.final_exported_checkpoint_identity,
+                                  CHECKPOINT_ID_PREFIX,
+                                  "smoke final checkpoint identity")
+    memories = (evidence.gpu_memory_before, evidence.gpu_memory_peak,
+                evidence.gpu_memory_after)
+    if any(value is not None for value in memories):
+        if any(not isinstance(value, int) or isinstance(value, bool) or value < 0
+               for value in memories):
+            raise CodecError("GPU memory evidence is invalid")
+    if evidence.actual_optimizer_steps > 0 and any(value is None for value in memories):
+        raise CodecError("positive smoke evidence requires complete GPU memory evidence")
+    out = [pack_string(evidence.schema_id),
+           pack_string(evidence.training_run_identity),
+           pack_string(evidence.source_dataset_identity),
+           pack_string(evidence.dataset_split_identity),
+           pack_string(evidence.model_architecture_config_identity),
+           pack_string(evidence.card_vocabulary_identity),
+           pack_string(evidence.optimizer_configuration_identity),
+           pack_string(evidence.learning_rate_schedule_identity),
+           pack_string(evidence.batch_configuration_identity),
+           pack_string(evidence.gradient_accumulation_configuration_identity),
+           pack_string(evidence.training_rng_contract_identity),
+           pack_string(evidence.training_seed_or_initialization_identity),
+           pack_string(evidence.precision_mode_identity),
+           pack_string(evidence.deterministic_execution_configuration_identity),
+           pack_string(evidence.device_and_distributed_provenance_identity),
+           pack_string(evidence.cuda_preflight_identity),
+           pack_u32(evidence.maximum_optimizer_steps),
+           pack_u32(evidence.actual_optimizer_steps),
+           _optional_string(evidence.final_exported_checkpoint_identity)]
+    for value in memories:
+        out.append(pack_u8(0) if value is None else pack_u8(1) + pack_u64(value))
+    return b"".join(out)
+
+
+def smoke_evidence_identity(evidence: Task4BSmokeEvidenceV1) -> str:
+    return _digest(SMOKE_EVIDENCE_ID_PREFIX,
+                   canonical_smoke_evidence_bytes(evidence))
 
 
 @dataclasses.dataclass(frozen=True)
@@ -459,16 +587,9 @@ class TrainingRunManifestV1:
     training_seed_or_initialization_identity: str
     initial_checkpoint_identity: Optional[str]
     precision_mode_identity: str
-    deterministic_execution_configuration_identity: str
     device_and_distributed_provenance_identity: str
-    cuda_preflight_identity: Optional[str]
-    maximum_optimizer_steps: int
-    actual_optimizer_steps: int
     final_exported_checkpoint_identity: Optional[str]
     schema_id: str = TRAINING_RUN_SCHEMA_ID
-    _cuda_preflight_attestation: object = dataclasses.field(
-        default=None, repr=False, compare=False
-    )
 
 
 def replace_training_run(manifest: TrainingRunManifestV1, **changes: object) -> TrainingRunManifestV1:
@@ -507,11 +628,7 @@ def default_training_run_manifest(
         training_seed_or_initialization_identity=rng_initialization_identity(),
         initial_checkpoint_identity=None,
         precision_mode_identity=precision_identity(),
-        deterministic_execution_configuration_identity=deterministic_execution_identity(),
         device_and_distributed_provenance_identity=execution_provenance_identity(),
-        cuda_preflight_identity=None,
-        maximum_optimizer_steps=SMOKE_MAX_OPTIMIZER_STEPS,
-        actual_optimizer_steps=actual_optimizer_steps,
         final_exported_checkpoint_identity=None,
     )
 
@@ -529,10 +646,6 @@ def _validate_sorted_unique(values: Sequence[str], field: str) -> None:
 def canonical_training_run_manifest_bytes(manifest: TrainingRunManifestV1) -> bytes:
     if manifest.schema_id != TRAINING_RUN_SCHEMA_ID:
         raise CodecError("unknown training-run schema")
-    if manifest.maximum_optimizer_steps != SMOKE_MAX_OPTIMIZER_STEPS:
-        raise CodecError("maximum optimizer step contract changed")
-    if not 0 <= manifest.actual_optimizer_steps <= manifest.maximum_optimizer_steps:
-        raise CodecError("actual optimizer step count is outside the hard bound")
     if manifest.training_contract_identity != "ocgforge.phase6.bc_contract.v1":
         raise CodecError("unknown training contract")
     _validate_lower_hex_digest(manifest.source_dataset_identity,
@@ -572,8 +685,6 @@ def canonical_training_run_manifest_bytes(manifest: TrainingRunManifestV1) -> by
         raise CodecError("training initialization identity is not accepted")
     if manifest.precision_mode_identity != precision_identity():
         raise CodecError("training precision identity is not accepted")
-    if manifest.deterministic_execution_configuration_identity != deterministic_execution_identity():
-        raise CodecError("training deterministic-execution identity is not accepted")
     _validate_identity(
         manifest.device_and_distributed_provenance_identity,
         ("phase6_execution_provenance.v1.",),
@@ -583,15 +694,6 @@ def canonical_training_run_manifest_bytes(manifest: TrainingRunManifestV1) -> by
         _validate_identity(manifest.initial_checkpoint_identity, (CHECKPOINT_ID_PREFIX,), "initial checkpoint identity")
     if manifest.final_exported_checkpoint_identity is not None:
         _validate_identity(manifest.final_exported_checkpoint_identity, (CHECKPOINT_ID_PREFIX,), "final checkpoint identity")
-    if manifest.cuda_preflight_identity is not None:
-        _validate_prefixed_digest(manifest.cuda_preflight_identity,
-                                  CUDA_PREFLIGHT_ID_PREFIX,
-                                  "CUDA preflight identity")
-    if manifest.actual_optimizer_steps > 0 and manifest.cuda_preflight_identity is None:
-        raise CodecError("positive-step training requires real CUDA preflight provenance")
-    if (manifest.actual_optimizer_steps > 0 and
-            manifest._cuda_preflight_attestation is not _CUDA_PREFLIGHT_ATTESTATION):
-        raise CodecError("positive-step training was not created by the CUDA preflight path")
     _validate_sorted_unique(manifest.behavior_policy_source_identities, "behavior policy identities")
     _validate_sorted_unique(manifest.opponent_policy_source_identities, "opponent policy identities")
     strings = (
@@ -611,11 +713,8 @@ def canonical_training_run_manifest_bytes(manifest: TrainingRunManifestV1) -> by
         manifest.training_seed_or_initialization_identity))
     out.append(_optional_string(manifest.initial_checkpoint_identity))
     out.append(pack_string(manifest.precision_mode_identity))
-    out.append(pack_string(manifest.deterministic_execution_configuration_identity))
     out.append(pack_string(manifest.device_and_distributed_provenance_identity))
-    out.append(_optional_string(manifest.cuda_preflight_identity))
-    out.extend((pack_u32(manifest.maximum_optimizer_steps), pack_u32(manifest.actual_optimizer_steps),
-                _optional_string(manifest.final_exported_checkpoint_identity)))
+    out.append(_optional_string(manifest.final_exported_checkpoint_identity))
     return b"".join(out)
 
 
@@ -1218,6 +1317,17 @@ def ordered_candidate_domain_identity(
     return _digest(ORDERED_DOMAIN_ID_PREFIX, body)
 
 
+def validate_ordered_candidate_domain_identity(
+    identity: str,
+    routing_keys: Sequence[str],
+) -> str:
+    _validate_ordered_domain_identity(identity, "ordered candidate-domain identity")
+    if identity.startswith(ORDERED_DOMAIN_ID_PREFIX):
+        if identity != ordered_candidate_domain_identity(routing_keys):
+            raise CodecError("fallback ordered domain identity does not match keys")
+    return identity
+
+
 @dataclasses.dataclass(frozen=True)
 class Task4NumericModelInputV1:
     model_input_identity: str
@@ -1620,8 +1730,6 @@ class InferenceRequestV1:
     checkpoint_identity: str
     model_input_identity: str
     ordered_candidate_domain_identity: str
-    numeric_input_identity: str
-    public_candidate_domain_digest: Optional[str]
     public_semantic_decision_id: Optional[str]
     perspective_player: int
     decision_index: int
@@ -1639,14 +1747,8 @@ def canonical_inference_request_bytes(request: InferenceRequestV1) -> bytes:
     _validate_prefixed_digest(request.model_input_identity,
                               "model_input.v1.",
                               "inference model-input identity")
-    _validate_prefixed_digest(request.numeric_input_identity,
-                              NUMERIC_MODEL_INPUT_ID_PREFIX,
-                              "inference numeric model-input identity")
     _validate_ordered_domain_identity(request.ordered_candidate_domain_identity,
                                       "inference ordered domain identity")
-    if request.public_candidate_domain_digest is not None:
-        _validate_lower_hex_digest(request.public_candidate_domain_digest,
-                                   "inference Phase-5 domain digest")
     if request.public_semantic_decision_id is not None:
         _validate_lower_hex_digest(request.public_semantic_decision_id,
                                    "inference public decision identity")
@@ -1657,7 +1759,6 @@ def canonical_inference_request_bytes(request: InferenceRequestV1) -> bytes:
     return b"".join((pack_string(request.schema_id), pack_string(request.checkpoint_identity),
                      pack_string(request.model_input_identity),
                      pack_string(request.ordered_candidate_domain_identity),
-                     pack_string(request.numeric_input_identity),
                      _optional_string(request.public_semantic_decision_id),
                      pack_u8(request.perspective_player), pack_u64(request.decision_index)))
 
@@ -1674,8 +1775,6 @@ def make_inference_request(
         checkpoint_identity=checkpoint_identity,
         model_input_identity=model_input.model_input_identity,
         ordered_candidate_domain_identity=model_input.ordered_candidate_domain_identity,
-        numeric_input_identity=model_input.numeric_input_identity,
-        public_candidate_domain_digest=model_input.public_candidate_domain_digest,
         public_semantic_decision_id=model_input.public_semantic_decision_id,
         perspective_player=model_input.perspective_player,
         decision_index=model_input.decision_index,

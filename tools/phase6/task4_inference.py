@@ -46,6 +46,15 @@ class LoadedCheckpointV1:
         return self.artifact.checkpoint_identity
 
 
+@dataclasses.dataclass(frozen=True)
+class BoundInferenceExecutionV1:
+    """Task-4 pending sidecar, not part of the frozen Request V1 schema."""
+
+    request: codec.InferenceRequestV1
+    model_input: codec.Task4NumericModelInputV1
+    numeric_input_identity: str
+
+
 def _error_from_codec(error: Exception, code: str = "invalid_checkpoint") -> Task4InferenceError:
     return Task4InferenceError(code, str(error))
 
@@ -236,14 +245,57 @@ def _validate_request(request: codec.InferenceRequestV1, checkpoint: LoadedCheck
     try:
         if codec.inference_request_identity(request) != request.request_identity:
             raise Task4InferenceError("malformed_request", "request identity does not match canonical request bytes")
-        if codec.ordered_candidate_domain_identity(
-            request.routing_keys, request.public_candidate_domain_digest
+        if codec.validate_ordered_candidate_domain_identity(
+            request.ordered_candidate_domain_identity, request.routing_keys
         ) != request.ordered_candidate_domain_identity:
             raise Task4InferenceError("wrong_candidate_domain", "request candidate domain identity is stale")
     except codec.CodecError as error:
         raise _error_from_codec(error, "malformed_request") from error
     if request.checkpoint_identity != checkpoint.checkpoint_identity:
         raise Task4InferenceError("wrong_checkpoint", "request checkpoint identity is not loaded")
+
+
+def bind_inference_execution(
+    request: codec.InferenceRequestV1,
+    model_input: codec.Task4NumericModelInputV1,
+    checkpoint: LoadedCheckpointV1,
+) -> BoundInferenceExecutionV1:
+    _validate_request(request, checkpoint)
+    try:
+        codec.validate_numeric_model_input(model_input)
+    except codec.CodecError as error:
+        raise _error_from_codec(error, "invalid_model_input") from error
+    if (
+        model_input.model_input_identity != request.model_input_identity or
+        model_input.ordered_candidate_domain_identity != request.ordered_candidate_domain_identity or
+        model_input.public_semantic_decision_id != request.public_semantic_decision_id or
+        model_input.perspective_player != request.perspective_player or
+        model_input.decision_index != request.decision_index or
+        model_input.routing_keys != request.routing_keys
+    ):
+        raise Task4InferenceError(
+            "model_input_binding_mismatch",
+            "numeric model input is not the unit bound by the request",
+        )
+    return BoundInferenceExecutionV1(
+        request=request,
+        model_input=model_input,
+        numeric_input_identity=model_input.numeric_input_identity,
+    )
+
+
+def _validate_bound_execution(
+    execution: BoundInferenceExecutionV1,
+    checkpoint: LoadedCheckpointV1,
+) -> None:
+    if not isinstance(execution, BoundInferenceExecutionV1):
+        raise Task4InferenceError("malformed_request", "pending execution sidecar has the wrong type")
+    bind_inference_execution(execution.request, execution.model_input, checkpoint)
+    if execution.numeric_input_identity != execution.model_input.numeric_input_identity:
+        raise Task4InferenceError(
+            "numeric_input_binding_mismatch",
+            "pending numeric input identity does not match the supplied input",
+        )
 
 
 def _select_ordinal(scores: Sequence[float], routing_keys: Sequence[str]) -> int:
@@ -295,32 +347,15 @@ def _rows_tensor(
 def infer_request(
     model: task4_model.Phase6TorchCandidateScorer,
     checkpoint: LoadedCheckpointV1,
-    request: codec.InferenceRequestV1,
-    model_input: codec.Task4NumericModelInputV1,
+    execution: BoundInferenceExecutionV1,
     *,
     physical_candidate_capacity: Optional[int] = None,
 ) -> codec.InferenceResponseV1:
-    """Run one validated numeric model-input request with no fallback."""
+    """Run one pending, validated numeric model-input execution with no fallback."""
 
-    _validate_request(request, checkpoint)
-    try:
-        codec.validate_numeric_model_input(model_input)
-    except codec.CodecError as error:
-        raise _error_from_codec(error, "invalid_model_input") from error
-    if (
-        model_input.model_input_identity != request.model_input_identity or
-        model_input.ordered_candidate_domain_identity != request.ordered_candidate_domain_identity or
-        model_input.numeric_input_identity != request.numeric_input_identity or
-        model_input.public_candidate_domain_digest != request.public_candidate_domain_digest or
-        model_input.public_semantic_decision_id != request.public_semantic_decision_id or
-        model_input.perspective_player != request.perspective_player or
-        model_input.decision_index != request.decision_index or
-        model_input.routing_keys != request.routing_keys
-    ):
-        raise Task4InferenceError(
-            "model_input_binding_mismatch",
-            "numeric model input is not the unit bound by the request",
-        )
+    _validate_bound_execution(execution, checkpoint)
+    request = execution.request
+    model_input = execution.model_input
     try:
         model_device = next(model.parameters()).device
     except StopIteration as error:
@@ -405,18 +440,24 @@ class Phase6InferenceRunnerV1:
         self._model = model
         self._checkpoint = checkpoint
         self._physical_candidate_capacity = physical_candidate_capacity
-        self._pending: dict[str, codec.InferenceRequestV1] = {}
+        self._pending: dict[str, BoundInferenceExecutionV1] = {}
         self._consumed: set[str] = set()
         self._closed: set[str] = set()
 
-    def submit_request(self, request: codec.InferenceRequestV1) -> None:
+    def submit_request(
+        self,
+        request: codec.InferenceRequestV1,
+        model_input: codec.Task4NumericModelInputV1,
+    ) -> None:
         _validate_request(request, self._checkpoint)
         identity = request.request_identity
         if identity in self._consumed or identity in self._closed:
             raise Task4InferenceError("duplicate_request", "request has already been consumed or closed")
         if identity in self._pending:
             raise Task4InferenceError("duplicate_request", "request is already pending")
-        self._pending[identity] = request
+        self._pending[identity] = bind_inference_execution(
+            request, model_input, self._checkpoint
+        )
 
     def accept_response(
         self,
@@ -429,11 +470,11 @@ class Phase6InferenceRunnerV1:
         pending = self._pending.pop(identity, None)
         if pending is None:
             raise Task4InferenceError("late_response", "response has no pending request")
-        if pending != request:
+        if pending.request != request:
             self._closed.add(identity)
             raise Task4InferenceError("stale_request", "request envelope does not match the pending request")
         try:
-            accepted = validate_response(pending, response)
+            accepted = validate_response(pending.request, response)
         except Task4InferenceError:
             self._closed.add(identity)
             raise
@@ -445,13 +486,35 @@ class Phase6InferenceRunnerV1:
         request: codec.InferenceRequestV1,
         model_input: codec.Task4NumericModelInputV1,
     ) -> codec.InferenceResponseV1:
-        self.submit_request(request)
+        if request.request_identity in self._pending:
+            pending = self._pending[request.request_identity]
+            try:
+                incoming = bind_inference_execution(
+                    request, model_input, self._checkpoint
+                )
+                if incoming.numeric_input_identity != pending.numeric_input_identity:
+                    raise Task4InferenceError(
+                        "numeric_input_binding_mismatch",
+                        "replacement numeric input does not match pending execution",
+                    )
+                if incoming.model_input != pending.model_input:
+                    raise Task4InferenceError(
+                        "model_input_binding_mismatch",
+                        "replacement numeric input is not the pending execution input",
+                    )
+            except Task4InferenceError:
+                self._pending.pop(request.request_identity, None)
+                self._closed.add(request.request_identity)
+                raise
+            execution = pending
+        else:
+            self.submit_request(request, model_input)
+            execution = self._pending[request.request_identity]
         try:
             response = infer_request(
                 self._model,
                 self._checkpoint,
-                request,
-                model_input,
+                execution,
                 physical_candidate_capacity=self._physical_candidate_capacity,
             )
             return self.accept_response(request, response)

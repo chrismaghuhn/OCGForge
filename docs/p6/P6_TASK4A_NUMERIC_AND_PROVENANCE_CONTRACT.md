@@ -259,7 +259,7 @@ by a training-run manifest:
   `step_i_modulo_train_sample_count` schedule;
 - optimizer config declares Adam with `foreach=false`, `fused=false`,
   `amsgrad=false`, `maximize=false`, `capturable=false`, and
-  `differentiable=false`;
+  `differentiable=false`, `decoupled_weight_decay=false`;
 - gradient-accumulation config declares accumulation count `1`;
 - RNG/initialization config declares the versioned PyTorch CPU/CUDA manual-seed
   contract and seed `1729`;
@@ -268,7 +268,7 @@ by a training-run manifest:
   `torch.use_deterministic_algorithms(True, warn_only=False)` and
   `torch.set_float32_matmul_precision("highest")`;
 - execution provenance declares backend identity, exact framework version,
-  device type/index, GPU name, PyTorch CUDA build and the version reported by
+  device type/index, GPU name, and the CUDA version reported by
   `torch.version.cuda`, capability, and distributed strategy/world size through
   structured canonical provenance bytes. The preflight does not claim an
   independently measured driver/runtime version. It produces this value and
@@ -307,28 +307,23 @@ training_rng_contract_identity
 training_seed_or_initialization_identity
 initial_checkpoint_identity:optional
 precision_mode_identity
-deterministic_execution_configuration_identity
 device_and_distributed_provenance_identity
-cuda_preflight_identity:optional; required when actual_optimizer_steps > 0
-maximum_optimizer_steps:u32 = 500
-actual_optimizer_steps:u32
-final_exported_checkpoint_identity:optional for Task 4A
+final_exported_checkpoint_identity:optional
 ```
 
-The identity is issued only when every required scalar/sub-identity is present,
-the actual step count is in `0..500`, and every referenced codec validates:
+The identity is issued only when every required scalar/sub-identity is present
+and every referenced codec validates:
 
 ```text
 phase6_training_run.v1.<lowercase SHA-256 of canonical manifest bytes>
 ```
 
 A Task-4A zero-step manifest is infrastructure/provenance test data, not
-training acceptance evidence.
-
-The generic/default manifest constructor is zero-step-only. A manifest with
-`actual_optimizer_steps > 0` is valid only when its `cuda_preflight_identity`
-was produced by the real CUDA preflight bridge and is bound to the same
-structured execution-provenance facts.
+training acceptance evidence. The generic/default constructor is explicitly
+zero-step-only. Task-4B `maximum_optimizer_steps`, `actual_optimizer_steps`,
+the CUDA-preflight attestation, deterministic execution identity, and optional
+GPU-memory telemetry belong to a separate `Task4BSmokeEvidenceV1` sidecar;
+they are not new top-level `TrainingRunManifestV1` fields.
 
 For the fixed Teacher-vs-Teacher smoke corpus, both accepted Teacher-v1
 artifact identities are required in `behavior_policy_source_identities` and
@@ -397,8 +392,8 @@ device == cuda:0
 GPU name == NVIDIA GeForce RTX 4060 Ti
 ```
 
-It records device type/index, GPU model, PyTorch version, PyTorch CUDA build,
-the version reported by `torch.version.cuda`, capability, precision, and
+It records device type/index, GPU model, PyTorch version, and the CUDA version
+reported by `torch.version.cuda`, capability, precision, and
 distributed configuration as execution provenance. It does not claim a
 separately measured driver/runtime version, create an optimizer, or execute a
 step.

@@ -95,9 +95,9 @@ optimizer, gradient, sharding, worker, device, or cache state. The physical
 checkpoint artifact is OCGForge-owned and binds its manifest to the canonical
 weight-content identity; no torch.save object is authoritative.
 
-GPU model, device index, the PyTorch CUDA build, and the version reported by
-`torch.version.cuda` are training provenance only and never checkpoint
-semantic identity; no separately measured driver/runtime version is claimed.
+GPU model, device index, and the CUDA version reported by `torch.version.cuda`
+are training provenance only and never checkpoint semantic identity; no
+separately measured driver/runtime version is claimed.
 
 ## Inference runner
 
