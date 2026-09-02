@@ -2,13 +2,15 @@
 
 ## Status and scope
 
-**Status:** CURRENT / AUTHORIZED — documentation-only contract freeze.
+**Status:** CURRENT / AUTHORIZED — Task-1 freeze with the Task-4A numeric and
+provenance supplement.
 
 This document freezes the OCGForge-owned checkpoint manifest, canonical weight
 export boundary, deterministic inference request/response binding, and
-fail-closed neural-policy behavior. It does not choose PyTorch or JAX, define
-one neural architecture, add a serialization dependency, generate weights, or
-start training.
+fail-closed neural-policy behavior. It does not choose PyTorch as the primary
+backend, add a serialization dependency, generate a trained checkpoint, or
+start training. Task 4A's exact numeric/configuration codecs are defined in
+the linked supplement.
 
 The accepted Phase-5 model-facing contracts remain the sole source of model
 input meaning. The words **MUST**, **MUST NOT**, and **FAIL CLOSED** are
@@ -23,16 +25,22 @@ normative.
 | checkpoint manifest | `ocgforge.phase6.checkpoint_manifest.v1` | immutable OCGForge checkpoint identity |
 | inference request | `ocgforge.phase6.inference_request.v1` | current-decision request binding |
 | inference response | `ocgforge.phase6.inference_response.v1` | one validated score/selection response |
-| inference numeric comparison | `ocgforge.phase6.inference_numeric.v1` | declared deterministic score comparison |
+| inference numeric comparison | `ocgforge.phase6.inference_numeric.v1` | Task-4A exact finite binary32 score comparison |
 
 The physical training framework, tensor container, device, worker, process,
 directory, and transport are implementation details. A physical artifact is
 usable only after it resolves to and validates against the OCGForge manifest
 and identity contracts below.
 
-The training-run and canonical-export rows in the table are frozen future
-contract surfaces. Task 1 does not ratify a nested configuration codec,
-numeric weight codec, or content-addressed artifact under either surface.
+Task 4A now defines the previously deferred numeric, architecture/config,
+training-run sub-identity, and canonical weight requirements in
+[P6_TASK4A_NUMERIC_AND_PROVENANCE_CONTRACT.md](P6_TASK4A_NUMERIC_AND_PROVENANCE_CONTRACT.md).
+Those definitions are prerequisites for Task 4B; they do not authorize an
+optimizer step or make PyTorch the primary Phase-6 backend.
+
+The training-run and canonical-export rows were deferred by Task 1. Task 4A
+ratifies the required provisional codecs and identities in the linked
+supplement; a zero-step infrastructure manifest is not training acceptance.
 
 ## 2. Training-run provenance
 
@@ -110,10 +118,11 @@ inputs remain equal. Until the sub-identity codecs are frozen, these are
 required provenance fields only and no reproducible training-run hash is
 claimed.
 
-Task 4 is blocked until the required configuration, precision, execution,
-architecture, and canonical-weight sub-identity codecs have been versioned and
-independently validated. A provisional framework state cannot be promoted to
-an accepted training-run or checkpoint identity before that boundary.
+Task 4B and any accepted training run remain blocked until the required
+configuration, precision, execution, architecture, and canonical-weight
+sub-identity codecs are independently validated under the Task-4A supplement.
+A provisional framework state cannot be promoted to an accepted training-run
+or checkpoint identity before that boundary.
 
 ## 3. Canonical weight export boundary
 
@@ -154,13 +163,11 @@ representation of inference parameters, including:
 - the export codec identity and its canonical bytes;
 - no optimizer, gradient, sharding, device, process, or cache state.
 
-The exact tensor serialization library and the semantic numeric
-representation are intentionally not selected here. Safetensors or another
-exact serialization may later implement the export codec, but the library is
-not checkpoint authority. No `canonical_weight_content_identity` can be
-issued by Task 1; the later export codec MUST define its canonical bytes,
-numeric representation, and content digest before a checkpoint can be
-accepted.
+Task 1 intentionally selected no tensor serialization library. Task 4A defines
+the OCGForge-owned exact binary32 export codec in the supplement; Safetensors
+or another physical serializer may later carry those bytes but is not
+checkpoint authority. The Task-4A codec, not a framework-native object, is
+required before a checkpoint can be accepted.
 
 Equivalent inference weights exported from different distributed layouts or
 from different training frameworks MUST be capable of producing the same
@@ -239,6 +246,15 @@ An alias MAY be a user-interface locator only when it resolves to one exact
 publication to a future artifact hub MUST pin an exact revision and canonical
 content identity before use.
 
+The implementation may expose a low-level artifact decoder that checks only
+syntax, canonical bytes, and self-consistent weight/content digests. That is
+not an accepted inference load. The accepted inference path MUST require the
+exact expected architecture configuration, all three Phase-5 contract IDs,
+CardVocabulary identity, dataset identity, split identity, BC training
+contract, export codec, and canonical weight content before constructing an
+inference model. Those compatibility values are required inputs on that path;
+an omitted expected context is fail-closed, not an implicit wildcard.
+
 Changing architecture/config, Phase-5 input contract, vocabulary, dataset,
 split, training contract, parent, export contract, or canonical weight content
 requires a new checkpoint identity. Replacing bytes under an old identity is
@@ -287,6 +303,14 @@ freshness validation, but it is not model input and is not part of the public
 model-input identity. The current public decision identity, model-input
 identity, checkpoint identity, and ordered-domain identity together prevent a
 response for decision N from being applied to decision N+1.
+
+The backend adapter MUST pass a single validated numeric projection unit that
+contains the model-input identity, Phase-5-or-fallback domain identity, public
+decision context, and exact state/candidate rows. It MUST NOT accept those
+rows and identities as independently combinable arguments; the unit's derived
+numeric integrity identity is kept in a Task-4 internal pending-execution
+sidecar and checked against the same sidecar before inference. It is not a new
+field in `InferenceRequestV1` and does not alter the frozen V1 request hash.
 
 ## 6. Deterministic inference response
 
@@ -377,14 +401,11 @@ are a domain failure before this rule can run. Backend-dependent unordered
 iteration MUST NOT choose a candidate.
 
 The semantic cross-implementation acceptance result is the selected
-`public_action_key`. A score vector is diagnostic evidence and may be
-compared across implementations only under the explicitly declared,
-versioned `ocgforge.phase6.inference_numeric.v1` contract. No implicit
-rounding or tolerance is permitted. A later numerical contract MUST state its
-absolute/relative tolerance, score representation, and action-ambiguity rule;
-if the permitted numerical interval could change the selected key, the
-deterministic gate fails closed rather than accepting a backend-dependent
-choice.
+`public_action_key`. Score vectors are compared under the explicitly declared
+Task-4A `ocgforge.phase6.inference_numeric.v1` binary32 contract. No implicit
+rounding or tolerance is permitted. Any future numerical interval that could
+change the selected key is an action-ambiguity failure rather than an accepted
+backend-dependent choice.
 
 For identical accepted model inputs, checkpoint/configuration, and
 deterministic inference mode, a frozen checkpoint MUST reproduce the same
@@ -483,7 +504,10 @@ POSITIVE_LETHAL_CAPABILITY = BLOCKED_BY_ACCEPTED_CURRENT_ACTION_CONTRACT
 - [Trusted trajectory v1](../contracts/trusted-trajectory-v1.md)
 - [Phase-6 evaluation plan](P6_EVALUATION_PLAN.md)
 
-Task 1 does not authorize PyTorch, JAX, Accelerate, Safetensors, Hugging Face
-Datasets, Trackio, `huggingface_hub`, neural network code, optimizer code,
+Task 1 alone did not authorize PyTorch, JAX, Accelerate, Safetensors, Hugging
+Face Datasets, Trackio, `huggingface_hub`, neural network code, optimizer code,
 training, GPU usage, checkpoint generation, RL, self-play, search, arbitrary
-decks, or Project Ignis/EDOPro integration.
+decks, or Project Ignis/EDOPro integration. Task 4A is separately authorized
+only for the provisional infrastructure and zero-step CUDA preflight defined
+in [P6_TASK4A_NUMERIC_AND_PROVENANCE_CONTRACT.md](P6_TASK4A_NUMERIC_AND_PROVENANCE_CONTRACT.md);
+Task 4B remains separately gated.

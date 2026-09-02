@@ -1,0 +1,762 @@
+"""Canonical checkpoint export and fail-closed inference for Phase 6 Task 4A.
+
+The module is an OCGForge boundary around the provisional PyTorch module.  It
+does not serialize PyTorch objects, pass routing identities into the network,
+or provide a gameplay fallback.  The later CUDA smoke may use the same
+boundary after its separate authorization.
+"""
+
+from __future__ import annotations
+
+import dataclasses
+from typing import Optional, Sequence
+
+import torch
+from torch import Tensor
+
+from . import task4_codec as codec
+from . import task4_model
+
+
+class Task4InferenceError(RuntimeError):
+    """Raised when checkpoint, request, response, or model execution is unsafe."""
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code
+
+
+_CANONICAL_EXPORT_ATTESTATION = object()
+_COMPLETION_RECEIPT_ATTESTATION = object()
+_COMPLETION_RECEIPT_BINDING_DOMAIN = (
+    "ocgforge.phase6.task4b.completion_receipt.v1"
+)
+
+
+@dataclasses.dataclass(frozen=True)
+class ExportedCheckpointV1:
+    artifact_bytes: bytes
+    artifact: codec.CheckpointArtifactV1
+    _attestation: object = dataclasses.field(
+        default=None, repr=False, compare=False
+    )
+
+    @property
+    def checkpoint_identity(self) -> str:
+        return self.artifact.checkpoint_identity
+
+
+@dataclasses.dataclass(frozen=True)
+class LoadedCheckpointV1:
+    artifact: codec.CheckpointArtifactV1
+    architecture_config: codec.ArchitectureConfigV1
+
+    @property
+    def checkpoint_identity(self) -> str:
+        return self.artifact.checkpoint_identity
+
+
+@dataclasses.dataclass(frozen=True)
+class BoundInferenceExecutionV1:
+    """Task-4 pending sidecar, not part of the frozen Request V1 schema."""
+
+    request: codec.InferenceRequestV1
+    model_input: codec.Task4NumericModelInputV1
+    numeric_input_identity: str
+
+
+@dataclasses.dataclass(frozen=True)
+class Task4BCompletionReceiptV1:
+    """Attested result of canonical export, fresh reload, and frozen inference."""
+
+    checkpoint_identity: str
+    model_input_identity: str
+    ordered_candidate_domain_identity: str
+    request_identity: str
+    response_identity: str
+    _exported_checkpoint: Optional[ExportedCheckpointV1] = dataclasses.field(
+        default=None, repr=False, compare=False
+    )
+    _binding_identity: str = dataclasses.field(
+        default="", repr=False, compare=False
+    )
+    _attestation: object = dataclasses.field(
+        default=None, repr=False, compare=False
+    )
+
+    @property
+    def fresh_checkpoint_reload(self) -> bool:
+        return True
+
+    @property
+    def deterministic_frozen_inference(self) -> bool:
+        return True
+
+
+def _error_from_codec(error: Exception, code: str = "invalid_checkpoint") -> Task4InferenceError:
+    return Task4InferenceError(code, str(error))
+
+
+def _require_actual_canonical_export(
+    exported_checkpoint: ExportedCheckpointV1,
+) -> codec.CheckpointArtifactV1:
+    if not isinstance(exported_checkpoint, ExportedCheckpointV1):
+        raise Task4InferenceError(
+            "invalid_checkpoint",
+            "completion verification requires an ExportedCheckpointV1",
+        )
+    if exported_checkpoint._attestation is not _CANONICAL_EXPORT_ATTESTATION:
+        raise Task4InferenceError(
+            "invalid_checkpoint",
+            "completion verification requires an actual canonical export",
+        )
+    try:
+        decoded = codec.decode_checkpoint_artifact(exported_checkpoint.artifact_bytes)
+    except (codec.CodecError, TypeError, ValueError) as error:
+        raise _error_from_codec(error, "invalid_checkpoint") from error
+    if decoded != exported_checkpoint.artifact:
+        raise Task4InferenceError(
+            "invalid_checkpoint",
+            "exported checkpoint object does not match its canonical artifact bytes",
+        )
+    return decoded
+
+
+def _completion_receipt_binding_identity(
+    receipt: Task4BCompletionReceiptV1,
+) -> str:
+    body = b"".join((
+        codec.pack_string(_COMPLETION_RECEIPT_BINDING_DOMAIN),
+        codec.pack_string(_COMPLETION_RECEIPT_BINDING_DOMAIN),
+        codec.pack_string(receipt.checkpoint_identity),
+        codec.pack_string(receipt.model_input_identity),
+        codec.pack_string(receipt.ordered_candidate_domain_identity),
+        codec.pack_string(receipt.request_identity),
+        codec.pack_string(receipt.response_identity),
+    ))
+    return codec._digest(
+        "phase6_task4b_completion_receipt.v1.", body
+    )
+
+
+def _canonical_parameter_tensors(
+    model: torch.nn.Module,
+    config: codec.ArchitectureConfigV1,
+) -> tuple[codec.CanonicalTensorV1, ...]:
+    named_parameters = tuple(model.named_parameters())
+    if tuple(name for name, _ in named_parameters) != codec.PARAMETER_ORDER:
+        raise Task4InferenceError("wrong_architecture", "model parameter order is not accepted")
+    tensors: list[codec.CanonicalTensorV1] = []
+    for (name, parameter), expected_shape in zip(
+        named_parameters, codec.expected_parameter_shapes(config)
+    ):
+        if parameter.dtype != torch.float32 or tuple(parameter.shape) != expected_shape:
+            raise Task4InferenceError("wrong_architecture", "model parameter shape or dtype is not accepted")
+        if parameter.grad is not None:
+            raise Task4InferenceError("training_state_present", "canonical export cannot include gradient state")
+        values = parameter.detach().cpu().contiguous().reshape(-1).tolist()
+        try:
+            raw = b"".join(codec.f32_bytes(value) for value in values)
+        except codec.CodecError as error:
+            raise _error_from_codec(error) from error
+        tensors.append(codec.CanonicalTensorV1(name, expected_shape, raw))
+    return tuple(tensors)
+
+
+def export_canonical_checkpoint(
+    model: torch.nn.Module,
+    *,
+    source_dataset_identity: str,
+    dataset_split_identity: str,
+    card_vocabulary_identity: str,
+    architecture_config: Optional[codec.ArchitectureConfigV1] = None,
+    parent_checkpoint_identity: Optional[str] = None,
+) -> ExportedCheckpointV1:
+    """Export only canonical f32 inference weights and an OCGForge manifest."""
+
+    config = codec.default_architecture_config() if architecture_config is None else architecture_config
+    architecture_identity = codec.architecture_config_identity(config)
+    tensors = _canonical_parameter_tensors(model, config)
+    try:
+        weight_bytes = codec.canonical_weight_export_bytes(tensors, architecture_identity, config)
+        weight_identity = codec.weight_content_identity(weight_bytes)
+        manifest = codec.default_checkpoint_manifest(
+            architecture_config_identity=architecture_identity,
+            card_vocabulary_identity=card_vocabulary_identity,
+            dataset_identity=source_dataset_identity,
+            dataset_split_identity=dataset_split_identity,
+            canonical_weight_content_identity=weight_identity,
+        )
+        if parent_checkpoint_identity is not None:
+            manifest = dataclasses.replace(
+                manifest, parent_checkpoint_identity=parent_checkpoint_identity
+            )
+        artifact = codec.CheckpointArtifactV1(
+            checkpoint_identity=codec.checkpoint_identity(manifest),
+            manifest=manifest,
+            weight_export_bytes=weight_bytes,
+        )
+        artifact_bytes = codec.encode_checkpoint_artifact(artifact)
+        decoded = codec.decode_checkpoint_artifact(artifact_bytes)
+    except codec.CodecError as error:
+        raise _error_from_codec(error) from error
+    if decoded != artifact:
+        raise Task4InferenceError("invalid_checkpoint", "exported checkpoint did not round-trip")
+    return ExportedCheckpointV1(
+        artifact_bytes, artifact, _attestation=_CANONICAL_EXPORT_ATTESTATION
+    )
+
+
+def load_checkpoint_artifact(
+    artifact_bytes: bytes,
+    *,
+    expected_architecture_config: Optional[codec.ArchitectureConfigV1] = None,
+    expected_card_vocabulary_identity: Optional[str] = None,
+    expected_dataset_identity: Optional[str] = None,
+    expected_dataset_split_identity: Optional[str] = None,
+) -> LoadedCheckpointV1:
+    """Decode a self-consistent artifact; this is not accepted inference load."""
+
+    try:
+        artifact = codec.decode_checkpoint_artifact(artifact_bytes)
+    except (codec.CodecError, TypeError, ValueError) as error:
+        raise _error_from_codec(error) from error
+    config = codec.default_architecture_config() if expected_architecture_config is None else expected_architecture_config
+    expected_architecture_identity = codec.architecture_config_identity(config)
+    manifest = artifact.manifest
+    if manifest.model_architecture_config_identity != expected_architecture_identity:
+        raise Task4InferenceError("wrong_architecture", "checkpoint architecture identity is not accepted")
+    if manifest.canonical_weight_export_codec_identity != codec.WEIGHT_EXPORT_CONTRACT_ID:
+        raise Task4InferenceError("invalid_checkpoint", "checkpoint weight codec is not accepted")
+    if manifest.training_contract_identity != "ocgforge.phase6.bc_contract.v1":
+        raise Task4InferenceError("invalid_checkpoint", "checkpoint training contract is not accepted")
+    if expected_card_vocabulary_identity is not None and manifest.card_vocabulary_identity != expected_card_vocabulary_identity:
+        raise Task4InferenceError("wrong_vocabulary", "checkpoint vocabulary identity is not accepted")
+    if expected_dataset_identity is not None and manifest.dataset_identity != expected_dataset_identity:
+        raise Task4InferenceError("wrong_dataset", "checkpoint dataset identity is not accepted")
+    if expected_dataset_split_identity is not None and manifest.dataset_split_identity != expected_dataset_split_identity:
+        raise Task4InferenceError("wrong_split", "checkpoint split identity is not accepted")
+    try:
+        architecture_identity, _ = codec.decode_weight_export_bytes(artifact.weight_export_bytes)
+    except codec.CodecError as error:
+        raise _error_from_codec(error) from error
+    if architecture_identity != expected_architecture_identity:
+        raise Task4InferenceError("wrong_architecture", "weight architecture identity is not accepted")
+    return LoadedCheckpointV1(artifact, config)
+
+
+def load_checkpoint_for_inference(
+    artifact_bytes: bytes,
+    *,
+    architecture_config: codec.ArchitectureConfigV1,
+    card_vocabulary_identity: str,
+    dataset_identity: str,
+    dataset_split_identity: str,
+) -> LoadedCheckpointV1:
+    """Perform the mandatory compatibility checks for an accepted load."""
+
+    try:
+        loaded = load_checkpoint_artifact(artifact_bytes)
+    except Task4InferenceError:
+        raise
+    manifest = loaded.artifact.manifest
+    try:
+        expected_architecture_identity = codec.architecture_config_identity(architecture_config)
+    except codec.CodecError as error:
+        raise _error_from_codec(error, "wrong_architecture") from error
+    if manifest.model_architecture_config_identity != expected_architecture_identity:
+        raise Task4InferenceError("wrong_architecture", "checkpoint architecture identity is not accepted")
+    if manifest.phase5_logical_model_input_contract_identity != "ocgforge.model_logical_input.v1":
+        raise Task4InferenceError("wrong_phase5_contract", "logical Phase-5 contract is not accepted")
+    if manifest.phase5_encoded_model_input_contract_identity != "ocgforge.model_encoded_input.v1":
+        raise Task4InferenceError("wrong_phase5_contract", "encoded Phase-5 contract is not accepted")
+    if manifest.phase5_batch_layout_contract_identity != "ocgforge.model_batch_layout.v1":
+        raise Task4InferenceError("wrong_phase5_contract", "batch-layout Phase-5 contract is not accepted")
+    if manifest.card_vocabulary_identity != card_vocabulary_identity:
+        raise Task4InferenceError("wrong_vocabulary", "checkpoint vocabulary identity is not accepted")
+    if manifest.dataset_identity != dataset_identity:
+        raise Task4InferenceError("wrong_dataset", "checkpoint dataset identity is not accepted")
+    if manifest.dataset_split_identity != dataset_split_identity:
+        raise Task4InferenceError("wrong_split", "checkpoint split identity is not accepted")
+    if manifest.training_contract_identity != "ocgforge.phase6.bc_contract.v1":
+        raise Task4InferenceError("invalid_checkpoint", "checkpoint BC contract is not accepted")
+    if manifest.canonical_weight_export_codec_identity != codec.WEIGHT_EXPORT_CONTRACT_ID:
+        raise Task4InferenceError("invalid_checkpoint", "checkpoint weight codec is not accepted")
+    if loaded.artifact.manifest.model_architecture_config_identity != expected_architecture_identity:
+        raise Task4InferenceError("wrong_architecture", "checkpoint architecture identity is not accepted")
+    return LoadedCheckpointV1(loaded.artifact, architecture_config)
+
+
+def _load_tensor_values(raw: bytes, shape: tuple[int, ...]) -> Tensor:
+    values = [codec.f32_value(raw[offset:offset + 4]) for offset in range(0, len(raw), 4)]
+    return torch.tensor(values, dtype=torch.float32).reshape(shape)
+
+
+def reload_model_from_checkpoint(
+    artifact_bytes: bytes,
+    *,
+    architecture_config: codec.ArchitectureConfigV1,
+    card_vocabulary_identity: str,
+    dataset_identity: str,
+    dataset_split_identity: str,
+) -> tuple[LoadedCheckpointV1, task4_model.Phase6TorchCandidateScorer]:
+    """Create a fresh scorer and load only canonical inference tensors."""
+
+    loaded = load_checkpoint_for_inference(
+        artifact_bytes,
+        architecture_config=architecture_config,
+        card_vocabulary_identity=card_vocabulary_identity,
+        dataset_identity=dataset_identity,
+        dataset_split_identity=dataset_split_identity,
+    )
+    try:
+        _, tensors = codec.decode_weight_export_bytes(loaded.artifact.weight_export_bytes)
+    except codec.CodecError as error:
+        raise _error_from_codec(error) from error
+    model = task4_model.Phase6TorchCandidateScorer(loaded.architecture_config)
+    with torch.no_grad():
+        for parameter, tensor in zip(model.parameters(), tensors):
+            values = _load_tensor_values(tensor.raw_bytes, tuple(tensor.shape))
+            parameter.copy_(values)
+    return loaded, model
+
+
+def _validate_request(request: codec.InferenceRequestV1, checkpoint: LoadedCheckpointV1) -> None:
+    if not isinstance(request, codec.InferenceRequestV1):
+        raise Task4InferenceError("malformed_request", "inference request has the wrong type")
+    try:
+        if codec.inference_request_identity(request) != request.request_identity:
+            raise Task4InferenceError("malformed_request", "request identity does not match canonical request bytes")
+        if codec.validate_ordered_candidate_domain_identity(
+            request.ordered_candidate_domain_identity, request.routing_keys
+        ) != request.ordered_candidate_domain_identity:
+            raise Task4InferenceError("wrong_candidate_domain", "request candidate domain identity is stale")
+    except codec.CodecError as error:
+        raise _error_from_codec(error, "malformed_request") from error
+    if request.checkpoint_identity != checkpoint.checkpoint_identity:
+        raise Task4InferenceError("wrong_checkpoint", "request checkpoint identity is not loaded")
+
+
+def bind_inference_execution(
+    request: codec.InferenceRequestV1,
+    model_input: codec.Task4NumericModelInputV1,
+    checkpoint: LoadedCheckpointV1,
+) -> BoundInferenceExecutionV1:
+    _validate_request(request, checkpoint)
+    try:
+        codec.validate_numeric_model_input(model_input)
+    except codec.CodecError as error:
+        raise _error_from_codec(error, "invalid_model_input") from error
+    if (
+        model_input.model_input_identity != request.model_input_identity or
+        model_input.ordered_candidate_domain_identity != request.ordered_candidate_domain_identity or
+        model_input.public_semantic_decision_id != request.public_semantic_decision_id or
+        model_input.perspective_player != request.perspective_player or
+        model_input.decision_index != request.decision_index or
+        model_input.routing_keys != request.routing_keys
+    ):
+        raise Task4InferenceError(
+            "model_input_binding_mismatch",
+            "numeric model input is not the unit bound by the request",
+        )
+    return BoundInferenceExecutionV1(
+        request=request,
+        model_input=model_input,
+        numeric_input_identity=model_input.numeric_input_identity,
+    )
+
+
+def _validate_bound_execution(
+    execution: BoundInferenceExecutionV1,
+    checkpoint: LoadedCheckpointV1,
+) -> None:
+    if not isinstance(execution, BoundInferenceExecutionV1):
+        raise Task4InferenceError("malformed_request", "pending execution sidecar has the wrong type")
+    bind_inference_execution(execution.request, execution.model_input, checkpoint)
+    if execution.numeric_input_identity != execution.model_input.numeric_input_identity:
+        raise Task4InferenceError(
+            "numeric_input_binding_mismatch",
+            "pending numeric input identity does not match the supplied input",
+        )
+
+
+def _select_ordinal(scores: Sequence[float], routing_keys: Sequence[str]) -> int:
+    if len(scores) != len(routing_keys) or not scores:
+        raise Task4InferenceError("score_count_mismatch", "score count does not equal the ordered domain")
+    finite_scores: list[float] = []
+    key_bytes: list[bytes] = []
+    try:
+        for score, key in zip(scores, routing_keys):
+            finite_scores.append(codec.f32_value(codec.f32_bytes(score)))
+            key_bytes.append(key.encode("utf-8", "strict"))
+    except (codec.CodecError, UnicodeError) as error:
+        raise _error_from_codec(error, "non_finite_score") from error
+    best = 0
+    for index in range(1, len(finite_scores)):
+        if finite_scores[index] > finite_scores[best] or (
+            finite_scores[index] == finite_scores[best]
+            and key_bytes[index] < key_bytes[best]
+        ):
+            best = index
+    return best
+
+
+def _rows_tensor(
+    rows: Sequence[Sequence[float]] | Tensor,
+    width: int,
+    device: torch.device,
+    name: str,
+) -> Tensor:
+    if isinstance(rows, Tensor):
+        value = rows
+    else:
+        try:
+            for row in rows:
+                if len(row) != width:
+                    raise Task4InferenceError("invalid_model_input", f"{name} has the wrong width")
+                for element in row:
+                    codec.f32_bytes(element)
+            value = torch.tensor(rows, dtype=torch.float32, device=device)
+        except (TypeError, ValueError, codec.CodecError) as error:
+            if isinstance(error, Task4InferenceError):
+                raise
+            raise _error_from_codec(error, "invalid_model_input") from error
+    if value.device != device:
+        raise Task4InferenceError("wrong_device", f"{name} is not on the model device")
+    return value
+
+
+def infer_request(
+    model: task4_model.Phase6TorchCandidateScorer,
+    checkpoint: LoadedCheckpointV1,
+    execution: BoundInferenceExecutionV1,
+    *,
+    physical_candidate_capacity: Optional[int] = None,
+) -> codec.InferenceResponseV1:
+    """Run one pending, validated numeric model-input execution with no fallback."""
+
+    _validate_bound_execution(execution, checkpoint)
+    request = execution.request
+    model_input = execution.model_input
+    try:
+        model_device = next(model.parameters()).device
+    except StopIteration as error:
+        raise Task4InferenceError("invalid_model", "scorer has no parameters") from error
+    state = _rows_tensor(model_input.state_rows, codec.STATE_ROW_WIDTH, model_device, "state rows")
+    candidates = _rows_tensor(model_input.candidate_rows, codec.CANDIDATE_ROW_WIDTH, model_device, "candidate rows")
+    if candidates.shape[0] != len(model_input.routing_keys):
+        raise Task4InferenceError("score_count_mismatch", "candidate rows do not equal the ordered domain")
+    try:
+        was_training = model.training
+        model.eval()
+        with torch.no_grad():
+            logits = model(
+                state,
+                candidates,
+                physical_candidate_capacity=physical_candidate_capacity,
+            )
+        if was_training:
+            model.train()
+        task4_model.validate_logits(logits, len(request.routing_keys))
+        scores = tuple(float(value) for value in logits.detach().cpu().tolist())
+        selected = _select_ordinal(scores, request.routing_keys)
+        return codec.make_inference_response(request, scores, selected)
+    except Task4InferenceError:
+        raise
+    except (codec.CodecError, RuntimeError, ValueError) as error:
+        raise _error_from_codec(error, "inference_failed") from error
+    finally:
+        if "was_training" in locals() and was_training:
+            model.train()
+
+
+def validate_response(
+    request: codec.InferenceRequestV1,
+    response: codec.InferenceResponseV1,
+) -> codec.InferenceResponseV1:
+    """Validate a response against the exact request that is awaiting it."""
+
+    if not isinstance(response, codec.InferenceResponseV1):
+        raise Task4InferenceError("malformed_response", "inference response has the wrong type")
+    if response.schema_id != codec.INFERENCE_RESPONSE_SCHEMA_ID:
+        raise Task4InferenceError("malformed_response", "inference response schema is not accepted")
+    if response.request_identity != request.request_identity:
+        raise Task4InferenceError("stale_response", "response belongs to another request")
+    if response.checkpoint_identity != request.checkpoint_identity:
+        raise Task4InferenceError("wrong_checkpoint", "response checkpoint identity is wrong")
+    if response.model_input_identity != request.model_input_identity:
+        raise Task4InferenceError("wrong_model_input", "response model-input identity is wrong")
+    if response.ordered_candidate_domain_identity != request.ordered_candidate_domain_identity:
+        raise Task4InferenceError("wrong_candidate_domain", "response candidate-domain identity is wrong")
+    try:
+        scores = tuple(codec.f32_value(codec.f32_bytes(value)) for value in response.scores)
+    except (codec.CodecError, TypeError, ValueError) as error:
+        raise _error_from_codec(error, "non_finite_score") from error
+    if len(scores) != len(request.routing_keys):
+        raise Task4InferenceError("score_count_mismatch", "response score count is wrong")
+    ordinal = response.selected_candidate_ordinal
+    if not isinstance(ordinal, int) or isinstance(ordinal, bool) or ordinal < 0 or ordinal >= len(request.routing_keys):
+        raise Task4InferenceError("invalid_selection", "response selected ordinal is outside the domain")
+    if response.selected_public_action_key != request.routing_keys[ordinal]:
+        raise Task4InferenceError("invalid_selection", "response selected key is not the ordinal key")
+    if _select_ordinal(scores, request.routing_keys) != ordinal:
+        raise Task4InferenceError("invalid_selection", "response selection does not use the deterministic score rule")
+    expected_identity = codec.inference_response_selection_identity(
+        dataclasses.replace(response, scores=scores)
+    )
+    if response.response_identity != expected_identity:
+        raise Task4InferenceError("malformed_response", "response selection identity is not canonical")
+    return dataclasses.replace(response, scores=scores)
+
+
+def validate_task4b_completion_receipt(
+    receipt: Task4BCompletionReceiptV1,
+) -> Task4BCompletionReceiptV1:
+    """Accept only a receipt issued by the verified completion path."""
+
+    if not isinstance(receipt, Task4BCompletionReceiptV1):
+        raise Task4InferenceError(
+            "invalid_completion_receipt",
+            "completion receipt has the wrong type",
+        )
+    if receipt._attestation is not _COMPLETION_RECEIPT_ATTESTATION:
+        raise Task4InferenceError(
+            "invalid_completion_receipt",
+            "completion receipt is not attested by the export/reload/inference path",
+        )
+    exported_checkpoint = receipt._exported_checkpoint
+    if exported_checkpoint is None:
+        raise Task4InferenceError(
+            "invalid_completion_receipt",
+            "completion receipt is not bound to an exported checkpoint",
+        )
+    _require_actual_canonical_export(exported_checkpoint)
+    if exported_checkpoint.checkpoint_identity != receipt.checkpoint_identity:
+        raise Task4InferenceError(
+            "invalid_completion_receipt",
+            "completion checkpoint identity is not the exported checkpoint identity",
+        )
+    try:
+        codec._validate_prefixed_digest(
+            receipt.checkpoint_identity,
+            codec.CHECKPOINT_ID_PREFIX,
+            "completion checkpoint identity",
+        )
+        codec._validate_prefixed_digest(
+            receipt.model_input_identity,
+            "model_input.v1.",
+            "completion model-input identity",
+        )
+        codec._validate_ordered_domain_identity(
+            receipt.ordered_candidate_domain_identity,
+            "completion ordered domain identity",
+        )
+        codec._validate_prefixed_digest(
+            receipt.request_identity,
+            codec.REQUEST_ID_PREFIX,
+            "completion request identity",
+        )
+        codec._validate_prefixed_digest(
+            receipt.response_identity,
+            codec.RESPONSE_ID_PREFIX,
+            "completion response identity",
+        )
+    except codec.CodecError as error:
+        raise Task4InferenceError("invalid_completion_receipt", str(error)) from error
+    try:
+        expected_binding = _completion_receipt_binding_identity(receipt)
+    except (codec.CodecError, TypeError, ValueError) as error:
+        raise Task4InferenceError("invalid_completion_receipt", str(error)) from error
+    if receipt._binding_identity != expected_binding:
+        raise Task4InferenceError(
+            "invalid_completion_receipt",
+            "completion receipt binding does not match its evidence fields",
+        )
+    if not receipt.fresh_checkpoint_reload or not receipt.deterministic_frozen_inference:
+        raise Task4InferenceError(
+            "invalid_completion_receipt",
+            "completion receipt does not prove both required completion checks",
+        )
+    return receipt
+
+
+def issue_task4b_completion_receipt(
+    exported_checkpoint: ExportedCheckpointV1,
+    *,
+    request: codec.InferenceRequestV1,
+    model_input: codec.Task4NumericModelInputV1,
+    architecture_config: codec.ArchitectureConfigV1,
+    card_vocabulary_identity: str,
+    dataset_identity: str,
+    dataset_split_identity: str,
+) -> Task4BCompletionReceiptV1:
+    """Issue completion proof only after export, strict fresh reload, and replay."""
+
+    _require_actual_canonical_export(exported_checkpoint)
+    try:
+        loaded_first, first_model = reload_model_from_checkpoint(
+            exported_checkpoint.artifact_bytes,
+            architecture_config=architecture_config,
+            card_vocabulary_identity=card_vocabulary_identity,
+            dataset_identity=dataset_identity,
+            dataset_split_identity=dataset_split_identity,
+        )
+        loaded_second, second_model = reload_model_from_checkpoint(
+            exported_checkpoint.artifact_bytes,
+            architecture_config=architecture_config,
+            card_vocabulary_identity=card_vocabulary_identity,
+            dataset_identity=dataset_identity,
+            dataset_split_identity=dataset_split_identity,
+        )
+        if (
+            loaded_first.checkpoint_identity != exported_checkpoint.checkpoint_identity or
+            loaded_second.checkpoint_identity != exported_checkpoint.checkpoint_identity or
+            first_model is second_model
+        ):
+            raise Task4InferenceError(
+                "invalid_completion_receipt",
+                "fresh checkpoint reload did not produce two independent matching models",
+            )
+        first_execution = bind_inference_execution(
+            request, model_input, loaded_first
+        )
+        second_execution = bind_inference_execution(
+            request, model_input, loaded_second
+        )
+        first_response = validate_response(
+            request, infer_request(first_model, loaded_first, first_execution)
+        )
+        second_response = validate_response(
+            request, infer_request(second_model, loaded_second, second_execution)
+        )
+    except Task4InferenceError:
+        raise
+    except (codec.CodecError, TypeError, ValueError, RuntimeError) as error:
+        raise Task4InferenceError(
+            "invalid_completion_receipt",
+            f"completion verification failed: {error}",
+        ) from error
+    if (
+        first_response.scores != second_response.scores or
+        first_response.selected_candidate_ordinal != second_response.selected_candidate_ordinal or
+        first_response.selected_public_action_key != second_response.selected_public_action_key or
+        first_response.response_identity != second_response.response_identity
+    ):
+        raise Task4InferenceError(
+            "determinism_mismatch",
+            "fresh inference results are not identical for the accepted input",
+        )
+    receipt = Task4BCompletionReceiptV1(
+        checkpoint_identity=exported_checkpoint.checkpoint_identity,
+        model_input_identity=request.model_input_identity,
+        ordered_candidate_domain_identity=request.ordered_candidate_domain_identity,
+        request_identity=request.request_identity,
+        response_identity=first_response.response_identity,
+        _exported_checkpoint=exported_checkpoint,
+        _binding_identity="",
+        _attestation=_COMPLETION_RECEIPT_ATTESTATION,
+    )
+    receipt = dataclasses.replace(
+        receipt,
+        _binding_identity=_completion_receipt_binding_identity(receipt),
+    )
+    return validate_task4b_completion_receipt(receipt)
+
+
+class Phase6InferenceRunnerV1:
+    """Single-use request ledger with fail-closed response handling."""
+
+    def __init__(
+        self,
+        model: task4_model.Phase6TorchCandidateScorer,
+        checkpoint: LoadedCheckpointV1,
+        *,
+        physical_candidate_capacity: Optional[int] = None,
+    ) -> None:
+        self._model = model
+        self._checkpoint = checkpoint
+        self._physical_candidate_capacity = physical_candidate_capacity
+        self._pending: dict[str, BoundInferenceExecutionV1] = {}
+        self._consumed: set[str] = set()
+        self._closed: set[str] = set()
+
+    def submit_request(
+        self,
+        request: codec.InferenceRequestV1,
+        model_input: codec.Task4NumericModelInputV1,
+    ) -> None:
+        _validate_request(request, self._checkpoint)
+        identity = request.request_identity
+        if identity in self._consumed or identity in self._closed:
+            raise Task4InferenceError("duplicate_request", "request has already been consumed or closed")
+        if identity in self._pending:
+            raise Task4InferenceError("duplicate_request", "request is already pending")
+        self._pending[identity] = bind_inference_execution(
+            request, model_input, self._checkpoint
+        )
+
+    def accept_response(
+        self,
+        request: codec.InferenceRequestV1,
+        response: codec.InferenceResponseV1,
+    ) -> codec.InferenceResponseV1:
+        identity = request.request_identity
+        if identity in self._consumed or identity in self._closed:
+            raise Task4InferenceError("duplicate_response", "request response is already closed")
+        pending = self._pending.pop(identity, None)
+        if pending is None:
+            raise Task4InferenceError("late_response", "response has no pending request")
+        if pending.request != request:
+            self._closed.add(identity)
+            raise Task4InferenceError("stale_request", "request envelope does not match the pending request")
+        try:
+            accepted = validate_response(pending.request, response)
+        except Task4InferenceError:
+            self._closed.add(identity)
+            raise
+        self._consumed.add(identity)
+        return accepted
+
+    def infer(
+        self,
+        request: codec.InferenceRequestV1,
+        model_input: codec.Task4NumericModelInputV1,
+    ) -> codec.InferenceResponseV1:
+        if request.request_identity in self._pending:
+            pending = self._pending[request.request_identity]
+            try:
+                incoming = bind_inference_execution(
+                    request, model_input, self._checkpoint
+                )
+                if incoming.numeric_input_identity != pending.numeric_input_identity:
+                    raise Task4InferenceError(
+                        "numeric_input_binding_mismatch",
+                        "replacement numeric input does not match pending execution",
+                    )
+                if incoming.model_input != pending.model_input:
+                    raise Task4InferenceError(
+                        "model_input_binding_mismatch",
+                        "replacement numeric input is not the pending execution input",
+                    )
+            except Task4InferenceError:
+                self._pending.pop(request.request_identity, None)
+                self._closed.add(request.request_identity)
+                raise
+            execution = pending
+        else:
+            self.submit_request(request, model_input)
+            execution = self._pending[request.request_identity]
+        try:
+            response = infer_request(
+                self._model,
+                self._checkpoint,
+                execution,
+                physical_candidate_capacity=self._physical_candidate_capacity,
+            )
+            return self.accept_response(request, response)
+        except Exception as error:
+            self._pending.pop(request.request_identity, None)
+            self._closed.add(request.request_identity)
+            if isinstance(error, Task4InferenceError):
+                raise
+            raise Task4InferenceError("inference_failed", str(error)) from error

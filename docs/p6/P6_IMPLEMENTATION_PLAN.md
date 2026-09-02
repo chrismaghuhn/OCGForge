@@ -25,10 +25,11 @@ training backend or ML dependency is selected by this plan's Task 1.
 
 | Task | Scope | Status at this freeze |
 | --- | --- | --- |
-| Task 1 | BC/data/checkpoint/evaluation contract freeze | CURRENT / AUTHORIZED — this docs-only task |
-| Task 2 | admitted supervision materialization, deterministic split, model-input inspector | NOT AUTHORIZED |
-| Task 3 | framework-neutral BC architecture and reference scorer/inference interface | NOT AUTHORIZED |
-| Task 4 | first backend implementation, smoke training, checkpoint export, fail-closed runner | NOT AUTHORIZED |
+| Task 1 | BC/data/checkpoint/evaluation contract freeze | FINAL / MERGED |
+| Task 2 | admitted supervision materialization, deterministic split, model-input inspector | FINAL / MERGED |
+| Task 3 | framework-neutral BC architecture and reference scorer/inference interface | FINAL / MERGED |
+| Task 4A | corpus, numeric/config sub-codecs, provisional PyTorch architecture, checkpoint/inference runner, CUDA preflight | CURRENT / AUTHORIZED — zero optimizer steps |
+| Task 4B | one CUDA smoke run, canonical export/reload, deterministic inference evidence | NOT AUTHORIZED |
 | Task 5 | frozen offline/gameplay evaluation and first-divergence tooling | NOT AUTHORIZED |
 | Task 6 | controlled PyTorch/JAX backend bake-off and primary-backend ADR | NOT AUTHORIZED |
 | Task 7 | first accepted BC baseline run and canonical checkpoint evidence | NOT AUTHORIZED |
@@ -51,7 +52,7 @@ remains future evidence; this plan does not mark any gate `PASS`.
 
 ## 2. Task 1 — Contract freeze
 
-**Status:** CURRENT / AUTHORIZED — the work requested by this branch.
+**Status:** FINAL / MERGED — the accepted Phase-6 contract freeze.
 
 **Authorized files:** exactly these nine Markdown files:
 
@@ -86,8 +87,7 @@ automatically authorized.
 
 ## 3. Task 2 — Admitted supervision materialization, split, and inspector
 
-**Status:** NOT AUTHORIZED. Requires a separate user authorization after Task 1
-review.
+**Status:** FINAL / MERGED — the accepted Task-2 implementation.
 
 **Purpose:** Build the first data consumer above the accepted Phase-3B
 admission and Phase-5 representation without changing either source contract.
@@ -125,8 +125,7 @@ backend dependency is authorized by this task.
 
 ## 4. Task 3 — Framework-neutral BC architecture and reference interface
 
-**Status:** NOT AUTHORIZED. Requires a separate user authorization after Task 2
-review.
+**Status:** FINAL / MERGED — the accepted Task-3 implementation.
 
 **Purpose:** Specify and, where useful, implement a backend-neutral reference
 interface for state encoding, candidate encoding, exact-domain scoring, and
@@ -153,10 +152,34 @@ against Phase-5 model identities, exact N→N output, padding exclusion, paired
 hidden-world equality, and stale/wrong-response binding. No training is
 authorized by this task.
 
-## 5. Task 4 — First backend, smoke training, export, and fail-closed runner
+## 5. Task 4A — First backend infrastructure, codecs, runner, and CUDA preflight
 
-**Status:** NOT AUTHORIZED. Requires separate authorization after Tasks 2 and 3
-are reviewed.
+**Status:** CURRENT / AUTHORIZED — zero-step Task-4A implementation.
+
+Task 4A defines and validates the Task-4 numeric/configuration/checkpoint
+sub-codecs, the rebuildable admitted smoke-corpus projection, the provisional
+PyTorch architecture, the fail-closed inference runner, and the CUDA preflight.
+It MUST execute zero optimizer steps. Its exact identities and field order are
+owned by [P6_TASK4A_NUMERIC_AND_PROVENANCE_CONTRACT.md](P6_TASK4A_NUMERIC_AND_PROVENANCE_CONTRACT.md).
+
+The Task-4B execution configuration is frozen before that later run: train
+samples are ordered by ascending `bc_sample_identity`, `shuffle=false`, step
+`i` selects `train_samples[i % train_sample_count]`, the Adam execution flags
+are all explicitly false (`foreach`, `fused`, `amsgrad`, `maximize`,
+`capturable`, `differentiable`, and `decoupled_weight_decay`), deterministic
+algorithms are strict, and float32 matmul precision is `highest`.
+
+The run manifest keeps the exact frozen Task-1 V1 top-level field set. Task-4B
+step counts, CUDA-preflight attestation, deterministic execution identity, and
+GPU-memory measurements are emitted in a separate smoke-evidence sidecar.
+
+Task 4A does not issue accepted training-run or trained-checkpoint evidence.
+Task 4B requires a separate authorization after independent review.
+
+## 6. Task 4B — One CUDA smoke run, canonical export, and fail-closed runner evidence
+
+**Status:** NOT AUTHORIZED. Requires separate authorization after Task 4A
+review.
 
 **Purpose:** Exercise one provisional implementation backend on a small real BC
 workload, export a canonical inference checkpoint, and prove the runner's
@@ -181,16 +204,23 @@ backend decision.
    wrong-length, non-finite, and invalid responses; and
 7. never call Teacher, RandomLegal, heuristic, first-candidate, or another
    policy after a neural failure.
+8. record `GPU_MEMORY_BEFORE`, `GPU_MEMORY_PEAK`, and `GPU_MEMORY_AFTER` as
+   execution provenance for the one CUDA smoke; these values must not enter
+   checkpoint semantic identity.
+9. issue positive smoke evidence only from a typed completion receipt produced
+   by canonical export, strict fresh reload, and deterministic inference
+   verification; checkpoint identity and completion PASS values are derived
+   from that receipt.
 
-The provisional backend must be explicitly selected for the task's smoke
-experiment by a later authorization. Task 4 does not choose PyTorch over JAX,
-JAX over PyTorch, or either as the primary Phase-6 backend.
+The provisional backend is PyTorch only for the one explicitly authorized CUDA
+smoke. Task 4B does not choose PyTorch over JAX, JAX over PyTorch, or either as
+the primary Phase-6 backend.
 
 **Review checkpoint:** validate checkpoint/content/provenance identities, exact
 inference binding, no fallback, capacity witnesses, and public-only diagnostics
 before any result is used in evaluation.
 
-## 6. Task 5 — Frozen offline, gameplay, and first-divergence evaluation
+## 7. Task 5 — Frozen offline, gameplay, and first-divergence evaluation
 
 **Status:** NOT AUTHORIZED. Requires separate authorization after Task 4 review.
 
@@ -217,7 +247,7 @@ and trusted trajectory/admission paths.
 fallback-assisted win, no aggregate-only claim, and reproducible first
 divergence. Run the P6-G08 through P6-G18 evidence applicable to the task.
 
-## 7. Task 6 — Controlled PyTorch/JAX backend bake-off
+## 8. Task 6 — Controlled PyTorch/JAX backend bake-off
 
 **Status:** NOT AUTHORIZED. Requires a separate authorization after a real BC
 workload and Task-5 evaluation evidence exist.
@@ -261,7 +291,7 @@ implementations, compare canonical exports, audit the same evaluation corpus,
 and reject any winner that relies on truncation, fixed action authority,
 hidden-state shortcuts, or silent fallback.
 
-## 8. Task 7 — First accepted BC baseline
+## 9. Task 7 — First accepted BC baseline
 
 **Status:** NOT AUTHORIZED. Requires the backend decision and explicit
 authorization after Tasks 2–6 are reviewed.
@@ -291,7 +321,7 @@ deployment.
 training/checkpoint provenance, evaluation identities, privacy evidence, and
 clean-worktree/source-head binding before any Phase-6 final status change.
 
-## 9. Cross-task non-goals
+## 10. Cross-task non-goals
 
 No task in this plan authorizes, without its own explicit scope and review,
 
