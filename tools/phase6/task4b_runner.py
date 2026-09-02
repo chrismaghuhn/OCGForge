@@ -1,13 +1,13 @@
-"""Task-4B runner primitives and the Task-3 CUDA training seam.
+"""Task-4B runner primitives, CUDA training, and smoke completion.
 
-Canonical export, completion receipts, execution reports, and post-smoke
-verification remain later authorized plan tasks.
+Post-smoke verification remains a later authorized plan task.
 """
 
 from __future__ import annotations
 
 import dataclasses
 import hashlib
+import json
 import os
 import re
 import subprocess
@@ -19,6 +19,7 @@ import torch
 
 from . import task4_codec as codec
 from . import task4_cuda
+from . import task4_inference
 from . import task4_model
 
 
@@ -48,6 +49,103 @@ class Task4BTrainingError(RuntimeError):
         super().__init__(message)
         self.code = code
         self.actual_optimizer_steps = actual_optimizer_steps
+
+
+@dataclasses.dataclass(frozen=True)
+class Task4BExecutionReportV1:
+    """Machine-readable report for one Task-4B smoke attempt."""
+
+    h_exec: str | None = None
+    corpus_probe_sha256: str | None = None
+    corpus_probe_source_commit: str | None = None
+    cuda_preflight_identity: str | None = None
+    cuda_available: bool | None = None
+    framework_version: str | None = None
+    torch_cuda_version_reported: str | None = None
+    device_type: str | None = None
+    device_index: int | None = None
+    gpu_name: str | None = None
+    capability_major: int | None = None
+    capability_minor: int | None = None
+    device_count: int | None = None
+    cpu_fallback: bool | None = None
+    backend_identity: str | None = None
+    distributed_strategy: str | None = None
+    world_size: int | None = None
+    deterministic_algorithms: bool | None = None
+    deterministic_warn_only: bool | None = None
+    float32_matmul_precision: str | None = None
+    source_dataset_identity: str | None = None
+    dataset_split_identity: str | None = None
+    card_vocabulary_identity: str | None = None
+    train_sample_count: int | None = None
+    validation_sample_count: int | None = None
+    test_sample_count: int | None = None
+    training_run_identity: str | None = None
+    actual_optimizer_steps: int = 0
+    gpu_memory_before: int | None = None
+    gpu_memory_peak: int | None = None
+    gpu_memory_after: int | None = None
+    error_code: str | None = None
+    smoke_pass: bool = False
+    task4b_pass: bool = False
+    checkpoint_identity: str | None = None
+    smoke_evidence_identity: str | None = None
+    initial_loss: float | None = None
+    final_loss: float | None = None
+    schema_id: str = "ocgforge.phase6.task4b.execution_report.v1"
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "schema_id": self.schema_id,
+            "H_exec": self.h_exec,
+            "corpus_probe_sha256": self.corpus_probe_sha256,
+            "corpus_probe_source_commit": self.corpus_probe_source_commit,
+            "cuda_preflight_identity": self.cuda_preflight_identity,
+            "cuda_available": self.cuda_available,
+            "framework_version": self.framework_version,
+            "torch_cuda_version_reported": self.torch_cuda_version_reported,
+            "device_type": self.device_type,
+            "device_index": self.device_index,
+            "gpu_name": self.gpu_name,
+            "capability_major": self.capability_major,
+            "capability_minor": self.capability_minor,
+            "device_count": self.device_count,
+            "cpu_fallback": self.cpu_fallback,
+            "backend_identity": self.backend_identity,
+            "distributed_strategy": self.distributed_strategy,
+            "world_size": self.world_size,
+            "deterministic_algorithms": self.deterministic_algorithms,
+            "deterministic_warn_only": self.deterministic_warn_only,
+            "float32_matmul_precision": self.float32_matmul_precision,
+            "source_dataset_identity": self.source_dataset_identity,
+            "dataset_split_identity": self.dataset_split_identity,
+            "card_vocabulary_identity": self.card_vocabulary_identity,
+            "train_sample_count": self.train_sample_count,
+            "validation_sample_count": self.validation_sample_count,
+            "test_sample_count": self.test_sample_count,
+            "training_run_identity": self.training_run_identity,
+            "actual_optimizer_steps": self.actual_optimizer_steps,
+            "GPU_MEMORY_BEFORE": self.gpu_memory_before,
+            "GPU_MEMORY_PEAK": self.gpu_memory_peak,
+            "GPU_MEMORY_AFTER": self.gpu_memory_after,
+            "error_code": self.error_code,
+            "SMOKE_PASS": self.smoke_pass,
+            "TASK4B_PASS": self.task4b_pass,
+            "checkpoint_identity": self.checkpoint_identity,
+            "smoke_evidence_identity": self.smoke_evidence_identity,
+            "initial_loss": self.initial_loss,
+            "final_loss": self.final_loss,
+        }
+
+    def to_json(self) -> str:
+        return json.dumps(
+            self.to_dict(),
+            ensure_ascii=True,
+            allow_nan=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
 
 
 @dataclasses.dataclass
@@ -346,6 +444,8 @@ class Task4BSmokeRunResult:
     test_sample_count: int
     ordered_train_samples: tuple[codec.CorpusSampleV1, ...]
     training_result: "Task4BCudaTrainingResultV1"
+    finalization: "Task4BFinalizationV1 | None" = None
+    execution_report: Task4BExecutionReportV1 | None = None
 
 
 def _partition_counts(
@@ -610,6 +710,195 @@ class Task4BCudaTrainingResultV1:
     gpu_memory_after: int
 
 
+@dataclasses.dataclass(frozen=True)
+class Task4BFinalizationV1:
+    """Attested canonical export, completion receipt, and smoke evidence."""
+
+    exported_checkpoint: task4_inference.ExportedCheckpointV1
+    completion_receipt: task4_inference.Task4BCompletionReceiptV1
+    training_run_manifest: codec.TrainingRunManifestV1
+    smoke_evidence: codec.Task4BSmokeEvidenceV1
+    training_run_identity: str
+    checkpoint_identity: str
+    smoke_evidence_identity: str
+
+
+def _numeric_model_input_for_sample(
+    sample: codec.CorpusSampleV1,
+) -> codec.Task4NumericModelInputV1:
+    return codec.make_numeric_model_input(
+        model_input_identity=sample.model_input_identity,
+        state_rows=sample.state_rows,
+        candidate_rows=sample.candidate_rows,
+        routing_keys=sample.routing_keys,
+        public_candidate_domain_digest=sample.public_candidate_domain_digest,
+        public_semantic_decision_id=sample.public_semantic_decision_id,
+        perspective_player=sample.perspective_player,
+        decision_index=sample.decision_index,
+    )
+
+
+def _finalize_task4b_artifacts(
+    run_result: Task4BSmokeRunResult,
+    training_result: Task4BCudaTrainingResultV1,
+) -> Task4BFinalizationV1:
+    """Export and attest the canonical inference/checkpoint boundary."""
+
+    corpus = run_result.admitted_corpus.corpus
+    exported = task4_inference.export_canonical_checkpoint(
+        training_result.model,
+        source_dataset_identity=corpus.source_dataset_identity,
+        dataset_split_identity=corpus.split_identity,
+        card_vocabulary_identity=corpus.card_vocabulary_identity,
+    )
+    codec.decode_checkpoint_artifact(exported.artifact_bytes)
+    sample = run_result.ordered_train_samples[0]
+    numeric_input = _numeric_model_input_for_sample(sample)
+    request = codec.make_inference_request(
+        checkpoint_identity=exported.checkpoint_identity,
+        model_input=numeric_input,
+    )
+    completion_receipt = task4_inference.issue_task4b_completion_receipt(
+        exported,
+        request=request,
+        model_input=numeric_input,
+        architecture_config=codec.default_architecture_config(),
+        card_vocabulary_identity=corpus.card_vocabulary_identity,
+        dataset_identity=corpus.source_dataset_identity,
+        dataset_split_identity=corpus.split_identity,
+    )
+    base_manifest = codec.default_training_run_manifest(
+        source_dataset_identity=corpus.source_dataset_identity,
+        dataset_split_identity=corpus.split_identity,
+        card_vocabulary_identity=corpus.card_vocabulary_identity,
+        training_code_commit=run_result.h_exec,
+        actual_optimizer_steps=0,
+    )
+    manifest = task4_cuda.finalize_training_run_manifest_from_cuda_preflight(
+        training_result.preflight,
+        base_manifest,
+        final_exported_checkpoint_identity=exported.checkpoint_identity,
+    )
+    smoke_evidence = task4_cuda.smoke_evidence_from_cuda_preflight(
+        training_result.preflight,
+        manifest,
+        completion_receipt,
+        actual_optimizer_steps=training_result.actual_optimizer_steps,
+        gpu_memory_before=training_result.gpu_memory_before,
+        gpu_memory_peak=training_result.gpu_memory_peak,
+        gpu_memory_after=training_result.gpu_memory_after,
+    )
+    codec.canonical_training_run_manifest_bytes(manifest)
+    codec.canonical_smoke_evidence_bytes(smoke_evidence)
+    return Task4BFinalizationV1(
+        exported_checkpoint=exported,
+        completion_receipt=completion_receipt,
+        training_run_manifest=manifest,
+        smoke_evidence=smoke_evidence,
+        training_run_identity=codec.training_run_identity(manifest),
+        checkpoint_identity=exported.checkpoint_identity,
+        smoke_evidence_identity=codec.smoke_evidence_identity(smoke_evidence),
+    )
+
+
+def _execution_report_preflight_fields(
+    preflight: task4_cuda.CudaPreflightResultV1,
+) -> dict[str, object]:
+    provenance = preflight.execution_provenance()
+    return {
+        "cuda_preflight_identity": preflight.cuda_preflight_identity,
+        "cuda_available": True,
+        "framework_version": preflight.framework_version,
+        "torch_cuda_version_reported": preflight.torch_cuda_version_reported,
+        "device_type": preflight.device_type,
+        "device_index": preflight.device_index,
+        "gpu_name": preflight.gpu_name,
+        "capability_major": preflight.capability_major,
+        "capability_minor": preflight.capability_minor,
+        "device_count": preflight.device_count,
+        "cpu_fallback": preflight.cpu_fallback,
+        "backend_identity": provenance.backend_identity,
+        "distributed_strategy": provenance.distributed_strategy,
+        "world_size": provenance.world_size,
+        "deterministic_algorithms": provenance.deterministic_algorithms,
+        "deterministic_warn_only": provenance.deterministic_warn_only,
+        "float32_matmul_precision": provenance.float32_matmul_precision,
+    }
+
+
+def _write_atomic_bytes(path: Path, data: bytes) -> None:
+    path = path.resolve()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(path.name + ".tmp")
+    with temporary.open("xb") as stream:
+        stream.write(bytes(data))
+        stream.flush()
+        os.fsync(stream.fileno())
+    os.replace(temporary, path)
+
+
+def _write_atomic_json(path: Path, value: object) -> None:
+    encoded = json.dumps(
+        value,
+        ensure_ascii=True,
+        allow_nan=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    _write_atomic_bytes(path, encoded)
+
+
+def _completion_receipt_projection(
+    receipt: task4_inference.Task4BCompletionReceiptV1,
+) -> dict[str, object]:
+    return {
+        "checkpoint_identity": receipt.checkpoint_identity,
+        "model_input_identity": receipt.model_input_identity,
+        "ordered_candidate_domain_identity": receipt.ordered_candidate_domain_identity,
+        "request_identity": receipt.request_identity,
+        "response_identity": receipt.response_identity,
+        "fresh_checkpoint_reload": receipt.fresh_checkpoint_reload,
+        "deterministic_frozen_inference": receipt.deterministic_frozen_inference,
+    }
+
+
+def _write_smoke_artifacts(
+    output_dir: Path,
+    run_result: Task4BSmokeRunResult,
+    finalization: Task4BFinalizationV1,
+    report: Task4BExecutionReportV1,
+) -> None:
+    output_dir = output_dir.resolve()
+    corpus = run_result.admitted_corpus
+    _write_atomic_bytes(output_dir / "corpus.p6c", corpus.corpus_bytes)
+    _write_atomic_bytes(
+        output_dir / "corpus.authority.p6a",
+        corpus.authority_bytes,
+    )
+    _write_atomic_bytes(
+        output_dir / "checkpoint.p6k",
+        finalization.exported_checkpoint.artifact_bytes,
+    )
+    _write_atomic_bytes(
+        output_dir / "training-run-manifest.p6m",
+        codec.canonical_training_run_manifest_bytes(
+            finalization.training_run_manifest
+        ),
+    )
+    _write_atomic_bytes(
+        output_dir / "smoke-evidence.p6e",
+        codec.canonical_smoke_evidence_bytes(finalization.smoke_evidence),
+    )
+    _write_atomic_json(
+        output_dir / "completion-receipt.json",
+        _completion_receipt_projection(finalization.completion_receipt),
+    )
+    _write_atomic_bytes(
+        output_dir / "task4b-execution-report.json",
+        report.to_json().encode("utf-8"),
+    )
+
+
 def _run_cuda_training(
     ordered_train_samples: Sequence[codec.CorpusSampleV1],
 ) -> Task4BCudaTrainingResultV1:
@@ -797,37 +1086,134 @@ def run_task4b_smoke(
 ) -> Task4BSmokeRunResult:
     """Run the authoritative Task-2 preparation and Task-3 CUDA seam.
 
-    Canonical export, completion receipts, execution reports, and post-smoke
-    verification remain later authorized plan tasks.
+    Canonical export, completion receipts, and execution reports are finalized
+    here; post-smoke verification remains a later authorized plan task.
     """
 
-    source_root = _canonical_source_root()
-    h_exec = _verify_clean_h_exec(source_root)
-    probe_path, probe_sha256 = _build_and_attest_probe(source_root, build_dir)
-    with tempfile.TemporaryDirectory(prefix="ocgforge-task4b-corpus-") as directory:
-        admitted = _run_authoritative_corpus_probe(
-            probe_path,
-            Path(directory),
-            source_root=source_root,
-            expected_probe_sha256=probe_sha256,
+    requested_output_dir = Path(output_dir).resolve()
+    report = Task4BExecutionReportV1()
+    try:
+        source_root = _canonical_source_root()
+        h_exec = _verify_clean_h_exec(source_root)
+        report = dataclasses.replace(report, h_exec=h_exec)
+        probe_path, probe_sha256 = _build_and_attest_probe(source_root, build_dir)
+        report = dataclasses.replace(
+            report,
+            corpus_probe_sha256=probe_sha256,
+            corpus_probe_source_commit=h_exec,
         )
-    corpus = admitted.corpus
-    train_count, validation_count, test_count = _partition_counts(corpus.samples)
-    ordered_train_samples = _ordered_train_samples(corpus.samples)
-    training_result = _run_cuda_training(ordered_train_samples)
-    return Task4BSmokeRunResult(
-        source_root=source_root,
-        output_dir=Path(output_dir).resolve(),
-        h_exec=h_exec,
-        probe_path=probe_path,
-        probe_sha256=probe_sha256,
-        admitted_corpus=admitted,
-        source_dataset_identity=corpus.source_dataset_identity,
-        dataset_split_identity=corpus.split_identity,
-        card_vocabulary_identity=corpus.card_vocabulary_identity,
-        train_sample_count=train_count,
-        validation_sample_count=validation_count,
-        test_sample_count=test_count,
-        ordered_train_samples=ordered_train_samples,
-        training_result=training_result,
-    )
+        with tempfile.TemporaryDirectory(prefix="ocgforge-task4b-corpus-") as directory:
+            admitted = _run_authoritative_corpus_probe(
+                probe_path,
+                Path(directory),
+                source_root=source_root,
+                expected_probe_sha256=probe_sha256,
+            )
+        corpus = admitted.corpus
+        train_count, validation_count, test_count = _partition_counts(corpus.samples)
+        ordered_train_samples = _ordered_train_samples(corpus.samples)
+        report = dataclasses.replace(
+            report,
+            source_dataset_identity=corpus.source_dataset_identity,
+            dataset_split_identity=corpus.split_identity,
+            card_vocabulary_identity=corpus.card_vocabulary_identity,
+            train_sample_count=train_count,
+            validation_sample_count=validation_count,
+            test_sample_count=test_count,
+        )
+        training_result = _run_cuda_training(ordered_train_samples)
+        report = dataclasses.replace(
+            report,
+            **_execution_report_preflight_fields(training_result.preflight),
+            actual_optimizer_steps=training_result.actual_optimizer_steps,
+            gpu_memory_before=training_result.gpu_memory_before,
+            gpu_memory_peak=training_result.gpu_memory_peak,
+            gpu_memory_after=training_result.gpu_memory_after,
+            initial_loss=training_result.initial_loss,
+            final_loss=training_result.final_loss,
+        )
+        preparation = Task4BSmokeRunResult(
+            source_root=source_root,
+            output_dir=requested_output_dir,
+            h_exec=h_exec,
+            probe_path=probe_path,
+            probe_sha256=probe_sha256,
+            admitted_corpus=admitted,
+            source_dataset_identity=corpus.source_dataset_identity,
+            dataset_split_identity=corpus.split_identity,
+            card_vocabulary_identity=corpus.card_vocabulary_identity,
+            train_sample_count=train_count,
+            validation_sample_count=validation_count,
+            test_sample_count=test_count,
+            ordered_train_samples=ordered_train_samples,
+            training_result=training_result,
+        )
+        finalization = _finalize_task4b_artifacts(preparation, training_result)
+        report = dataclasses.replace(
+            report,
+            training_run_identity=finalization.training_run_identity,
+            smoke_pass=True,
+            task4b_pass=False,
+            checkpoint_identity=finalization.checkpoint_identity,
+            smoke_evidence_identity=finalization.smoke_evidence_identity,
+        )
+        _write_smoke_artifacts(
+            requested_output_dir,
+            preparation,
+            finalization,
+            report,
+        )
+        return dataclasses.replace(
+            preparation,
+            finalization=finalization,
+            execution_report=report,
+        )
+    except task4_cuda.CudaPreflightError as error:
+        report = dataclasses.replace(
+            report,
+            error_code=error.code,
+            actual_optimizer_steps=error.actual_optimizer_steps,
+        )
+        _write_atomic_bytes(
+            requested_output_dir / "task4b-execution-report.json",
+            report.to_json().encode("utf-8"),
+        )
+        raise
+    except Task4BTrainingError as error:
+        report = dataclasses.replace(
+            report,
+            error_code=error.code,
+            actual_optimizer_steps=error.actual_optimizer_steps,
+        )
+        _write_atomic_bytes(
+            requested_output_dir / "task4b-execution-report.json",
+            report.to_json().encode("utf-8"),
+        )
+        raise
+    except Task4BSmokeError as error:
+        report = dataclasses.replace(report, error_code=error.code)
+        _write_atomic_bytes(
+            requested_output_dir / "task4b-execution-report.json",
+            report.to_json().encode("utf-8"),
+        )
+        if error.report is not None:
+            raise
+        raise Task4BSmokeError(
+            error.code,
+            str(error),
+            report=report,
+        ) from error
+    except (codec.CodecError, task4_inference.Task4InferenceError, OSError, RuntimeError, TypeError, ValueError) as error:
+        report = dataclasses.replace(
+            report,
+            error_code=getattr(error, "code", "TASK4B_FAILED"),
+        )
+        _write_atomic_bytes(
+            requested_output_dir / "task4b-execution-report.json",
+            report.to_json().encode("utf-8"),
+        )
+        raise Task4BSmokeError(
+            report.error_code or "TASK4B_FAILED",
+            str(error),
+            report=report,
+        ) from error

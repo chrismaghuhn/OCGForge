@@ -1,5 +1,6 @@
 import dataclasses
 import hashlib
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -9,6 +10,7 @@ import torch
 
 from tools.phase6 import task4_codec as codec
 from tools.phase6 import task4_cuda
+from tools.phase6 import task4_inference
 from tools.phase6 import task4b_runner as runner
 
 
@@ -84,6 +86,30 @@ def _admitted_corpus(samples, *, authority=None):
         authority_bytes=b"authority",
         corpus=corpus,
         authority=object() if authority is None else authority,
+    )
+
+
+def _finalization_stub() -> runner.Task4BFinalizationV1:
+    return runner.Task4BFinalizationV1(
+        exported_checkpoint=mock.Mock(),
+        completion_receipt=mock.Mock(),
+        training_run_manifest=mock.Mock(),
+        smoke_evidence=mock.Mock(),
+        training_run_identity="phase6_training_run.v1." + "1" * 64,
+        checkpoint_identity="phase6_checkpoint.v1." + "2" * 64,
+        smoke_evidence_identity="phase6_task4b_smoke_evidence.v1." + "3" * 64,
+    )
+
+
+def _training_result_stub():
+    return mock.Mock(
+        preflight=mock.Mock(),
+        actual_optimizer_steps=500,
+        gpu_memory_before=1,
+        gpu_memory_peak=2,
+        gpu_memory_after=1,
+        initial_loss=3.0,
+        final_loss=2.0,
     )
 
 
@@ -213,23 +239,26 @@ class Task4BRunnerTests(unittest.TestCase):
         with mock.patch.object(runner, "_canonical_source_root", return_value=source_root), \
              mock.patch.object(runner, "_verify_clean_h_exec", side_effect=dirty), \
              mock.patch.object(runner, "_build_and_attest_probe") as build_probe, \
-             mock.patch.object(runner, "_run_authoritative_corpus_probe") as run_probe:
+             mock.patch.object(runner, "_run_authoritative_corpus_probe") as run_probe, \
+             mock.patch.object(runner, "_write_atomic_bytes") as write_report:
             with self.assertRaises(runner.Task4BSmokeError) as raised:
                 runner.run_task4b_smoke(
                     build_dir=source_root / "build",
                     output_dir=source_root / "output",
                 )
 
-        self.assertIs(raised.exception, dirty)
+        self.assertEqual(raised.exception.code, dirty.code)
+        self.assertIsNotNone(raised.exception.report)
         build_probe.assert_not_called()
         run_probe.assert_not_called()
+        write_report.assert_called_once()
 
     def test_authoritative_composition_connects_clean_head_to_probe_admission(self):
         source_root = Path("C:/source")
         probe = source_root / "build" / "phase6_task4_corpus_probe.exe"
         probe_hash = "a" * 64
         admitted = _admitted_corpus((_sample("a" * 64, "train", "00"),))
-        training_result = object()
+        training_result = _training_result_stub()
         calls = []
 
         def record_clean(_source_root):
@@ -258,7 +287,10 @@ class Task4BRunnerTests(unittest.TestCase):
              mock.patch.object(runner, "_verify_clean_h_exec", side_effect=record_clean), \
              mock.patch.object(runner, "_build_and_attest_probe", side_effect=record_build), \
              mock.patch.object(runner, "_run_authoritative_corpus_probe", side_effect=record_probe), \
-             mock.patch.object(runner, "_run_cuda_training", return_value=training_result):
+             mock.patch.object(runner, "_run_cuda_training", return_value=training_result), \
+             mock.patch.object(runner, "_execution_report_preflight_fields", return_value={}), \
+             mock.patch.object(runner, "_finalize_task4b_artifacts", return_value=_finalization_stub()), \
+             mock.patch.object(runner, "_write_smoke_artifacts"):
             result = runner.run_task4b_smoke(
                 build_dir=source_root / "build",
                 output_dir=source_root / "output",
@@ -287,13 +319,16 @@ class Task4BRunnerTests(unittest.TestCase):
                 card_vocabulary_identity="caller-vocabulary",
             ),
         )
-        training_result = object()
+        training_result = _training_result_stub()
 
         with mock.patch.object(runner, "_canonical_source_root", return_value=source_root), \
              mock.patch.object(runner, "_verify_clean_h_exec", return_value="b" * 40), \
              mock.patch.object(runner, "_build_and_attest_probe", return_value=(probe, probe_hash)), \
              mock.patch.object(runner, "_run_authoritative_corpus_probe", return_value=admitted), \
-             mock.patch.object(runner, "_run_cuda_training", return_value=training_result):
+             mock.patch.object(runner, "_run_cuda_training", return_value=training_result), \
+             mock.patch.object(runner, "_execution_report_preflight_fields", return_value={}), \
+             mock.patch.object(runner, "_finalize_task4b_artifacts", return_value=_finalization_stub()), \
+             mock.patch.object(runner, "_write_smoke_artifacts"):
             result = runner.run_task4b_smoke(
                 build_dir=source_root / "build",
                 output_dir=source_root / "output",
@@ -324,7 +359,8 @@ class Task4BRunnerTests(unittest.TestCase):
         with mock.patch.object(runner, "_canonical_source_root", return_value=source_root), \
              mock.patch.object(runner, "_verify_clean_h_exec", return_value="b" * 40), \
              mock.patch.object(runner, "_build_and_attest_probe", return_value=(probe, "a" * 64)), \
-             mock.patch.object(runner, "_run_authoritative_corpus_probe", return_value=admitted):
+             mock.patch.object(runner, "_run_authoritative_corpus_probe", return_value=admitted), \
+             mock.patch.object(runner, "_write_atomic_bytes"):
             with self.assertRaises(runner.Task4BSmokeError) as raised:
                 runner.run_task4b_smoke(
                     build_dir=source_root / "build",
@@ -348,6 +384,7 @@ class Task4BRunnerTests(unittest.TestCase):
                  "_run_authoritative_corpus_probe",
                  side_effect=admission_failure,
              ), \
+             mock.patch.object(runner, "_write_atomic_bytes") as write_report, \
              mock.patch.object(runner, "_ordered_train_samples") as ordered:
             with self.assertRaises(runner.Task4BSmokeError) as raised:
                 runner.run_task4b_smoke(
@@ -355,8 +392,10 @@ class Task4BRunnerTests(unittest.TestCase):
                     output_dir=source_root / "output",
                 )
 
-        self.assertIs(raised.exception, admission_failure)
+        self.assertEqual(raised.exception.code, admission_failure.code)
+        self.assertIsNotNone(raised.exception.report)
         ordered.assert_not_called()
+        write_report.assert_called_once()
 
     def test_cuda_preflight_is_after_admission_and_before_optimizer(self):
         source_root = Path("C:/source")
@@ -385,7 +424,8 @@ class Task4BRunnerTests(unittest.TestCase):
              mock.patch.object(runner, "_build_and_attest_probe", side_effect=record_build), \
              mock.patch.object(runner, "_run_authoritative_corpus_probe", side_effect=record_admission), \
              mock.patch.object(runner.task4_cuda, "require_task4_cuda", side_effect=fail_preflight), \
-             mock.patch.object(torch.optim, "Adam") as optimizer:
+             mock.patch.object(torch.optim, "Adam") as optimizer, \
+             mock.patch.object(runner, "_write_atomic_bytes") as write_report:
             with self.assertRaises(task4_cuda.CudaPreflightError) as raised:
                 runner.run_task4b_smoke(
                     build_dir=source_root / "build",
@@ -396,6 +436,7 @@ class Task4BRunnerTests(unittest.TestCase):
         self.assertEqual(raised.exception.actual_optimizer_steps, 0)
         self.assertEqual(events, ["build", "admission", "preflight"])
         optimizer.assert_not_called()
+        write_report.assert_called_once()
 
     def test_adam_configuration_is_explicit_and_frozen(self):
         model = mock.Mock()
@@ -483,6 +524,201 @@ class Task4BRunnerTests(unittest.TestCase):
                 actual_optimizer_steps=44,
             )
         self.assertEqual(mask_raised.exception.actual_optimizer_steps, 44)
+
+    def test_execution_report_has_required_fields_and_rejects_nonfinite_json(self):
+        report = runner.Task4BExecutionReportV1()
+        payload = json.loads(report.to_json())
+        self.assertEqual(payload["schema_id"], "ocgforge.phase6.task4b.execution_report.v1")
+        for key in (
+            "H_exec",
+            "corpus_probe_sha256",
+            "corpus_probe_source_commit",
+            "cuda_preflight_identity",
+            "cuda_available",
+            "framework_version",
+            "torch_cuda_version_reported",
+            "device_type",
+            "device_index",
+            "gpu_name",
+            "capability_major",
+            "capability_minor",
+            "device_count",
+            "cpu_fallback",
+            "backend_identity",
+            "distributed_strategy",
+            "world_size",
+            "deterministic_algorithms",
+            "deterministic_warn_only",
+            "float32_matmul_precision",
+            "source_dataset_identity",
+            "dataset_split_identity",
+            "card_vocabulary_identity",
+            "train_sample_count",
+            "validation_sample_count",
+            "test_sample_count",
+            "training_run_identity",
+            "actual_optimizer_steps",
+            "GPU_MEMORY_BEFORE",
+            "GPU_MEMORY_PEAK",
+            "GPU_MEMORY_AFTER",
+            "error_code",
+            "SMOKE_PASS",
+            "TASK4B_PASS",
+            "checkpoint_identity",
+            "smoke_evidence_identity",
+            "initial_loss",
+            "final_loss",
+        ):
+            self.assertIn(key, payload)
+        with self.assertRaises(ValueError):
+            dataclasses.replace(report, initial_loss=float("nan")).to_json()
+
+    def test_atomic_bytes_writer_publishes_final_file_without_temp_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "task4b-execution-report.json"
+            runner._write_atomic_bytes(path, b"report")
+            self.assertEqual(path.read_bytes(), b"report")
+            self.assertFalse(path.with_name(path.name + ".tmp").exists())
+
+    def test_task4_finalization_uses_export_completion_and_evidence_paths(self):
+        sample = _sample("a" * 64, "train", "00")
+        admitted = _admitted_corpus((sample,))
+        run_result = mock.Mock(
+            admitted_corpus=admitted,
+            ordered_train_samples=(sample,),
+            h_exec="b" * 40,
+        )
+        training_result = mock.Mock(
+            model=mock.Mock(),
+            preflight=mock.Mock(),
+            actual_optimizer_steps=500,
+            gpu_memory_before=1,
+            gpu_memory_peak=2,
+            gpu_memory_after=1,
+        )
+        exported = mock.Mock(
+            checkpoint_identity="phase6_checkpoint.v1." + "a" * 64,
+            artifact_bytes=b"checkpoint",
+        )
+        numeric_input = mock.Mock()
+        request = mock.Mock()
+        receipt = mock.Mock()
+        manifest = mock.Mock()
+        evidence = mock.Mock()
+
+        with mock.patch.object(
+            task4_inference,
+            "export_canonical_checkpoint",
+            return_value=exported,
+        ) as export, mock.patch.object(
+            codec,
+            "decode_checkpoint_artifact",
+        ) as decode, mock.patch.object(
+            codec,
+            "make_numeric_model_input",
+            return_value=numeric_input,
+        ) as make_numeric, mock.patch.object(
+            codec,
+            "make_inference_request",
+            return_value=request,
+        ) as make_request, mock.patch.object(
+            task4_inference,
+            "issue_task4b_completion_receipt",
+            return_value=receipt,
+        ) as issue, mock.patch.object(
+            codec,
+            "default_training_run_manifest",
+            return_value=manifest,
+        ) as default_manifest, mock.patch.object(
+            task4_cuda,
+            "finalize_training_run_manifest_from_cuda_preflight",
+            return_value=manifest,
+        ) as finalize_manifest, mock.patch.object(
+            task4_cuda,
+            "smoke_evidence_from_cuda_preflight",
+            return_value=evidence,
+        ) as smoke_evidence, mock.patch.object(
+            codec,
+            "canonical_training_run_manifest_bytes",
+            return_value=b"manifest",
+        ), mock.patch.object(
+            codec,
+            "canonical_smoke_evidence_bytes",
+            return_value=b"evidence",
+        ), mock.patch.object(
+            codec,
+            "training_run_identity",
+            return_value="phase6_training_run.v1." + "c" * 64,
+        ), mock.patch.object(
+            codec,
+            "smoke_evidence_identity",
+            return_value="phase6_task4b_smoke_evidence.v1." + "d" * 64,
+        ):
+            result = runner._finalize_task4b_artifacts(run_result, training_result)
+
+        export.assert_called_once_with(
+            training_result.model,
+            source_dataset_identity=admitted.corpus.source_dataset_identity,
+            dataset_split_identity=admitted.corpus.split_identity,
+            card_vocabulary_identity=admitted.corpus.card_vocabulary_identity,
+        )
+        decode.assert_called_once_with(exported.artifact_bytes)
+        make_numeric.assert_called_once()
+        make_request.assert_called_once_with(
+            checkpoint_identity=exported.checkpoint_identity,
+            model_input=numeric_input,
+        )
+        issue.assert_called_once()
+        default_manifest.assert_called_once()
+        finalize_manifest.assert_called_once_with(
+            training_result.preflight,
+            manifest,
+            final_exported_checkpoint_identity=exported.checkpoint_identity,
+        )
+        smoke_evidence.assert_called_once_with(
+            training_result.preflight,
+            manifest,
+            receipt,
+            actual_optimizer_steps=500,
+            gpu_memory_before=1,
+            gpu_memory_peak=2,
+            gpu_memory_after=1,
+        )
+        self.assertIs(result.exported_checkpoint, exported)
+        self.assertIs(result.completion_receipt, receipt)
+
+    def test_training_failure_persists_execution_report_with_actual_count(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output_dir = Path(directory) / "output"
+            source_root = Path(directory) / "source"
+            probe = source_root / "build" / "phase6_task4_corpus_probe.exe"
+            admitted = _admitted_corpus((_sample("a" * 64, "train", "00"),))
+            failure = runner.Task4BTrainingError(
+                "CUDA_TRAINING_FAILED",
+                "synthetic failure",
+                237,
+            )
+            with mock.patch.object(runner, "_canonical_source_root", return_value=source_root), \
+                 mock.patch.object(runner, "_verify_clean_h_exec", return_value="b" * 40), \
+                 mock.patch.object(runner, "_build_and_attest_probe", return_value=(probe, "a" * 64)), \
+                 mock.patch.object(runner, "_run_authoritative_corpus_probe", return_value=admitted), \
+                 mock.patch.object(runner, "_run_cuda_training", side_effect=failure):
+                with self.assertRaises(runner.Task4BTrainingError) as raised:
+                    runner.run_task4b_smoke(
+                        build_dir=source_root / "build",
+                        output_dir=output_dir,
+                    )
+
+            self.assertIs(raised.exception, failure)
+            report = json.loads(
+                (output_dir / "task4b-execution-report.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(report["actual_optimizer_steps"], 237)
+            self.assertEqual(report["error_code"], "CUDA_TRAINING_FAILED")
+            self.assertFalse(report["SMOKE_PASS"])
+            self.assertFalse(report["TASK4B_PASS"])
+            self.assertIsNone(report["checkpoint_identity"])
+            self.assertIsNone(report["smoke_evidence_identity"])
 
     def test_authoritative_probe_rejects_wrong_expected_hash_before_invocation(self):
         with tempfile.TemporaryDirectory() as directory:
