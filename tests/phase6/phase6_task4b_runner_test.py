@@ -66,6 +66,24 @@ def _write_cmake_cache(
     )
 
 
+def _admitted_corpus(samples, *, authority=None):
+    corpus = codec.DerivedCorpusV1(
+        source_dataset_identity="5" * 64,
+        split_identity="phase6_dataset_split.v1." + "6" * 64,
+        derivation_contract_identity=codec.NUMERIC_PROJECTION_CONTRACT_ID,
+        card_vocabulary_identity="model_card_vocabulary.v1." + "7" * 64,
+        episode_ids=("2" * 64,),
+        samples=tuple(samples),
+    )
+    return runner.AdmittedCorpusArtifactsV1(
+        probe_sha256="a" * 64,
+        corpus_bytes=b"corpus",
+        authority_bytes=b"authority",
+        corpus=corpus,
+        authority=object() if authority is None else authority,
+    )
+
+
 def _sample(identity_suffix: str, partition: str, action_suffix: str) -> codec.CorpusSampleV1:
     action_key = f"public_action.v1.{action_suffix}"
     sample = codec.CorpusSampleV1(
@@ -207,7 +225,7 @@ class Task4BRunnerTests(unittest.TestCase):
         source_root = Path("C:/source")
         probe = source_root / "build" / "phase6_task4_corpus_probe.exe"
         probe_hash = "a" * 64
-        admitted = object()
+        admitted = _admitted_corpus((_sample("a" * 64, "train", "00"),))
         calls = []
 
         def record_clean(_source_root):
@@ -246,6 +264,90 @@ class Task4BRunnerTests(unittest.TestCase):
         self.assertEqual(result.probe_path, probe)
         self.assertEqual(result.probe_sha256, probe_hash)
         self.assertIs(result.admitted_corpus, admitted)
+
+    def test_composition_derives_admitted_metadata_counts_and_train_order(self):
+        source_root = Path("C:/source")
+        probe = source_root / "build" / "phase6_task4_corpus_probe.exe"
+        probe_hash = "a" * 64
+        train_later = _sample("b" * 64, "train", "01")
+        train_earlier = _sample("a" * 64, "train", "00")
+        validation = _sample("c" * 64, "validation", "02")
+        test = _sample("d" * 64, "test", "03")
+        admitted = _admitted_corpus(
+            (test, train_later, validation, train_earlier),
+            authority=mock.Mock(
+                source_dataset_identity="caller-dataset",
+                split_identity="caller-split",
+                card_vocabulary_identity="caller-vocabulary",
+            ),
+        )
+
+        with mock.patch.object(runner, "_canonical_source_root", return_value=source_root), \
+             mock.patch.object(runner, "_verify_clean_h_exec", return_value="b" * 40), \
+             mock.patch.object(runner, "_build_and_attest_probe", return_value=(probe, probe_hash)), \
+             mock.patch.object(runner, "_run_authoritative_corpus_probe", return_value=admitted):
+            result = runner.run_task4b_smoke(
+                build_dir=source_root / "build",
+                output_dir=source_root / "output",
+            )
+
+        self.assertEqual(result.source_dataset_identity, "5" * 64)
+        self.assertEqual(result.dataset_split_identity, "phase6_dataset_split.v1." + "6" * 64)
+        self.assertEqual(result.card_vocabulary_identity, "model_card_vocabulary.v1." + "7" * 64)
+        self.assertEqual(result.train_sample_count, 2)
+        self.assertEqual(result.validation_sample_count, 1)
+        self.assertEqual(result.test_sample_count, 1)
+        self.assertEqual(
+            tuple(sample.bc_sample_identity for sample in result.ordered_train_samples),
+            (train_earlier.bc_sample_identity, train_later.bc_sample_identity),
+        )
+        self.assertTrue(
+            all(sample.partition == "train" for sample in result.ordered_train_samples)
+        )
+
+    def test_empty_admitted_train_partition_fails_closed_after_admission(self):
+        source_root = Path("C:/source")
+        probe = source_root / "build" / "phase6_task4_corpus_probe.exe"
+        admitted = _admitted_corpus(
+            (_sample("c" * 64, "validation", "02"), _sample("d" * 64, "test", "03"))
+        )
+
+        with mock.patch.object(runner, "_canonical_source_root", return_value=source_root), \
+             mock.patch.object(runner, "_verify_clean_h_exec", return_value="b" * 40), \
+             mock.patch.object(runner, "_build_and_attest_probe", return_value=(probe, "a" * 64)), \
+             mock.patch.object(runner, "_run_authoritative_corpus_probe", return_value=admitted):
+            with self.assertRaises(runner.Task4BSmokeError) as raised:
+                runner.run_task4b_smoke(
+                    build_dir=source_root / "build",
+                    output_dir=source_root / "output",
+                )
+
+        self.assertEqual(raised.exception.code, "EMPTY_TRAIN_PARTITION")
+
+    def test_composition_does_not_order_before_successful_admission(self):
+        source_root = Path("C:/source")
+        probe = source_root / "build" / "phase6_task4_corpus_probe.exe"
+        admission_failure = runner.Task4BSmokeError(
+            "CORPUS_ADMISSION_FAILED",
+            "synthetic admission failure",
+        )
+        with mock.patch.object(runner, "_canonical_source_root", return_value=source_root), \
+             mock.patch.object(runner, "_verify_clean_h_exec", return_value="b" * 40), \
+             mock.patch.object(runner, "_build_and_attest_probe", return_value=(probe, "a" * 64)), \
+             mock.patch.object(
+                 runner,
+                 "_run_authoritative_corpus_probe",
+                 side_effect=admission_failure,
+             ), \
+             mock.patch.object(runner, "_ordered_train_samples") as ordered:
+            with self.assertRaises(runner.Task4BSmokeError) as raised:
+                runner.run_task4b_smoke(
+                    build_dir=source_root / "build",
+                    output_dir=source_root / "output",
+                )
+
+        self.assertIs(raised.exception, admission_failure)
+        ordered.assert_not_called()
 
     def test_authoritative_probe_rejects_wrong_expected_hash_before_invocation(self):
         with tempfile.TemporaryDirectory() as directory:

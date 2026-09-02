@@ -327,6 +327,27 @@ class Task4BSmokeRunResult:
     probe_path: Path
     probe_sha256: str
     admitted_corpus: AdmittedCorpusArtifactsV1
+    source_dataset_identity: str
+    dataset_split_identity: str
+    card_vocabulary_identity: str
+    train_sample_count: int
+    validation_sample_count: int
+    test_sample_count: int
+    ordered_train_samples: tuple[codec.CorpusSampleV1, ...]
+
+
+def _partition_counts(
+    samples: Sequence[codec.CorpusSampleV1],
+) -> tuple[int, int, int]:
+    counts = {"train": 0, "validation": 0, "test": 0}
+    for sample in samples:
+        if sample.partition not in counts:
+            raise Task4BSmokeError(
+                "INVALID_CORPUS_PARTITION",
+                f"unknown admitted corpus partition: {sample.partition}",
+            )
+        counts[sample.partition] += 1
+    return counts["train"], counts["validation"], counts["test"]
 
 
 def _run_authoritative_corpus_probe(
@@ -428,6 +449,9 @@ def run_task4b_smoke(
             source_root=source_root,
             expected_probe_sha256=probe_sha256,
         )
+    corpus = admitted.corpus
+    train_count, validation_count, test_count = _partition_counts(corpus.samples)
+    ordered_train_samples = _ordered_train_samples(corpus.samples)
     return Task4BSmokeRunResult(
         source_root=source_root,
         output_dir=Path(output_dir).resolve(),
@@ -435,4 +459,11 @@ def run_task4b_smoke(
         probe_path=probe_path,
         probe_sha256=probe_sha256,
         admitted_corpus=admitted,
+        source_dataset_identity=corpus.source_dataset_identity,
+        dataset_split_identity=corpus.split_identity,
+        card_vocabulary_identity=corpus.card_vocabulary_identity,
+        train_sample_count=train_count,
+        validation_sample_count=validation_count,
+        test_sample_count=test_count,
+        ordered_train_samples=ordered_train_samples,
     )
