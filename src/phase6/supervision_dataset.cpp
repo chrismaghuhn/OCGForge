@@ -410,7 +410,7 @@ Phase6BcSampleV1 materialize_sample_unchecked(
     const std::string_view trajectory_record_id,
     const model::CardVocabularyV1& vocabulary) {
     if (record_index >= envelope.records.size()) {
-        fail(Phase6DataErrorCode::MissingEpisodeEnvelope);
+        fail(Phase6DataErrorCode::InvalidDecisionRecord);
     }
     const auto& record = envelope.records[record_index];
     const auto logical = model::project_logical_model_input_v1(

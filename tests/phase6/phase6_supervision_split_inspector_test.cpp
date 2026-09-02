@@ -383,7 +383,9 @@ void test_continuation_samples_are_materialized_normally() {
     continuation_sample.supervision.candidate_ordinal = 1;
     continuation_sample.sample_identity =
         ygo::phase6::phase6_sample_identity(continuation_sample);
-    require(ygo::phase6::canonical_phase6_sample_identity_bytes(continuation_sample).size() > 0,
+    require(continuation_sample.sample_identity ==
+                ygo::phase6::phase6_sample_identity(continuation_sample) &&
+                !ygo::phase6::canonical_phase6_sample_identity_bytes(continuation_sample).empty(),
             "continuation sample identity could not be materialized");
     const auto inspection = ygo::phase6::inspect_public_model_input_v1(
         *logical.value, *encoded.value, std::optional<std::uint32_t>(1));
@@ -447,6 +449,13 @@ void test_non_admitted_and_non_teacher_sources_fail_closed() {
     const auto missing_result = ygo::phase6::materialize_phase6_dataset_v1(
         fixture.manifest, receipts, {}, fixture.vocabulary);
     require(!missing_result, "missing non-manifest episode was accepted");
+
+    const auto invalid_record_result = ygo::phase6::materialize_phase6_sample_v1(
+        fixture.manifest, receipts, fixture.envelope, fixture.envelope.records.size(),
+        fixture.vocabulary);
+    require(!invalid_record_result && invalid_record_result.error.has_value() &&
+                invalid_record_result.error->code == Phase6DataErrorCode::InvalidDecisionRecord,
+            "out-of-range decision record was classified as a missing envelope");
 }
 
 void test_split_identity_is_deterministic_and_episode_scoped(const char* executable) {
