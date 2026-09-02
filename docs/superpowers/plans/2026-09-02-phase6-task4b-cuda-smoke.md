@@ -830,8 +830,14 @@ acceptance, even when every mocked post-smoke command succeeds. Assert that a
 successful smoke report with one failing gate produces TASK4B_PASS=false and a
 successful smoke report with every gate returning exit code 0 produces
 TASK4B_PASS=true. Assert that no recorded command contains
-task4b_cuda_smoke.py, P4A_HEAVY_REPLAY, M4_HEAVY_LIFECYCLE, or
-M4_ACCEPTANCE_SCALE.
+task4b_cuda_smoke.py and that no excluded suite is executed; the exact CTest
+label-exclusion argument is allowed in the full-non-long-ctest record. Before
+each mocked gate, return a source-integrity
+snapshot with HEAD equal to the report's H_exec, empty staged/unstaged tracked
+diffs, and only the expected generated files beneath output_dir as untracked.
+Assert that a different HEAD, any staged/unstaged tracked path, or an
+untracked path outside output_dir makes verification fail closed before that
+gate runs.
 
 - [ ] **Step 2: Add failing tests for fixed post-smoke command coverage and JSON safety.**
 
@@ -854,13 +860,23 @@ Assert every command record contains its argument vector, exit code, stdout
 SHA-256, stderr SHA-256, and PASS/FAIL status. Serialize a report containing
 no non-finite values and assert allow_nan=False is used. Serialize a report
 with a NaN diagnostic injected by the test and assert serialization raises
-TypeError instead of emitting non-standard JSON.
+ValueError instead of emitting non-standard JSON.
+Assert both admitted-forward argv vectors use the exact probe path whose
+SHA-256 matches the execution report and that their probe-produced files are
+created below private temporary directories, never by overwriting the original
+Task4B corpus.p6c or corpus.authority.p6a.
 
 - [ ] **Step 3: Implement the fixed post-smoke verifier and result types.**
 
 Define these exact public entry points in tools/phase6/task4b_verify.py:
 
 ~~~python
+class Task4BVerificationError(RuntimeError):
+    def __init__(self, code: str) -> None:
+        super().__init__(code)
+        self.code = code
+
+
 @dataclasses.dataclass(frozen=True)
 class VerificationCommandV1:
     command_id: str
@@ -887,15 +903,73 @@ def run_post_smoke_verification(
     output_dir: Path,
 ) -> Task4BVerificationResultV1:
     raise NotImplementedError
+
+
+def check_source_integrity_from_report(*, output_dir: Path) -> None:
+    raise NotImplementedError
 ~~~
 
 The implementation must read and validate the runner's exact
 task4b-execution-report.json, require SMOKE_PASS=true, and derive the final
 TASK4B_PASS only from SMOKE_PASS and all fixed post-smoke command results. It
-must not call run_task4b_smoke or rebuild/re-execute the corpus probe. It
-resolves the already-built probe beneath build_dir, hashes it, and verifies
-that its hash equals the execution report's corpus_probe_sha256 before running
-the admitted-forward test.
+must not call run_task4b_smoke, rebuild the probe, or repeat the authoritative
+Task4B corpus-producing invocation. It may execute the same hashed probe binary
+only as an ephemeral regression test. Those regression invocations must write
+to private temporary output paths, must not rewrite the original Task4B corpus
+or authority files, and must never become training or DatasetManifest
+authority. It resolves the already-built probe beneath build_dir, hashes it,
+and verifies that its hash equals the execution report's corpus_probe_sha256
+before running the admitted-forward tests.
+
+Before every fixed gate, call this source-integrity check with the H_exec read
+from the execution report:
+
+~~~python
+def _verify_h_exec_source_integrity(
+    *,
+    source_root: Path,
+    expected_head: str,
+    output_dir: Path,
+    allowed_output_files: frozenset[str],
+) -> None:
+    actual_head = _run_git(source_root, "rev-parse", "HEAD")[0].strip()
+    if actual_head != expected_head:
+        raise Task4BVerificationError("POST_SMOKE_HEAD_CHANGED")
+    tracked_paths = (
+        _run_git(source_root, "diff", "--name-only", "--diff-filter=ACMRTUXB")[0].splitlines()
+        + _run_git(source_root, "diff", "--cached", "--name-only", "--diff-filter=ACMRTUXB")[0].splitlines()
+    )
+    for relative in tracked_paths:
+        resolved = (source_root / relative).resolve()
+        if resolved.parent != output_dir.resolve() or resolved.name not in allowed_output_files:
+            raise Task4BVerificationError("POST_SMOKE_TRACKED_SOURCE_CHANGED")
+    status = _run_git(
+        source_root,
+        "status",
+        "--porcelain",
+        "--untracked-files=all",
+    )[0].splitlines()
+    for record in status:
+        if record.startswith("?? "):
+            resolved = (source_root / record[3:]).resolve()
+            if resolved.parent != output_dir.resolve() or resolved.name not in allowed_output_files:
+                raise Task4BVerificationError("POST_SMOKE_UNEXPECTED_UNTRACKED_FILE")
+        else:
+            resolved = (source_root / record[3:]).resolve()
+            if resolved.parent != output_dir.resolve() or resolved.name not in allowed_output_files:
+                raise Task4BVerificationError("POST_SMOKE_TRACKED_SOURCE_CHANGED")
+~~~
+
+The verifier calls this function immediately before each command. It therefore
+requires HEAD == H_exec, rejects staged or unstaged tracked source changes,
+and allows only the explicitly named generated files directly under output_dir
+as untracked or staged evidence. Ignored build/cache files remain allowed.
+
+The verifier CLI must also expose a source-only mode. In that mode it reads
+H_exec from task4b-execution-report.json and runs
+check_source_integrity_from_report(output_dir=output_dir) without running any
+gate or smoke command. This is the mandatory check immediately before and
+after staging an evidence commit.
 
 - [ ] **Step 4: Implement the exact fixed gate commands.**
 
@@ -1175,8 +1249,9 @@ diagnostic only.
 
 No source code may change after the one smoke run. The success path stages only
 runner-generated smoke artifacts plus verifier-generated post-smoke evidence.
-The failure path stages the persistent execution report for the single attempt.
-Neither path retries the smoke.
+The smoke-failure path stages the persistent execution report for the single
+attempt. The verification-failure path stages all already-generated smoke and
+verification evidence with TASK4B_PASS=false. No path retries the smoke.
 
 - [ ] **Step 1: Run the H_exec-owned post-smoke verifier only after a successful smoke.**
 
@@ -1191,7 +1266,10 @@ H_exec binding, execute its fixed required gate groups, and write
 task4b-verification.json, task4b-acceptance.json, and task4b-acceptance.md
 atomically. It must not invoke task4b_cuda_smoke.py, rebuild the probe, rerun
 the probe, or run the heavy replay/long soak suite. If the smoke report has
-SMOKE_PASS=false, do not invoke the verifier; use Step 3's failure branch.
+SMOKE_PASS=false, do not invoke the verifier; use Step 3's smoke-failure
+branch. If the verifier returns nonzero because a post-smoke gate failed, keep
+all generated outputs and use Step 3's verification-failure branch; do not
+rerun the verifier or the smoke.
 
 - [ ] **Step 2: Require final TASK4B_PASS to include every post-smoke gate.**
 
@@ -1219,8 +1297,31 @@ CUDA provenance do not enter checkpoint semantic identity. Then run:
 
 ~~~text
 git diff --name-only 1727f09eb0fdc4e4e25e3f9ced9748feb4058234 HEAD
-git diff --cached --check
+python -m tools.phase6.task4b_verify --check-source-integrity --output-dir docs/p6/task4b
 ~~~
+
+The source-integrity command must pass with HEAD equal to H_exec, no staged or
+unstaged tracked source path, and only the expected generated output files
+under docs/p6/task4b. Run it again after staging and immediately before
+git commit; staged generated evidence is allowed, staged source is not.
+
+For a smoke-success plus post-smoke-verification failure, validate that the
+execution report has SMOKE_PASS=true, the verification and acceptance reports
+have TASK4B_PASS=false, and no retry or source change occurred. Stage all
+already-generated smoke and verification evidence:
+
+~~~text
+git add docs/p6/task4b/corpus.p6c docs/p6/task4b/corpus.authority.p6a docs/p6/task4b/checkpoint.p6k docs/p6/task4b/training-run-manifest.p6m docs/p6/task4b/smoke-evidence.p6e docs/p6/task4b/completion-receipt.json docs/p6/task4b/task4b-execution-report.json docs/p6/task4b/task4b-verification.json docs/p6/task4b/task4b-acceptance.json docs/p6/task4b/task4b-acceptance.md
+python -m tools.phase6.task4b_verify --check-source-integrity --output-dir docs/p6/task4b
+git diff --cached --check
+git commit -m "evidence: record phase 6 task 4b verification failure"
+git push
+~~~
+
+The verification-failure evidence commit is H_evidence_verification_failure.
+It must retain SMOKE_PASS=true, TASK4B_PASS=false, the real failed gate
+records, the exact H_exec/probe provenance, and TASK5_AUTHORIZED=NO. Do not
+rerun the verifier, change source, or retry the CUDA attempt.
 
 For a failed single attempt, validate that task4b-execution-report.json has
 TASK4B_PASS=false, checkpoint_identity=null, smoke_evidence_identity=null,
@@ -1230,13 +1331,16 @@ report and run:
 
 ~~~text
 git add docs/p6/task4b/task4b-execution-report.json
+python -m tools.phase6.task4b_verify --check-source-integrity --output-dir docs/p6/task4b
 git diff --cached --check
 git commit -m "evidence: record failed phase 6 task 4b attempt"
 git push
 ~~~
 
 The failure evidence commit is H_evidence_failure. Do not run the verifier,
-change source, or retry the CUDA attempt.
+change source, or retry the CUDA attempt. Run the source-integrity command once
+more immediately before git commit; it must allow only the staged generated
+failure report and reject every staged or unstaged source path.
 
 - [ ] **Step 4: Commit successful acceptance evidence and stop with Phase-6 Task 5 locked.**
 
@@ -1244,6 +1348,7 @@ For a successful verifier result, run:
 
 ~~~text
 git add docs/p6/task4b
+python -m tools.phase6.task4b_verify --check-source-integrity --output-dir docs/p6/task4b
 git diff --cached --check
 git commit -m "evidence: record phase 6 task 4b cuda smoke"
 git push
@@ -1263,6 +1368,8 @@ H_evidence_failure and stop with TASK4B_PASS=NO.
   Tasks 2 and 7.
 - Canonical source root and stale CMake source rejection: Task 2, Steps 3–4.
 - Exact probe build, hash, source commit, and one invocation: Task 2, Steps 4–5.
+- The authoritative probe invocation occurs once, while post-smoke regression
+  executions reuse the same hash in private temporary outputs: Tasks 2 and 5.
 - TRAIN-only byte ordering and no validation/test leakage: Task 1 and Task 2,
   Step 5.
 - Exact Adam, strict deterministic settings, CUDA placement, exact-domain loss,
@@ -1273,10 +1380,14 @@ H_evidence_failure and stop with TASK4B_PASS=NO.
   repeated inference identity: Task 4.
 - Atomic report for both success and failure: Task 4, Steps 1 and 5.
 - CLI cannot supply step/memory/identity/completion claims: Task 6.
+- Post-smoke HEAD/source/untracked-output integrity before every gate and
+  evidence commit: Tasks 5 and 9.
 - H_exec-owned post-smoke gate execution and final pass derivation: Task 5 and
   Task 9, Steps 1–2.
 - No real optimizer before independently approved H_exec: Tasks 7 and 8 gate.
-- Success evidence-only commit and failure-report evidence commit: Task 9.
+- Success evidence-only, smoke-failure, and verification-failure commits: Task
+  9.
+- JSON negative test expects ValueError with allow_nan=False: Tasks 4 and 5.
 
 No step uses an unresolved placeholder, an unspecified file, a caller-provided
 execution fact, an implicit fallback, a candidate truncation, a retry, or a
