@@ -1,5 +1,7 @@
 import dataclasses
+import contextlib
 import hashlib
+import io
 import json
 import tempfile
 import unittest
@@ -10,6 +12,7 @@ import torch
 
 from tools.phase6 import task4_codec as codec
 from tools.phase6 import task4_cuda
+from tools.phase6 import task4b_cuda_smoke as smoke_cli
 from tools.phase6 import task4_inference
 from tools.phase6 import task4b_runner as runner
 
@@ -150,6 +153,99 @@ def _sample(identity_suffix: str, partition: str, action_suffix: str) -> codec.C
 
 
 class Task4BRunnerTests(unittest.TestCase):
+    def test_cuda_smoke_cli_help_has_only_build_and_output_paths(self):
+        with mock.patch.object(smoke_cli.task4b_runner, "run_task4b_smoke") as run:
+            stdout = io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                with self.assertRaises(SystemExit) as raised:
+                    smoke_cli.main(["--help"])
+
+        self.assertEqual(raised.exception.code, 0)
+        help_text = stdout.getvalue()
+        self.assertIn("--build-dir", help_text)
+        self.assertIn("--output-dir", help_text)
+        for forbidden in (
+            "--max-optimizer-steps",
+            "--actual-optimizer-steps",
+            "--gpu-memory-before",
+            "--gpu-memory-peak",
+            "--gpu-memory-after",
+            "--checkpoint-identity",
+            "--smoke-evidence-identity",
+        ):
+            self.assertNotIn(forbidden, help_text)
+        run.assert_not_called()
+
+    def test_cuda_smoke_cli_rejects_evidence_step_override_before_runner(self):
+        with mock.patch.object(smoke_cli.task4b_runner, "run_task4b_smoke") as run:
+            stderr = io.StringIO()
+            with contextlib.redirect_stderr(stderr):
+                with self.assertRaises(SystemExit) as raised:
+                    smoke_cli.main(
+                        [
+                            "--build-dir",
+                            "build/task4b-cuda-smoke",
+                            "--output-dir",
+                            "docs/p6/task4b",
+                            "--actual-optimizer-steps",
+                            "1",
+                        ]
+                    )
+
+        self.assertEqual(raised.exception.code, 2)
+        self.assertIn("unrecognized arguments", stderr.getvalue())
+        run.assert_not_called()
+
+    def test_cuda_smoke_cli_delegates_only_build_and_output_paths(self):
+        result = mock.Mock(report_json='{"SMOKE_PASS":true}')
+        with mock.patch.object(
+            smoke_cli.task4b_runner,
+            "run_task4b_smoke",
+            return_value=result,
+        ) as run:
+            stdout = io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                exit_code = smoke_cli.main(
+                    [
+                        "--build-dir",
+                        "build/task4b-cuda-smoke",
+                        "--output-dir",
+                        "docs/p6/task4b",
+                    ]
+                )
+
+        self.assertEqual(exit_code, 0)
+        run.assert_called_once_with(
+            build_dir=Path("build/task4b-cuda-smoke"),
+            output_dir=Path("docs/p6/task4b"),
+        )
+        self.assertEqual(stdout.getvalue(), result.report_json + "\n")
+
+    def test_cuda_smoke_cli_reports_structured_runner_failure(self):
+        failure = runner.Task4BSmokeError(
+            "SYNTHETIC_FAILURE",
+            "synthetic failure",
+            report=_SyntheticReport(),
+        )
+        with mock.patch.object(
+            smoke_cli.task4b_runner,
+            "run_task4b_smoke",
+            side_effect=failure,
+        ):
+            stderr = io.StringIO()
+            with contextlib.redirect_stderr(stderr):
+                exit_code = smoke_cli.main(
+                    [
+                        "--build-dir",
+                        "build/task4b-cuda-smoke",
+                        "--output-dir",
+                        "docs/p6/task4b",
+                    ]
+                )
+
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(stderr.getvalue(), failure.report_json + "\n")
+
     def test_smoke_error_report_json_uses_fallback_or_attached_report(self):
         fallback = runner.Task4BSmokeError("SYNTHETIC", "fallback message")
         self.assertIsNone(fallback.report)
