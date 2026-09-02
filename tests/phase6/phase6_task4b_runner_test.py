@@ -5,7 +5,10 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+import torch
+
 from tools.phase6 import task4_codec as codec
+from tools.phase6 import task4_cuda
 from tools.phase6 import task4b_runner as runner
 
 
@@ -226,6 +229,7 @@ class Task4BRunnerTests(unittest.TestCase):
         probe = source_root / "build" / "phase6_task4_corpus_probe.exe"
         probe_hash = "a" * 64
         admitted = _admitted_corpus((_sample("a" * 64, "train", "00"),))
+        training_result = object()
         calls = []
 
         def record_clean(_source_root):
@@ -253,7 +257,8 @@ class Task4BRunnerTests(unittest.TestCase):
         with mock.patch.object(runner, "_canonical_source_root", return_value=source_root), \
              mock.patch.object(runner, "_verify_clean_h_exec", side_effect=record_clean), \
              mock.patch.object(runner, "_build_and_attest_probe", side_effect=record_build), \
-             mock.patch.object(runner, "_run_authoritative_corpus_probe", side_effect=record_probe):
+             mock.patch.object(runner, "_run_authoritative_corpus_probe", side_effect=record_probe), \
+             mock.patch.object(runner, "_run_cuda_training", return_value=training_result):
             result = runner.run_task4b_smoke(
                 build_dir=source_root / "build",
                 output_dir=source_root / "output",
@@ -264,6 +269,7 @@ class Task4BRunnerTests(unittest.TestCase):
         self.assertEqual(result.probe_path, probe)
         self.assertEqual(result.probe_sha256, probe_hash)
         self.assertIs(result.admitted_corpus, admitted)
+        self.assertIs(result.training_result, training_result)
 
     def test_composition_derives_admitted_metadata_counts_and_train_order(self):
         source_root = Path("C:/source")
@@ -281,11 +287,13 @@ class Task4BRunnerTests(unittest.TestCase):
                 card_vocabulary_identity="caller-vocabulary",
             ),
         )
+        training_result = object()
 
         with mock.patch.object(runner, "_canonical_source_root", return_value=source_root), \
              mock.patch.object(runner, "_verify_clean_h_exec", return_value="b" * 40), \
              mock.patch.object(runner, "_build_and_attest_probe", return_value=(probe, probe_hash)), \
-             mock.patch.object(runner, "_run_authoritative_corpus_probe", return_value=admitted):
+             mock.patch.object(runner, "_run_authoritative_corpus_probe", return_value=admitted), \
+             mock.patch.object(runner, "_run_cuda_training", return_value=training_result):
             result = runner.run_task4b_smoke(
                 build_dir=source_root / "build",
                 output_dir=source_root / "output",
@@ -304,6 +312,7 @@ class Task4BRunnerTests(unittest.TestCase):
         self.assertTrue(
             all(sample.partition == "train" for sample in result.ordered_train_samples)
         )
+        self.assertIs(result.training_result, training_result)
 
     def test_empty_admitted_train_partition_fails_closed_after_admission(self):
         source_root = Path("C:/source")
@@ -348,6 +357,75 @@ class Task4BRunnerTests(unittest.TestCase):
 
         self.assertIs(raised.exception, admission_failure)
         ordered.assert_not_called()
+
+    def test_cuda_preflight_is_after_admission_and_before_optimizer(self):
+        source_root = Path("C:/source")
+        probe = source_root / "build" / "phase6_task4_corpus_probe.exe"
+        admitted = _admitted_corpus((_sample("a" * 64, "train", "00"),))
+        events = []
+
+        def record_build(_source_root, _build_dir):
+            events.append("build")
+            return probe, "a" * 64
+
+        def record_admission(*args, **kwargs):
+            del args, kwargs
+            events.append("admission")
+            return admitted
+
+        def fail_preflight():
+            events.append("preflight")
+            raise task4_cuda.CudaPreflightError(
+                "CUDA_UNAVAILABLE",
+                "synthetic CUDA failure",
+            )
+
+        with mock.patch.object(runner, "_canonical_source_root", return_value=source_root), \
+             mock.patch.object(runner, "_verify_clean_h_exec", return_value="b" * 40), \
+             mock.patch.object(runner, "_build_and_attest_probe", side_effect=record_build), \
+             mock.patch.object(runner, "_run_authoritative_corpus_probe", side_effect=record_admission), \
+             mock.patch.object(runner.task4_cuda, "require_task4_cuda", side_effect=fail_preflight), \
+             mock.patch.object(torch.optim, "Adam") as optimizer:
+            with self.assertRaises(task4_cuda.CudaPreflightError) as raised:
+                runner.run_task4b_smoke(
+                    build_dir=source_root / "build",
+                    output_dir=source_root / "output",
+                )
+
+        self.assertEqual(raised.exception.code, "CUDA_UNAVAILABLE")
+        self.assertEqual(raised.exception.actual_optimizer_steps, 0)
+        self.assertEqual(events, ["build", "admission", "preflight"])
+        optimizer.assert_not_called()
+
+    def test_adam_configuration_is_explicit_and_frozen(self):
+        model = mock.Mock()
+        model.parameters.return_value = ()
+        with mock.patch.object(torch.optim, "Adam", return_value="optimizer") as adam:
+            self.assertEqual(runner._make_adam_optimizer(model), "optimizer")
+
+        adam.assert_called_once_with(
+            (),
+            lr=0.001,
+            betas=(0.9, 0.999),
+            eps=1e-8,
+            weight_decay=0.0,
+            foreach=False,
+            fused=False,
+            amsgrad=False,
+            maximize=False,
+            capturable=False,
+            differentiable=False,
+            decoupled_weight_decay=False,
+        )
+
+    def test_training_tensor_placement_rejects_cpu_tensor_for_cuda_execution(self):
+        value = torch.zeros((1, codec.STATE_ROW_WIDTH), dtype=torch.float32)
+        with self.assertRaises(runner.Task4BTrainingError):
+            runner._require_cuda_tensor(
+                value,
+                torch.device("cuda:0"),
+                "state tensor",
+            )
 
     def test_authoritative_probe_rejects_wrong_expected_hash_before_invocation(self):
         with tempfile.TemporaryDirectory() as directory:

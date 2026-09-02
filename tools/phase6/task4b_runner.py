@@ -18,6 +18,8 @@ from typing import Sequence
 import torch
 
 from . import task4_codec as codec
+from . import task4_cuda
+from . import task4_model
 
 
 class Task4BSmokeError(RuntimeError):
@@ -37,6 +39,15 @@ class Task4BSmokeError(RuntimeError):
     @property
     def report_json(self) -> str:
         return self.report.to_json() if self.report is not None else str(self)
+
+
+class Task4BTrainingError(RuntimeError):
+    """Raised when CUDA-only training cannot satisfy its frozen contract."""
+
+    def __init__(self, code: str, message: str, actual_optimizer_steps: int) -> None:
+        super().__init__(message)
+        self.code = code
+        self.actual_optimizer_steps = actual_optimizer_steps
 
 
 @dataclasses.dataclass
@@ -334,6 +345,7 @@ class Task4BSmokeRunResult:
     validation_sample_count: int
     test_sample_count: int
     ordered_train_samples: tuple[codec.CorpusSampleV1, ...]
+    training_result: "Task4BCudaTrainingResultV1"
 
 
 def _partition_counts(
@@ -348,6 +360,287 @@ def _partition_counts(
             )
         counts[sample.partition] += 1
     return counts["train"], counts["validation"], counts["test"]
+
+
+def _require_cuda_tensor(
+    value: torch.Tensor,
+    device: torch.device,
+    name: str,
+) -> torch.Tensor:
+    if not isinstance(value, torch.Tensor) or value.device != device:
+        raise Task4BTrainingError(
+            "WRONG_DEVICE",
+            f"{name} is not on the required CUDA device",
+            0,
+        )
+    if device != torch.device("cuda:0") or value.device.type != "cuda":
+        raise Task4BTrainingError(
+            "CPU_FALLBACK_FORBIDDEN",
+            f"{name} is not on cuda:0",
+            0,
+        )
+    return value
+
+
+def _make_adam_optimizer(
+    model: torch.nn.Module,
+) -> torch.optim.Optimizer:
+    return torch.optim.Adam(
+        model.parameters(),
+        lr=0.001,
+        betas=(0.9, 0.999),
+        eps=1e-8,
+        weight_decay=0.0,
+        foreach=False,
+        fused=False,
+        amsgrad=False,
+        maximize=False,
+        capturable=False,
+        differentiable=False,
+        decoupled_weight_decay=False,
+    )
+
+
+def _require_training_preflight(
+    preflight: task4_cuda.CudaPreflightResultV1,
+) -> torch.device:
+    if not isinstance(preflight, task4_cuda.CudaPreflightResultV1):
+        raise Task4BTrainingError(
+            "CUDA_DEVICE_MISMATCH",
+            "CUDA preflight result is not an attested Task-4 value",
+            0,
+        )
+    if (
+        preflight.device_type != codec.EXPECTED_DEVICE_TYPE
+        or preflight.device_index != codec.EXPECTED_DEVICE_INDEX
+        or preflight.gpu_name != codec.EXPECTED_GPU_NAME
+        or preflight.device_count < 1
+        or preflight.actual_optimizer_steps != 0
+        or preflight.cpu_fallback is not False
+    ):
+        raise Task4BTrainingError(
+            "CUDA_DEVICE_MISMATCH",
+            "training requires the clean attested cuda:0 preflight",
+            0,
+        )
+    return preflight.device
+
+
+def _require_model_on_device(
+    model: task4_model.Phase6TorchCandidateScorer,
+    device: torch.device,
+) -> None:
+    parameters = tuple(model.parameters())
+    if not parameters or any(parameter.device != device for parameter in parameters):
+        raise Task4BTrainingError(
+            "WRONG_DEVICE",
+            "model parameters are not on cuda:0",
+            0,
+        )
+    if any(parameter.dtype != torch.float32 for parameter in parameters):
+        raise Task4BTrainingError(
+            "WRONG_DTYPE",
+            "model parameters are not float32",
+            0,
+        )
+
+
+def _loss_for_sample(
+    model: task4_model.Phase6TorchCandidateScorer,
+    sample: codec.CorpusSampleV1,
+    device: torch.device,
+    actual_optimizer_steps: int,
+) -> torch.Tensor:
+    try:
+        numeric_input = codec.make_numeric_model_input(
+            model_input_identity=sample.model_input_identity,
+            state_rows=sample.state_rows,
+            candidate_rows=sample.candidate_rows,
+            routing_keys=sample.routing_keys,
+            public_candidate_domain_digest=sample.public_candidate_domain_digest,
+            public_semantic_decision_id=sample.public_semantic_decision_id,
+            perspective_player=sample.perspective_player,
+            decision_index=sample.decision_index,
+        )
+        if (
+            sample.candidate_ordinal < 0
+            or sample.candidate_ordinal >= len(sample.routing_keys)
+            or sample.routing_keys[sample.candidate_ordinal]
+            != sample.selected_public_action_key
+        ):
+            raise Task4BTrainingError(
+                "INVALID_TRAIN_LABEL",
+                "Teacher candidate ordinal is not paired with its public key",
+                actual_optimizer_steps,
+            )
+        state_tensor = torch.tensor(
+            numeric_input.state_rows,
+            dtype=torch.float32,
+            device=device,
+        )
+        candidate_tensor = torch.tensor(
+            numeric_input.candidate_rows,
+            dtype=torch.float32,
+            device=device,
+        )
+        label_tensor = torch.tensor(
+            [sample.candidate_ordinal],
+            dtype=torch.long,
+            device=device,
+        )
+        real_candidate_mask = torch.ones(
+            (1, len(sample.routing_keys)),
+            dtype=torch.bool,
+            device=device,
+        )
+        _require_cuda_tensor(state_tensor, device, "state tensor")
+        _require_cuda_tensor(candidate_tensor, device, "candidate tensor")
+        _require_cuda_tensor(label_tensor, device, "label tensor")
+        _require_cuda_tensor(real_candidate_mask, device, "candidate mask")
+        logits = model(state_tensor, candidate_tensor)
+        _require_cuda_tensor(logits, device, "logits")
+        task4_model.validate_logits(logits, len(sample.routing_keys))
+        if not torch.isfinite(logits).all().item():
+            raise Task4BTrainingError(
+                "NONFINITE_LOGITS",
+                "CUDA logits are non-finite",
+                actual_optimizer_steps,
+            )
+        loss = task4_model.exact_domain_cross_entropy_from_padded(
+            logits.unsqueeze(0),
+            label_tensor,
+            real_candidate_mask,
+        )
+        _require_cuda_tensor(loss, device, "loss")
+        if not torch.isfinite(loss).item():
+            raise Task4BTrainingError(
+                "NONFINITE_LOSS",
+                "CUDA loss is non-finite",
+                actual_optimizer_steps,
+            )
+        return loss
+    except Task4BTrainingError:
+        raise
+    except (codec.CodecError, TypeError, ValueError, RuntimeError) as error:
+        raise Task4BTrainingError(
+            "TRAINING_INPUT_FAILED",
+            f"training sample could not reach exact-domain loss: {error}",
+            actual_optimizer_steps,
+        ) from error
+
+
+@dataclasses.dataclass(frozen=True)
+class Task4BCudaTrainingResultV1:
+    preflight: task4_cuda.CudaPreflightResultV1
+    model: task4_model.Phase6TorchCandidateScorer
+    actual_optimizer_steps: int
+    initial_loss: float
+    final_loss: float
+    gpu_memory_before: int
+    gpu_memory_peak: int
+    gpu_memory_after: int
+
+
+def _run_cuda_training(
+    ordered_train_samples: Sequence[codec.CorpusSampleV1],
+) -> Task4BCudaTrainingResultV1:
+    if not ordered_train_samples:
+        raise Task4BTrainingError(
+            "EMPTY_TRAIN_PARTITION",
+            "cannot train without admitted TRAIN samples",
+            0,
+        )
+    preflight = task4_cuda.require_task4_cuda()
+    device = _require_training_preflight(preflight)
+    try:
+        torch.use_deterministic_algorithms(True, warn_only=False)
+        torch.set_float32_matmul_precision("highest")
+        torch.manual_seed(1729)
+        torch.cuda.manual_seed_all(1729)
+        if not torch.are_deterministic_algorithms_enabled():
+            raise Task4BTrainingError(
+                "DETERMINISM_CONFIGURATION",
+                "strict deterministic algorithms were not enabled",
+                0,
+            )
+        if torch.is_deterministic_algorithms_warn_only_enabled():
+            raise Task4BTrainingError(
+                "DETERMINISM_CONFIGURATION",
+                "deterministic algorithms are warn-only",
+                0,
+            )
+        if torch.get_float32_matmul_precision() != "highest":
+            raise Task4BTrainingError(
+                "DETERMINISM_CONFIGURATION",
+                "float32 matmul precision is not highest",
+                0,
+            )
+        model = task4_model.Phase6TorchCandidateScorer().to(device)
+        _require_model_on_device(model, device)
+        optimizer = _make_adam_optimizer(model)
+        torch.cuda.synchronize(device)
+        torch.cuda.reset_peak_memory_stats(device)
+        gpu_memory_before = int(torch.cuda.memory_allocated(device))
+        initial_loss_tensor = _loss_for_sample(
+            model,
+            ordered_train_samples[0],
+            device,
+            0,
+        )
+        initial_loss = float(initial_loss_tensor.detach().cpu().item())
+        del initial_loss_tensor
+        counter = _SuccessfulStepCounter()
+        model.train()
+        for step_index in range(codec.SMOKE_MAX_OPTIMIZER_STEPS):
+            optimizer.zero_grad(set_to_none=True)
+            loss = _loss_for_sample(
+                model,
+                ordered_train_samples[step_index % len(ordered_train_samples)],
+                device,
+                counter.value,
+            )
+            _apply_optimizer_update(optimizer, loss, counter)
+        if counter.value != codec.SMOKE_MAX_OPTIMIZER_STEPS:
+            raise Task4BTrainingError(
+                "OPTIMIZER_STEP_COUNT_MISMATCH",
+                "training did not complete the frozen optimizer-step bound",
+                counter.value,
+            )
+        torch.cuda.synchronize(device)
+        gpu_memory_peak = int(torch.cuda.max_memory_allocated(device))
+        optimizer.zero_grad(set_to_none=True)
+        torch.cuda.synchronize(device)
+        gpu_memory_after = int(torch.cuda.memory_allocated(device))
+        with torch.no_grad():
+            final_loss_tensor = _loss_for_sample(
+                model,
+                ordered_train_samples[0],
+                device,
+                counter.value,
+            )
+            final_loss = float(final_loss_tensor.detach().cpu().item())
+        del final_loss_tensor
+        return Task4BCudaTrainingResultV1(
+            preflight=preflight,
+            model=model,
+            actual_optimizer_steps=counter.value,
+            initial_loss=initial_loss,
+            final_loss=final_loss,
+            gpu_memory_before=gpu_memory_before,
+            gpu_memory_peak=gpu_memory_peak,
+            gpu_memory_after=gpu_memory_after,
+        )
+    except task4_cuda.CudaPreflightError:
+        raise
+    except Task4BTrainingError:
+        raise
+    except (RuntimeError, TypeError, ValueError, codec.CodecError) as error:
+        steps = locals().get("counter").value if "counter" in locals() else 0
+        raise Task4BTrainingError(
+            "CUDA_TRAINING_FAILED",
+            f"CUDA training failed: {error}",
+            steps,
+        ) from error
 
 
 def _run_authoritative_corpus_probe(
@@ -452,6 +745,7 @@ def run_task4b_smoke(
     corpus = admitted.corpus
     train_count, validation_count, test_count = _partition_counts(corpus.samples)
     ordered_train_samples = _ordered_train_samples(corpus.samples)
+    training_result = _run_cuda_training(ordered_train_samples)
     return Task4BSmokeRunResult(
         source_root=source_root,
         output_dir=Path(output_dir).resolve(),
@@ -466,4 +760,5 @@ def run_task4b_smoke(
         validation_sample_count=validation_count,
         test_sample_count=test_count,
         ordered_train_samples=ordered_train_samples,
+        training_result=training_result,
     )
