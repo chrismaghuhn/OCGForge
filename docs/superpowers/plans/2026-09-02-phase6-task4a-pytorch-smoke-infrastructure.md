@@ -6,7 +6,7 @@
 
 **Architecture:** C++ remains the DatasetManifest/AdmissionReceipt/Phase-6 materialization authority and emits a rebuildable derived corpus. Python owns the provisional PyTorch execution adapter and OCGForge-owned canonical codecs. The model receives numeric state/candidate surfaces only; public keys remain control-plane sidecars.
 
-**Tech Stack:** Existing C++17/CMake, Python standard library, and the installed provisional PyTorch CUDA runtime. No optimizer step, no training run, no Task-5 evaluation, and no PyTorch-primary ADR.
+**Tech Stack:** Existing C++17/CMake, Python standard library, and the installed provisional CUDA-enabled PyTorch build. No optimizer step, no training run, no Task-5 evaluation, and no PyTorch-primary ADR.
 
 ---
 

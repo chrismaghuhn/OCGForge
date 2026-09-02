@@ -310,6 +310,7 @@ def infer_request(
     if (
         model_input.model_input_identity != request.model_input_identity or
         model_input.ordered_candidate_domain_identity != request.ordered_candidate_domain_identity or
+        model_input.numeric_input_identity != request.numeric_input_identity or
         model_input.public_candidate_domain_digest != request.public_candidate_domain_digest or
         model_input.public_semantic_decision_id != request.public_semantic_decision_id or
         model_input.perspective_player != request.perspective_player or

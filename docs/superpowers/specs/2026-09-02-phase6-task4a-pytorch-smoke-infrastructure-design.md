@@ -29,8 +29,11 @@ The C++ probe is the only producer of the smoke corpus:
 The physical corpus is rebuildable and is not DatasetManifest authority. It
 carries the source dataset semantic identity, split identity, derivation
 contract, every source BC sample identity, every model-input identity, and a
-derived-artifact content digest. The Python loader accepts only that exact
-probe protocol and rejects malformed or digest-mismatched payloads.
+derived-artifact content digest. The probe also emits a separate authority
+sidecar directly from the trusted manifest, Task-2 split, and admitted sample
+path. The Python admission path requires that sidecar (or equivalent
+independent authority) plus the exact expected corpus artifact identity; it
+never manufactures positive authority from decoded corpus bytes.
 
 The fixed corpus job set is declared in code and does not search for favorable
 partition membership. If its train partition is empty, corpus creation fails
@@ -92,16 +95,18 @@ optimizer, gradient, sharding, worker, device, or cache state. The physical
 checkpoint artifact is OCGForge-owned and binds its manifest to the canonical
 weight-content identity; no torch.save object is authoritative.
 
-GPU model, CUDA runtime, device index, PID, and paths are training provenance
-only and never checkpoint semantic identity.
+GPU model, device index, the PyTorch CUDA build, and the version reported by
+`torch.version.cuda` are training provenance only and never checkpoint
+semantic identity; no separately measured driver/runtime version is claimed.
 
 ## Inference runner
 
-The runner creates canonical InferenceRequestV1 values from checkpoint,
-model-input, ordered-domain, and public-decision identities. The PyTorch model
-receives only numeric state/candidate tensors. The runner retains routing keys
-outside the model, validates exactly N finite scores, resolves the deterministic
-selection, and computes the selection-envelope response identity.
+The runner creates canonical InferenceRequestV1 values from checkpoint, the
+validated numeric model-input unit, ordered-domain, numeric-input, and
+public-decision identities. The PyTorch model receives only numeric
+state/candidate tensors. The runner retains routing keys outside the model,
+validates exactly N finite scores, resolves the deterministic selection, and
+computes the selection-envelope response identity.
 
 A request is single-use. Stale, duplicate, late, wrong-domain, wrong-input,
 wrong-checkpoint, wrong-length, non-finite, malformed, invalid-selection, or

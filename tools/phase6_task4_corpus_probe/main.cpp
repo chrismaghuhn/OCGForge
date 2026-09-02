@@ -54,6 +54,10 @@ using ygo::trajectory::VerifiedAdmissionReceipt;
 constexpr std::string_view kCorpusSchemaId =
     "ocgforge.phase6.task4.smoke_corpus.v2";
 constexpr std::string_view kCorpusArtifactPrefix = "phase6_corpus_artifact.v2.";
+constexpr std::string_view kCorpusAuthoritySchemaId =
+    "ocgforge.phase6.task4.corpus_authority.v1";
+constexpr std::string_view kCorpusAuthorityArtifactPrefix =
+    "phase6_corpus_authority.v1.";
 constexpr std::string_view kOrderedDomainIdentityDomain =
     "ocgforge.phase6.ordered_candidate_domain.v1";
 constexpr std::string_view kOrderedDomainIdentityPrefix =
@@ -382,11 +386,74 @@ std::vector<std::uint8_t> corpus_body(const DatasetManifest& manifest,
     return std::move(writer).take();
 }
 
-std::string output_path(int argc, char** argv) {
-    if (argc != 3 || std::string_view(argv[1]) != "--output" || argv[2][0] == '\0') {
-        throw std::runtime_error("usage: phase6_task4_corpus_probe --output <path>");
+std::vector<std::uint8_t> authority_body(
+    const DatasetManifest& manifest,
+    const ygo::phase6::Phase6MaterializedDatasetV1& dataset,
+    const CardVocabularyV1& vocabulary,
+    const std::string& corpus_artifact_identity) {
+    Writer writer;
+    writer.string(kCorpusAuthoritySchemaId);
+    writer.string(corpus_artifact_identity);
+    writer.string(manifest.dataset_semantic_id);
+    writer.string(dataset.split.split_identity);
+    writer.string(vocabulary.identity());
+    writer.strings(dataset.split.train_episode_ids);
+    writer.strings(dataset.split.validation_episode_ids);
+    writer.strings(dataset.split.test_episode_ids);
+
+    std::vector<const ygo::phase6::Phase6BcSampleV1*> samples;
+    const auto append_samples = [&samples](const auto& values) {
+        for (const auto& sample : values) samples.push_back(&sample);
+    };
+    append_samples(dataset.train_samples);
+    append_samples(dataset.validation_samples);
+    append_samples(dataset.test_samples);
+    std::sort(samples.begin(), samples.end(),
+              [](const auto* left, const auto* right) {
+                  return left->sample_identity < right->sample_identity;
+              });
+    for (std::size_t index = 1; index < samples.size(); ++index) {
+        require(samples[index - 1]->sample_identity != samples[index]->sample_identity,
+                "corpus authority contains duplicate sample identity");
     }
-    return argv[2];
+    writer.u32(checked_u32(samples.size(), "corpus authority sample count exceeds u32"));
+    for (const auto* sample : samples) {
+        writer.string(sample->sample_identity);
+        writer.string(sample->trajectory_record_id);
+        writer.string(sample->episode_semantic_id);
+        writer.string(sample->supervision.source_public_semantic_decision_id);
+        writer.string(sample->supervision.model_input_identity);
+        writer.string(sample->supervision.selected_public_action_key);
+        writer.u32(sample->supervision.candidate_ordinal);
+        writer.string(ordered_domain_identity(sample->encoded_model_input));
+        writer.optional_string(sample->encoded_model_input.public_candidate_domain_digest);
+        writer.u8(sample->encoded_model_input.perspective_player);
+        writer.u64(sample->encoded_model_input.decision_index);
+    }
+    return std::move(writer).take();
+}
+
+struct OutputPaths final {
+    std::string corpus;
+    std::string authority;
+};
+
+OutputPaths output_paths(int argc, char** argv) {
+    if (argc != 5 || std::string_view(argv[1]) != "--output" ||
+        std::string_view(argv[3]) != "--authority" || argv[2][0] == '\0' ||
+        argv[4][0] == '\0') {
+        throw std::runtime_error(
+            "usage: phase6_task4_corpus_probe --output <path> --authority <path>");
+    }
+    return {argv[2], argv[4]};
+}
+
+void write_file(const std::string& path, const std::vector<std::uint8_t>& bytes) {
+    std::ofstream output(path, std::ios::binary | std::ios::trunc);
+    require(output.is_open(), "could not open corpus output");
+    output.write(reinterpret_cast<const char*>(bytes.data()),
+                 static_cast<std::streamsize>(bytes.size()));
+    require(output.good(), "could not write corpus output");
 }
 
 }  // namespace
@@ -422,14 +489,18 @@ int main(int argc, char** argv) {
         Writer artifact;
         artifact.string(artifact_identity);
         artifact.raw(body);
-        const auto bytes = std::move(artifact).take();
+        const auto corpus_bytes = std::move(artifact).take();
 
-        const auto path = output_path(argc, argv);
-        std::ofstream output(path, std::ios::binary | std::ios::trunc);
-        require(output.is_open(), "could not open corpus output");
-        output.write(reinterpret_cast<const char*>(bytes.data()),
-                     static_cast<std::streamsize>(bytes.size()));
-        require(output.good(), "could not write corpus output");
+        const auto paths = output_paths(argc, argv);
+        const auto authority = authority_body(manifest, *dataset.value, vocabulary,
+                                              artifact_identity);
+        const auto authority_identity = std::string(kCorpusAuthorityArtifactPrefix) +
+                                        ygo::trace::sha256_bytes(authority);
+        Writer authority_artifact;
+        authority_artifact.string(authority_identity);
+        authority_artifact.raw(authority);
+        write_file(paths.corpus, corpus_bytes);
+        write_file(paths.authority, std::move(authority_artifact).take());
         return EXIT_SUCCESS;
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n';

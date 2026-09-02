@@ -270,6 +270,7 @@ InferenceRequestV1 {
     schema_id: "ocgforge.phase6.inference_request.v1"
     checkpoint_identity: exact immutable checkpoint identity
     model_input_identity: exact Phase-5 model-input identity
+    numeric_input_identity: exact validated Task-4 numeric projection identity
     ordered_candidate_domain_identity: exact current ordered-domain identity
     public_semantic_decision_id: optional exact public decision identity
     perspective_player: u8
@@ -308,7 +309,8 @@ The backend adapter MUST pass a single validated numeric projection unit that
 contains the model-input identity, Phase-5-or-fallback domain identity, public
 decision context, and exact state/candidate rows. It MUST NOT accept those
 rows and identities as independently combinable arguments; the unit's derived
-numeric integrity identity is checked before inference.
+numeric integrity identity is included in the request identity and checked
+against the pending request before inference.
 
 ## 6. Deterministic inference response
 

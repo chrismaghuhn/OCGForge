@@ -27,6 +27,8 @@ The following identities are fixed for Task 4A:
 | Task-4 smoke corpus | `ocgforge.phase6.task4.smoke_corpus.v2` |
 | smoke-corpus derivation | `ocgforge.phase6.task4.numeric_projection.v1` |
 | smoke-corpus artifact identity prefix | `phase6_corpus_artifact.v2.` |
+| smoke-corpus authority sidecar | `ocgforge.phase6.task4.corpus_authority.v1` |
+| smoke-corpus authority identity prefix | `phase6_corpus_authority.v1.` |
 | training-run manifest | `ocgforge.phase6.training_run.v1` |
 | training-run identity prefix | `phase6_training_run.v1.` |
 | architecture config sub-identity | `ocgforge.phase6.bc_architecture_config.v1` |
@@ -36,6 +38,7 @@ The following identities are fixed for Task 4A:
 | gradient accumulation sub-identity | `ocgforge.phase6.gradient_accumulation.v1` |
 | RNG/initialization sub-identity | `ocgforge.phase6.rng_initialization.v1` |
 | precision sub-identity | `ocgforge.phase6.precision.v1` |
+| deterministic execution sub-identity | `ocgforge.phase6.determinism_config.v1` |
 | execution provenance sub-identity | `ocgforge.phase6.execution_provenance.v1` |
 | CUDA preflight | `ocgforge.phase6.cuda_preflight.v1` |
 
@@ -234,6 +237,13 @@ episode partition, and exact source-sample/model-input membership. A newly
 hashed self-consistent artifact is not admitted without that authority
 context.
 
+The C++ probe emits the authority sidecar as a separate artifact, built
+directly from the validated `DatasetManifest`, Task-2 split, and admitted
+`Phase6BcSampleV1` values before any physical corpus decoding. A positive
+admission result must consume that sidecar (or equivalent trusted authority
+values) and the exact expected corpus artifact identity; the decoded corpus
+can never be used to manufacture its own positive authority.
+
 ## 6. Configuration sub-identities
 
 Every Task-4A configuration value is canonicalized before it can be referenced
@@ -244,16 +254,26 @@ by a training-run manifest:
   binary32 values;
 - schedule config is the explicit no-schedule identity;
 - batch config declares the real-sample loss normalization
-  `mean_per_real_sample` and no semantic padding rows;
+  `mean_per_real_sample`, no semantic padding rows, ascending
+  `bc_sample_identity` order, `shuffle=false`, and the deterministic
+  `step_i_modulo_train_sample_count` schedule;
+- optimizer config declares Adam with `foreach=false`, `fused=false`,
+  `amsgrad=false`, `maximize=false`, `capturable=false`, and
+  `differentiable=false`;
 - gradient-accumulation config declares accumulation count `1`;
 - RNG/initialization config declares the versioned PyTorch CPU/CUDA manual-seed
   contract and seed `1729`;
 - precision config declares binary32 model/input/score execution;
+- deterministic-execution config declares
+  `torch.use_deterministic_algorithms(True, warn_only=False)` and
+  `torch.set_float32_matmul_precision("highest")`;
 - execution provenance declares backend identity, exact framework version,
-  device type/index, GPU name, PyTorch CUDA build/runtime, capability, and
-  distributed strategy/world size through structured canonical provenance
-  bytes. The CUDA preflight produces this value and its identity; a training
-  manifest records that exact identity rather than an arbitrary prefix string.
+  device type/index, GPU name, PyTorch CUDA build and the version reported by
+  `torch.version.cuda`, capability, and distributed strategy/world size through
+  structured canonical provenance bytes. The preflight does not claim an
+  independently measured driver/runtime version. It produces this value and
+  its identity; a training manifest records that exact identity rather than an
+  arbitrary prefix string.
 
 Each sub-identity uses its own domain/schema, fixed field order, canonical
 primitive values, and lowercase SHA-256 digest. Execution provenance is
@@ -287,7 +307,9 @@ training_rng_contract_identity
 training_seed_or_initialization_identity
 initial_checkpoint_identity:optional
 precision_mode_identity
+deterministic_execution_configuration_identity
 device_and_distributed_provenance_identity
+cuda_preflight_identity:optional; required when actual_optimizer_steps > 0
 maximum_optimizer_steps:u32 = 500
 actual_optimizer_steps:u32
 final_exported_checkpoint_identity:optional for Task 4A
@@ -302,6 +324,11 @@ phase6_training_run.v1.<lowercase SHA-256 of canonical manifest bytes>
 
 A Task-4A zero-step manifest is infrastructure/provenance test data, not
 training acceptance evidence.
+
+The generic/default manifest constructor is zero-step-only. A manifest with
+`actual_optimizer_steps > 0` is valid only when its `cuda_preflight_identity`
+was produced by the real CUDA preflight bridge and is bound to the same
+structured execution-provenance facts.
 
 For the fixed Teacher-vs-Teacher smoke corpus, both accepted Teacher-v1
 artifact identities are required in `behavior_policy_source_identities` and
@@ -348,7 +375,7 @@ sidecar, but never enters checkpoint semantic identity.
 The inference numeric response contains exactly N finite binary32 scores in
 source order. Request/response identities bind checkpoint, the one validated
 numeric model-input unit, ordered candidate domain, and public semantic
-decision. Response identity hashes only the canonical selection envelope. A
+decision, and the numeric-input identity. Response identity hashes only the canonical selection envelope. A
 consumed request cannot be consumed again. An existing Phase-5
 `public_candidate_domain_digest` is the ordered-domain identity; the
 `phase6_ordered_candidate_domain.v1` digest is used only when the Phase-5
@@ -371,8 +398,10 @@ GPU name == NVIDIA GeForce RTX 4060 Ti
 ```
 
 It records device type/index, GPU model, PyTorch version, PyTorch CUDA build,
-CUDA runtime, capability, precision, and distributed configuration as
-execution provenance. It does not create an optimizer or execute a step.
+the version reported by `torch.version.cuda`, capability, precision, and
+distributed configuration as execution provenance. It does not claim a
+separately measured driver/runtime version, create an optimizer, or execute a
+step.
 
 On failure it returns a structured CUDA failure with:
 

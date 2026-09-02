@@ -10,46 +10,23 @@ from tools.phase6 import task4_codec as codec
 from tools.phase6 import task4_model
 
 
-def _authority(corpus):
-    episodes = {
-        "train": tuple(value for value in corpus.episode_ids
-                       if codec.partition_for_episode(value) == "train"),
-        "validation": tuple(value for value in corpus.episode_ids
-                            if codec.partition_for_episode(value) == "validation"),
-        "test": tuple(value for value in corpus.episode_ids
-                      if codec.partition_for_episode(value) == "test"),
-    }
-    return codec.CorpusAdmissionAuthorityV1(
-        expected_artifact_identity=codec.derived_corpus_content_identity(
-            codec.canonical_corpus_bytes(corpus)
-        ),
-        source_dataset_identity=corpus.source_dataset_identity,
-        split_identity=corpus.split_identity,
-        card_vocabulary_identity=corpus.card_vocabulary_identity,
-        train_episode_ids=episodes["train"],
-        validation_episode_ids=episodes["validation"],
-        test_episode_ids=episodes["test"],
-        source_samples=tuple(codec.source_sample_authority(value)
-                              for value in corpus.samples),
-    )
-
-
 class Task4AAdmittedModelTests(unittest.TestCase):
     def test_one_admitted_train_sample_reaches_forward_without_synthetic_label(self):
         probe = Path(sys.argv[1]) if len(sys.argv) > 1 else None
         self.assertIsNotNone(probe, "corpus probe path is required")
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "smoke-corpus.p6c"
+            authority_output = Path(directory) / "smoke-corpus.authority.p6a"
             completed = subprocess.run(
-                [str(probe), "--output", str(output)],
+                [str(probe), "--output", str(output), "--authority", str(authority_output)],
                 check=False,
                 capture_output=True,
                 text=True,
             )
             self.assertEqual(completed.returncode, 0, completed.stderr)
             artifact = output.read_bytes()
-            corpus = codec.decode_corpus_artifact(artifact)
-            corpus = codec.admit_corpus_artifact(artifact, _authority(corpus))
+            authority = codec.decode_corpus_authority_artifact(authority_output.read_bytes())
+            corpus = codec.admit_corpus_artifact(artifact, authority)
         sample = next((value for value in corpus.samples if value.partition == "train"), None)
         self.assertIsNotNone(sample, "admitted corpus has no train sample")
         self.assertEqual(

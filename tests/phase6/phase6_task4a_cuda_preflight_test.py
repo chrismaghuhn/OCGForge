@@ -29,12 +29,17 @@ class Task4ACudaPreflightTests(unittest.TestCase):
         result = task4_cuda.require_task4_cuda()
         self.assertEqual(result.device, torch.device("cuda:0"))
         self.assertEqual(result.gpu_name, "NVIDIA GeForce RTX 4060 Ti")
+        self.assertTrue(result.torch_cuda_version)
+        self.assertFalse(hasattr(result, "cuda_runtime"))
         self.assertEqual(result.actual_optimizer_steps, 0)
         self.assertFalse(result.cpu_fallback)
         self.assertEqual(
             result.execution_provenance_identity,
             codec.execution_provenance_identity_for(result.execution_provenance()),
         )
+        self.assertTrue(result.cuda_preflight_identity.startswith(
+            codec.CUDA_PREFLIGHT_ID_PREFIX
+        ))
         manifest = task4_cuda.training_run_manifest_from_cuda_preflight(
             result,
             source_dataset_identity="1" * 64,
@@ -48,6 +53,17 @@ class Task4ACudaPreflightTests(unittest.TestCase):
             result.execution_provenance_identity,
         )
         self.assertTrue(codec.training_run_identity(manifest).startswith(
+            "phase6_training_run.v1."
+        ))
+        positive_manifest = task4_cuda.training_run_manifest_from_cuda_preflight(
+            result,
+            source_dataset_identity="1" * 64,
+            dataset_split_identity="phase6_dataset_split.v1." + "2" * 64,
+            card_vocabulary_identity="model_card_vocabulary.v1." + "3" * 64,
+            training_code_commit="4" * 40,
+            actual_optimizer_steps=1,
+        )
+        self.assertTrue(codec.training_run_identity(positive_manifest).startswith(
             "phase6_training_run.v1."
         ))
 

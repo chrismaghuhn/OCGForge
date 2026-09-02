@@ -29,7 +29,8 @@ class CudaPreflightResultV1:
     gpu_name: str
     framework_version: str
     torch_cuda_build: str
-    cuda_runtime: str
+    torch_cuda_version: str
+    device_count: int
     capability_major: int
     capability_minor: int
     actual_optimizer_steps: int = 0
@@ -46,7 +47,7 @@ class CudaPreflightResultV1:
             device_index=self.device_index,
             gpu_name=self.gpu_name,
             torch_cuda_build=self.torch_cuda_build,
-            cuda_runtime=self.cuda_runtime,
+            torch_cuda_version=self.torch_cuda_version,
             capability_major=self.capability_major,
             capability_minor=self.capability_minor,
         )
@@ -54,6 +55,14 @@ class CudaPreflightResultV1:
     @property
     def execution_provenance_identity(self) -> str:
         return codec.execution_provenance_identity_for(self.execution_provenance())
+
+    @property
+    def cuda_preflight_identity(self) -> str:
+        return codec.cuda_preflight_identity_for(codec.CudaPreflightFactsV1(
+            cuda_available=True,
+            device_count=self.device_count,
+            execution_provenance=self.execution_provenance(),
+        ))
 
 
 def training_run_manifest_from_cuda_preflight(
@@ -72,12 +81,20 @@ def training_run_manifest_from_cuda_preflight(
         dataset_split_identity=dataset_split_identity,
         card_vocabulary_identity=card_vocabulary_identity,
         training_code_commit=training_code_commit,
-        actual_optimizer_steps=actual_optimizer_steps,
+        actual_optimizer_steps=0,
     )
+    if preflight.actual_optimizer_steps != 0 or preflight.cpu_fallback:
+        raise CudaPreflightError(
+            "CUDA_DEVICE_MISMATCH",
+            "training provenance requires a clean zero-step CUDA preflight",
+        )
     return dataclasses.replace(
         manifest,
         framework_version=preflight.framework_version,
         device_and_distributed_provenance_identity=preflight.execution_provenance_identity,
+        cuda_preflight_identity=preflight.cuda_preflight_identity,
+        actual_optimizer_steps=actual_optimizer_steps,
+        _cuda_preflight_attestation=codec._CUDA_PREFLIGHT_ATTESTATION,
     )
 
 
@@ -90,7 +107,8 @@ def require_task4_cuda() -> CudaPreflightResultV1:
             "CUDA is unavailable; CPU fallback is forbidden",
         )
     try:
-        if torch.cuda.device_count() < 1:
+        device_count = torch.cuda.device_count()
+        if device_count < 1:
             raise CudaPreflightError(
                 "CUDA_UNAVAILABLE",
                 "no CUDA device is available; CPU fallback is forbidden",
@@ -127,7 +145,8 @@ def require_task4_cuda() -> CudaPreflightResultV1:
         gpu_name=gpu_name,
         framework_version=torch.__version__,
         torch_cuda_build=cuda_build,
-        cuda_runtime=cuda_build,
+        torch_cuda_version=cuda_build,
+        device_count=int(device_count),
         capability_major=int(capability[0]),
         capability_minor=int(capability[1]),
     )

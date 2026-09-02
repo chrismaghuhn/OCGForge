@@ -162,6 +162,13 @@ PyTorch architecture, the fail-closed inference runner, and the CUDA preflight.
 It MUST execute zero optimizer steps. Its exact identities and field order are
 owned by [P6_TASK4A_NUMERIC_AND_PROVENANCE_CONTRACT.md](P6_TASK4A_NUMERIC_AND_PROVENANCE_CONTRACT.md).
 
+The Task-4B execution configuration is frozen before that later run: train
+samples are ordered by ascending `bc_sample_identity`, `shuffle=false`, step
+`i` selects `train_samples[i % train_sample_count]`, the Adam execution flags
+are all explicitly false (`foreach`, `fused`, `amsgrad`, `maximize`,
+`capturable`, and `differentiable`), deterministic algorithms are strict, and
+float32 matmul precision is `highest`.
+
 Task 4A does not issue accepted training-run or trained-checkpoint evidence.
 Task 4B requires a separate authorization after independent review.
 

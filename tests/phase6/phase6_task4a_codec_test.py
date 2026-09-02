@@ -57,6 +57,13 @@ class Task4ACodecTests(unittest.TestCase):
         self.assertNotEqual(codec.optimizer_config_identity(), codec.schedule_config_identity())
         self.assertEqual(codec.default_architecture_config().parameter_order,
                          codec.PARAMETER_ORDER)
+        self.assertIn(b"bc_sample_identity_ascending.v1", codec.canonical_batch_config_bytes())
+        self.assertIn(b"step_i_modulo_train_sample_count.v1", codec.canonical_batch_config_bytes())
+        optimizer_bytes = codec.canonical_optimizer_config_bytes()
+        for flag in (b"foreach", b"fused", b"amsgrad", b"maximize",
+                     b"capturable", b"differentiable"):
+            self.assertIn(flag, optimizer_bytes)
+        self.assertIn(b"highest", codec.canonical_deterministic_execution_bytes())
 
     def test_weight_export_is_ordered_and_rejects_mutation_values(self):
         tensors = (
@@ -100,6 +107,23 @@ class Task4ACodecTests(unittest.TestCase):
         with self.assertRaises(codec.CodecError):
             codec.training_run_identity(codec.replace_training_run(
                 manifest, opponent_policy_source_identities=()))
+        with self.assertRaises(codec.CodecError):
+            codec.default_training_run_manifest(
+                source_dataset_identity="1" * 64,
+                dataset_split_identity="phase6_dataset_split.v1." + "2" * 64,
+                card_vocabulary_identity="model_card_vocabulary.v1." + "3" * 64,
+                training_code_commit="4" * 40,
+                actual_optimizer_steps=1,
+            )
+        with self.assertRaises(codec.CodecError):
+            codec.training_run_identity(codec.replace_training_run(
+                manifest, actual_optimizer_steps=1))
+        with self.assertRaises(codec.CodecError):
+            codec.training_run_identity(codec.replace_training_run(
+                manifest,
+                actual_optimizer_steps=1,
+                cuda_preflight_identity=codec.CUDA_PREFLIGHT_ID_PREFIX + "5" * 64,
+            ))
 
         checkpoint = codec.default_checkpoint_manifest(
             architecture_config_identity=manifest.model_architecture_config_identity,

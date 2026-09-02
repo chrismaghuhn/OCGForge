@@ -152,6 +152,13 @@ class Task4AInferenceTests(unittest.TestCase):
                 for index, row in enumerate(model_input.candidate_rows)
             ),
         )
+        changed_rows = dataclasses.replace(
+            changed_rows,
+            numeric_input_identity=codec.numeric_model_input_identity(changed_rows),
+        )
+        self.assertNotEqual(
+            changed_rows.numeric_input_identity, request.numeric_input_identity
+        )
         with self.assertRaises(task4_inference.Task4InferenceError):
             task4_inference.infer_request(model, loaded, request, changed_rows)
 

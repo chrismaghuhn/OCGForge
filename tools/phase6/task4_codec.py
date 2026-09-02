@@ -28,6 +28,8 @@ WEIGHT_EXPORT_CONTRACT_ID = "ocgforge.phase6.canonical_weight_export.v1"
 WEIGHT_CONTENT_ID_PREFIX = "phase6_weight_content.v1."
 CORPUS_SCHEMA_ID = "ocgforge.phase6.task4.smoke_corpus.v2"
 CORPUS_ARTIFACT_ID_PREFIX = "phase6_corpus_artifact.v2."
+CORPUS_AUTHORITY_SCHEMA_ID = "ocgforge.phase6.task4.corpus_authority.v1"
+CORPUS_AUTHORITY_ID_PREFIX = "phase6_corpus_authority.v1."
 NUMERIC_MODEL_INPUT_SCHEMA_ID = "ocgforge.phase6.numeric_model_input.v1"
 NUMERIC_MODEL_INPUT_ID_PREFIX = "phase6_numeric_model_input.v1."
 TRAINING_RUN_SCHEMA_ID = "ocgforge.phase6.training_run.v1"
@@ -47,6 +49,12 @@ SPLIT_IDENTITY_PREFIX = "phase6_dataset_split.v1."
 SPLIT_PARTITION_IDENTITY = "ocgforge.phase6.split.fixed_80_10_10_sha256.v1"
 BC_SAMPLE_IDENTITY_DOMAIN = "ocgforge.phase6.bc_sample_identity.v1"
 BC_SAMPLE_IDENTITY_PREFIX = "bc_sample.v1."
+CUDA_PREFLIGHT_DOMAIN = "ocgforge.phase6.cuda_preflight.v1"
+CUDA_PREFLIGHT_ID_PREFIX = "phase6_cuda_preflight.v1."
+DETERMINISM_CONFIG_DOMAIN = "ocgforge.phase6.determinism_config.v1"
+DETERMINISM_CONFIG_ID_PREFIX = "phase6_determinism_config.v1."
+TRAIN_SAMPLE_ORDER_IDENTITY = "bc_sample_identity_ascending.v1"
+TRAIN_SAMPLE_SCHEDULE_IDENTITY = "step_i_modulo_train_sample_count.v1"
 RESPONSE_SELECTION_ID_DOMAIN = "ocgforge.phase6.inference_response_identity.v1"
 
 STATE_ROW_WIDTH = 8
@@ -69,6 +77,8 @@ TEACHER_SOURCE_IDENTITIES = (
     "policy_artifact.v1.52f56b550a2a674430439d3db104a0b2281b69df79891573e4d71967e3d4310d",
     "policy_artifact.v1.a68642ee28f0dd53ebe4908994664f178b3d5cea6fb7c06421990729cd9c4527",
 )
+
+_CUDA_PREFLIGHT_ATTESTATION = object()
 
 
 def _text(value: str) -> bytes:
@@ -187,6 +197,13 @@ def _validate_public_action_key(value: str, field: str) -> None:
         raise CodecError(f"{field} is not lowercase hexadecimal")
 
 
+def _validate_ordered_domain_identity(value: str, field: str) -> None:
+    if isinstance(value, str) and value.startswith(ORDERED_DOMAIN_ID_PREFIX):
+        _validate_prefixed_digest(value, ORDERED_DOMAIN_ID_PREFIX, field)
+        return
+    _validate_lower_hex_digest(value, field)
+
+
 @dataclasses.dataclass(frozen=True)
 class ArchitectureConfigV1:
     numeric_contract_identity: str = F32_CODEC_ID
@@ -232,17 +249,29 @@ def architecture_config_identity(config: Optional[ArchitectureConfigV1] = None) 
 
 
 def _subidentity(domain: str, values: Iterable[bytes], prefix: str) -> str:
-    payload = pack_string(domain) + pack_string(domain) + b"".join(values)
-    return _digest(prefix, payload)
+    return _digest(prefix, _subidentity_bytes(domain, values))
+
+
+def _subidentity_bytes(domain: str, values: Iterable[bytes]) -> bytes:
+    return pack_string(domain) + pack_string(domain) + b"".join(values)
+
+
+def canonical_optimizer_config_bytes() -> bytes:
+    return _subidentity_bytes(
+        "ocgforge.phase6.optimizer_config.v1",
+        (pack_string("adam"), f32_bytes(0.001), f32_bytes(0.9), f32_bytes(0.999),
+         f32_bytes(1e-8), f32_bytes(0.0),
+         pack_string("foreach"), pack_u8(0),
+         pack_string("fused"), pack_u8(0),
+         pack_string("amsgrad"), pack_u8(0),
+         pack_string("maximize"), pack_u8(0),
+         pack_string("capturable"), pack_u8(0),
+         pack_string("differentiable"), pack_u8(0)),
+    )
 
 
 def optimizer_config_identity() -> str:
-    return _subidentity(
-        "ocgforge.phase6.optimizer_config.v1",
-        (pack_string("adam"), f32_bytes(0.001), f32_bytes(0.9), f32_bytes(0.999),
-         f32_bytes(1e-8), f32_bytes(0.0)),
-        "phase6_optimizer_config.v1.",
-    )
+    return _digest("phase6_optimizer_config.v1.", canonical_optimizer_config_bytes())
 
 
 def schedule_config_identity() -> str:
@@ -252,12 +281,18 @@ def schedule_config_identity() -> str:
     )
 
 
-def batch_config_identity() -> str:
-    return _subidentity(
+def canonical_batch_config_bytes() -> bytes:
+    return _subidentity_bytes(
         "ocgforge.phase6.batch_config.v1",
-        (pack_u32(1), pack_string("mean_per_real_sample"), pack_string("no_semantic_padding")),
-        "phase6_batch_config.v1.",
+        (pack_u32(1), pack_string("mean_per_real_sample"),
+         pack_string("no_semantic_padding"), pack_string(TRAIN_SAMPLE_ORDER_IDENTITY),
+         pack_string("shuffle"), pack_u8(0),
+         pack_string(TRAIN_SAMPLE_SCHEDULE_IDENTITY)),
     )
+
+
+def batch_config_identity() -> str:
+    return _digest("phase6_batch_config.v1.", canonical_batch_config_bytes())
 
 
 def gradient_accumulation_identity() -> str:
@@ -282,6 +317,20 @@ def precision_identity() -> str:
     )
 
 
+def canonical_deterministic_execution_bytes() -> bytes:
+    return _subidentity_bytes(
+        DETERMINISM_CONFIG_DOMAIN,
+        (pack_string("torch.use_deterministic_algorithms"), pack_u8(1),
+         pack_string("warn_only"), pack_u8(0),
+         pack_string("torch.set_float32_matmul_precision"), pack_string("highest")),
+    )
+
+
+def deterministic_execution_identity() -> str:
+    return _digest(DETERMINISM_CONFIG_ID_PREFIX,
+                   canonical_deterministic_execution_bytes())
+
+
 @dataclasses.dataclass(frozen=True)
 class ExecutionProvenanceV1:
     backend_identity: str = "ocgforge.phase6.backend.pytorch.provisional.v1"
@@ -290,7 +339,7 @@ class ExecutionProvenanceV1:
     device_index: int = EXPECTED_DEVICE_INDEX
     gpu_name: str = EXPECTED_GPU_NAME
     torch_cuda_build: str = "12.6"
-    cuda_runtime: str = "12.6"
+    torch_cuda_version: str = "12.6"
     capability_major: int = 8
     capability_minor: int = 9
     distributed_strategy: str = "single_process"
@@ -311,7 +360,7 @@ def canonical_execution_provenance_bytes(
     values = (
         provenance.backend_identity, provenance.framework_version,
         provenance.device_type, provenance.gpu_name,
-        provenance.torch_cuda_build, provenance.cuda_runtime,
+        provenance.torch_cuda_build, provenance.torch_cuda_version,
         provenance.distributed_strategy,
     )
     if any(not isinstance(value, str) or not value for value in values):
@@ -324,7 +373,7 @@ def canonical_execution_provenance_bytes(
                      pack_u32(provenance.device_index),
                      pack_string(provenance.gpu_name),
                      pack_string(provenance.torch_cuda_build),
-                     pack_string(provenance.cuda_runtime),
+                     pack_string(provenance.torch_cuda_version),
                      pack_u32(provenance.capability_major),
                      pack_u32(provenance.capability_minor),
                      pack_string(provenance.distributed_strategy),
@@ -346,7 +395,7 @@ def execution_provenance_identity(
     device_index: int = EXPECTED_DEVICE_INDEX,
     gpu_name: str = EXPECTED_GPU_NAME,
     torch_cuda_build: str = "12.6",
-    cuda_runtime: str = "12.6",
+    torch_cuda_version: str = "12.6",
     capability_major: int = 8,
     capability_minor: int = 9,
     distributed_strategy: str = "single_process",
@@ -359,12 +408,32 @@ def execution_provenance_identity(
         device_index=device_index,
         gpu_name=gpu_name,
         torch_cuda_build=torch_cuda_build,
-        cuda_runtime=cuda_runtime,
+        torch_cuda_version=torch_cuda_version,
         capability_major=capability_major,
         capability_minor=capability_minor,
         distributed_strategy=distributed_strategy,
         world_size=world_size,
     ))
+
+
+@dataclasses.dataclass(frozen=True)
+class CudaPreflightFactsV1:
+    cuda_available: bool
+    device_count: int
+    execution_provenance: ExecutionProvenanceV1
+
+
+def canonical_cuda_preflight_bytes(facts: CudaPreflightFactsV1) -> bytes:
+    if not facts.cuda_available or facts.device_count < 1:
+        raise CodecError("CUDA preflight facts do not prove an available device")
+    return b"".join((pack_string(CUDA_PREFLIGHT_DOMAIN),
+                     pack_string(CUDA_PREFLIGHT_DOMAIN),
+                     pack_u8(1), pack_u32(facts.device_count),
+                     canonical_execution_provenance_bytes(facts.execution_provenance)))
+
+
+def cuda_preflight_identity_for(facts: CudaPreflightFactsV1) -> str:
+    return _digest(CUDA_PREFLIGHT_ID_PREFIX, canonical_cuda_preflight_bytes(facts))
 
 
 @dataclasses.dataclass(frozen=True)
@@ -390,11 +459,16 @@ class TrainingRunManifestV1:
     training_seed_or_initialization_identity: str
     initial_checkpoint_identity: Optional[str]
     precision_mode_identity: str
+    deterministic_execution_configuration_identity: str
     device_and_distributed_provenance_identity: str
+    cuda_preflight_identity: Optional[str]
     maximum_optimizer_steps: int
     actual_optimizer_steps: int
     final_exported_checkpoint_identity: Optional[str]
     schema_id: str = TRAINING_RUN_SCHEMA_ID
+    _cuda_preflight_attestation: object = dataclasses.field(
+        default=None, repr=False, compare=False
+    )
 
 
 def replace_training_run(manifest: TrainingRunManifestV1, **changes: object) -> TrainingRunManifestV1:
@@ -409,6 +483,8 @@ def default_training_run_manifest(
     training_code_commit: str,
     actual_optimizer_steps: int,
 ) -> TrainingRunManifestV1:
+    if actual_optimizer_steps != 0:
+        raise CodecError("generic training manifest constructor only issues zero-step infrastructure")
     return TrainingRunManifestV1(
         training_contract_identity="ocgforge.phase6.bc_contract.v1",
         source_dataset_identity=source_dataset_identity,
@@ -431,7 +507,9 @@ def default_training_run_manifest(
         training_seed_or_initialization_identity=rng_initialization_identity(),
         initial_checkpoint_identity=None,
         precision_mode_identity=precision_identity(),
+        deterministic_execution_configuration_identity=deterministic_execution_identity(),
         device_and_distributed_provenance_identity=execution_provenance_identity(),
+        cuda_preflight_identity=None,
         maximum_optimizer_steps=SMOKE_MAX_OPTIMIZER_STEPS,
         actual_optimizer_steps=actual_optimizer_steps,
         final_exported_checkpoint_identity=None,
@@ -494,6 +572,8 @@ def canonical_training_run_manifest_bytes(manifest: TrainingRunManifestV1) -> by
         raise CodecError("training initialization identity is not accepted")
     if manifest.precision_mode_identity != precision_identity():
         raise CodecError("training precision identity is not accepted")
+    if manifest.deterministic_execution_configuration_identity != deterministic_execution_identity():
+        raise CodecError("training deterministic-execution identity is not accepted")
     _validate_identity(
         manifest.device_and_distributed_provenance_identity,
         ("phase6_execution_provenance.v1.",),
@@ -503,6 +583,15 @@ def canonical_training_run_manifest_bytes(manifest: TrainingRunManifestV1) -> by
         _validate_identity(manifest.initial_checkpoint_identity, (CHECKPOINT_ID_PREFIX,), "initial checkpoint identity")
     if manifest.final_exported_checkpoint_identity is not None:
         _validate_identity(manifest.final_exported_checkpoint_identity, (CHECKPOINT_ID_PREFIX,), "final checkpoint identity")
+    if manifest.cuda_preflight_identity is not None:
+        _validate_prefixed_digest(manifest.cuda_preflight_identity,
+                                  CUDA_PREFLIGHT_ID_PREFIX,
+                                  "CUDA preflight identity")
+    if manifest.actual_optimizer_steps > 0 and manifest.cuda_preflight_identity is None:
+        raise CodecError("positive-step training requires real CUDA preflight provenance")
+    if (manifest.actual_optimizer_steps > 0 and
+            manifest._cuda_preflight_attestation is not _CUDA_PREFLIGHT_ATTESTATION):
+        raise CodecError("positive-step training was not created by the CUDA preflight path")
     _validate_sorted_unique(manifest.behavior_policy_source_identities, "behavior policy identities")
     _validate_sorted_unique(manifest.opponent_policy_source_identities, "opponent policy identities")
     strings = (
@@ -521,8 +610,10 @@ def canonical_training_run_manifest_bytes(manifest: TrainingRunManifestV1) -> by
         manifest.gradient_accumulation_configuration_identity, manifest.training_rng_contract_identity,
         manifest.training_seed_or_initialization_identity))
     out.append(_optional_string(manifest.initial_checkpoint_identity))
-    out.extend(pack_string(value) for value in (
-        manifest.precision_mode_identity, manifest.device_and_distributed_provenance_identity))
+    out.append(pack_string(manifest.precision_mode_identity))
+    out.append(pack_string(manifest.deterministic_execution_configuration_identity))
+    out.append(pack_string(manifest.device_and_distributed_provenance_identity))
+    out.append(_optional_string(manifest.cuda_preflight_identity))
     out.extend((pack_u32(manifest.maximum_optimizer_steps), pack_u32(manifest.actual_optimizer_steps),
                 _optional_string(manifest.final_exported_checkpoint_identity)))
     return b"".join(out)
@@ -1278,6 +1369,174 @@ class CorpusAdmissionAuthorityV1:
     source_samples: tuple[CorpusSourceSampleAuthorityV1, ...]
 
 
+def _validate_source_sample_authority(
+    sample: CorpusSourceSampleAuthorityV1,
+) -> None:
+    _validate_prefixed_digest(sample.bc_sample_identity,
+                              BC_SAMPLE_IDENTITY_PREFIX,
+                              "authority BC sample identity")
+    _validate_prefixed_digest(sample.trajectory_record_id,
+                              "trajectory_record.v1.",
+                              "authority trajectory identity")
+    _validate_lower_hex_digest(sample.episode_semantic_id,
+                               "authority episode identity")
+    _validate_lower_hex_digest(sample.public_semantic_decision_id,
+                               "authority public decision identity")
+    _validate_prefixed_digest(sample.model_input_identity,
+                              "model_input.v1.",
+                              "authority model-input identity")
+    _validate_public_action_key(sample.selected_public_action_key,
+                                "authority selected public action key")
+    if not isinstance(sample.candidate_ordinal, int) or sample.candidate_ordinal < 0:
+        raise CodecError("authority candidate ordinal is invalid")
+    _validate_ordered_domain_identity(sample.ordered_candidate_domain_identity,
+                                      "authority ordered domain identity")
+    if sample.public_candidate_domain_digest is not None:
+        _validate_lower_hex_digest(sample.public_candidate_domain_digest,
+                                   "authority Phase-5 domain digest")
+    if sample.perspective_player not in (0, 1) or sample.decision_index < 0:
+        raise CodecError("authority decision context is invalid")
+    if sample.bc_sample_identity != bc_sample_identity(CorpusSampleV1(
+        bc_sample_identity=sample.bc_sample_identity,
+        trajectory_record_id=sample.trajectory_record_id,
+        episode_semantic_id=sample.episode_semantic_id,
+        public_semantic_decision_id=sample.public_semantic_decision_id,
+        model_input_identity=sample.model_input_identity,
+        selected_public_action_key=sample.selected_public_action_key,
+        partition="train",
+        candidate_ordinal=sample.candidate_ordinal,
+        ordered_candidate_domain_identity=sample.ordered_candidate_domain_identity,
+        state_rows=(), candidate_rows=(), routing_keys=(),
+    )):
+        raise CodecError("authority BC sample identity is not canonical")
+
+
+def canonical_corpus_authority_bytes(
+    authority: CorpusAdmissionAuthorityV1,
+) -> bytes:
+    _validate_prefixed_digest(authority.expected_artifact_identity,
+                              CORPUS_ARTIFACT_ID_PREFIX,
+                              "authority expected corpus artifact identity")
+    _validate_lower_hex_digest(authority.source_dataset_identity,
+                               "authority source dataset identity")
+    _validate_prefixed_digest(authority.split_identity, SPLIT_IDENTITY_PREFIX,
+                              "authority split identity")
+    _validate_prefixed_digest(authority.card_vocabulary_identity,
+                              "model_card_vocabulary.v1.",
+                              "authority vocabulary identity")
+    split_groups = (
+        tuple(authority.train_episode_ids),
+        tuple(authority.validation_episode_ids),
+        tuple(authority.test_episode_ids),
+    )
+    for group in split_groups:
+        if tuple(group) != tuple(sorted(set(group))):
+            raise CodecError("authority split episode identities are not sorted and unique")
+        for episode in group:
+            _validate_lower_hex_digest(episode, "authority split episode identity")
+    expected_split = split_identity(authority.source_dataset_identity, *split_groups)
+    if expected_split != authority.split_identity:
+        raise CodecError("authority split identity does not match its episode vectors")
+    if tuple(sample.bc_sample_identity for sample in authority.source_samples) != tuple(
+        sorted(sample.bc_sample_identity for sample in authority.source_samples)
+    ):
+        raise CodecError("authority source samples are not in canonical order")
+    if len({sample.bc_sample_identity for sample in authority.source_samples}) != len(authority.source_samples):
+        raise CodecError("authority source samples are duplicated")
+    for sample in authority.source_samples:
+        _validate_source_sample_authority(sample)
+    out = [pack_string(CORPUS_AUTHORITY_SCHEMA_ID),
+           pack_string(authority.expected_artifact_identity),
+           pack_string(authority.source_dataset_identity),
+           pack_string(authority.split_identity),
+           pack_string(authority.card_vocabulary_identity),
+           _string_vector(split_groups[0]), _string_vector(split_groups[1]),
+           _string_vector(split_groups[2]), pack_u32(len(authority.source_samples))]
+    for sample in authority.source_samples:
+        out.extend((pack_string(sample.bc_sample_identity),
+                    pack_string(sample.trajectory_record_id),
+                    pack_string(sample.episode_semantic_id),
+                    pack_string(sample.public_semantic_decision_id),
+                    pack_string(sample.model_input_identity),
+                    pack_string(sample.selected_public_action_key),
+                    pack_u32(sample.candidate_ordinal),
+                    pack_string(sample.ordered_candidate_domain_identity),
+                    _optional_string(sample.public_candidate_domain_digest),
+                    pack_u8(sample.perspective_player),
+                    pack_u64(sample.decision_index)))
+    return b"".join(out)
+
+
+def encode_corpus_authority_artifact(
+    authority: CorpusAdmissionAuthorityV1,
+) -> bytes:
+    body = canonical_corpus_authority_bytes(authority)
+    return pack_string(CORPUS_AUTHORITY_ID_PREFIX + hashlib.sha256(body).hexdigest()) + body
+
+
+def decode_corpus_authority_artifact(
+    artifact: bytes,
+) -> CorpusAdmissionAuthorityV1:
+    reader = _Reader(artifact)
+    declared_identity = reader.string()
+    body = reader.data[reader.offset:]
+    if declared_identity != CORPUS_AUTHORITY_ID_PREFIX + hashlib.sha256(body).hexdigest():
+        raise CodecError("corpus authority content digest mismatch")
+    body_reader = _Reader(body)
+    if body_reader.string() != CORPUS_AUTHORITY_SCHEMA_ID:
+        raise CodecError("unknown corpus authority schema")
+    expected_artifact_identity = body_reader.string()
+    source_dataset_identity = body_reader.string()
+    split_identity_value = body_reader.string()
+    card_vocabulary_identity = body_reader.string()
+    groups = []
+    for _ in range(3):
+        groups.append(tuple(body_reader.string() for _ in range(body_reader.u32())))
+    samples = []
+    for _ in range(body_reader.u32()):
+        bc_sample_identity_value = body_reader.string()
+        trajectory_record_id = body_reader.string()
+        episode_semantic_id = body_reader.string()
+        public_decision_id = body_reader.string()
+        model_input_identity_value = body_reader.string()
+        selected_key = body_reader.string()
+        ordinal = body_reader.u32()
+        domain_identity = body_reader.string()
+        phase5_domain_digest = body_reader.optional_string()
+        perspective = body_reader.u8()
+        decision_index = body_reader.u64()
+        samples.append(CorpusSourceSampleAuthorityV1(
+            bc_sample_identity=bc_sample_identity_value,
+            trajectory_record_id=trajectory_record_id,
+            episode_semantic_id=episode_semantic_id,
+            public_semantic_decision_id=public_decision_id,
+            model_input_identity=model_input_identity_value,
+            selected_public_action_key=selected_key,
+            candidate_ordinal=ordinal,
+            ordered_candidate_domain_identity=domain_identity,
+            public_candidate_domain_digest=phase5_domain_digest,
+            perspective_player=perspective,
+            decision_index=decision_index,
+        ))
+    if not body_reader.done():
+        raise CodecError("corpus authority has trailing bytes")
+    authority = CorpusAdmissionAuthorityV1(
+        expected_artifact_identity=expected_artifact_identity,
+        source_dataset_identity=source_dataset_identity,
+        split_identity=split_identity_value,
+        card_vocabulary_identity=card_vocabulary_identity,
+        train_episode_ids=groups[0],
+        validation_episode_ids=groups[1],
+        test_episode_ids=groups[2],
+        source_samples=tuple(samples),
+    )
+    if canonical_corpus_authority_bytes(authority) != body:
+        raise CodecError("corpus authority is not canonical")
+    if (CORPUS_AUTHORITY_ID_PREFIX + hashlib.sha256(body).hexdigest()) != declared_identity:
+        raise CodecError("corpus authority identity is not canonical")
+    return authority
+
+
 def admit_corpus_artifact(
     artifact: bytes,
     authority: CorpusAdmissionAuthorityV1,
@@ -1290,6 +1549,7 @@ def admit_corpus_artifact(
     trusted C++ producer and Task-2 path.
     """
 
+    canonical_corpus_authority_bytes(authority)
     corpus = decode_corpus_artifact(artifact)
     actual_artifact_identity = derived_corpus_content_identity(
         canonical_corpus_bytes(corpus)
@@ -1360,6 +1620,7 @@ class InferenceRequestV1:
     checkpoint_identity: str
     model_input_identity: str
     ordered_candidate_domain_identity: str
+    numeric_input_identity: str
     public_candidate_domain_digest: Optional[str]
     public_semantic_decision_id: Optional[str]
     perspective_player: int
@@ -1372,6 +1633,23 @@ class InferenceRequestV1:
 def canonical_inference_request_bytes(request: InferenceRequestV1) -> bytes:
     if request.schema_id != INFERENCE_REQUEST_SCHEMA_ID:
         raise CodecError("unknown inference request schema")
+    _validate_prefixed_digest(request.checkpoint_identity,
+                              CHECKPOINT_ID_PREFIX,
+                              "inference checkpoint identity")
+    _validate_prefixed_digest(request.model_input_identity,
+                              "model_input.v1.",
+                              "inference model-input identity")
+    _validate_prefixed_digest(request.numeric_input_identity,
+                              NUMERIC_MODEL_INPUT_ID_PREFIX,
+                              "inference numeric model-input identity")
+    _validate_ordered_domain_identity(request.ordered_candidate_domain_identity,
+                                      "inference ordered domain identity")
+    if request.public_candidate_domain_digest is not None:
+        _validate_lower_hex_digest(request.public_candidate_domain_digest,
+                                   "inference Phase-5 domain digest")
+    if request.public_semantic_decision_id is not None:
+        _validate_lower_hex_digest(request.public_semantic_decision_id,
+                                   "inference public decision identity")
     if request.perspective_player not in (0, 1):
         raise CodecError("invalid inference perspective")
     if request.decision_index < 0:
@@ -1379,6 +1657,7 @@ def canonical_inference_request_bytes(request: InferenceRequestV1) -> bytes:
     return b"".join((pack_string(request.schema_id), pack_string(request.checkpoint_identity),
                      pack_string(request.model_input_identity),
                      pack_string(request.ordered_candidate_domain_identity),
+                     pack_string(request.numeric_input_identity),
                      _optional_string(request.public_semantic_decision_id),
                      pack_u8(request.perspective_player), pack_u64(request.decision_index)))
 
@@ -1395,6 +1674,7 @@ def make_inference_request(
         checkpoint_identity=checkpoint_identity,
         model_input_identity=model_input.model_input_identity,
         ordered_candidate_domain_identity=model_input.ordered_candidate_domain_identity,
+        numeric_input_identity=model_input.numeric_input_identity,
         public_candidate_domain_digest=model_input.public_candidate_domain_digest,
         public_semantic_decision_id=model_input.public_semantic_decision_id,
         perspective_player=model_input.perspective_player,

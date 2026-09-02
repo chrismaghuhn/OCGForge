@@ -14,14 +14,16 @@ class Task4ACorpusTests(unittest.TestCase):
         self.assertIsNotNone(probe, "corpus probe path is required")
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "smoke-corpus.p6c"
+            authority_output = Path(directory) / "smoke-corpus.authority.p6a"
             completed = subprocess.run(
-                [str(probe), "--output", str(output)],
+                [str(probe), "--output", str(output), "--authority", str(authority_output)],
                 check=False,
                 capture_output=True,
                 text=True,
             )
             self.assertEqual(completed.returncode, 0, completed.stderr)
             artifact = output.read_bytes()
+            authority = codec.decode_corpus_authority_artifact(authority_output.read_bytes())
             corpus = codec.decode_corpus_artifact(artifact)
             self.assertEqual(
                 corpus.derivation_contract_identity,
@@ -56,24 +58,9 @@ class Task4ACorpusTests(unittest.TestCase):
                 self.assertTrue(all(len(row) == codec.STATE_ROW_WIDTH for row in sample.state_rows))
                 self.assertTrue(all(len(row) == codec.CANDIDATE_ROW_WIDTH for row in sample.candidate_rows))
 
-            train = tuple(value for value in corpus.episode_ids
-                          if codec.partition_for_episode(value) == "train")
-            validation = tuple(value for value in corpus.episode_ids
-                               if codec.partition_for_episode(value) == "validation")
-            test = tuple(value for value in corpus.episode_ids
-                         if codec.partition_for_episode(value) == "test")
-            authority = codec.CorpusAdmissionAuthorityV1(
-                expected_artifact_identity=codec.derived_corpus_content_identity(
-                    codec.canonical_corpus_bytes(corpus)
-                ),
-                source_dataset_identity=corpus.source_dataset_identity,
-                split_identity=corpus.split_identity,
-                card_vocabulary_identity=corpus.card_vocabulary_identity,
-                train_episode_ids=train,
-                validation_episode_ids=validation,
-                test_episode_ids=test,
-                source_samples=tuple(codec.source_sample_authority(value)
-                                      for value in corpus.samples),
+            self.assertEqual(
+                authority.expected_artifact_identity,
+                codec.derived_corpus_content_identity(codec.canonical_corpus_bytes(corpus)),
             )
             self.assertEqual(codec.admit_corpus_artifact(artifact, authority), corpus)
 
