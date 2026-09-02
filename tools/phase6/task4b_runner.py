@@ -17,9 +17,20 @@ from . import task4_codec as codec
 class Task4BSmokeError(RuntimeError):
     """Raised when a Task-4B runner invariant cannot be established."""
 
-    def __init__(self, code: str, message: str) -> None:
+    def __init__(
+        self,
+        code: str,
+        message: str,
+        *,
+        report: "Task4BExecutionReportV1 | None" = None,
+    ) -> None:
         super().__init__(message)
         self.code = code
+        self.report = report
+
+    @property
+    def report_json(self) -> str:
+        return self.report.to_json() if self.report is not None else str(self)
 
 
 @dataclasses.dataclass

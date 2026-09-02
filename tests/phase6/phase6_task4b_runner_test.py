@@ -24,6 +24,11 @@ class _FakeOptimizer:
             raise RuntimeError("synthetic optimizer failure")
 
 
+class _SyntheticReport:
+    def to_json(self) -> str:
+        return '{"schema_id":"synthetic"}'
+
+
 def _sample(identity_suffix: str, partition: str, action_suffix: str) -> codec.CorpusSampleV1:
     action_key = f"public_action.v1.{action_suffix}"
     sample = codec.CorpusSampleV1(
@@ -47,6 +52,20 @@ def _sample(identity_suffix: str, partition: str, action_suffix: str) -> codec.C
 
 
 class Task4BRunnerTests(unittest.TestCase):
+    def test_smoke_error_report_json_uses_fallback_or_attached_report(self):
+        fallback = runner.Task4BSmokeError("SYNTHETIC", "fallback message")
+        self.assertIsNone(fallback.report)
+        self.assertEqual(fallback.report_json, str(fallback))
+
+        report = _SyntheticReport()
+        attached = runner.Task4BSmokeError(
+            "SYNTHETIC",
+            "attached message",
+            report=report,
+        )
+        self.assertIs(attached.report, report)
+        self.assertEqual(attached.report_json, report.to_json())
+
     def test_step_counter_marks_only_successful_optimizer_steps(self):
         counter = runner._SuccessfulStepCounter()
         optimizer = _FakeOptimizer(raises=False)
