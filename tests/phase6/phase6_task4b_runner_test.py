@@ -305,6 +305,7 @@ class Task4BRunnerTests(unittest.TestCase):
              mock.patch.object(runner, "_execution_report_preflight_fields", return_value={}), \
              mock.patch.object(runner, "_finalize_task4b_artifacts", return_value=_finalization_stub()), \
              mock.patch.object(runner, "_write_smoke_artifacts"), \
+             mock.patch.object(runner, "_write_execution_report"), \
              mock.patch.object(codec, "canonical_training_run_manifest_bytes", return_value=b"manifest"), \
              mock.patch.object(codec, "canonical_smoke_evidence_bytes", return_value=b"evidence"):
             result = runner.run_task4b_smoke(
@@ -351,6 +352,7 @@ class Task4BRunnerTests(unittest.TestCase):
              mock.patch.object(runner, "_execution_report_preflight_fields", return_value={}), \
              mock.patch.object(runner, "_finalize_task4b_artifacts", return_value=_finalization_stub()), \
              mock.patch.object(runner, "_write_smoke_artifacts"), \
+             mock.patch.object(runner, "_write_execution_report"), \
              mock.patch.object(codec, "canonical_training_run_manifest_bytes", return_value=b"manifest"), \
              mock.patch.object(codec, "canonical_smoke_evidence_bytes", return_value=b"evidence"):
             result = runner.run_task4b_smoke(
@@ -531,6 +533,70 @@ class Task4BRunnerTests(unittest.TestCase):
         self.assertEqual(raised.exception.actual_optimizer_steps, 0)
         for key, value in runner._execution_report_preflight_fields(preflight).items():
             self.assertEqual(state.report.to_dict()[key], value)
+
+    def test_post_training_preflight_failure_preserves_reached_report_facts(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            output_dir = root / "output"
+            source_root = root / "source"
+            probe = source_root / "build" / "phase6_task4_corpus_probe.exe"
+            admitted = _admitted_corpus((_sample("a" * 64, "train", "00"),))
+            preflight = _attested_preflight()
+            training_result = _training_result_stub()
+            training_result.actual_optimizer_steps = 500
+            training_result.gpu_memory_before = 101
+            training_result.gpu_memory_peak = 202
+            training_result.gpu_memory_after = 111
+            training_result.initial_loss = 3.5
+            training_result.final_loss = 2.5
+            finalization_failure = task4_cuda.CudaPreflightError(
+                "INVALID_SMOKE_EVIDENCE",
+                "synthetic post-training preflight failure",
+            )
+
+            def complete_training(_ordered_samples, *, report_state):
+                report_state.update(
+                    **runner._execution_report_preflight_fields(preflight),
+                    actual_optimizer_steps=500,
+                    gpu_memory_before=101,
+                    gpu_memory_peak=202,
+                    gpu_memory_after=111,
+                    initial_loss=3.5,
+                    final_loss=2.5,
+                )
+                return training_result
+
+            with mock.patch.object(runner, "_canonical_source_root", return_value=source_root), \
+                 mock.patch.object(runner, "_verify_clean_h_exec", return_value="b" * 40), \
+                 mock.patch.object(runner, "_build_and_attest_probe", return_value=(probe, "a" * 64)), \
+                 mock.patch.object(runner, "_run_authoritative_corpus_probe", return_value=admitted), \
+                 mock.patch.object(runner, "_run_cuda_training", side_effect=complete_training), \
+                 mock.patch.object(runner, "_finalize_task4b_artifacts", side_effect=finalization_failure):
+                with self.assertRaises(task4_cuda.CudaPreflightError) as raised:
+                    runner.run_task4b_smoke(
+                        build_dir=source_root / "build",
+                        output_dir=output_dir,
+                    )
+
+            self.assertIs(raised.exception, finalization_failure)
+            report = json.loads(
+                (output_dir / "task4b-execution-report.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(report["actual_optimizer_steps"], 500)
+            for key, value in runner._execution_report_preflight_fields(preflight).items():
+                self.assertEqual(report[key], value)
+            self.assertEqual(report["GPU_MEMORY_BEFORE"], 101)
+            self.assertEqual(report["GPU_MEMORY_PEAK"], 202)
+            self.assertEqual(report["GPU_MEMORY_AFTER"], 111)
+            self.assertEqual(report["initial_loss"], 3.5)
+            self.assertEqual(report["final_loss"], 2.5)
+            self.assertEqual(report["error_code"], "INVALID_SMOKE_EVIDENCE")
+            self.assertFalse(report["SMOKE_PASS"])
+            self.assertFalse(report["TASK4B_PASS"])
+            self.assertIsNone(report["checkpoint_identity"])
+            self.assertIsNone(report["smoke_evidence_identity"])
 
 
     def test_adam_configuration_is_explicit_and_frozen(self):
@@ -906,6 +972,103 @@ class Task4BRunnerTests(unittest.TestCase):
             self.assertFalse(report["TASK4B_PASS"])
             self.assertIsNone(report["checkpoint_identity"])
             self.assertIsNone(report["smoke_evidence_identity"])
+
+    def test_any_smoke_publication_failure_persists_failure_semantics(self):
+        publication_paths = (
+            "corpus.p6c",
+            "corpus.authority.p6a",
+            "checkpoint.p6k",
+            "training-run-manifest.p6m",
+            "smoke-evidence.p6e",
+            "completion-receipt.json",
+            "task4b-execution-report.json",
+        )
+        for failure_name in publication_paths:
+            with self.subTest(failure_name=failure_name), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                output_dir = root / "output"
+                source_root = root / "source"
+                probe = source_root / "build" / "phase6_task4_corpus_probe.exe"
+                admitted = _admitted_corpus((_sample("a" * 64, "train", "00"),))
+                preflight = _attested_preflight()
+                training_result = _training_result_stub()
+                training_result.actual_optimizer_steps = 500
+                training_result.gpu_memory_before = 101
+                training_result.gpu_memory_peak = 202
+                training_result.gpu_memory_after = 111
+                training_result.initial_loss = 3.5
+                training_result.final_loss = 2.5
+                finalization = _finalization_stub()
+                finalization.exported_checkpoint.artifact_bytes = b"checkpoint"
+                receipt = finalization.completion_receipt
+                receipt.checkpoint_identity = finalization.checkpoint_identity
+                receipt.model_input_identity = "model_input.v1." + "4" * 64
+                receipt.ordered_candidate_domain_identity = "candidate_domain.v1." + "5" * 64
+                receipt.request_identity = "inference_request.v1." + "6" * 64
+                receipt.response_identity = "inference_response.v1." + "7" * 64
+                receipt.fresh_checkpoint_reload = True
+                receipt.deterministic_frozen_inference = True
+
+                def complete_training(_ordered_samples, *, report_state):
+                    report_state.update(
+                        **runner._execution_report_preflight_fields(preflight),
+                        actual_optimizer_steps=500,
+                        gpu_memory_before=101,
+                        gpu_memory_peak=202,
+                        gpu_memory_after=111,
+                        initial_loss=3.5,
+                        final_loss=2.5,
+                    )
+                    return training_result
+
+                original_write = runner._write_atomic_bytes
+                report_write_attempts = 0
+
+                def fail_publication(path, data):
+                    nonlocal report_write_attempts
+                    path = Path(path)
+                    if path.name == failure_name:
+                        if failure_name != "task4b-execution-report.json":
+                            raise OSError(f"synthetic failure writing {failure_name}")
+                        report_write_attempts += 1
+                        if report_write_attempts == 1:
+                            raise OSError("synthetic failure writing success report")
+                    return original_write(path, data)
+
+                with mock.patch.object(runner, "_canonical_source_root", return_value=source_root), \
+                     mock.patch.object(runner, "_verify_clean_h_exec", return_value="b" * 40), \
+                     mock.patch.object(runner, "_build_and_attest_probe", return_value=(probe, "a" * 64)), \
+                     mock.patch.object(runner, "_run_authoritative_corpus_probe", return_value=admitted), \
+                     mock.patch.object(runner, "_run_cuda_training", side_effect=complete_training), \
+                     mock.patch.object(runner, "_finalize_task4b_artifacts", return_value=finalization), \
+                     mock.patch.object(codec, "canonical_training_run_manifest_bytes", return_value=b"manifest"), \
+                     mock.patch.object(codec, "canonical_smoke_evidence_bytes", return_value=b"evidence"), \
+                     mock.patch.object(runner, "_write_atomic_bytes", side_effect=fail_publication):
+                    with self.assertRaises(runner.Task4BSmokeError):
+                        runner.run_task4b_smoke(
+                            build_dir=source_root / "build",
+                            output_dir=output_dir,
+                        )
+
+                report = json.loads(
+                    (output_dir / "task4b-execution-report.json").read_text(
+                        encoding="utf-8"
+                    )
+                )
+                self.assertEqual(report["actual_optimizer_steps"], 500)
+                for key, value in runner._execution_report_preflight_fields(preflight).items():
+                    self.assertEqual(report[key], value)
+                self.assertEqual(report["GPU_MEMORY_BEFORE"], 101)
+                self.assertEqual(report["GPU_MEMORY_PEAK"], 202)
+                self.assertEqual(report["GPU_MEMORY_AFTER"], 111)
+                self.assertEqual(report["initial_loss"], 3.5)
+                self.assertEqual(report["final_loss"], 2.5)
+                self.assertFalse(report["SMOKE_PASS"])
+                self.assertFalse(report["TASK4B_PASS"])
+                self.assertIsNone(report["checkpoint_identity"])
+                self.assertIsNone(report["smoke_evidence_identity"])
+                if failure_name == "task4b-execution-report.json":
+                    self.assertEqual(report_write_attempts, 2)
 
     def test_authoritative_probe_rejects_wrong_expected_hash_before_invocation(self):
         with tempfile.TemporaryDirectory() as directory:

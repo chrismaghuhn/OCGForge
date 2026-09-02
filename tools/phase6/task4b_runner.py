@@ -886,7 +886,6 @@ def _write_smoke_artifacts(
     output_dir: Path,
     run_result: _Task4BPreparationResult,
     finalization: Task4BFinalizationV1,
-    report: Task4BExecutionReportV1,
 ) -> None:
     output_dir = output_dir.resolve()
     corpus = run_result.admitted_corpus
@@ -913,9 +912,42 @@ def _write_smoke_artifacts(
         output_dir / "completion-receipt.json",
         _completion_receipt_projection(finalization.completion_receipt),
     )
+
+
+def _write_execution_report(
+    output_dir: Path,
+    report: Task4BExecutionReportV1,
+) -> None:
     _write_atomic_bytes(
         output_dir / "task4b-execution-report.json",
         report.to_json().encode("utf-8"),
+    )
+
+
+def _record_failure(
+    report_state: _ExecutionReportState,
+    *,
+    error_code: str,
+    error_optimizer_steps: int = 0,
+) -> None:
+    """Retain reached facts while restoring the report's failure semantics."""
+
+    if (
+        not isinstance(error_optimizer_steps, int)
+        or isinstance(error_optimizer_steps, bool)
+        or error_optimizer_steps < 0
+    ):
+        error_optimizer_steps = 0
+    report_state.update(
+        error_code=error_code,
+        actual_optimizer_steps=max(
+            report_state.report.actual_optimizer_steps,
+            error_optimizer_steps,
+        ),
+        smoke_pass=False,
+        task4b_pass=False,
+        checkpoint_identity=None,
+        smoke_evidence_identity=None,
     )
 
 
@@ -1188,6 +1220,11 @@ def run_task4b_smoke(
             training_result=training_result,
         )
         finalization = _finalize_task4b_artifacts(preparation, training_result)
+        _write_smoke_artifacts(
+            requested_output_dir,
+            preparation,
+            finalization,
+        )
         report_state.update(
             smoke_pass=True,
             task4b_pass=False,
@@ -1195,12 +1232,7 @@ def run_task4b_smoke(
             smoke_evidence_identity=finalization.smoke_evidence_identity,
         )
         report = report_state.report
-        _write_smoke_artifacts(
-            requested_output_dir,
-            preparation,
-            finalization,
-            report,
-        )
+        _write_execution_report(requested_output_dir, report)
         return Task4BSmokeRunResult(
             report=report,
             report_json=report.to_json(),
@@ -1216,31 +1248,24 @@ def run_task4b_smoke(
             completion_receipt=finalization.completion_receipt,
         )
     except task4_cuda.CudaPreflightError as error:
-        report_state.update(
+        _record_failure(
+            report_state,
             error_code=error.code,
-            actual_optimizer_steps=error.actual_optimizer_steps,
+            error_optimizer_steps=error.actual_optimizer_steps,
         )
-        _write_atomic_bytes(
-            requested_output_dir / "task4b-execution-report.json",
-            report_state.report.to_json().encode("utf-8"),
-        )
+        _write_execution_report(requested_output_dir, report_state.report)
         raise
     except Task4BTrainingError as error:
-        report_state.update(
+        _record_failure(
+            report_state,
             error_code=error.code,
-            actual_optimizer_steps=error.actual_optimizer_steps,
+            error_optimizer_steps=error.actual_optimizer_steps,
         )
-        _write_atomic_bytes(
-            requested_output_dir / "task4b-execution-report.json",
-            report_state.report.to_json().encode("utf-8"),
-        )
+        _write_execution_report(requested_output_dir, report_state.report)
         raise
     except Task4BSmokeError as error:
-        report_state.update(error_code=error.code)
-        _write_atomic_bytes(
-            requested_output_dir / "task4b-execution-report.json",
-            report_state.report.to_json().encode("utf-8"),
-        )
+        _record_failure(report_state, error_code=error.code)
+        _write_execution_report(requested_output_dir, report_state.report)
         if error.report is not None:
             raise
         raise Task4BSmokeError(
@@ -1249,13 +1274,11 @@ def run_task4b_smoke(
             report=report_state.report,
         ) from error
     except (codec.CodecError, task4_inference.Task4InferenceError, OSError, RuntimeError, TypeError, ValueError) as error:
-        report_state.update(
+        _record_failure(
+            report_state,
             error_code=getattr(error, "code", "TASK4B_FAILED"),
         )
-        _write_atomic_bytes(
-            requested_output_dir / "task4b-execution-report.json",
-            report_state.report.to_json().encode("utf-8"),
-        )
+        _write_execution_report(requested_output_dir, report_state.report)
         raise Task4BSmokeError(
             report_state.report.error_code or "TASK4B_FAILED",
             str(error),
