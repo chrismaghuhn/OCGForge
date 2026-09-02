@@ -274,11 +274,14 @@ Create temporary CMakeCache.txt fixtures containing:
 CMAKE_HOME_DIRECTORY:INTERNAL=C:/other/source
 ~~~
 
-and the canonical source path. Assert the first raises STALE_BUILD_SOURCE and the
-second is accepted. Assert a probe path outside the resolved build directory
-raises PROBE_OUTSIDE_BUILD and two matching target files raise
-AMBIGUOUS_PROBE_BINARY. Hash a one-byte temporary executable fixture and
-assert the returned value equals hashlib.sha256(b"x").hexdigest().
+and the canonical source path. Also vary
+CMAKE_GENERATOR:INTERNAL=Ninja to Visual Studio and
+CMAKE_BUILD_TYPE:STRING=Release to Debug. Assert that a different source,
+generator, or build type raises STALE_BUILD_SOURCE and that the exact canonical
+source/Ninja/Release combination is accepted. Assert a probe path outside the
+resolved build directory raises PROBE_OUTSIDE_BUILD and two matching target
+files raise AMBIGUOUS_PROBE_BINARY. Hash a one-byte temporary executable
+fixture and assert the returned value equals hashlib.sha256(b"x").hexdigest().
 
 - [ ] **Step 3: Implement source-root and clean-HEAD verification.**
 
@@ -337,17 +340,25 @@ def run_task4b_smoke(
 
 It must not accept a probe executable path, an optimizer-step count, memory
 values, identities, loss values, or completion flags. Before using the build
-directory, inspect CMakeCache.txt. If its normalized CMAKE_HOME_DIRECTORY
-exists and differs from the canonical source root, raise STALE_BUILD_SOURCE.
-If no cache exists, configure it with source_root and build_dir bound to the
-validated paths:
+directory, inspect CMakeCache.txt. If it exists, require all three values to
+match the canonical invocation:
+
+~~~text
+CMAKE_HOME_DIRECTORY == canonical source_root
+CMAKE_GENERATOR == Ninja
+CMAKE_BUILD_TYPE == Release
+~~~
+
+Any mismatch raises STALE_BUILD_SOURCE. If no cache exists, configure it with
+source_root and build_dir bound to the validated paths:
 
 ~~~text
 cmake -S source_root -B build_dir -G Ninja -DCMAKE_BUILD_TYPE=Release
 ~~~
 
-Always use the canonical source root in the configure command. Then build only
-the accepted target:
+Always use the canonical source root in the configure command. After
+configuration, parse CMakeCache.txt again and enforce the same three values.
+Then build only the accepted target:
 
 ~~~text
 cmake --build build_dir --target phase6_task4_corpus_probe --parallel 1
@@ -591,6 +602,22 @@ H_exec
 corpus_probe_sha256
 corpus_probe_source_commit
 cuda_preflight_identity
+cuda_available
+framework_version
+torch_cuda_version_reported
+device_type
+device_index
+gpu_name
+capability_major
+capability_minor
+device_count
+cpu_fallback
+backend_identity
+distributed_strategy
+world_size
+deterministic_algorithms
+deterministic_warn_only
+float32_matmul_precision
 source_dataset_identity
 dataset_split_identity
 card_vocabulary_identity
@@ -612,6 +639,8 @@ Patch os.replace, write a temporary report into a temporary directory, and
 assert the final report exists while the temporary file does not. Assert a
 failure report has SMOKE_PASS == false, TASK4B_PASS == false, null
 checkpoint/evidence identities, and the internally captured step count. Assert
+that every persisted CUDA/PyTorch fact is null before an attested preflight and
+equals the attested preflight after it. Assert
 that a successful smoke-only report has SMOKE_PASS == true but TASK4B_PASS ==
 false until the post-smoke verifier runs. The test must not manually edit a
 generated report.
@@ -686,7 +715,10 @@ evidence = task4_cuda.smoke_evidence_from_cuda_preflight(
 
 Validate the canonical manifest and smoke-evidence bytes. The runner owns every
 argument above; neither the CLI nor a caller may replace one. GPU memory and
-execution provenance remain outside checkpoint semantic identity.
+execution provenance remain outside checkpoint semantic identity. When
+preflight succeeds, copy every CUDA/PyTorch fact directly from the attested
+CudaPreflightResultV1 and its ExecutionProvenanceV1 into the execution report;
+before preflight, keep those report fields null.
 
 - [ ] **Step 5: Implement Task4BExecutionReportV1 and atomic publication.**
 
@@ -699,6 +731,22 @@ class Task4BExecutionReportV1:
     corpus_probe_sha256: str | None
     corpus_probe_source_commit: str | None
     cuda_preflight_identity: str | None
+    cuda_available: bool | None
+    framework_version: str | None
+    torch_cuda_version_reported: str | None
+    device_type: str | None
+    device_index: int | None
+    gpu_name: str | None
+    capability_major: int | None
+    capability_minor: int | None
+    device_count: int | None
+    cpu_fallback: bool | None
+    backend_identity: str | None
+    distributed_strategy: str | None
+    world_size: int | None
+    deterministic_algorithms: bool | None
+    deterministic_warn_only: bool | None
+    float32_matmul_precision: str | None
     source_dataset_identity: str | None
     dataset_split_identity: str | None
     card_vocabulary_identity: str | None
@@ -725,6 +773,22 @@ class Task4BExecutionReportV1:
             "corpus_probe_sha256": self.corpus_probe_sha256,
             "corpus_probe_source_commit": self.corpus_probe_source_commit,
             "cuda_preflight_identity": self.cuda_preflight_identity,
+            "cuda_available": self.cuda_available,
+            "framework_version": self.framework_version,
+            "torch_cuda_version_reported": self.torch_cuda_version_reported,
+            "device_type": self.device_type,
+            "device_index": self.device_index,
+            "gpu_name": self.gpu_name,
+            "capability_major": self.capability_major,
+            "capability_minor": self.capability_minor,
+            "device_count": self.device_count,
+            "cpu_fallback": self.cpu_fallback,
+            "backend_identity": self.backend_identity,
+            "distributed_strategy": self.distributed_strategy,
+            "world_size": self.world_size,
+            "deterministic_algorithms": self.deterministic_algorithms,
+            "deterministic_warn_only": self.deterministic_warn_only,
+            "float32_matmul_precision": self.float32_matmul_precision,
             "source_dataset_identity": self.source_dataset_identity,
             "dataset_split_identity": self.dataset_split_identity,
             "card_vocabulary_identity": self.card_vocabulary_identity,
@@ -865,6 +929,10 @@ Assert both admitted-forward argv vectors use the exact probe path whose
 SHA-256 matches the execution report and that their probe-produced files are
 created below private temporary directories, never by overwriting the original
 Task4B corpus.p6c or corpus.authority.p6a.
+Construct the preflight provenance object from every persisted CUDA/PyTorch
+fact, recompute codec.cuda_preflight_identity_for(codec.CudaPreflightFactsV1),
+and assert equality with the report's cuda_preflight_identity. Mutate each
+fact once and assert the verifier rejects the report before any acceptance gate.
 
 - [ ] **Step 3: Implement the fixed post-smoke verifier and result types.**
 
@@ -920,6 +988,22 @@ or authority files, and must never become training or DatasetManifest
 authority. It resolves the already-built probe beneath build_dir, hashes it,
 and verifies that its hash equals the execution report's corpus_probe_sha256
 before running the admitted-forward tests.
+
+Reconstruct codec.ExecutionProvenanceV1 from the report's persisted framework,
+CUDA, device, GPU, capability, backend, distributed, and deterministic fields;
+reconstruct codec.CudaPreflightFactsV1 from cuda_available and device_count;
+and require:
+
+~~~python
+codec.cuda_preflight_identity_for(facts) == report["cuda_preflight_identity"]
+~~~
+
+Also require cuda_available is true, cpu_fallback is false, device_type is
+cuda, device_index is 0, gpu_name is NVIDIA GeForce RTX 4060 Ti, device_count
+is at least 1, deterministic_algorithms is true,
+deterministic_warn_only is false, and float32_matmul_precision is highest.
+Any missing, mutated, or inconsistent fact fails closed before the first
+post-smoke gate.
 
 Before every fixed gate, call this source-integrity check with the H_exec read
 from the execution report:
@@ -1143,15 +1227,29 @@ cmake --build build/task4b-h-exec --target phase6_task4_corpus_probe --parallel 
 ~~~
 
 Before the probe build, the runner and the H_exec verification must assert that
-the resolved CMake cache CMAKE_HOME_DIRECTORY equals the canonical source root
-from git rev-parse --show-toplevel. If a pre-existing cache names any other
-source tree, stop and use a new build directory; do not reuse, delete, or
-repair an unrelated build tree.
+the resolved CMake cache has all of these values:
+
+~~~text
+CMAKE_HOME_DIRECTORY == canonical source root from git rev-parse --show-toplevel
+CMAKE_GENERATOR == Ninja
+CMAKE_BUILD_TYPE == Release
+~~~
+
+If a pre-existing cache names any other source tree, generator, or build type,
+stop and use a new build directory; do not reuse, delete, or repair an
+unrelated build tree.
 
 - [ ] **Step 2: Run all focused zero-step checks.**
 
-Run the new runner tests, all Task-4A Python tests with the built probe where
-required, and the accepted preflight test. Confirm that no command invokes
+Run both new Task-4B zero-step modules explicitly, then all Task-4A Python tests
+with the built probe where required, and the accepted preflight test:
+
+~~~text
+python -m unittest -v tests.phase6.phase6_task4b_runner_test
+python -m unittest -v tests.phase6.phase6_task4b_verification_test
+~~~
+
+Confirm that no command invokes
 task4b_cuda_smoke.py and no command performs an optimizer update. Then run:
 
 ~~~text
@@ -1175,7 +1273,9 @@ git status --porcelain --untracked-files=all
 
 The first output is the exact 40-character lowercase H_exec; the second is
 empty. Do not amend or change source after recording it. This exact SHA is the
-only accepted training_code_commit for the later smoke.
+only accepted training_code_commit for the later smoke. If the last
+zero-step test did not change any source, do not create an empty commit; the
+current HEAD is H_exec.
 
 - [ ] **Step 4: Push H_exec and stop.**
 
@@ -1207,7 +1307,26 @@ Require the recorded H_exec and empty status. The runner repeats the same
 checks internally before it builds the probe, so a caller cannot bypass the
 gate.
 
-- [ ] **Step 2: Run the runner exactly once.**
+- [ ] **Step 2: Build the complete later-verification tree before the smoke.**
+
+Before invoking the runner, configure and build the complete
+build/task4b-cuda-smoke tree from the verified H_exec source:
+
+~~~text
+cmake -S . -B build/task4b-cuda-smoke -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build/task4b-cuda-smoke --parallel 1
+~~~
+
+After configuration, require CMAKE_HOME_DIRECTORY to equal the canonical
+H_exec source root, CMAKE_GENERATOR to equal Ninja, and CMAKE_BUILD_TYPE to
+equal Release. If configuration or the full build fails, do not invoke the
+runner and do not start the smoke. Do not switch generators, use another
+source tree, or retry with changed configuration. This full build prepares all
+CTest executables required by the later verifier and consumes no optimizer
+step. The runner still rebuilds its probe target and hashes the exact binary
+that it executes.
+
+- [ ] **Step 3: Run the runner exactly once.**
 
 Use one command with no retry and no evidence-valued options:
 
@@ -1223,7 +1342,7 @@ steps, and enter the Task 9 failure-evidence branch. Do not run the post-smoke
 verifier for a failed smoke. Do not rerun with another build directory, seed,
 device, configuration, or backend.
 
-- [ ] **Step 3: On a successful run, validate the generated evidence in place.**
+- [ ] **Step 4: On a successful run, validate the generated evidence in place.**
 
 Require the generated report and artifacts to prove:
 
@@ -1367,6 +1486,8 @@ H_evidence_failure and stop with TASK4B_PASS=NO.
 - Clean H_exec verification before source/build/probe/preflight/optimizer:
   Tasks 2 and 7.
 - Canonical source root and stale CMake source rejection: Task 2, Steps 3–4.
+- Existing CMake cache must match source root, Ninja, and Release; the full
+  smoke build occurs before the one runner invocation: Tasks 2, 7, and 8.
 - Exact probe build, hash, source commit, and one invocation: Task 2, Steps 4–5.
 - The authoritative probe invocation occurs once, while post-smoke regression
   executions reuse the same hash in private temporary outputs: Tasks 2 and 5.
@@ -1379,6 +1500,8 @@ H_evidence_failure and stop with TASK4B_PASS=NO.
 - Canonical export, finalized manifest, completion receipt, two reloads, and
   repeated inference identity: Task 4.
 - Atomic report for both success and failure: Task 4, Steps 1 and 5.
+- Complete attested CUDA/PyTorch facts persist in the execution report and the
+  verifier recomputes cuda_preflight_identity: Tasks 4, 5, and 9.
 - CLI cannot supply step/memory/identity/completion claims: Task 6.
 - Post-smoke HEAD/source/untracked-output integrity before every gate and
   evidence commit: Tasks 5 and 9.
