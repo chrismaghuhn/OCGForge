@@ -17,6 +17,30 @@ inline constexpr std::string_view kPhase6BcCandidateScorerContractId =
 inline constexpr std::string_view kPhase6BcInferenceTiebreakContractId =
     "ocgforge.phase6.bc.inference_tiebreak.v1";
 
+// State-only encoded input. Candidate rows, routing keys, the candidate-domain
+// digest, and candidate ordinals are intentionally not representable here.
+inline constexpr std::string_view kPhase6BcStateInputSchemaId =
+    "ocgforge.phase6.bc_state_input.v1";
+
+struct Phase6BcStateInputV1 final {
+    std::string schema_id = std::string(kPhase6BcStateInputSchemaId);
+    std::string card_vocabulary_identity;
+    std::string public_observation_digest;
+    std::uint8_t perspective_player = 0;
+    std::uint64_t decision_index = 0;
+    std::vector<std::string> public_locator_table;
+    std::optional<std::uint16_t> public_observation_context_kind_code;
+    std::optional<std::uint8_t> public_observation_context_player;
+    std::vector<std::uint32_t> observation_context_reference_ordinals;
+    model::EncodedGlobals globals;
+    std::vector<model::EncodedZone> zones;
+    std::vector<model::EncodedEntity> entities;
+    std::vector<model::EncodedRelationship> relationships;
+    model::EncodedChainState chain;
+    std::vector<model::EncodedVisibleEvent> visible_events;
+    model::EncodedMatchContext match_context;
+};
+
 // These are callback-owned reference execution values. They have no
 // canonical semantic identity and do not prescribe a neural architecture.
 struct Phase6BcStateRepresentationV1 final {
@@ -43,7 +67,7 @@ struct Phase6BcCallbackResult final {
 
 using Phase6BcStateEncoderV1 =
     std::function<Phase6BcCallbackResult<Phase6BcStateRepresentationV1>(
-        const model::EncodedModelInputV1&)>;
+        const Phase6BcStateInputV1&)>;
 using Phase6BcCandidateEncoderV1 =
     std::function<Phase6BcCallbackResult<Phase6BcCandidateRepresentationV1>(
         const Phase6BcStateRepresentationV1&, const model::EncodedCandidate&)>;

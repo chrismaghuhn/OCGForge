@@ -4,7 +4,7 @@
 
 **Goal:** Add a framework-neutral Phase-6 reference seam that scores every supplied encoded candidate and resolves one deterministic existing public action key without implementing a neural network or selecting a training backend.
 
-**Architecture:** `ygo::phase6` will accept only an already validated `EncodedModelInputV1`. A state encoder produces an opaque reference representation, a candidate encoder receives each encoded candidate in source order without its routing key, and a candidate scoring function produces one reference execution score per row. A separate selection boundary validates exact cardinality and finite scores, then applies the frozen higher-score/bytewise-key tie rule against the input's unchanged routing sidecar.
+**Architecture:** `ygo::phase6` will accept only an already validated `EncodedModelInputV1`. The scorer derives a state-only encoded input that cannot represent candidate rows, routing keys, the candidate-domain digest, or candidate ordinals before invoking the state encoder. A candidate encoder receives each encoded candidate in source order without its routing key, and a candidate scoring function produces one reference execution score per row. A separate selection boundary validates exact cardinality and finite scores, then applies the frozen higher-score/bytewise-key tie rule against the input's unchanged routing sidecar.
 
 **Tech Stack:** Existing C++17 standard-library types and accepted `ygo::model` values. No PyTorch, JAX, NumPy, ML dependency, optimizer, checkpoint, or training code.
 
@@ -32,11 +32,21 @@ Expected result: the build fails because the new header and reference function d
 
 - [ ] **Step 3: Add the minimal framework-neutral public interface**
 
-Define `Phase6BcStateRepresentationV1` and `Phase6BcCandidateRepresentationV1` as callback-owned reference values containing only `std::vector<std::uint64_t>`. Define callback result wrappers with `std::optional<T>` and structured callback errors. Define:
+Define `Phase6BcStateInputV1` as a state-only encoded value containing the
+encoded perspective/context, globals, zones, entities, relationships, chain,
+visible events, match context, vocabulary identity, observation digest, and
+state-derived public locator data. The implementation must rebuild that
+locator table from state/context fields and remap state references, so a
+candidate-only locator cannot cross the seam. It must not define candidate
+rows, routing keys, candidate-domain digest, or candidate ordinal. Define
+`Phase6BcStateRepresentationV1` and `Phase6BcCandidateRepresentationV1` as
+callback-owned reference values containing only `std::vector<std::uint64_t>`.
+Define callback result wrappers with `std::optional<T>` and structured callback
+errors. Define:
 
     using Phase6BcStateEncoderV1 =
         std::function<Phase6BcCallbackResult<Phase6BcStateRepresentationV1>(
-            const model::EncodedModelInputV1&)>;
+            const Phase6BcStateInputV1&)>;
     using Phase6BcCandidateEncoderV1 =
         std::function<Phase6BcCallbackResult<Phase6BcCandidateRepresentationV1>(
             const Phase6BcStateRepresentationV1&,
@@ -135,6 +145,10 @@ Expected result: all capacity, malformed-output, finite-score, and tie tests pas
 - [ ] **Step 1: Add paired encoded-input equality coverage**
 
 Use two encoded inputs with identical accepted public fields, candidate rows, routing sidecars, and model-input source values but different private-only markers kept outside the encoded type. Assert byte identity and selected-key equality. The reference interface has no parameter or field for `CoreHost`, `PlayerObservation`, internal semantic keys, response bytes, continuation IDs, or hidden passcodes.
+
+Also include a candidate-only public locator in one encoded candidate and assert
+that the state callback receives only state/context locators with correctly
+remapped state ordinals.
 
 - [ ] **Step 2: Add a source inspection assertion**
 

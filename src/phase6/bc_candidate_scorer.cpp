@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <exception>
+#include <iterator>
 #include <limits>
 #include <stdexcept>
 #include <string>
@@ -51,6 +52,114 @@ void validate_capacity(const model::EncodedModelInputV1& encoded,
         *capacity < static_cast<std::uint64_t>(encoded.candidate_count())) {
         fail(Phase6BcScorerErrorCode::CandidateCapacityTooSmall);
     }
+}
+
+Phase6BcStateInputV1 state_input_from_encoded(
+    const model::EncodedModelInputV1& encoded) {
+    Phase6BcStateInputV1 state;
+    state.card_vocabulary_identity = encoded.card_vocabulary_identity;
+    state.public_observation_digest = encoded.public_observation_digest;
+    state.perspective_player = encoded.perspective_player;
+    state.decision_index = encoded.decision_index;
+    state.public_observation_context_kind_code =
+        encoded.public_observation_context_kind_code;
+    state.public_observation_context_player = encoded.public_observation_context_player;
+    state.observation_context_reference_ordinals =
+        encoded.observation_context_reference_ordinals;
+    state.globals = encoded.globals;
+    state.zones = encoded.zones;
+    state.entities = encoded.entities;
+    state.relationships = encoded.relationships;
+    state.chain = encoded.chain;
+    state.visible_events = encoded.visible_events;
+    state.match_context = encoded.match_context;
+
+    const auto collect_locator = [&encoded, &state](const std::uint32_t ordinal) {
+        if (ordinal >= encoded.public_locator_table.size()) {
+            fail(Phase6BcScorerErrorCode::InvalidEncodedModelInput);
+        }
+        state.public_locator_table.push_back(encoded.public_locator_table[ordinal]);
+    };
+    for (const auto ordinal : encoded.observation_context_reference_ordinals) {
+        collect_locator(ordinal);
+    }
+    for (const auto& entity : encoded.entities) {
+        collect_locator(entity.public_locator_ordinal);
+    }
+    for (const auto& relationship : encoded.relationships) {
+        collect_locator(relationship.source.public_locator_ordinal);
+        collect_locator(relationship.target.public_locator_ordinal);
+    }
+    for (const auto& link : encoded.chain.links) {
+        if (link.source.has_value()) {
+            collect_locator(link.source->public_locator_ordinal);
+        }
+        for (const auto& target : link.targets) {
+            collect_locator(target.public_locator_ordinal);
+        }
+    }
+    for (const auto& event : encoded.visible_events) {
+        if (event.public_locator_ordinal.has_value()) {
+            collect_locator(*event.public_locator_ordinal);
+        }
+        for (const auto ordinal : event.target_public_locator_ordinals) {
+            collect_locator(ordinal);
+        }
+    }
+    std::sort(state.public_locator_table.begin(), state.public_locator_table.end(),
+              [](const std::string& left, const std::string& right) {
+                  return byte_less(left, right);
+              });
+    state.public_locator_table.erase(
+        std::unique(state.public_locator_table.begin(), state.public_locator_table.end()),
+        state.public_locator_table.end());
+
+    const auto remap_locator = [&encoded, &state](const std::uint32_t ordinal) {
+        if (ordinal >= encoded.public_locator_table.size()) {
+            fail(Phase6BcScorerErrorCode::InvalidEncodedModelInput);
+        }
+        const auto& value = encoded.public_locator_table[ordinal];
+        const auto it = std::lower_bound(
+            state.public_locator_table.begin(), state.public_locator_table.end(), value,
+            [](const std::string& left, const std::string& right) {
+                return byte_less(left, right);
+            });
+        if (it == state.public_locator_table.end() || *it != value) {
+            fail(Phase6BcScorerErrorCode::InvalidEncodedModelInput);
+        }
+        return static_cast<std::uint32_t>(
+            std::distance(state.public_locator_table.begin(), it));
+    };
+    for (auto& ordinal : state.observation_context_reference_ordinals) {
+        ordinal = remap_locator(ordinal);
+    }
+    for (auto& entity : state.entities) {
+        entity.public_locator_ordinal = remap_locator(entity.public_locator_ordinal);
+    }
+    for (auto& relationship : state.relationships) {
+        relationship.source.public_locator_ordinal =
+            remap_locator(relationship.source.public_locator_ordinal);
+        relationship.target.public_locator_ordinal =
+            remap_locator(relationship.target.public_locator_ordinal);
+    }
+    for (auto& link : state.chain.links) {
+        if (link.source.has_value()) {
+            link.source->public_locator_ordinal =
+                remap_locator(link.source->public_locator_ordinal);
+        }
+        for (auto& target : link.targets) {
+            target.public_locator_ordinal = remap_locator(target.public_locator_ordinal);
+        }
+    }
+    for (auto& event : state.visible_events) {
+        if (event.public_locator_ordinal.has_value()) {
+            event.public_locator_ordinal = remap_locator(*event.public_locator_ordinal);
+        }
+        for (auto& ordinal : event.target_public_locator_ordinals) {
+            ordinal = remap_locator(ordinal);
+        }
+    }
+    return state;
 }
 
 Phase6BcScorerError make_error(const Phase6BcScorerErrorCode code) {
@@ -149,9 +258,10 @@ Phase6BcInferenceResult score_encoded_model_input_v1(
             fail(Phase6BcScorerErrorCode::MissingCandidateScoringFunction);
         }
 
+        const auto state_input = state_input_from_encoded(encoded);
         Phase6BcStateRepresentationV1 state;
         try {
-            const auto result = scorer.state_encoder(encoded);
+            const auto result = scorer.state_encoder(state_input);
             if (!result || !result.value.has_value()) {
                 fail(Phase6BcScorerErrorCode::StateEncoderFailure);
             }

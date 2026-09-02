@@ -4,10 +4,12 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include <iostream>
 #include <limits>
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -18,15 +20,48 @@ namespace {
 
 using ygo::environment::PublicActionKeyInput;
 using ygo::model::EncodedCandidate;
+using ygo::model::EncodedCardReference;
+using ygo::model::EncodedCurrentReference;
+using ygo::model::EncodedEntity;
 using ygo::model::EncodedModelInputV1;
 using ygo::phase6::Phase6BcCandidateRepresentationV1;
 using ygo::phase6::Phase6BcReferenceScorerV1;
 using ygo::phase6::Phase6BcScorerErrorCode;
+using ygo::phase6::Phase6BcStateInputV1;
 using ygo::phase6::Phase6BcStateRepresentationV1;
 
 void require(const bool condition, const std::string& message) {
     if (!condition) throw std::runtime_error(message);
 }
+
+template <typename T, typename = void>
+struct has_candidate_features final : std::false_type {};
+
+template <typename T>
+struct has_candidate_features<T, std::void_t<decltype(std::declval<T>().candidate_features)>>
+    final : std::true_type {};
+
+template <typename T, typename = void>
+struct has_routing_keys final : std::false_type {};
+
+template <typename T>
+struct has_routing_keys<T, std::void_t<decltype(std::declval<T>().routing_keys)>>
+    final : std::true_type {};
+
+template <typename T, typename = void>
+struct has_candidate_domain_digest final : std::false_type {};
+
+template <typename T>
+struct has_candidate_domain_digest<
+    T, std::void_t<decltype(std::declval<T>().public_candidate_domain_digest)>>
+    final : std::true_type {};
+
+template <typename T, typename = void>
+struct has_candidate_ordinal final : std::false_type {};
+
+template <typename T>
+struct has_candidate_ordinal<T, std::void_t<decltype(std::declval<T>().candidate_ordinal)>>
+    final : std::true_type {};
 
 std::string candidate_key(const std::uint32_t index) {
     PublicActionKeyInput key;
@@ -62,6 +97,78 @@ EncodedModelInputV1 encoded_input(const std::uint32_t candidate_count) {
     return input;
 }
 
+void test_state_input_cannot_expose_candidate_domain() {
+    static_assert(!has_candidate_features<Phase6BcStateInputV1>::value,
+                  "state input must not expose candidate features");
+    static_assert(!has_routing_keys<Phase6BcStateInputV1>::value,
+                  "state input must not expose routing keys");
+    static_assert(!has_candidate_domain_digest<Phase6BcStateInputV1>::value,
+                  "state input must not expose candidate-domain digest");
+    static_assert(!has_candidate_ordinal<Phase6BcStateInputV1>::value,
+                  "state input must not expose candidate ordinal");
+}
+
+void test_state_input_rebuilds_locator_table_without_candidate_locators() {
+    auto input = encoded_input(2);
+    input.public_locator_table = {"candidate:only", "state:only"};
+    input.observation_context_reference_ordinals = {1};
+
+    EncodedEntity state_entity;
+    state_entity.public_locator_ordinal = 1;
+    state_entity.identity_known = false;
+    state_entity.card_vocabulary_id = 1;
+    state_entity.zone_code = 3;
+    state_entity.face_down = true;
+    input.entities.push_back(state_entity);
+
+    input.candidate_features.front().source_reference = EncodedCardReference{
+        0, EncodedCurrentReference{0, std::nullopt}};
+    PublicActionKeyInput candidate_key_with_locator;
+    candidate_key_with_locator.action_kind = "card_selection";
+    candidate_key_with_locator.source_index = 0;
+    candidate_key_with_locator.source_reference = {
+        ygo::environment::PublicCardReferenceKind::VisibleCard, "candidate:only"};
+    input.routing_keys.front() =
+        ygo::environment::public_action_key(candidate_key_with_locator);
+    input.public_candidate_domain_digest =
+        ygo::environment::public_candidate_domain_digest(
+            "card_selection", input.routing_keys);
+
+    bool state_only = false;
+    Phase6BcReferenceScorerV1 scorer;
+    scorer.state_encoder = [&state_only](const Phase6BcStateInputV1& state) {
+        state_only = state.public_locator_table == std::vector<std::string>{"state:only"} &&
+                     state.observation_context_reference_ordinals ==
+                         std::vector<std::uint32_t>{0} &&
+                     state.entities.size() == 1 &&
+                     state.entities.front().public_locator_ordinal == 0;
+        Phase6BcStateRepresentationV1 representation;
+        representation.values.push_back(state.entities.front().public_locator_ordinal);
+        return ygo::phase6::Phase6BcCallbackResult<Phase6BcStateRepresentationV1>{
+            std::optional<Phase6BcStateRepresentationV1>(std::move(representation)),
+            std::nullopt};
+    };
+    scorer.candidate_encoder = [](const Phase6BcStateRepresentationV1&,
+                                  const EncodedCandidate& candidate) {
+        Phase6BcCandidateRepresentationV1 representation;
+        representation.values.push_back(candidate.source_index.value_or(0));
+        return ygo::phase6::Phase6BcCallbackResult<Phase6BcCandidateRepresentationV1>{
+            std::optional<Phase6BcCandidateRepresentationV1>(std::move(representation)),
+            std::nullopt};
+    };
+    scorer.candidate_scoring_function =
+        [](const Phase6BcStateRepresentationV1&,
+           const Phase6BcCandidateRepresentationV1& candidate) {
+            return ygo::phase6::Phase6BcCallbackResult<double>{
+                std::optional<double>(static_cast<double>(candidate.values.front())),
+                std::nullopt};
+    };
+
+    const auto result = ygo::phase6::score_encoded_model_input_v1(input, scorer);
+    require(result && result.value.has_value() && state_only,
+            "state encoder received candidate-derived locator information");
+}
+
 void test_pipeline_preserves_order_and_returns_one_score_per_candidate() {
     const auto input = encoded_input(3);
     std::vector<std::size_t> encoded_ordinals;
@@ -69,7 +176,7 @@ void test_pipeline_preserves_order_and_returns_one_score_per_candidate() {
     std::size_t state_calls = 0;
 
     Phase6BcReferenceScorerV1 scorer;
-    scorer.state_encoder = [&state_calls](const EncodedModelInputV1& value) {
+    scorer.state_encoder = [&state_calls](const Phase6BcStateInputV1& value) {
         ++state_calls;
         Phase6BcStateRepresentationV1 state;
         state.values.push_back(value.decision_index);
@@ -110,7 +217,7 @@ void test_pipeline_preserves_order_and_returns_one_score_per_candidate() {
 
 Phase6BcReferenceScorerV1 reference_scorer(std::vector<std::size_t>& calls) {
     Phase6BcReferenceScorerV1 scorer;
-    scorer.state_encoder = [](const EncodedModelInputV1& value) {
+    scorer.state_encoder = [](const Phase6BcStateInputV1& value) {
         Phase6BcStateRepresentationV1 state;
         state.values.push_back(value.decision_index);
         return ygo::phase6::Phase6BcCallbackResult<Phase6BcStateRepresentationV1>{
@@ -199,7 +306,7 @@ void test_missing_and_failing_callbacks_fail_closed() {
                   "missing state encoder was not rejected");
 
     auto failing_state = reference_scorer(calls);
-    failing_state.state_encoder = [](const EncodedModelInputV1&) {
+    failing_state.state_encoder = [](const Phase6BcStateInputV1&) {
         return ygo::phase6::Phase6BcCallbackResult<Phase6BcStateRepresentationV1>{
             std::nullopt, ygo::phase6::Phase6BcCallbackError{"state failure"}};
     };
@@ -311,6 +418,8 @@ void test_identical_encoded_inputs_have_identical_reference_results() {
 
 int main() {
     try {
+        test_state_input_cannot_expose_candidate_domain();
+        test_state_input_rebuilds_locator_table_without_candidate_locators();
         test_pipeline_preserves_order_and_returns_one_score_per_candidate();
         test_ties_use_bytewise_public_key_order();
         test_capacity_boundaries_are_exact_and_fail_closed();
@@ -319,6 +428,7 @@ int main() {
         test_identical_encoded_inputs_have_identical_reference_results();
         return EXIT_SUCCESS;
     } catch (const std::exception& error) {
-        return (void)error, EXIT_FAILURE;
+        std::cerr << error.what() << '\n';
+        return EXIT_FAILURE;
     }
 }
