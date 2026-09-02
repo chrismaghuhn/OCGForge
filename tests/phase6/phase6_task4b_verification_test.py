@@ -70,7 +70,7 @@ def _report(*, smoke_pass: bool = True) -> dict[str, object]:
         "schema_id": "ocgforge.phase6.task4b.execution_report.v1",
         "H_exec": H_EXEC,
         "corpus_probe_sha256": PROBE_SHA256 if smoke_pass else None,
-        "corpus_probe_source_commit": H_EXEC,
+        "corpus_probe_source_commit": H_EXEC if smoke_pass else None,
         "source_dataset_identity": "d" * 64 if smoke_pass else None,
         "dataset_split_identity": (
             "phase6_dataset_split.v1." + "e" * 64 if smoke_pass else None
@@ -292,7 +292,12 @@ class Task4BVerificationTests(unittest.TestCase):
             root = Path(directory)
             source_root = root / "source"
             output_dir = source_root / "docs" / "p6" / "task4b"
-            _write_report(output_dir, _report(smoke_pass=False))
+            failure_report = _report(smoke_pass=False)
+            failure_report["error_code"] = "PROBE_BUILD_FAILED"
+            self.assertEqual(failure_report["H_exec"], H_EXEC)
+            self.assertIsNone(failure_report["corpus_probe_sha256"])
+            self.assertIsNone(failure_report["corpus_probe_source_commit"])
+            _write_report(output_dir, failure_report)
             with mock.patch.object(
                 verifier, "_canonical_source_root", return_value=source_root
             ), mock.patch.object(
@@ -411,6 +416,64 @@ class Task4BVerificationTests(unittest.TestCase):
                     output_dir=output_dir,
                     allowed_output_files=verifier.ALLOWED_OUTPUT_FILES,
                 )
+
+            for status in (
+                "A  docs/p6/task4b/task4b-verification.json\n",
+                "M  docs/p6/task4b/task4b-verification.json\n",
+                " M docs/p6/task4b/task4b-verification.json\n",
+                "AM docs/p6/task4b/task4b-verification.json\n",
+                "MM docs/p6/task4b/task4b-verification.json\n",
+            ):
+                with self.subTest(status=status):
+                    with mock.patch.object(
+                        verifier,
+                        "_run_git",
+                        side_effect=_git_snapshot(status=status),
+                    ):
+                        if status[1] == " ":
+                            verifier._verify_h_exec_source_integrity(
+                                source_root=source_root,
+                                expected_head=H_EXEC,
+                                output_dir=output_dir,
+                                allowed_output_files=verifier.ALLOWED_OUTPUT_FILES,
+                            )
+                        else:
+                            with self.assertRaises(
+                                verifier.Task4BVerificationError
+                            ) as raised:
+                                verifier._verify_h_exec_source_integrity(
+                                    source_root=source_root,
+                                    expected_head=H_EXEC,
+                                    output_dir=output_dir,
+                                    allowed_output_files=verifier.ALLOWED_OUTPUT_FILES,
+                                )
+                            self.assertEqual(
+                                raised.exception.code,
+                                "POST_SMOKE_TRACKED_SOURCE_CHANGED",
+                            )
+
+    def test_failed_smoke_source_only_passes_before_and_after_staging(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source_root = root / "source"
+            output_dir = source_root / "docs" / "p6" / "task4b"
+            _write_report(output_dir, _report(smoke_pass=False))
+
+            for status in (
+                "?? docs/p6/task4b/task4b-execution-report.json\n",
+                "A  docs/p6/task4b/task4b-execution-report.json\n",
+            ):
+                with self.subTest(status=status):
+                    with mock.patch.object(
+                        verifier, "_canonical_source_root", return_value=source_root
+                    ), mock.patch.object(
+                        verifier,
+                        "_run_git",
+                        side_effect=_git_snapshot(status=status),
+                    ):
+                        verifier.check_source_integrity_from_report(
+                            output_dir=output_dir
+                        )
 
     def test_source_only_mode_checks_integrity_without_running_gates(self):
         with tempfile.TemporaryDirectory() as directory:

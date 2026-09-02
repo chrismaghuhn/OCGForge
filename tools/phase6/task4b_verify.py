@@ -363,13 +363,81 @@ def _validate_cuda_preflight_report(report: Mapping[str, object]) -> None:
         raise Task4BVerificationError("CUDA_PREFLIGHT_IDENTITY_MISMATCH")
 
 
+def _validate_optional_failure_facts(report: Mapping[str, object]) -> None:
+    if (
+        not isinstance(report.get("error_code"), str)
+        or not report["error_code"]
+    ):
+        raise Task4BVerificationError("INVALID_FAILURE_REPORT")
+    _require_int(
+        report,
+        "actual_optimizer_steps",
+        minimum=0,
+        maximum=codec.SMOKE_MAX_OPTIMIZER_STEPS,
+    )
+
+    probe_hash = report.get("corpus_probe_sha256")
+    probe_source_commit = report.get("corpus_probe_source_commit")
+    if (probe_hash is None) != (probe_source_commit is None):
+        raise Task4BVerificationError("INVALID_FAILURE_REPORT")
+    if probe_hash is not None and probe_source_commit is not None:
+        if not isinstance(probe_hash, str) or _HEX64.fullmatch(probe_hash) is None:
+            raise Task4BVerificationError("INVALID_FAILURE_REPORT")
+        if (
+            not isinstance(probe_source_commit, str)
+            or _HEX40.fullmatch(probe_source_commit) is None
+            or probe_source_commit != report["H_exec"]
+        ):
+            raise Task4BVerificationError("INVALID_FAILURE_REPORT")
+
+    metadata_keys = (
+        "source_dataset_identity",
+        "dataset_split_identity",
+        "card_vocabulary_identity",
+        "train_sample_count",
+        "validation_sample_count",
+        "test_sample_count",
+    )
+    metadata_present = [report.get(key) is not None for key in metadata_keys]
+    if any(metadata_present) and not all(metadata_present):
+        raise Task4BVerificationError("INVALID_FAILURE_REPORT")
+    if all(metadata_present):
+        _require_string(report, "source_dataset_identity")
+        if _HEX64.fullmatch(report["source_dataset_identity"]) is None:  # type: ignore[arg-type]
+            raise Task4BVerificationError("INVALID_FAILURE_REPORT")
+        _require_prefixed_hex(
+            report, "dataset_split_identity", "phase6_dataset_split.v1."
+        )
+        _require_prefixed_hex(
+            report, "card_vocabulary_identity", "model_card_vocabulary.v1."
+        )
+        _require_int(report, "train_sample_count", minimum=1)
+        _require_int(report, "validation_sample_count", minimum=0)
+        _require_int(report, "test_sample_count", minimum=0)
+
+    preflight_present = [
+        report.get(key) is not None for key in _PREFLIGHT_REPORT_KEYS
+    ]
+    if any(preflight_present) and not all(preflight_present):
+        raise Task4BVerificationError("INVALID_FAILURE_REPORT")
+    if all(preflight_present):
+        _validate_cuda_preflight_report(report)
+
+    for key in ("GPU_MEMORY_BEFORE", "GPU_MEMORY_PEAK", "GPU_MEMORY_AFTER"):
+        if report.get(key) is not None:
+            _require_int(report, key, minimum=0)
+    if report.get("initial_loss") is not None:
+        _require_finite_number(report, "initial_loss")
+    if report.get("final_loss") is not None:
+        if report.get("initial_loss") is None:
+            raise Task4BVerificationError("INVALID_FAILURE_REPORT")
+        _require_finite_number(report, "final_loss")
+
+
 def _validate_execution_report(report: Mapping[str, object]) -> tuple[str, bool]:
     if report.get("schema_id") != "ocgforge.phase6.task4b.execution_report.v1":
         raise Task4BVerificationError("INVALID_EXECUTION_REPORT_SCHEMA")
     h_exec = _require_hex(report, "H_exec", 40)
-    source_commit = _require_hex(report, "corpus_probe_source_commit", 40)
-    if source_commit != h_exec:
-        raise Task4BVerificationError("H_EXEC_PROBE_COMMIT_MISMATCH")
     smoke_pass = _require_bool(report, "SMOKE_PASS")
     if _require_bool(report, "TASK4B_PASS"):
         raise Task4BVerificationError("PREMATURE_TASK4B_ACCEPTANCE")
@@ -378,9 +446,13 @@ def _validate_execution_report(report: Mapping[str, object]) -> tuple[str, bool]
             raise Task4BVerificationError("INVALID_FAILURE_REPORT")
         if report.get("smoke_evidence_identity") is not None:
             raise Task4BVerificationError("INVALID_FAILURE_REPORT")
+        _validate_optional_failure_facts(report)
         return h_exec, False
     if report.get("error_code") is not None:
         raise Task4BVerificationError("INVALID_SUCCESS_REPORT")
+    source_commit = _require_hex(report, "corpus_probe_source_commit", 40)
+    if source_commit != h_exec:
+        raise Task4BVerificationError("H_EXEC_PROBE_COMMIT_MISMATCH")
     _require_hex(report, "corpus_probe_sha256", 64)
     _require_string(report, "source_dataset_identity")
     if _HEX64.fullmatch(report["source_dataset_identity"]) is None:  # type: ignore[arg-type]
@@ -549,6 +621,8 @@ def _verify_h_exec_source_integrity(
         if not record:
             continue
         untracked = record.startswith("?? ")
+        if not untracked and len(record) >= 2 and record[1] != " ":
+            raise Task4BVerificationError("POST_SMOKE_TRACKED_SOURCE_CHANGED")
         _require_allowed_output_path(
             source_root,
             output_dir,
