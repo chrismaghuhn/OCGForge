@@ -4,7 +4,7 @@
 
 **Goal:** Add a framework-neutral Phase-6 reference seam that scores every supplied encoded candidate and resolves one deterministic existing public action key without implementing a neural network or selecting a training backend.
 
-**Architecture:** `ygo::phase6` will accept only an already validated `EncodedModelInputV1`. The scorer derives a state-only encoded input that cannot represent candidate rows, routing keys, the candidate-domain digest, or candidate ordinals before invoking the state encoder. A candidate encoder receives each encoded candidate in source order without its routing key, and a candidate scoring function produces one reference execution score per row. A separate selection boundary validates exact cardinality and finite scores, then applies the frozen higher-score/bytewise-key tie rule against the input's unchanged routing sidecar.
+**Architecture:** `ygo::phase6` will accept only an already validated `EncodedModelInputV1`. The scorer derives a state-only encoded input that cannot represent candidate rows, routing keys, the candidate-domain digest, or candidate ordinals before invoking the state encoder. Candidate rows are projected into a separate callback input whose references explicitly use either the remapped state-locator namespace or a deterministic candidate-only namespace; no raw locator string or routing key crosses that callback. A candidate scoring function produces one reference execution score per row, and a separate selection boundary validates exact cardinality and finite scores before applying the frozen higher-score/bytewise-key tie rule against the input's unchanged routing sidecar.
 
 **Tech Stack:** Existing C++17 standard-library types and accepted `ygo::model` values. No PyTorch, JAX, NumPy, ML dependency, optimizer, checkpoint, or training code.
 
@@ -19,7 +19,7 @@
 
 - [ ] **Step 1: Write the failing test and its encoded-input fixture**
 
-Create a valid `EncodedModelInputV1` fixture with `N` card-selection candidates, unique routing keys derived from each candidate's `source_index`, and the accepted encoded schema. Define callbacks that record the received candidate ordinals and return deterministic state/candidate representations. Assert the wished-for result API returns one score per candidate and that callback invocation order is `0..N-1`.
+Create a valid `EncodedModelInputV1` fixture with `N` card-selection candidates, unique routing keys derived from each candidate's `source_index`, and the accepted encoded schema. Define callbacks that record the received candidate source rows and return deterministic state/candidate representations. Assert the wished-for result API returns one score per candidate and that callback invocation order is `0..N-1` without passing the ordinal into either callback.
 
 - [ ] **Step 2: Run the new target to verify the interface is absent**
 
@@ -41,6 +41,10 @@ candidate-only locator cannot cross the seam. It must not define candidate
 rows, routing keys, candidate-domain digest, or candidate ordinal. Define
 `Phase6BcStateRepresentationV1` and `Phase6BcCandidateRepresentationV1` as
 callback-owned reference values containing only `std::vector<std::uint64_t>`.
+Define `Phase6BcLocatorNamespace`, `Phase6BcCandidateReferenceV1`, and
+`Phase6BcCandidateInputV1` so state references use state-table ordinals and
+candidate-only references use a separate explicit namespace/ordinal. The
+candidate input contains no raw locator strings or routing keys.
 Define callback result wrappers with `std::optional<T>` and structured callback
 errors. Define:
 
@@ -50,7 +54,7 @@ errors. Define:
     using Phase6BcCandidateEncoderV1 =
         std::function<Phase6BcCallbackResult<Phase6BcCandidateRepresentationV1>(
             const Phase6BcStateRepresentationV1&,
-            const model::EncodedCandidate&)>;
+            const Phase6BcCandidateInputV1&)>;
     using Phase6BcCandidateScoringFunctionV1 =
         std::function<Phase6BcCallbackResult<double>(
             const Phase6BcStateRepresentationV1&,
@@ -152,7 +156,7 @@ remapped state ordinals.
 
 - [ ] **Step 2: Add a source inspection assertion**
 
-Search the new public header/source/test interface for forbidden backend and private-boundary tokens. Confirm the candidate encoder receives an `EncodedCandidate` and not a public key, raw internal candidate, or engine object.
+Search the new public header/source/test interface for forbidden backend and private-boundary tokens. Confirm the candidate encoder receives a `Phase6BcCandidateInputV1` with explicit reference namespace/ordinal values and not a public key, raw locator string, raw internal candidate, or engine object.
 
 - [ ] **Step 3: Run all focused Phase-5/Phase-6 checks**
 

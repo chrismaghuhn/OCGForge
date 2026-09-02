@@ -41,6 +41,35 @@ struct Phase6BcStateInputV1 final {
     model::EncodedMatchContext match_context;
 };
 
+enum class Phase6BcLocatorNamespace : std::uint8_t {
+    State = 0,
+    CandidateOnly = 1,
+};
+
+// A candidate reference keeps its namespace explicit. State references use
+// the ordinal in Phase6BcStateInputV1::public_locator_table; candidate-only
+// references use a separate deterministic ordinal space. No raw locator
+// string or public action key crosses the candidate callback boundary.
+struct Phase6BcCandidateReferenceV1 final {
+    std::uint8_t kind_code = 0;
+    Phase6BcLocatorNamespace locator_namespace = Phase6BcLocatorNamespace::State;
+    std::uint32_t locator_ordinal = 0;
+    std::optional<std::uint32_t> current_entity_ordinal;
+};
+
+struct Phase6BcCandidateInputV1 final {
+    std::uint16_t action_kind_code = 0;
+    std::optional<model::EncodedChoice> choice;
+    std::optional<Phase6BcCandidateReferenceV1> source_reference;
+    std::optional<Phase6BcCandidateReferenceV1> target_reference;
+    std::optional<std::uint32_t> phase;
+    std::optional<std::uint8_t> position;
+    std::optional<std::uint32_t> source_index;
+    std::optional<std::int32_t> amount;
+    std::uint8_t continuation_operation_code = 0;
+    bool submits_engine_response = true;
+};
+
 // These are callback-owned reference execution values. They have no
 // canonical semantic identity and do not prescribe a neural architecture.
 struct Phase6BcStateRepresentationV1 final {
@@ -70,7 +99,7 @@ using Phase6BcStateEncoderV1 =
         const Phase6BcStateInputV1&)>;
 using Phase6BcCandidateEncoderV1 =
     std::function<Phase6BcCallbackResult<Phase6BcCandidateRepresentationV1>(
-        const Phase6BcStateRepresentationV1&, const model::EncodedCandidate&)>;
+        const Phase6BcStateRepresentationV1&, const Phase6BcCandidateInputV1&)>;
 using Phase6BcCandidateScoringFunctionV1 =
     std::function<Phase6BcCallbackResult<double>(
         const Phase6BcStateRepresentationV1&,

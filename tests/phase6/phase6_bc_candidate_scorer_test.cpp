@@ -24,7 +24,9 @@ using ygo::model::EncodedCardReference;
 using ygo::model::EncodedCurrentReference;
 using ygo::model::EncodedEntity;
 using ygo::model::EncodedModelInputV1;
+using ygo::phase6::Phase6BcCandidateInputV1;
 using ygo::phase6::Phase6BcCandidateRepresentationV1;
+using ygo::phase6::Phase6BcLocatorNamespace;
 using ygo::phase6::Phase6BcReferenceScorerV1;
 using ygo::phase6::Phase6BcScorerErrorCode;
 using ygo::phase6::Phase6BcStateInputV1;
@@ -61,6 +63,13 @@ struct has_candidate_ordinal final : std::false_type {};
 
 template <typename T>
 struct has_candidate_ordinal<T, std::void_t<decltype(std::declval<T>().candidate_ordinal)>>
+    final : std::true_type {};
+
+template <typename T, typename = void>
+struct has_public_action_key final : std::false_type {};
+
+template <typename T>
+struct has_public_action_key<T, std::void_t<decltype(std::declval<T>().public_action_key)>>
     final : std::true_type {};
 
 std::string candidate_key(const std::uint32_t index) {
@@ -106,6 +115,10 @@ void test_state_input_cannot_expose_candidate_domain() {
                   "state input must not expose candidate-domain digest");
     static_assert(!has_candidate_ordinal<Phase6BcStateInputV1>::value,
                   "state input must not expose candidate ordinal");
+    static_assert(!has_public_action_key<Phase6BcCandidateInputV1>::value,
+                  "candidate input must not expose public action keys");
+    static_assert(!has_routing_keys<Phase6BcCandidateInputV1>::value,
+                  "candidate input must not expose routing keys");
 }
 
 void test_state_input_rebuilds_locator_table_without_candidate_locators() {
@@ -122,19 +135,30 @@ void test_state_input_rebuilds_locator_table_without_candidate_locators() {
     input.entities.push_back(state_entity);
 
     input.candidate_features.front().source_reference = EncodedCardReference{
+        0, EncodedCurrentReference{1, std::nullopt}};
+    input.candidate_features[1].source_reference = EncodedCardReference{
         0, EncodedCurrentReference{0, std::nullopt}};
+    PublicActionKeyInput state_key_with_locator;
+    state_key_with_locator.action_kind = "card_selection";
+    state_key_with_locator.source_index = 0;
+    state_key_with_locator.source_reference = {
+        ygo::environment::PublicCardReferenceKind::VisibleCard, "state:only"};
+    input.routing_keys.front() =
+        ygo::environment::public_action_key(state_key_with_locator);
     PublicActionKeyInput candidate_key_with_locator;
     candidate_key_with_locator.action_kind = "card_selection";
-    candidate_key_with_locator.source_index = 0;
+    candidate_key_with_locator.source_index = 1;
     candidate_key_with_locator.source_reference = {
         ygo::environment::PublicCardReferenceKind::VisibleCard, "candidate:only"};
-    input.routing_keys.front() =
+    input.routing_keys[1] =
         ygo::environment::public_action_key(candidate_key_with_locator);
     input.public_candidate_domain_digest =
         ygo::environment::public_candidate_domain_digest(
             "card_selection", input.routing_keys);
 
     bool state_only = false;
+    bool state_reference_compatible = false;
+    bool candidate_only_reference_separate = false;
     Phase6BcReferenceScorerV1 scorer;
     scorer.state_encoder = [&state_only](const Phase6BcStateInputV1& state) {
         state_only = state.public_locator_table == std::vector<std::string>{"state:only"} &&
@@ -148,8 +172,24 @@ void test_state_input_rebuilds_locator_table_without_candidate_locators() {
             std::optional<Phase6BcStateRepresentationV1>(std::move(representation)),
             std::nullopt};
     };
-    scorer.candidate_encoder = [](const Phase6BcStateRepresentationV1&,
-                                  const EncodedCandidate& candidate) {
+    scorer.candidate_encoder = [&state_reference_compatible,
+                                &candidate_only_reference_separate](
+                                   const Phase6BcStateRepresentationV1&,
+                                  const Phase6BcCandidateInputV1& candidate) {
+        if (candidate.source_index == std::optional<std::uint32_t>(0) &&
+            candidate.source_reference.has_value()) {
+            const auto& reference = *candidate.source_reference;
+            state_reference_compatible =
+                reference.locator_namespace == Phase6BcLocatorNamespace::State &&
+                reference.locator_ordinal == 0;
+        }
+        if (candidate.source_index == std::optional<std::uint32_t>(1) &&
+            candidate.source_reference.has_value()) {
+            const auto& reference = *candidate.source_reference;
+            candidate_only_reference_separate =
+                reference.locator_namespace == Phase6BcLocatorNamespace::CandidateOnly &&
+                reference.locator_ordinal == 0;
+        }
         Phase6BcCandidateRepresentationV1 representation;
         representation.values.push_back(candidate.source_index.value_or(0));
         return ygo::phase6::Phase6BcCallbackResult<Phase6BcCandidateRepresentationV1>{
@@ -165,8 +205,9 @@ void test_state_input_rebuilds_locator_table_without_candidate_locators() {
     };
 
     const auto result = ygo::phase6::score_encoded_model_input_v1(input, scorer);
-    require(result && result.value.has_value() && state_only,
-            "state encoder received candidate-derived locator information");
+    require(result && result.value.has_value() && state_only &&
+                state_reference_compatible && candidate_only_reference_separate,
+            "state/candidate locator namespaces were not remapped compatibly");
 }
 
 void test_pipeline_preserves_order_and_returns_one_score_per_candidate() {
@@ -185,7 +226,7 @@ void test_pipeline_preserves_order_and_returns_one_score_per_candidate() {
     };
     scorer.candidate_encoder = [&encoded_ordinals](
                                    const Phase6BcStateRepresentationV1&,
-                                   const EncodedCandidate& candidate) {
+                                   const Phase6BcCandidateInputV1& candidate) {
         encoded_ordinals.push_back(candidate.source_index.value_or(0));
         Phase6BcCandidateRepresentationV1 representation;
         representation.values.push_back(candidate.source_index.value_or(0));
@@ -224,7 +265,7 @@ Phase6BcReferenceScorerV1 reference_scorer(std::vector<std::size_t>& calls) {
             std::optional<Phase6BcStateRepresentationV1>(std::move(state)), std::nullopt};
     };
     scorer.candidate_encoder = [&calls](const Phase6BcStateRepresentationV1&,
-                                         const EncodedCandidate& candidate) {
+                                         const Phase6BcCandidateInputV1& candidate) {
         calls.push_back(candidate.source_index.value_or(0));
         Phase6BcCandidateRepresentationV1 representation;
         representation.values.push_back(candidate.source_index.value_or(0));
@@ -328,7 +369,7 @@ void test_missing_and_failing_callbacks_fail_closed() {
 
     auto failing_candidate = reference_scorer(calls);
     failing_candidate.candidate_encoder = [](const Phase6BcStateRepresentationV1&,
-                                             const EncodedCandidate& candidate) {
+                                             const Phase6BcCandidateInputV1& candidate) {
         if (candidate.source_index == std::optional<std::uint32_t>(1)) {
             return ygo::phase6::Phase6BcCallbackResult<Phase6BcCandidateRepresentationV1>{
                 std::nullopt, ygo::phase6::Phase6BcCallbackError{"candidate failure"}};
