@@ -72,6 +72,48 @@ class Task4AInferenceTests(unittest.TestCase):
         self.assertFalse(hasattr(codec.InferenceRequestV1, "numeric_input_identity"))
         self.assertFalse(hasattr(codec.InferenceRequestV1, "public_candidate_domain_digest"))
 
+    def test_completion_receipt_requires_real_export_reload_and_inference_path(self):
+        exported = _checkpoint()
+        model_input = _model_input()
+        request = _request(exported.checkpoint_identity, model_input)
+        receipt = task4_inference.issue_task4b_completion_receipt(
+            exported,
+            request=request,
+            model_input=model_input,
+            architecture_config=codec.default_architecture_config(),
+            card_vocabulary_identity="model_card_vocabulary.v1." + "3" * 64,
+            dataset_identity="1" * 64,
+            dataset_split_identity="phase6_dataset_split.v1." + "2" * 64,
+        )
+        self.assertEqual(receipt.checkpoint_identity, exported.checkpoint_identity)
+        self.assertEqual(receipt.model_input_identity, model_input.model_input_identity)
+        self.assertTrue(receipt.fresh_checkpoint_reload)
+        self.assertTrue(receipt.deterministic_frozen_inference)
+        self.assertIs(
+            task4_inference.validate_task4b_completion_receipt(receipt), receipt
+        )
+        with self.assertRaises(task4_inference.Task4InferenceError):
+            task4_inference.validate_task4b_completion_receipt(
+                dataclasses.replace(
+                    receipt,
+                    checkpoint_identity="phase6_checkpoint.v1." + "f" * 64,
+                )
+            )
+        with self.assertRaises(task4_inference.Task4InferenceError):
+            task4_inference.issue_task4b_completion_receipt(
+                dataclasses.replace(exported, _attestation=None),
+                request=request,
+                model_input=model_input,
+                architecture_config=codec.default_architecture_config(),
+                card_vocabulary_identity="model_card_vocabulary.v1." + "3" * 64,
+                dataset_identity="1" * 64,
+                dataset_split_identity="phase6_dataset_split.v1." + "2" * 64,
+            )
+        with self.assertRaises(task4_inference.Task4InferenceError):
+            task4_inference.validate_task4b_completion_receipt(
+                dataclasses.replace(receipt, _attestation=None)
+            )
+
     def test_canonical_export_mutation_and_wrong_architecture_fail_closed(self):
         exported = _checkpoint()
         loaded = task4_inference.load_checkpoint_artifact(exported.artifact_bytes)

@@ -13,6 +13,7 @@ import dataclasses
 import torch
 
 from . import task4_codec as codec
+from . import task4_inference
 
 
 _CUDA_PREFLIGHT_ATTESTATION = object()
@@ -151,10 +152,9 @@ def finalize_training_run_manifest_from_cuda_preflight(
 def smoke_evidence_from_cuda_preflight(
     preflight: CudaPreflightResultV1,
     manifest: codec.TrainingRunManifestV1,
+    completion_receipt: task4_inference.Task4BCompletionReceiptV1 | None = None,
     *,
     actual_optimizer_steps: int = 0,
-    fresh_checkpoint_reload: bool = False,
-    deterministic_frozen_inference: bool = False,
     gpu_memory_before: int | None = None,
     gpu_memory_peak: int | None = None,
     gpu_memory_after: int | None = None,
@@ -190,6 +190,26 @@ def smoke_evidence_from_cuda_preflight(
             "CUDA_DEVICE_MISMATCH",
             "training manifest execution provenance is not the live CUDA preflight provenance",
         )
+    completion = None
+    if completion_receipt is not None:
+        try:
+            completion = task4_inference.validate_task4b_completion_receipt(
+                completion_receipt
+            )
+        except task4_inference.Task4InferenceError as error:
+            raise CudaPreflightError(
+                "INVALID_COMPLETION_RECEIPT", str(error)
+            ) from error
+        if manifest.final_exported_checkpoint_identity != completion.checkpoint_identity:
+            raise CudaPreflightError(
+                "INVALID_COMPLETION_RECEIPT",
+                "completion receipt checkpoint is not the manifest final checkpoint",
+            )
+    if actual_optimizer_steps > 0 and completion is None:
+        raise CudaPreflightError(
+            "INVALID_COMPLETION_RECEIPT",
+            "positive smoke evidence requires an attested completion receipt",
+        )
     try:
         run_identity = codec.training_run_identity(manifest)
         evidence = codec.Task4BSmokeEvidenceV1(
@@ -210,9 +230,17 @@ def smoke_evidence_from_cuda_preflight(
             cuda_preflight_identity=preflight.cuda_preflight_identity,
             maximum_optimizer_steps=codec.SMOKE_MAX_OPTIMIZER_STEPS,
             actual_optimizer_steps=actual_optimizer_steps,
-            final_exported_checkpoint_identity=manifest.final_exported_checkpoint_identity,
-            fresh_checkpoint_reload=fresh_checkpoint_reload,
-            deterministic_frozen_inference=deterministic_frozen_inference,
+            final_exported_checkpoint_identity=(
+                manifest.final_exported_checkpoint_identity
+                if completion is None
+                else completion.checkpoint_identity
+            ),
+            fresh_checkpoint_reload=(
+                False if completion is None else completion.fresh_checkpoint_reload
+            ),
+            deterministic_frozen_inference=(
+                False if completion is None else completion.deterministic_frozen_inference
+            ),
             gpu_memory_before=gpu_memory_before,
             gpu_memory_peak=gpu_memory_peak,
             gpu_memory_after=gpu_memory_after,

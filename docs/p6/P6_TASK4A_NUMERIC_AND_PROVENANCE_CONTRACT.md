@@ -327,9 +327,11 @@ flags, and optional GPU-memory telemetry belong to a separate
 they are not new top-level `TrainingRunManifestV1` fields. The sidecar builder
 accepts the finalized manifest, recomputes `training_run_identity` from its
 canonical bytes, and does not accept a caller-supplied run identity. Positive
-step evidence additionally requires the manifest's final checkpoint identity,
-a successful fresh checkpoint reload, and successful deterministic frozen
-inference evidence.
+step evidence additionally requires an attested `Task4BCompletionReceiptV1`.
+That receipt is issued only after the actual canonical export, strict fresh
+checkpoint reload, and deterministic frozen inference verification; the
+sidecar derives the checkpoint identity and completion PASS values from the
+receipt rather than accepting caller claims.
 
 For the fixed Teacher-vs-Teacher smoke corpus, both accepted Teacher-v1
 artifact identities are required in `behavior_policy_source_identities` and

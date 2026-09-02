@@ -6,6 +6,8 @@ import torch
 
 from tools.phase6 import task4_codec as codec
 from tools.phase6 import task4_cuda
+from tools.phase6 import task4_inference
+from tools.phase6 import task4_model
 
 
 class Task4ACudaPreflightTests(unittest.TestCase):
@@ -68,7 +70,40 @@ class Task4ACudaPreflightTests(unittest.TestCase):
             result.execution_provenance_identity,
         )
         self.assertEqual(evidence.actual_optimizer_steps, 0)
-        checkpoint_identity = "phase6_checkpoint.v1." + "9" * 64
+        model = task4_model.Phase6TorchCandidateScorer()
+        exported = task4_inference.export_canonical_checkpoint(
+            model,
+            source_dataset_identity="1" * 64,
+            dataset_split_identity="phase6_dataset_split.v1." + "2" * 64,
+            card_vocabulary_identity="model_card_vocabulary.v1." + "3" * 64,
+        )
+        model_input = codec.make_numeric_model_input(
+            model_input_identity="model_input.v1." + "5" * 64,
+            state_rows=((0.0,) * codec.STATE_ROW_WIDTH,),
+            candidate_rows=(
+                (0.0,) * codec.CANDIDATE_ROW_WIDTH,
+                (1.0,) + (0.0,) * (codec.CANDIDATE_ROW_WIDTH - 1),
+            ),
+            routing_keys=("public_action.v1.00", "public_action.v1.01"),
+            public_candidate_domain_digest=None,
+            public_semantic_decision_id="6" * 64,
+            perspective_player=0,
+            decision_index=1,
+        )
+        request = codec.make_inference_request(
+            checkpoint_identity=exported.checkpoint_identity,
+            model_input=model_input,
+        )
+        completion_receipt = task4_inference.issue_task4b_completion_receipt(
+            exported,
+            request=request,
+            model_input=model_input,
+            architecture_config=codec.default_architecture_config(),
+            card_vocabulary_identity="model_card_vocabulary.v1." + "3" * 64,
+            dataset_identity="1" * 64,
+            dataset_split_identity="phase6_dataset_split.v1." + "2" * 64,
+        )
+        checkpoint_identity = completion_receipt.checkpoint_identity
         positive_manifest = (
             task4_cuda.finalize_training_run_manifest_from_cuda_preflight(
                 result,
@@ -79,14 +114,19 @@ class Task4ACudaPreflightTests(unittest.TestCase):
         positive_evidence = task4_cuda.smoke_evidence_from_cuda_preflight(
             result,
             positive_manifest,
+            completion_receipt,
             actual_optimizer_steps=1,
-            fresh_checkpoint_reload=True,
-            deterministic_frozen_inference=True,
             gpu_memory_before=1,
             gpu_memory_peak=2,
             gpu_memory_after=1,
         )
         self.assertEqual(positive_evidence.actual_optimizer_steps, 1)
+        self.assertEqual(
+            positive_evidence.final_exported_checkpoint_identity,
+            completion_receipt.checkpoint_identity,
+        )
+        self.assertTrue(positive_evidence.fresh_checkpoint_reload)
+        self.assertTrue(positive_evidence.deterministic_frozen_inference)
         self.assertEqual(
             positive_evidence.training_run_identity,
             codec.training_run_identity(positive_manifest),
@@ -99,7 +139,7 @@ class Task4ACudaPreflightTests(unittest.TestCase):
             task4_cuda.smoke_evidence_from_cuda_preflight(
                 result,
                 positive_manifest,
-                training_run_identity="phase6_training_run.v1." + "8" * 64,
+                final_exported_checkpoint_identity=checkpoint_identity,
                 actual_optimizer_steps=1,
                 fresh_checkpoint_reload=True,
                 deterministic_frozen_inference=True,
@@ -111,9 +151,8 @@ class Task4ACudaPreflightTests(unittest.TestCase):
             task4_cuda.smoke_evidence_from_cuda_preflight(
                 result,
                 manifest,
+                completion_receipt,
                 actual_optimizer_steps=1,
-                fresh_checkpoint_reload=True,
-                deterministic_frozen_inference=True,
                 gpu_memory_before=1,
                 gpu_memory_peak=2,
                 gpu_memory_after=1,
@@ -122,9 +161,21 @@ class Task4ACudaPreflightTests(unittest.TestCase):
             task4_cuda.smoke_evidence_from_cuda_preflight(
                 result,
                 positive_manifest,
+                dataclasses.replace(completion_receipt, _attestation=None),
                 actual_optimizer_steps=1,
-                fresh_checkpoint_reload=False,
-                deterministic_frozen_inference=True,
+                gpu_memory_before=1,
+                gpu_memory_peak=2,
+                gpu_memory_after=1,
+            )
+        with self.assertRaises(task4_cuda.CudaPreflightError):
+            task4_cuda.smoke_evidence_from_cuda_preflight(
+                result,
+                positive_manifest,
+                dataclasses.replace(
+                    completion_receipt,
+                    checkpoint_identity="phase6_checkpoint.v1." + "a" * 64,
+                ),
+                actual_optimizer_steps=1,
                 gpu_memory_before=1,
                 gpu_memory_peak=2,
                 gpu_memory_after=1,
@@ -143,9 +194,8 @@ class Task4ACudaPreflightTests(unittest.TestCase):
             task4_cuda.smoke_evidence_from_cuda_preflight(
                 dataclasses.replace(result, _attestation=None),
                 positive_manifest,
+                completion_receipt,
                 actual_optimizer_steps=1,
-                fresh_checkpoint_reload=True,
-                deterministic_frozen_inference=True,
                 gpu_memory_before=1,
                 gpu_memory_peak=2,
                 gpu_memory_after=1,

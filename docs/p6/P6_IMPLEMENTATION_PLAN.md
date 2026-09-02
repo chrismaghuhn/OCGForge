@@ -207,6 +207,10 @@ backend decision.
 8. record `GPU_MEMORY_BEFORE`, `GPU_MEMORY_PEAK`, and `GPU_MEMORY_AFTER` as
    execution provenance for the one CUDA smoke; these values must not enter
    checkpoint semantic identity.
+9. issue positive smoke evidence only from a typed completion receipt produced
+   by canonical export, strict fresh reload, and deterministic inference
+   verification; checkpoint identity and completion PASS values are derived
+   from that receipt.
 
 The provisional backend is PyTorch only for the one explicitly authorized CUDA
 smoke. Task 4B does not choose PyTorch over JAX, JAX over PyTorch, or either as

@@ -26,10 +26,20 @@ class Task4InferenceError(RuntimeError):
         self.code = code
 
 
+_CANONICAL_EXPORT_ATTESTATION = object()
+_COMPLETION_RECEIPT_ATTESTATION = object()
+_COMPLETION_RECEIPT_BINDING_DOMAIN = (
+    "ocgforge.phase6.task4b.completion_receipt.v1"
+)
+
+
 @dataclasses.dataclass(frozen=True)
 class ExportedCheckpointV1:
     artifact_bytes: bytes
     artifact: codec.CheckpointArtifactV1
+    _attestation: object = dataclasses.field(
+        default=None, repr=False, compare=False
+    )
 
     @property
     def checkpoint_identity(self) -> str:
@@ -55,8 +65,78 @@ class BoundInferenceExecutionV1:
     numeric_input_identity: str
 
 
+@dataclasses.dataclass(frozen=True)
+class Task4BCompletionReceiptV1:
+    """Attested result of canonical export, fresh reload, and frozen inference."""
+
+    checkpoint_identity: str
+    model_input_identity: str
+    ordered_candidate_domain_identity: str
+    request_identity: str
+    response_identity: str
+    _exported_checkpoint: Optional[ExportedCheckpointV1] = dataclasses.field(
+        default=None, repr=False, compare=False
+    )
+    _binding_identity: str = dataclasses.field(
+        default="", repr=False, compare=False
+    )
+    _attestation: object = dataclasses.field(
+        default=None, repr=False, compare=False
+    )
+
+    @property
+    def fresh_checkpoint_reload(self) -> bool:
+        return True
+
+    @property
+    def deterministic_frozen_inference(self) -> bool:
+        return True
+
+
 def _error_from_codec(error: Exception, code: str = "invalid_checkpoint") -> Task4InferenceError:
     return Task4InferenceError(code, str(error))
+
+
+def _require_actual_canonical_export(
+    exported_checkpoint: ExportedCheckpointV1,
+) -> codec.CheckpointArtifactV1:
+    if not isinstance(exported_checkpoint, ExportedCheckpointV1):
+        raise Task4InferenceError(
+            "invalid_checkpoint",
+            "completion verification requires an ExportedCheckpointV1",
+        )
+    if exported_checkpoint._attestation is not _CANONICAL_EXPORT_ATTESTATION:
+        raise Task4InferenceError(
+            "invalid_checkpoint",
+            "completion verification requires an actual canonical export",
+        )
+    try:
+        decoded = codec.decode_checkpoint_artifact(exported_checkpoint.artifact_bytes)
+    except (codec.CodecError, TypeError, ValueError) as error:
+        raise _error_from_codec(error, "invalid_checkpoint") from error
+    if decoded != exported_checkpoint.artifact:
+        raise Task4InferenceError(
+            "invalid_checkpoint",
+            "exported checkpoint object does not match its canonical artifact bytes",
+        )
+    return decoded
+
+
+def _completion_receipt_binding_identity(
+    receipt: Task4BCompletionReceiptV1,
+) -> str:
+    body = b"".join((
+        codec.pack_string(_COMPLETION_RECEIPT_BINDING_DOMAIN),
+        codec.pack_string(_COMPLETION_RECEIPT_BINDING_DOMAIN),
+        codec.pack_string(receipt.checkpoint_identity),
+        codec.pack_string(receipt.model_input_identity),
+        codec.pack_string(receipt.ordered_candidate_domain_identity),
+        codec.pack_string(receipt.request_identity),
+        codec.pack_string(receipt.response_identity),
+    ))
+    return codec._digest(
+        "phase6_task4b_completion_receipt.v1.", body
+    )
 
 
 def _canonical_parameter_tensors(
@@ -122,7 +202,9 @@ def export_canonical_checkpoint(
         raise _error_from_codec(error) from error
     if decoded != artifact:
         raise Task4InferenceError("invalid_checkpoint", "exported checkpoint did not round-trip")
-    return ExportedCheckpointV1(artifact_bytes, artifact)
+    return ExportedCheckpointV1(
+        artifact_bytes, artifact, _attestation=_CANONICAL_EXPORT_ATTESTATION
+    )
 
 
 def load_checkpoint_artifact(
@@ -425,6 +507,160 @@ def validate_response(
     if response.response_identity != expected_identity:
         raise Task4InferenceError("malformed_response", "response selection identity is not canonical")
     return dataclasses.replace(response, scores=scores)
+
+
+def validate_task4b_completion_receipt(
+    receipt: Task4BCompletionReceiptV1,
+) -> Task4BCompletionReceiptV1:
+    """Accept only a receipt issued by the verified completion path."""
+
+    if not isinstance(receipt, Task4BCompletionReceiptV1):
+        raise Task4InferenceError(
+            "invalid_completion_receipt",
+            "completion receipt has the wrong type",
+        )
+    if receipt._attestation is not _COMPLETION_RECEIPT_ATTESTATION:
+        raise Task4InferenceError(
+            "invalid_completion_receipt",
+            "completion receipt is not attested by the export/reload/inference path",
+        )
+    exported_checkpoint = receipt._exported_checkpoint
+    if exported_checkpoint is None:
+        raise Task4InferenceError(
+            "invalid_completion_receipt",
+            "completion receipt is not bound to an exported checkpoint",
+        )
+    _require_actual_canonical_export(exported_checkpoint)
+    if exported_checkpoint.checkpoint_identity != receipt.checkpoint_identity:
+        raise Task4InferenceError(
+            "invalid_completion_receipt",
+            "completion checkpoint identity is not the exported checkpoint identity",
+        )
+    try:
+        codec._validate_prefixed_digest(
+            receipt.checkpoint_identity,
+            codec.CHECKPOINT_ID_PREFIX,
+            "completion checkpoint identity",
+        )
+        codec._validate_prefixed_digest(
+            receipt.model_input_identity,
+            "model_input.v1.",
+            "completion model-input identity",
+        )
+        codec._validate_ordered_domain_identity(
+            receipt.ordered_candidate_domain_identity,
+            "completion ordered domain identity",
+        )
+        codec._validate_prefixed_digest(
+            receipt.request_identity,
+            codec.REQUEST_ID_PREFIX,
+            "completion request identity",
+        )
+        codec._validate_prefixed_digest(
+            receipt.response_identity,
+            codec.RESPONSE_ID_PREFIX,
+            "completion response identity",
+        )
+    except codec.CodecError as error:
+        raise Task4InferenceError("invalid_completion_receipt", str(error)) from error
+    try:
+        expected_binding = _completion_receipt_binding_identity(receipt)
+    except (codec.CodecError, TypeError, ValueError) as error:
+        raise Task4InferenceError("invalid_completion_receipt", str(error)) from error
+    if receipt._binding_identity != expected_binding:
+        raise Task4InferenceError(
+            "invalid_completion_receipt",
+            "completion receipt binding does not match its evidence fields",
+        )
+    if not receipt.fresh_checkpoint_reload or not receipt.deterministic_frozen_inference:
+        raise Task4InferenceError(
+            "invalid_completion_receipt",
+            "completion receipt does not prove both required completion checks",
+        )
+    return receipt
+
+
+def issue_task4b_completion_receipt(
+    exported_checkpoint: ExportedCheckpointV1,
+    *,
+    request: codec.InferenceRequestV1,
+    model_input: codec.Task4NumericModelInputV1,
+    architecture_config: codec.ArchitectureConfigV1,
+    card_vocabulary_identity: str,
+    dataset_identity: str,
+    dataset_split_identity: str,
+) -> Task4BCompletionReceiptV1:
+    """Issue completion proof only after export, strict fresh reload, and replay."""
+
+    _require_actual_canonical_export(exported_checkpoint)
+    try:
+        loaded_first, first_model = reload_model_from_checkpoint(
+            exported_checkpoint.artifact_bytes,
+            architecture_config=architecture_config,
+            card_vocabulary_identity=card_vocabulary_identity,
+            dataset_identity=dataset_identity,
+            dataset_split_identity=dataset_split_identity,
+        )
+        loaded_second, second_model = reload_model_from_checkpoint(
+            exported_checkpoint.artifact_bytes,
+            architecture_config=architecture_config,
+            card_vocabulary_identity=card_vocabulary_identity,
+            dataset_identity=dataset_identity,
+            dataset_split_identity=dataset_split_identity,
+        )
+        if (
+            loaded_first.checkpoint_identity != exported_checkpoint.checkpoint_identity or
+            loaded_second.checkpoint_identity != exported_checkpoint.checkpoint_identity or
+            first_model is second_model
+        ):
+            raise Task4InferenceError(
+                "invalid_completion_receipt",
+                "fresh checkpoint reload did not produce two independent matching models",
+            )
+        first_execution = bind_inference_execution(
+            request, model_input, loaded_first
+        )
+        second_execution = bind_inference_execution(
+            request, model_input, loaded_second
+        )
+        first_response = validate_response(
+            request, infer_request(first_model, loaded_first, first_execution)
+        )
+        second_response = validate_response(
+            request, infer_request(second_model, loaded_second, second_execution)
+        )
+    except Task4InferenceError:
+        raise
+    except (codec.CodecError, TypeError, ValueError, RuntimeError) as error:
+        raise Task4InferenceError(
+            "invalid_completion_receipt",
+            f"completion verification failed: {error}",
+        ) from error
+    if (
+        first_response.scores != second_response.scores or
+        first_response.selected_candidate_ordinal != second_response.selected_candidate_ordinal or
+        first_response.selected_public_action_key != second_response.selected_public_action_key or
+        first_response.response_identity != second_response.response_identity
+    ):
+        raise Task4InferenceError(
+            "determinism_mismatch",
+            "fresh inference results are not identical for the accepted input",
+        )
+    receipt = Task4BCompletionReceiptV1(
+        checkpoint_identity=exported_checkpoint.checkpoint_identity,
+        model_input_identity=request.model_input_identity,
+        ordered_candidate_domain_identity=request.ordered_candidate_domain_identity,
+        request_identity=request.request_identity,
+        response_identity=first_response.response_identity,
+        _exported_checkpoint=exported_checkpoint,
+        _binding_identity="",
+        _attestation=_COMPLETION_RECEIPT_ATTESTATION,
+    )
+    receipt = dataclasses.replace(
+        receipt,
+        _binding_identity=_completion_receipt_binding_identity(receipt),
+    )
+    return validate_task4b_completion_receipt(receipt)
 
 
 class Phase6InferenceRunnerV1:
