@@ -56,7 +56,7 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force artifacts\m4-worker-failures | Out-Null
           $env:YGO_M4_FAILURE_ARTIFACT_DIR = "artifacts\m4-worker-failures"
-          ctest --preset dev-windows --output-on-failure --label-exclude "^(M4_ACCEPTANCE_SCALE|P4A_HEAVY_REPLAY|M4_HEAVY_LIFECYCLE)$"
+          ctest --preset dev-windows --output-on-failure --label-exclude "^(M4_ACCEPTANCE_SCALE|P4A_HEAVY_REPLAY|M4_HEAVY_LIFECYCLE|P6_PYTORCH_REQUIRED)$"
 
       - name: Run M4 benchmark-integrity acceptance tests
         shell: pwsh

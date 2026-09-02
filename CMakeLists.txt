@@ -268,6 +268,7 @@ add_test(NAME phase6_task4b_runner_test
          COMMAND "${Python3_EXECUTABLE}" -B -m
                  tests.phase6.phase6_task4b_runner_test)
 set_tests_properties(phase6_task4b_runner_test PROPERTIES
+                     LABELS "P6_PYTORCH_REQUIRED"
                      WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
 
 add_test(NAME phase6_task4b_verification_test
