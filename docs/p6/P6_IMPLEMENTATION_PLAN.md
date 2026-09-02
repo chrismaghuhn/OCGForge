@@ -52,7 +52,7 @@ remains future evidence; this plan does not mark any gate `PASS`.
 
 ## 2. Task 1 — Contract freeze
 
-**Status:** CURRENT / AUTHORIZED — the work requested by this branch.
+**Status:** FINAL / MERGED — the accepted Phase-6 contract freeze.
 
 **Authorized files:** exactly these nine Markdown files:
 
@@ -87,8 +87,7 @@ automatically authorized.
 
 ## 3. Task 2 — Admitted supervision materialization, split, and inspector
 
-**Status:** NOT AUTHORIZED. Requires a separate user authorization after Task 1
-review.
+**Status:** FINAL / MERGED — the accepted Task-2 implementation.
 
 **Purpose:** Build the first data consumer above the accepted Phase-3B
 admission and Phase-5 representation without changing either source contract.
@@ -126,8 +125,7 @@ backend dependency is authorized by this task.
 
 ## 4. Task 3 — Framework-neutral BC architecture and reference interface
 
-**Status:** NOT AUTHORIZED. Requires a separate user authorization after Task 2
-review.
+**Status:** FINAL / MERGED — the accepted Task-3 implementation.
 
 **Purpose:** Specify and, where useful, implement a backend-neutral reference
 interface for state encoding, candidate encoding, exact-domain scoring, and

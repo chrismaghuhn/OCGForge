@@ -263,30 +263,34 @@ Accepted evidence: `H_exec=3c99e86c487361fc4e0f5f12678b4867e59232b7`,
 
 ## Phase 6 — Behavior Cloning baseline
 
-Status: **Task 1 CURRENT / AUTHORIZED — docs-only contract freeze**.
+Status: **Task 4A CURRENT / AUTHORIZED — zero-step backend infrastructure**.
 
-Phase 6 now has its first contract boundary, but Phase-6 implementation,
-training, backend selection, and checkpoint generation have not started. Task
-1 defines the semantics and future gates above the accepted public,
-trajectory/admission, and Phase-5 model-facing boundaries; it does not claim a
-learner or a trained policy.
+Phase 6 Tasks 1–3 are merged. Task 4A implements only the provisional
+PyTorch-side numeric/configuration codecs, admitted smoke-corpus bridge,
+checkpoint/inference boundary, and CUDA preflight; it executes zero optimizer
+steps and produces no trained-policy or gameplay claim. PyTorch is not selected
+as the primary backend, and Task 4B remains separately gated.
 
 | Phase-6 task | Status |
 | --- | --- |
-| Task 1 — BC/data/checkpoint/evaluation contract freeze | **CURRENT / AUTHORIZED** |
-| Task 2 — admitted supervision materialization, split, and model-input inspector | **NOT AUTHORIZED** |
-| Task 3 — framework-neutral BC architecture and reference interface | **NOT AUTHORIZED** |
-| Task 4 — first backend, smoke training, export, and fail-closed runner | **NOT AUTHORIZED** |
+| Task 1 — BC/data/checkpoint/evaluation contract freeze | **FINAL / MERGED** |
+| Task 2 — admitted supervision materialization, split, and model-input inspector | **FINAL / MERGED** |
+| Task 3 — framework-neutral BC architecture and reference interface | **FINAL / MERGED** |
+| Task 4A — provisional backend infrastructure, codecs, runner, and CUDA preflight | **CURRENT / AUTHORIZED — zero optimizer steps** |
+| Task 4B — one CUDA smoke run, canonical export/reload, and inference evidence | **NOT AUTHORIZED** |
 | Task 5 — frozen offline/gameplay evaluation and first divergence | **NOT AUTHORIZED** |
 | Task 6 — PyTorch/JAX backend bake-off | **NOT AUTHORIZED** |
 | Task 7 — first accepted BC baseline and checkpoint evidence | **NOT AUTHORIZED** |
 
-The current contract set is [P6_BC_CONTRACT.md](p6/P6_BC_CONTRACT.md),
+The current contract and implementation set is [P6_BC_CONTRACT.md](p6/P6_BC_CONTRACT.md),
 [P6_DATASET_AND_SPLIT_CONTRACT.md](p6/P6_DATASET_AND_SPLIT_CONTRACT.md),
 [P6_CHECKPOINT_AND_INFERENCE_CONTRACT.md](p6/P6_CHECKPOINT_AND_INFERENCE_CONTRACT.md),
 [P6_EVALUATION_PLAN.md](p6/P6_EVALUATION_PLAN.md), and
-[P6_IMPLEMENTATION_PLAN.md](p6/P6_IMPLEMENTATION_PLAN.md), with the
-architecture rationale in [ADR-0007](adr/ADR-0007-phase6-behavior-cloning-boundary.md).
+[P6_IMPLEMENTATION_PLAN.md](p6/P6_IMPLEMENTATION_PLAN.md), with the Task-4A
+numeric/provenance supplement in
+[P6_TASK4A_NUMERIC_AND_PROVENANCE_CONTRACT.md](p6/P6_TASK4A_NUMERIC_AND_PROVENANCE_CONTRACT.md)
+and the architecture rationale in
+[ADR-0007](adr/ADR-0007-phase6-behavior-cloning-boundary.md).
 
 Later tasks require separate authorization and independent review. They must
 not weaken determinism, privacy, candidate completeness, replay, or admission

@@ -240,6 +240,30 @@ target_link_libraries(phase6_bc_candidate_scorer_test PRIVATE ygo_phase6)
 add_test(NAME phase6_bc_candidate_scorer_test
          COMMAND phase6_bc_candidate_scorer_test)
 
+add_executable(phase6_task4_corpus_probe
+               tools/phase6_task4_corpus_probe/main.cpp
+               src/phase6/task4_numeric_projection.cpp)
+target_include_directories(phase6_task4_corpus_probe PRIVATE
+                           "${CMAKE_SOURCE_DIR}/src/phase6")
+target_link_libraries(phase6_task4_corpus_probe PRIVATE ygo_phase6 ygo_policy)
+if(MSVC)
+    target_compile_options(phase6_task4_corpus_probe PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(phase6_task4_corpus_probe PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+add_test(NAME phase6_task4a_codec_test
+         COMMAND "${Python3_EXECUTABLE}" -B -m tests.phase6.phase6_task4a_codec_test)
+set_tests_properties(phase6_task4a_codec_test PROPERTIES
+                     WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
+
+add_test(NAME phase6_task4a_corpus_test
+         COMMAND "${Python3_EXECUTABLE}" -B -m
+                 tests.phase6.phase6_task4a_corpus_test
+                 "$<TARGET_FILE:phase6_task4_corpus_probe>")
+set_tests_properties(phase6_task4a_corpus_test PROPERTIES
+                     WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
+
 add_library(ygo_teacher STATIC
     src/teacher/candidate_evaluator.cpp
     src/teacher/candidate_features.cpp
