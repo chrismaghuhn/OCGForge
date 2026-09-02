@@ -81,7 +81,6 @@ class Task4BExecutionReportV1:
     train_sample_count: int | None = None
     validation_sample_count: int | None = None
     test_sample_count: int | None = None
-    training_run_identity: str | None = None
     actual_optimizer_steps: int = 0
     gpu_memory_before: int | None = None
     gpu_memory_peak: int | None = None
@@ -124,7 +123,6 @@ class Task4BExecutionReportV1:
             "train_sample_count": self.train_sample_count,
             "validation_sample_count": self.validation_sample_count,
             "test_sample_count": self.test_sample_count,
-            "training_run_identity": self.training_run_identity,
             "actual_optimizer_steps": self.actual_optimizer_steps,
             "GPU_MEMORY_BEFORE": self.gpu_memory_before,
             "GPU_MEMORY_PEAK": self.gpu_memory_peak,
@@ -146,6 +144,16 @@ class Task4BExecutionReportV1:
             sort_keys=True,
             separators=(",", ":"),
         )
+
+
+@dataclasses.dataclass
+class _ExecutionReportState:
+    report: Task4BExecutionReportV1 = dataclasses.field(
+        default_factory=Task4BExecutionReportV1
+    )
+
+    def update(self, **changes: object) -> None:
+        self.report = dataclasses.replace(self.report, **changes)
 
 
 @dataclasses.dataclass
@@ -427,8 +435,8 @@ class AdmittedCorpusArtifactsV1:
 
 
 @dataclasses.dataclass(frozen=True)
-class Task4BSmokeRunResult:
-    """Authoritative Task-2 preparation plus Task-3 CUDA training result."""
+class _Task4BPreparationResult:
+    """Private Task-2/3 preparation state used before finalization."""
 
     source_root: Path
     output_dir: Path
@@ -444,8 +452,20 @@ class Task4BSmokeRunResult:
     test_sample_count: int
     ordered_train_samples: tuple[codec.CorpusSampleV1, ...]
     training_result: "Task4BCudaTrainingResultV1"
-    finalization: "Task4BFinalizationV1 | None" = None
-    execution_report: Task4BExecutionReportV1 | None = None
+
+
+@dataclasses.dataclass(frozen=True)
+class Task4BSmokeRunResult:
+    """Value-owned finalized Task-4 result surface."""
+
+    report: Task4BExecutionReportV1
+    report_json: str
+    corpus_bytes: bytes
+    authority_bytes: bytes
+    checkpoint_bytes: bytes
+    training_run_manifest_bytes: bytes
+    smoke_evidence_bytes: bytes
+    completion_receipt: task4_inference.Task4BCompletionReceiptV1
 
 
 def _partition_counts(
@@ -739,7 +759,7 @@ def _numeric_model_input_for_sample(
 
 
 def _finalize_task4b_artifacts(
-    run_result: Task4BSmokeRunResult,
+    run_result: _Task4BPreparationResult,
     training_result: Task4BCudaTrainingResultV1,
 ) -> Task4BFinalizationV1:
     """Export and attest the canonical inference/checkpoint boundary."""
@@ -864,7 +884,7 @@ def _completion_receipt_projection(
 
 def _write_smoke_artifacts(
     output_dir: Path,
-    run_result: Task4BSmokeRunResult,
+    run_result: _Task4BPreparationResult,
     finalization: Task4BFinalizationV1,
     report: Task4BExecutionReportV1,
 ) -> None:
@@ -901,6 +921,8 @@ def _write_smoke_artifacts(
 
 def _run_cuda_training(
     ordered_train_samples: Sequence[codec.CorpusSampleV1],
+    *,
+    report_state: _ExecutionReportState | None = None,
 ) -> Task4BCudaTrainingResultV1:
     if not ordered_train_samples:
         raise Task4BTrainingError(
@@ -909,7 +931,10 @@ def _run_cuda_training(
             0,
         )
     preflight = task4_cuda.require_task4_cuda()
+    if report_state is not None:
+        report_state.update(**_execution_report_preflight_fields(preflight))
     device = _require_training_preflight(preflight)
+    counter = _SuccessfulStepCounter()
     try:
         torch.use_deterministic_algorithms(True, warn_only=False)
         torch.set_float32_matmul_precision("highest")
@@ -939,6 +964,8 @@ def _run_cuda_training(
         torch.cuda.synchronize(device)
         torch.cuda.reset_peak_memory_stats(device)
         gpu_memory_before = int(torch.cuda.memory_allocated(device))
+        if report_state is not None:
+            report_state.update(gpu_memory_before=gpu_memory_before)
         initial_loss_tensor = _loss_for_sample(
             model,
             ordered_train_samples[0],
@@ -946,8 +973,9 @@ def _run_cuda_training(
             0,
         )
         initial_loss = float(initial_loss_tensor.detach().cpu().item())
+        if report_state is not None:
+            report_state.update(initial_loss=initial_loss)
         del initial_loss_tensor
-        counter = _SuccessfulStepCounter()
         model.train()
         for step_index in range(codec.SMOKE_MAX_OPTIMIZER_STEPS):
             optimizer.zero_grad(set_to_none=True)
@@ -958,6 +986,8 @@ def _run_cuda_training(
                 counter.value,
             )
             _apply_optimizer_update(optimizer, loss, counter)
+            if report_state is not None:
+                report_state.update(actual_optimizer_steps=counter.value)
         if counter.value != codec.SMOKE_MAX_OPTIMIZER_STEPS:
             raise Task4BTrainingError(
                 "OPTIMIZER_STEP_COUNT_MISMATCH",
@@ -966,9 +996,13 @@ def _run_cuda_training(
             )
         torch.cuda.synchronize(device)
         gpu_memory_peak = int(torch.cuda.max_memory_allocated(device))
+        if report_state is not None:
+            report_state.update(gpu_memory_peak=gpu_memory_peak)
         optimizer.zero_grad(set_to_none=True)
         torch.cuda.synchronize(device)
         gpu_memory_after = int(torch.cuda.memory_allocated(device))
+        if report_state is not None:
+            report_state.update(gpu_memory_after=gpu_memory_after)
         with torch.no_grad():
             final_loss_tensor = _loss_for_sample(
                 model,
@@ -977,6 +1011,8 @@ def _run_cuda_training(
                 counter.value,
             )
             final_loss = float(final_loss_tensor.detach().cpu().item())
+        if report_state is not None:
+            report_state.update(final_loss=final_loss)
         del final_loss_tensor
         return Task4BCudaTrainingResultV1(
             preflight=preflight,
@@ -991,9 +1027,13 @@ def _run_cuda_training(
     except task4_cuda.CudaPreflightError:
         raise
     except Task4BTrainingError:
+        if report_state is not None:
+            report_state.update(actual_optimizer_steps=counter.value)
         raise
     except (RuntimeError, TypeError, ValueError, codec.CodecError) as error:
-        steps = locals().get("counter").value if "counter" in locals() else 0
+        steps = counter.value
+        if report_state is not None:
+            report_state.update(actual_optimizer_steps=steps)
         raise Task4BTrainingError(
             "CUDA_TRAINING_FAILED",
             f"CUDA training failed: {error}",
@@ -1091,14 +1131,13 @@ def run_task4b_smoke(
     """
 
     requested_output_dir = Path(output_dir).resolve()
-    report = Task4BExecutionReportV1()
+    report_state = _ExecutionReportState()
     try:
         source_root = _canonical_source_root()
         h_exec = _verify_clean_h_exec(source_root)
-        report = dataclasses.replace(report, h_exec=h_exec)
+        report_state.update(h_exec=h_exec)
         probe_path, probe_sha256 = _build_and_attest_probe(source_root, build_dir)
-        report = dataclasses.replace(
-            report,
+        report_state.update(
             corpus_probe_sha256=probe_sha256,
             corpus_probe_source_commit=h_exec,
         )
@@ -1112,8 +1151,7 @@ def run_task4b_smoke(
         corpus = admitted.corpus
         train_count, validation_count, test_count = _partition_counts(corpus.samples)
         ordered_train_samples = _ordered_train_samples(corpus.samples)
-        report = dataclasses.replace(
-            report,
+        report_state.update(
             source_dataset_identity=corpus.source_dataset_identity,
             dataset_split_identity=corpus.split_identity,
             card_vocabulary_identity=corpus.card_vocabulary_identity,
@@ -1121,10 +1159,11 @@ def run_task4b_smoke(
             validation_sample_count=validation_count,
             test_sample_count=test_count,
         )
-        training_result = _run_cuda_training(ordered_train_samples)
-        report = dataclasses.replace(
-            report,
-            **_execution_report_preflight_fields(training_result.preflight),
+        training_result = _run_cuda_training(
+            ordered_train_samples,
+            report_state=report_state,
+        )
+        report_state.update(
             actual_optimizer_steps=training_result.actual_optimizer_steps,
             gpu_memory_before=training_result.gpu_memory_before,
             gpu_memory_peak=training_result.gpu_memory_peak,
@@ -1132,7 +1171,7 @@ def run_task4b_smoke(
             initial_loss=training_result.initial_loss,
             final_loss=training_result.final_loss,
         )
-        preparation = Task4BSmokeRunResult(
+        preparation = _Task4BPreparationResult(
             source_root=source_root,
             output_dir=requested_output_dir,
             h_exec=h_exec,
@@ -1149,71 +1188,76 @@ def run_task4b_smoke(
             training_result=training_result,
         )
         finalization = _finalize_task4b_artifacts(preparation, training_result)
-        report = dataclasses.replace(
-            report,
-            training_run_identity=finalization.training_run_identity,
+        report_state.update(
             smoke_pass=True,
             task4b_pass=False,
             checkpoint_identity=finalization.checkpoint_identity,
             smoke_evidence_identity=finalization.smoke_evidence_identity,
         )
+        report = report_state.report
         _write_smoke_artifacts(
             requested_output_dir,
             preparation,
             finalization,
             report,
         )
-        return dataclasses.replace(
-            preparation,
-            finalization=finalization,
-            execution_report=report,
+        return Task4BSmokeRunResult(
+            report=report,
+            report_json=report.to_json(),
+            corpus_bytes=preparation.admitted_corpus.corpus_bytes,
+            authority_bytes=preparation.admitted_corpus.authority_bytes,
+            checkpoint_bytes=finalization.exported_checkpoint.artifact_bytes,
+            training_run_manifest_bytes=codec.canonical_training_run_manifest_bytes(
+                finalization.training_run_manifest
+            ),
+            smoke_evidence_bytes=codec.canonical_smoke_evidence_bytes(
+                finalization.smoke_evidence
+            ),
+            completion_receipt=finalization.completion_receipt,
         )
     except task4_cuda.CudaPreflightError as error:
-        report = dataclasses.replace(
-            report,
+        report_state.update(
             error_code=error.code,
             actual_optimizer_steps=error.actual_optimizer_steps,
         )
         _write_atomic_bytes(
             requested_output_dir / "task4b-execution-report.json",
-            report.to_json().encode("utf-8"),
+            report_state.report.to_json().encode("utf-8"),
         )
         raise
     except Task4BTrainingError as error:
-        report = dataclasses.replace(
-            report,
+        report_state.update(
             error_code=error.code,
             actual_optimizer_steps=error.actual_optimizer_steps,
         )
         _write_atomic_bytes(
             requested_output_dir / "task4b-execution-report.json",
-            report.to_json().encode("utf-8"),
+            report_state.report.to_json().encode("utf-8"),
         )
         raise
     except Task4BSmokeError as error:
-        report = dataclasses.replace(report, error_code=error.code)
+        report_state.update(error_code=error.code)
         _write_atomic_bytes(
             requested_output_dir / "task4b-execution-report.json",
-            report.to_json().encode("utf-8"),
+            report_state.report.to_json().encode("utf-8"),
         )
         if error.report is not None:
             raise
         raise Task4BSmokeError(
             error.code,
             str(error),
-            report=report,
+            report=report_state.report,
         ) from error
     except (codec.CodecError, task4_inference.Task4InferenceError, OSError, RuntimeError, TypeError, ValueError) as error:
-        report = dataclasses.replace(
-            report,
+        report_state.update(
             error_code=getattr(error, "code", "TASK4B_FAILED"),
         )
         _write_atomic_bytes(
             requested_output_dir / "task4b-execution-report.json",
-            report.to_json().encode("utf-8"),
+            report_state.report.to_json().encode("utf-8"),
         )
         raise Task4BSmokeError(
-            report.error_code or "TASK4B_FAILED",
+            report_state.report.error_code or "TASK4B_FAILED",
             str(error),
-            report=report,
+            report=report_state.report,
         ) from error
