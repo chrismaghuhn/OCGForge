@@ -2,10 +2,11 @@
 
 ## Status
 
-Approved for implementation on branch `chris/phase6-task4b-cuda-smoke`, based
-on `1727f09eb0fdc4e4e25e3f9ced9748feb4058234`. This design authorizes the
-runner and its zero-step verification only. It does not authorize the CUDA
-training run until the committed `H_exec` has been independently reviewed.
+`PROPOSED — pending independent specification review` on branch
+`chris/phase6-task4b-cuda-smoke`, based on
+`1727f09eb0fdc4e4e25e3f9ced9748feb4058234`. The design is not yet an
+implementation-plan authorization. It authorizes no CUDA training run and no
+optimizer step.
 
 ## Goal
 
@@ -35,6 +36,22 @@ The `training_code_commit` in `TrainingRunManifestV1` is derived inside the
 runner from the exact `H_exec` checkout. The evidence records that source head
 explicitly. The later evidence commit changes no source used by the run; its
 evidence source head remains `H_exec`.
+
+The runner enforces the clean source-head precondition itself before it builds
+or executes the corpus probe, performs CUDA preflight, creates an optimizer,
+or performs any other training work. It executes the equivalent of:
+
+```text
+git -C <source_root> rev-parse HEAD
+git -C <source_root> status --porcelain --untracked-files=all
+```
+
+It accepts the first command only when the result is exactly 40 lowercase
+hexadecimal characters, and accepts the second only when the result is empty.
+The accepted HEAD is the sole source for `training_code_commit` and
+`H_exec`. Ignored build/cache artifacts are allowed because they do not appear
+in this porcelain status. Any non-clean result fails closed with
+`actual_optimizer_steps=0`, before corpus creation and before CUDA preflight.
 
 ## Hard boundary
 
@@ -86,10 +103,12 @@ Teacher, RandomLegal, a heuristic, a first candidate, or CPU training.
 
 ### `tools/phase6/task4b_cuda_smoke.py`
 
-The CLI is a thin launcher. It accepts only a corpus-probe executable path and
-an output directory. It does not accept optimizer-step counts, memory values,
-checkpoint identities, completion flags, dataset identities, split identities,
-or loss values. The runner derives all of those values.
+The CLI is a thin launcher. It accepts only the source-root/build configuration
+needed to build the accepted `phase6_task4_corpus_probe` target and an output
+directory. It does not accept an arbitrary probe executable path, optimizer-
+step counts, memory values, checkpoint identities, completion flags, dataset
+identities, split identities, or loss values. The runner derives all of those
+values.
 
 ### Existing Task-4A modules
 
@@ -106,8 +125,22 @@ The runner uses, without changing their semantic meaning:
 ## Corpus and training data flow
 
 The runner creates a private temporary directory and invokes the accepted C++
-corpus probe exactly once. The probe produces the derived corpus artifact and
-the independent authority sidecar. The runner then:
+corpus probe exactly once. Before that invocation, the runner builds the
+`phase6_task4_corpus_probe` target from the clean `H_exec` source tree, resolves
+the resulting target path within the requested build directory, and computes
+its SHA-256. It records:
+
+```text
+CORPUS_PROBE_SHA256 = SHA-256 of the exact executed binary
+CORPUS_PROBE_SOURCE_COMMIT = H_exec
+```
+
+The runner executes exactly that hashed binary once. The binary hash and source
+commit are build/execution provenance only; they never enter DatasetManifest,
+sample, checkpoint, or gameplay identity. A missing, ambiguous, out-of-build,
+or unbuildable target fails closed before corpus creation. The probe produces
+the derived corpus artifact and the independent authority sidecar. The runner
+then:
 
 1. decodes both artifacts strictly;
 2. admits the corpus through `admit_corpus_artifact()` and the decoded authority;
@@ -205,19 +238,51 @@ The generated evidence set contains the exact corpus and authority artifacts,
 canonical checkpoint bytes, canonical run-manifest bytes, canonical smoke-
 evidence bytes, and a derived JSON/Markdown report. No generated file is
 hand-edited. The report includes the source `H_exec`, actual PyTorch/CUDA
-facts, dataset counts, losses, identities, and the explicit non-claims.
+facts, probe hash/source commit, dataset counts, losses, identities, and the
+explicit non-claims.
+
+The runner always writes a machine-readable `Task4BExecutionReportV1`,
+including when the single attempt fails. It writes a complete temporary JSON
+file in the destination directory, flushes and fsyncs it, and publishes it
+with an atomic same-directory replace. The report contains:
+
+```text
+schema_id
+H_exec
+corpus_probe_sha256
+corpus_probe_source_commit
+cuda_preflight_identity or null
+source_dataset_identity or null
+dataset_split_identity or null
+card_vocabulary_identity or null
+train/validation/test sample counts or null
+actual_optimizer_steps
+GPU_MEMORY_BEFORE/PEAK/AFTER or null
+error_code or null
+TASK4B_PASS
+checkpoint_identity or null
+smoke_evidence_identity or null
+```
+
+On any failure, `TASK4B_PASS=false`, the checkpoint and smoke-evidence
+identities are null, and the report preserves the internally counted steps and
+all provenance values reached before the failure. This report is execution
+audit evidence, not a positive `Task4BSmokeEvidenceV1`.
 
 ## Failure behavior
 
 Any preflight, admission, device-placement, determinism-setting, optimizer,
 forward, loss, export, reload, or inference failure is fail-closed. The CLI
-reports `TASK4B_PASS=NO`, the internally known successful-step count, and the
-structured blocker. It does not retry, change configuration, use CPU, invoke
-the Teacher, select a candidate, or fabricate evidence.
+reports `TASK4B_PASS=NO`, atomically publishes the execution report, and
+returns the internally known successful-step count and structured blocker. It
+does not retry, change configuration, use CPU, invoke the Teacher, select a
+candidate, or fabricate positive evidence.
 
-If preflight fails, the count is exactly zero and the optimizer is never
-created. If a step fails after `N` successful calls, the count is exactly `N`
-and positive completion evidence is impossible.
+If clean-`H_exec` or probe-build verification fails, the count is exactly zero
+and CUDA preflight is not reached. If CUDA preflight fails, the count is
+exactly zero and the optimizer is never created. If a step fails after `N`
+successful calls, the count is exactly `N` and positive completion evidence is
+impossible.
 
 ## Focused zero-step verification
 
