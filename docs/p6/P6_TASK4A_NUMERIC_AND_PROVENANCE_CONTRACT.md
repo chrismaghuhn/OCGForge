@@ -321,9 +321,15 @@ phase6_training_run.v1.<lowercase SHA-256 of canonical manifest bytes>
 A Task-4A zero-step manifest is infrastructure/provenance test data, not
 training acceptance evidence. The generic/default constructor is explicitly
 zero-step-only. Task-4B `maximum_optimizer_steps`, `actual_optimizer_steps`,
-the CUDA-preflight attestation, deterministic execution identity, and optional
-GPU-memory telemetry belong to a separate `Task4BSmokeEvidenceV1` sidecar;
-they are not new top-level `TrainingRunManifestV1` fields.
+the CUDA-preflight attestation, deterministic execution identity, completion
+flags, and optional GPU-memory telemetry belong to a separate
+`Task4BSmokeEvidenceV1` sidecar;
+they are not new top-level `TrainingRunManifestV1` fields. The sidecar builder
+accepts the finalized manifest, recomputes `training_run_identity` from its
+canonical bytes, and does not accept a caller-supplied run identity. Positive
+step evidence additionally requires the manifest's final checkpoint identity,
+a successful fresh checkpoint reload, and successful deterministic frozen
+inference evidence.
 
 For the fixed Teacher-vs-Teacher smoke corpus, both accepted Teacher-v1
 artifact identities are required in `behavior_policy_source_identities` and
@@ -370,8 +376,10 @@ sidecar, but never enters checkpoint semantic identity.
 The inference numeric response contains exactly N finite binary32 scores in
 source order. Request/response identities bind checkpoint, the one validated
 numeric model-input unit, ordered candidate domain, and public semantic
-decision, and the numeric-input identity. Response identity hashes only the canonical selection envelope. A
-consumed request cannot be consumed again. An existing Phase-5
+decision. The unit's numeric integrity identity is held in the Task-4 pending
+execution sidecar and is checked against the exact rows used for inference;
+it is not part of `InferenceRequestV1`. Response identity hashes only the
+canonical selection envelope. A consumed request cannot be consumed again. An existing Phase-5
 `public_candidate_domain_digest` is the ordered-domain identity; the
 `phase6_ordered_candidate_domain.v1` digest is used only when the Phase-5
 field is absent.

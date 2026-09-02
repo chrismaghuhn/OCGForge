@@ -472,6 +472,8 @@ class Task4BSmokeEvidenceV1:
     maximum_optimizer_steps: int
     actual_optimizer_steps: int
     final_exported_checkpoint_identity: Optional[str] = None
+    fresh_checkpoint_reload: bool = False
+    deterministic_frozen_inference: bool = False
     gpu_memory_before: Optional[int] = None
     gpu_memory_peak: Optional[int] = None
     gpu_memory_after: Optional[int] = None
@@ -527,6 +529,9 @@ def canonical_smoke_evidence_bytes(
         _validate_prefixed_digest(evidence.final_exported_checkpoint_identity,
                                   CHECKPOINT_ID_PREFIX,
                                   "smoke final checkpoint identity")
+    if (not isinstance(evidence.fresh_checkpoint_reload, bool) or
+            not isinstance(evidence.deterministic_frozen_inference, bool)):
+        raise CodecError("smoke completion evidence must use boolean values")
     memories = (evidence.gpu_memory_before, evidence.gpu_memory_peak,
                 evidence.gpu_memory_after)
     if any(value is not None for value in memories):
@@ -535,6 +540,13 @@ def canonical_smoke_evidence_bytes(
             raise CodecError("GPU memory evidence is invalid")
     if evidence.actual_optimizer_steps > 0 and any(value is None for value in memories):
         raise CodecError("positive smoke evidence requires complete GPU memory evidence")
+    if evidence.actual_optimizer_steps > 0:
+        if evidence.final_exported_checkpoint_identity is None:
+            raise CodecError("positive smoke evidence requires a final checkpoint identity")
+        if not evidence.fresh_checkpoint_reload:
+            raise CodecError("positive smoke evidence requires a fresh checkpoint reload")
+        if not evidence.deterministic_frozen_inference:
+            raise CodecError("positive smoke evidence requires deterministic frozen inference")
     out = [pack_string(evidence.schema_id),
            pack_string(evidence.training_run_identity),
            pack_string(evidence.source_dataset_identity),
@@ -553,7 +565,9 @@ def canonical_smoke_evidence_bytes(
            pack_string(evidence.cuda_preflight_identity),
            pack_u32(evidence.maximum_optimizer_steps),
            pack_u32(evidence.actual_optimizer_steps),
-           _optional_string(evidence.final_exported_checkpoint_identity)]
+           _optional_string(evidence.final_exported_checkpoint_identity),
+           pack_u8(1 if evidence.fresh_checkpoint_reload else 0),
+           pack_u8(1 if evidence.deterministic_frozen_inference else 0)]
     for value in memories:
         out.append(pack_u8(0) if value is None else pack_u8(1) + pack_u64(value))
     return b"".join(out)

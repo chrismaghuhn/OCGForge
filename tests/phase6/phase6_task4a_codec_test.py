@@ -162,6 +162,54 @@ class Task4ACodecTests(unittest.TestCase):
         self.assertEqual(left.response_identity, right.response_identity)
         self.assertEqual(left.selected_public_action_key, "public_action.v1.01")
 
+    def test_positive_smoke_evidence_requires_checkpoint_reload_and_inference(self):
+        evidence = codec.Task4BSmokeEvidenceV1(
+            training_run_identity="phase6_training_run.v1." + "0" * 64,
+            source_dataset_identity="1" * 64,
+            dataset_split_identity="phase6_dataset_split.v1." + "2" * 64,
+            model_architecture_config_identity=codec.architecture_config_identity(),
+            card_vocabulary_identity="model_card_vocabulary.v1." + "3" * 64,
+            optimizer_configuration_identity=codec.optimizer_config_identity(),
+            learning_rate_schedule_identity=codec.schedule_config_identity(),
+            batch_configuration_identity=codec.batch_config_identity(),
+            gradient_accumulation_configuration_identity=codec.gradient_accumulation_identity(),
+            training_rng_contract_identity="ocgforge.phase6.training_rng.v1",
+            training_seed_or_initialization_identity=codec.rng_initialization_identity(),
+            precision_mode_identity=codec.precision_identity(),
+            deterministic_execution_configuration_identity=codec.deterministic_execution_identity(),
+            device_and_distributed_provenance_identity=codec.execution_provenance_identity(),
+            cuda_preflight_identity=codec.cuda_preflight_identity_for(codec.CudaPreflightFactsV1(
+                cuda_available=True,
+                device_count=1,
+                execution_provenance=codec.ExecutionProvenanceV1(),
+            )),
+            maximum_optimizer_steps=codec.SMOKE_MAX_OPTIMIZER_STEPS,
+            actual_optimizer_steps=1,
+            gpu_memory_before=1,
+            gpu_memory_peak=2,
+            gpu_memory_after=1,
+        )
+        with self.assertRaises(codec.CodecError):
+            codec.canonical_smoke_evidence_bytes(evidence)
+        with self.assertRaises(codec.CodecError):
+            codec.canonical_smoke_evidence_bytes(dataclasses.replace(
+                evidence,
+                final_exported_checkpoint_identity="phase6_checkpoint.v1." + "4" * 64,
+            ))
+        with self.assertRaises(codec.CodecError):
+            codec.canonical_smoke_evidence_bytes(dataclasses.replace(
+                evidence,
+                final_exported_checkpoint_identity="phase6_checkpoint.v1." + "4" * 64,
+                fresh_checkpoint_reload=True,
+            ))
+        accepted = dataclasses.replace(
+            evidence,
+            final_exported_checkpoint_identity="phase6_checkpoint.v1." + "4" * 64,
+            fresh_checkpoint_reload=True,
+            deterministic_frozen_inference=True,
+        )
+        self.assertTrue(codec.canonical_smoke_evidence_bytes(accepted))
+
     def test_phase5_candidate_domain_digest_precedes_task4_fallback(self):
         keys = ("public_action.v1.00", "public_action.v1.01")
         phase5_digest = "9" * 64

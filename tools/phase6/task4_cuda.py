@@ -69,67 +69,157 @@ class CudaPreflightResultV1:
         ))
 
 
+def _require_attested_cuda_preflight(
+    preflight: CudaPreflightResultV1,
+) -> codec.ExecutionProvenanceV1:
+    if not isinstance(preflight, CudaPreflightResultV1):
+        raise CudaPreflightError(
+            "CUDA_DEVICE_MISMATCH",
+            "CUDA provenance is not a Task-4 preflight result",
+        )
+    if preflight._attestation is not _CUDA_PREFLIGHT_ATTESTATION:
+        raise CudaPreflightError(
+            "CUDA_DEVICE_MISMATCH",
+            "CUDA provenance is not attested by the real Task-4 preflight path",
+        )
+    if (
+        preflight.device_type != codec.EXPECTED_DEVICE_TYPE or
+        not isinstance(preflight.device_index, int) or
+        isinstance(preflight.device_index, bool) or
+        preflight.device_index != codec.EXPECTED_DEVICE_INDEX or
+        preflight.gpu_name != codec.EXPECTED_GPU_NAME or
+        not isinstance(preflight.device_count, int) or
+        isinstance(preflight.device_count, bool) or
+        preflight.device_count < 1 or
+        not isinstance(preflight.actual_optimizer_steps, int) or
+        isinstance(preflight.actual_optimizer_steps, bool) or
+        preflight.actual_optimizer_steps != 0 or
+        preflight.cpu_fallback is not False
+    ):
+        raise CudaPreflightError(
+            "CUDA_DEVICE_MISMATCH",
+            "training provenance requires a clean zero-step cuda:0 preflight",
+        )
+    try:
+        provenance = preflight.execution_provenance()
+        codec.canonical_execution_provenance_bytes(provenance)
+        codec.canonical_cuda_preflight_bytes(codec.CudaPreflightFactsV1(
+            cuda_available=True,
+            device_count=preflight.device_count,
+            execution_provenance=provenance,
+        ))
+    except (codec.CodecError, TypeError, ValueError) as error:
+        raise CudaPreflightError(
+            "CUDA_DEVICE_MISMATCH",
+            f"CUDA preflight provenance is not canonical: {error}",
+        ) from error
+    return provenance
+
+
+def finalize_training_run_manifest_from_cuda_preflight(
+    preflight: CudaPreflightResultV1,
+    base_manifest: codec.TrainingRunManifestV1,
+    *,
+    final_exported_checkpoint_identity: str | None = None,
+) -> codec.TrainingRunManifestV1:
+    """Bind a zero-step manifest to the exact attested CUDA preflight facts."""
+
+    provenance = _require_attested_cuda_preflight(preflight)
+    if not isinstance(base_manifest, codec.TrainingRunManifestV1):
+        raise CudaPreflightError(
+            "INVALID_TRAINING_MANIFEST",
+            "training provenance requires a TrainingRunManifestV1",
+        )
+    manifest = dataclasses.replace(
+        base_manifest,
+        framework_version=preflight.framework_version,
+        device_and_distributed_provenance_identity=(
+            codec.execution_provenance_identity_for(provenance)
+        ),
+        final_exported_checkpoint_identity=final_exported_checkpoint_identity,
+    )
+    try:
+        codec.canonical_training_run_manifest_bytes(manifest)
+    except (codec.CodecError, TypeError, ValueError) as error:
+        raise CudaPreflightError(
+            "INVALID_TRAINING_MANIFEST",
+            f"training manifest is not canonical: {error}",
+        ) from error
+    return manifest
+
+
 def smoke_evidence_from_cuda_preflight(
     preflight: CudaPreflightResultV1,
+    manifest: codec.TrainingRunManifestV1,
     *,
-    training_run_identity: str,
-    source_dataset_identity: str,
-    dataset_split_identity: str,
-    card_vocabulary_identity: str,
-    training_code_commit: str,
     actual_optimizer_steps: int = 0,
-    final_exported_checkpoint_identity: str | None = None,
+    fresh_checkpoint_reload: bool = False,
+    deterministic_frozen_inference: bool = False,
     gpu_memory_before: int | None = None,
     gpu_memory_peak: int | None = None,
     gpu_memory_after: int | None = None,
 ) -> codec.Task4BSmokeEvidenceV1:
-    """Build Task-4B evidence from the same real CUDA preflight result."""
+    """Build Task-4B evidence from an attested, finalized run manifest."""
 
-    manifest = codec.default_training_run_manifest(
-        source_dataset_identity=source_dataset_identity,
-        dataset_split_identity=dataset_split_identity,
-        card_vocabulary_identity=card_vocabulary_identity,
-        training_code_commit=training_code_commit,
-        actual_optimizer_steps=0,
-    )
-    if preflight.actual_optimizer_steps != 0 or preflight.cpu_fallback:
+    provenance = _require_attested_cuda_preflight(preflight)
+    if not isinstance(manifest, codec.TrainingRunManifestV1):
         raise CudaPreflightError(
-            "CUDA_DEVICE_MISMATCH",
-            "training provenance requires a clean zero-step CUDA preflight",
+            "INVALID_TRAINING_MANIFEST",
+            "smoke evidence requires a TrainingRunManifestV1",
         )
-    if (actual_optimizer_steps > 0 and
-            preflight._attestation is not _CUDA_PREFLIGHT_ATTESTATION):
-        raise CudaPreflightError(
-            "CUDA_DEVICE_MISMATCH",
-            "positive smoke evidence requires the real CUDA preflight path",
-        )
-    evidence = codec.Task4BSmokeEvidenceV1(
-        training_run_identity=training_run_identity,
-        source_dataset_identity=manifest.source_dataset_identity,
-        dataset_split_identity=manifest.dataset_split_identity,
-        model_architecture_config_identity=manifest.model_architecture_config_identity,
-        card_vocabulary_identity=manifest.card_vocabulary_identity,
-        optimizer_configuration_identity=manifest.optimizer_configuration_identity,
-        learning_rate_schedule_identity=manifest.learning_rate_schedule_identity,
-        batch_configuration_identity=manifest.batch_configuration_identity,
-        gradient_accumulation_configuration_identity=manifest.gradient_accumulation_configuration_identity,
-        training_rng_contract_identity=manifest.training_rng_contract_identity,
-        training_seed_or_initialization_identity=manifest.training_seed_or_initialization_identity,
-        precision_mode_identity=manifest.precision_mode_identity,
-        deterministic_execution_configuration_identity=codec.deterministic_execution_identity(),
-        device_and_distributed_provenance_identity=preflight.execution_provenance_identity,
-        cuda_preflight_identity=preflight.cuda_preflight_identity,
-        maximum_optimizer_steps=codec.SMOKE_MAX_OPTIMIZER_STEPS,
-        actual_optimizer_steps=actual_optimizer_steps,
-        final_exported_checkpoint_identity=final_exported_checkpoint_identity,
-        gpu_memory_before=gpu_memory_before,
-        gpu_memory_peak=gpu_memory_peak,
-        gpu_memory_after=gpu_memory_after,
-    )
     try:
+        codec.canonical_training_run_manifest_bytes(manifest)
+        live_provenance_identity = codec.execution_provenance_identity_for(provenance)
+    except (codec.CodecError, TypeError, ValueError) as error:
+        raise CudaPreflightError(
+            "INVALID_TRAINING_MANIFEST",
+            f"training manifest is not canonical: {error}",
+        ) from error
+    if manifest.framework_version != preflight.framework_version:
+        raise CudaPreflightError(
+            "CUDA_DEVICE_MISMATCH",
+            "training manifest framework version is not the live preflight version",
+        )
+    if manifest.framework_backend_identity != provenance.backend_identity:
+        raise CudaPreflightError(
+            "CUDA_DEVICE_MISMATCH",
+            "training manifest backend is not the live preflight backend",
+        )
+    if manifest.device_and_distributed_provenance_identity != live_provenance_identity:
+        raise CudaPreflightError(
+            "CUDA_DEVICE_MISMATCH",
+            "training manifest execution provenance is not the live CUDA preflight provenance",
+        )
+    try:
+        run_identity = codec.training_run_identity(manifest)
+        evidence = codec.Task4BSmokeEvidenceV1(
+            training_run_identity=run_identity,
+            source_dataset_identity=manifest.source_dataset_identity,
+            dataset_split_identity=manifest.dataset_split_identity,
+            model_architecture_config_identity=manifest.model_architecture_config_identity,
+            card_vocabulary_identity=manifest.card_vocabulary_identity,
+            optimizer_configuration_identity=manifest.optimizer_configuration_identity,
+            learning_rate_schedule_identity=manifest.learning_rate_schedule_identity,
+            batch_configuration_identity=manifest.batch_configuration_identity,
+            gradient_accumulation_configuration_identity=manifest.gradient_accumulation_configuration_identity,
+            training_rng_contract_identity=manifest.training_rng_contract_identity,
+            training_seed_or_initialization_identity=manifest.training_seed_or_initialization_identity,
+            precision_mode_identity=manifest.precision_mode_identity,
+            deterministic_execution_configuration_identity=codec.deterministic_execution_identity(),
+            device_and_distributed_provenance_identity=manifest.device_and_distributed_provenance_identity,
+            cuda_preflight_identity=preflight.cuda_preflight_identity,
+            maximum_optimizer_steps=codec.SMOKE_MAX_OPTIMIZER_STEPS,
+            actual_optimizer_steps=actual_optimizer_steps,
+            final_exported_checkpoint_identity=manifest.final_exported_checkpoint_identity,
+            fresh_checkpoint_reload=fresh_checkpoint_reload,
+            deterministic_frozen_inference=deterministic_frozen_inference,
+            gpu_memory_before=gpu_memory_before,
+            gpu_memory_peak=gpu_memory_peak,
+            gpu_memory_after=gpu_memory_after,
+        )
         codec.canonical_smoke_evidence_bytes(evidence)
-    except codec.CodecError as error:
-        raise CudaPreflightError("CUDA_DEVICE_MISMATCH", str(error)) from error
+    except (codec.CodecError, TypeError, ValueError) as error:
+        raise CudaPreflightError("INVALID_SMOKE_EVIDENCE", str(error)) from error
     return evidence
 
 
