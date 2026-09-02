@@ -224,6 +224,7 @@ target_link_libraries(ygo_model PUBLIC ygo_trajectory)
 add_library(ygo_phase6 STATIC
     src/phase6/supervision_dataset.cpp
     src/phase6/model_input_inspector.cpp
+    src/phase6/bc_candidate_scorer.cpp
 )
 target_include_directories(ygo_phase6 PUBLIC "${CMAKE_SOURCE_DIR}/include")
 target_link_libraries(ygo_phase6 PUBLIC ygo_model)
@@ -232,6 +233,12 @@ if(MSVC)
 else()
     target_compile_options(ygo_phase6 PRIVATE -Wall -Wextra -Wpedantic)
 endif()
+
+add_executable(phase6_bc_candidate_scorer_test
+               tests/phase6/phase6_bc_candidate_scorer_test.cpp)
+target_link_libraries(phase6_bc_candidate_scorer_test PRIVATE ygo_phase6)
+add_test(NAME phase6_bc_candidate_scorer_test
+         COMMAND phase6_bc_candidate_scorer_test)
 
 add_library(ygo_teacher STATIC
     src/teacher/candidate_evaluator.cpp

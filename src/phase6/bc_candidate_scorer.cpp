@@ -1,0 +1,431 @@
+#include "ygo/phase6/bc_candidate_scorer.hpp"
+
+#include <algorithm>
+#include <cmath>
+#include <cstddef>
+#include <cstdint>
+#include <exception>
+#include <iterator>
+#include <limits>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <utility>
+
+namespace ygo::phase6 {
+namespace {
+
+class ScorerFailure final {
+public:
+    explicit ScorerFailure(const Phase6BcScorerErrorCode code) : code_(code) {}
+
+    Phase6BcScorerErrorCode code() const noexcept { return code_; }
+
+private:
+    Phase6BcScorerErrorCode code_;
+};
+
+[[noreturn]] void fail(const Phase6BcScorerErrorCode code) {
+    throw ScorerFailure(code);
+}
+
+bool byte_less(const std::string_view left, const std::string_view right) noexcept {
+    return std::lexicographical_compare(
+        left.begin(), left.end(), right.begin(), right.end(),
+        [](const char left_byte, const char right_byte) {
+            return static_cast<unsigned char>(left_byte) <
+                   static_cast<unsigned char>(right_byte);
+        });
+}
+
+void validate_encoded_input(const model::EncodedModelInputV1& encoded) {
+    try {
+        (void)model::canonical_encoded_model_input_bytes(encoded);
+    } catch (const std::invalid_argument&) {
+        fail(Phase6BcScorerErrorCode::InvalidEncodedModelInput);
+    }
+}
+
+void validate_capacity(const model::EncodedModelInputV1& encoded,
+                       const std::optional<std::uint64_t> capacity) {
+    if (capacity.has_value() &&
+        *capacity < static_cast<std::uint64_t>(encoded.candidate_count())) {
+        fail(Phase6BcScorerErrorCode::CandidateCapacityTooSmall);
+    }
+}
+
+Phase6BcStateInputV1 state_input_from_encoded(
+    const model::EncodedModelInputV1& encoded) {
+    Phase6BcStateInputV1 state;
+    state.card_vocabulary_identity = encoded.card_vocabulary_identity;
+    state.public_observation_digest = encoded.public_observation_digest;
+    state.perspective_player = encoded.perspective_player;
+    state.decision_index = encoded.decision_index;
+    state.public_observation_context_kind_code =
+        encoded.public_observation_context_kind_code;
+    state.public_observation_context_player = encoded.public_observation_context_player;
+    state.observation_context_reference_ordinals =
+        encoded.observation_context_reference_ordinals;
+    state.globals = encoded.globals;
+    state.zones = encoded.zones;
+    state.entities = encoded.entities;
+    state.relationships = encoded.relationships;
+    state.chain = encoded.chain;
+    state.visible_events = encoded.visible_events;
+    state.match_context = encoded.match_context;
+
+    const auto collect_locator = [&encoded, &state](const std::uint32_t ordinal) {
+        if (ordinal >= encoded.public_locator_table.size()) {
+            fail(Phase6BcScorerErrorCode::InvalidEncodedModelInput);
+        }
+        state.public_locator_table.push_back(encoded.public_locator_table[ordinal]);
+    };
+    for (const auto ordinal : encoded.observation_context_reference_ordinals) {
+        collect_locator(ordinal);
+    }
+    for (const auto& entity : encoded.entities) {
+        collect_locator(entity.public_locator_ordinal);
+    }
+    for (const auto& relationship : encoded.relationships) {
+        collect_locator(relationship.source.public_locator_ordinal);
+        collect_locator(relationship.target.public_locator_ordinal);
+    }
+    for (const auto& link : encoded.chain.links) {
+        if (link.source.has_value()) {
+            collect_locator(link.source->public_locator_ordinal);
+        }
+        for (const auto& target : link.targets) {
+            collect_locator(target.public_locator_ordinal);
+        }
+    }
+    for (const auto& event : encoded.visible_events) {
+        if (event.public_locator_ordinal.has_value()) {
+            collect_locator(*event.public_locator_ordinal);
+        }
+        for (const auto ordinal : event.target_public_locator_ordinals) {
+            collect_locator(ordinal);
+        }
+    }
+    std::sort(state.public_locator_table.begin(), state.public_locator_table.end(),
+              [](const std::string& left, const std::string& right) {
+                  return byte_less(left, right);
+              });
+    state.public_locator_table.erase(
+        std::unique(state.public_locator_table.begin(), state.public_locator_table.end()),
+        state.public_locator_table.end());
+
+    const auto remap_locator = [&encoded, &state](const std::uint32_t ordinal) {
+        if (ordinal >= encoded.public_locator_table.size()) {
+            fail(Phase6BcScorerErrorCode::InvalidEncodedModelInput);
+        }
+        const auto& value = encoded.public_locator_table[ordinal];
+        const auto it = std::lower_bound(
+            state.public_locator_table.begin(), state.public_locator_table.end(), value,
+            [](const std::string& left, const std::string& right) {
+                return byte_less(left, right);
+            });
+        if (it == state.public_locator_table.end() || *it != value) {
+            fail(Phase6BcScorerErrorCode::InvalidEncodedModelInput);
+        }
+        return static_cast<std::uint32_t>(
+            std::distance(state.public_locator_table.begin(), it));
+    };
+    for (auto& ordinal : state.observation_context_reference_ordinals) {
+        ordinal = remap_locator(ordinal);
+    }
+    for (auto& entity : state.entities) {
+        entity.public_locator_ordinal = remap_locator(entity.public_locator_ordinal);
+    }
+    for (auto& relationship : state.relationships) {
+        relationship.source.public_locator_ordinal =
+            remap_locator(relationship.source.public_locator_ordinal);
+        relationship.target.public_locator_ordinal =
+            remap_locator(relationship.target.public_locator_ordinal);
+    }
+    for (auto& link : state.chain.links) {
+        if (link.source.has_value()) {
+            link.source->public_locator_ordinal =
+                remap_locator(link.source->public_locator_ordinal);
+        }
+        for (auto& target : link.targets) {
+            target.public_locator_ordinal = remap_locator(target.public_locator_ordinal);
+        }
+    }
+    for (auto& event : state.visible_events) {
+        if (event.public_locator_ordinal.has_value()) {
+            event.public_locator_ordinal = remap_locator(*event.public_locator_ordinal);
+        }
+        for (auto& ordinal : event.target_public_locator_ordinals) {
+            ordinal = remap_locator(ordinal);
+        }
+    }
+    return state;
+}
+
+bool contains_locator(const std::vector<std::string>& table,
+                      const std::string& value) {
+    const auto it = std::lower_bound(
+        table.begin(), table.end(), value,
+        [](const std::string& left, const std::string& right) {
+            return byte_less(left, right);
+        });
+    return it != table.end() && *it == value;
+}
+
+std::uint32_t locator_ordinal(const std::vector<std::string>& table,
+                              const std::string& value) {
+    const auto it = std::lower_bound(
+        table.begin(), table.end(), value,
+        [](const std::string& left, const std::string& right) {
+            return byte_less(left, right);
+        });
+    if (it == table.end() || *it != value) {
+        fail(Phase6BcScorerErrorCode::InvalidEncodedModelInput);
+    }
+    return static_cast<std::uint32_t>(std::distance(table.begin(), it));
+}
+
+std::vector<std::string> candidate_only_locators_from_encoded(
+    const model::EncodedModelInputV1& encoded,
+    const Phase6BcStateInputV1& state) {
+    std::vector<std::string> locators;
+    const auto collect = [&encoded, &state, &locators](
+                             const std::optional<model::EncodedCardReference>& reference) {
+        if (!reference.has_value()) return;
+        const auto ordinal = reference->reference.public_locator_ordinal;
+        if (ordinal >= encoded.public_locator_table.size()) {
+            fail(Phase6BcScorerErrorCode::InvalidEncodedModelInput);
+        }
+        const auto& value = encoded.public_locator_table[ordinal];
+        if (!contains_locator(state.public_locator_table, value)) {
+            locators.push_back(value);
+        }
+    };
+    for (const auto& candidate : encoded.candidate_features) {
+        collect(candidate.source_reference);
+        collect(candidate.target_reference);
+    }
+    std::sort(locators.begin(), locators.end(),
+              [](const std::string& left, const std::string& right) {
+                  return byte_less(left, right);
+              });
+    locators.erase(std::unique(locators.begin(), locators.end()), locators.end());
+    return locators;
+}
+
+Phase6BcCandidateReferenceV1 candidate_reference_from_encoded(
+    const model::EncodedModelInputV1& encoded,
+    const Phase6BcStateInputV1& state,
+    const std::vector<std::string>& candidate_only_locators,
+    const model::EncodedCardReference& reference) {
+    const auto old_ordinal = reference.reference.public_locator_ordinal;
+    if (old_ordinal >= encoded.public_locator_table.size()) {
+        fail(Phase6BcScorerErrorCode::InvalidEncodedModelInput);
+    }
+    const auto& value = encoded.public_locator_table[old_ordinal];
+    Phase6BcCandidateReferenceV1 output;
+    output.kind_code = reference.kind_code;
+    output.current_entity_ordinal = reference.reference.current_entity_ordinal;
+    if (contains_locator(state.public_locator_table, value)) {
+        output.locator_namespace = Phase6BcLocatorNamespace::State;
+        output.locator_ordinal = locator_ordinal(state.public_locator_table, value);
+        return output;
+    }
+    if (output.current_entity_ordinal.has_value()) {
+        fail(Phase6BcScorerErrorCode::InvalidEncodedModelInput);
+    }
+    output.locator_namespace = Phase6BcLocatorNamespace::CandidateOnly;
+    output.locator_ordinal = locator_ordinal(candidate_only_locators, value);
+    return output;
+}
+
+Phase6BcCandidateInputV1 candidate_input_from_encoded(
+    const model::EncodedModelInputV1& encoded,
+    const Phase6BcStateInputV1& state,
+    const std::vector<std::string>& candidate_only_locators,
+    const model::EncodedCandidate& candidate) {
+    Phase6BcCandidateInputV1 output;
+    output.action_kind_code = candidate.action_kind_code;
+    output.choice = candidate.choice;
+    if (candidate.source_reference.has_value()) {
+        output.source_reference = candidate_reference_from_encoded(
+            encoded, state, candidate_only_locators, *candidate.source_reference);
+    }
+    if (candidate.target_reference.has_value()) {
+        output.target_reference = candidate_reference_from_encoded(
+            encoded, state, candidate_only_locators, *candidate.target_reference);
+    }
+    output.phase = candidate.phase;
+    output.position = candidate.position;
+    output.source_index = candidate.source_index;
+    output.amount = candidate.amount;
+    output.continuation_operation_code = candidate.continuation_operation_code;
+    output.submits_engine_response = candidate.submits_engine_response;
+    return output;
+}
+
+Phase6BcScorerError make_error(const Phase6BcScorerErrorCode code) {
+    return {code, std::string(phase6_bc_scorer_error_code_name(code))};
+}
+
+template <typename T>
+Phase6BcResult<T> failure(const Phase6BcScorerErrorCode code) {
+    return {std::nullopt, make_error(code)};
+}
+
+Phase6BcSelectionV1 select_unchecked(const model::EncodedModelInputV1& encoded,
+                                     const std::vector<double>& scores) {
+    if (scores.size() != encoded.candidate_count()) {
+        fail(Phase6BcScorerErrorCode::ScoreCountMismatch);
+    }
+    for (const double score : scores) {
+        if (!std::isfinite(score)) fail(Phase6BcScorerErrorCode::NonFiniteScore);
+    }
+
+    std::size_t best = 0;
+    for (std::size_t index = 1; index < scores.size(); ++index) {
+        const bool higher = scores[index] > scores[best];
+        const bool equal_and_lower_key =
+            scores[index] == scores[best] &&
+            byte_less(encoded.routing_keys[index], encoded.routing_keys[best]);
+        if (higher || equal_and_lower_key) best = index;
+    }
+
+    if (best > std::numeric_limits<std::uint32_t>::max()) {
+        fail(Phase6BcScorerErrorCode::SelectionFailure);
+    }
+    return {static_cast<std::uint32_t>(best), encoded.routing_keys[best]};
+}
+
+}  // namespace
+
+std::string_view phase6_bc_scorer_error_code_name(
+    const Phase6BcScorerErrorCode code) noexcept {
+    switch (code) {
+    case Phase6BcScorerErrorCode::InvalidEncodedModelInput:
+        return "invalid_encoded_model_input";
+    case Phase6BcScorerErrorCode::CandidateCapacityTooSmall:
+        return "candidate_capacity_too_small";
+    case Phase6BcScorerErrorCode::MissingStateEncoder:
+        return "missing_state_encoder";
+    case Phase6BcScorerErrorCode::StateEncoderFailure:
+        return "state_encoder_failure";
+    case Phase6BcScorerErrorCode::MissingCandidateEncoder:
+        return "missing_candidate_encoder";
+    case Phase6BcScorerErrorCode::CandidateEncoderFailure:
+        return "candidate_encoder_failure";
+    case Phase6BcScorerErrorCode::MissingCandidateScoringFunction:
+        return "missing_candidate_scoring_function";
+    case Phase6BcScorerErrorCode::CandidateScoringFailure:
+        return "candidate_scoring_failure";
+    case Phase6BcScorerErrorCode::ScoreCountMismatch:
+        return "score_count_mismatch";
+    case Phase6BcScorerErrorCode::NonFiniteScore:
+        return "non_finite_score";
+    case Phase6BcScorerErrorCode::SelectionFailure:
+        return "selection_failure";
+    case Phase6BcScorerErrorCode::InternalFailure:
+        return "internal_failure";
+    }
+    return "internal_failure";
+}
+
+Phase6BcSelectionResult select_phase6_candidate_v1(
+    const model::EncodedModelInputV1& encoded,
+    const std::vector<double>& scores) noexcept {
+    try {
+        validate_encoded_input(encoded);
+        return {std::optional<Phase6BcSelectionV1>(select_unchecked(encoded, scores)),
+                std::nullopt};
+    } catch (const ScorerFailure& error) {
+        return failure<Phase6BcSelectionV1>(error.code());
+    } catch (const std::bad_alloc&) {
+        return failure<Phase6BcSelectionV1>(Phase6BcScorerErrorCode::InternalFailure);
+    } catch (...) {
+        return failure<Phase6BcSelectionV1>(Phase6BcScorerErrorCode::SelectionFailure);
+    }
+}
+
+Phase6BcInferenceResult score_encoded_model_input_v1(
+    const model::EncodedModelInputV1& encoded,
+    const Phase6BcReferenceScorerV1& scorer) noexcept {
+    try {
+        validate_encoded_input(encoded);
+        validate_capacity(encoded, scorer.physical_candidate_capacity);
+        if (!scorer.state_encoder) fail(Phase6BcScorerErrorCode::MissingStateEncoder);
+        if (!scorer.candidate_encoder) {
+            fail(Phase6BcScorerErrorCode::MissingCandidateEncoder);
+        }
+        if (!scorer.candidate_scoring_function) {
+            fail(Phase6BcScorerErrorCode::MissingCandidateScoringFunction);
+        }
+
+        const auto state_input = state_input_from_encoded(encoded);
+        const auto candidate_only_locators =
+            candidate_only_locators_from_encoded(encoded, state_input);
+        Phase6BcStateRepresentationV1 state;
+        try {
+            const auto result = scorer.state_encoder(state_input);
+            if (!result || !result.value.has_value()) {
+                fail(Phase6BcScorerErrorCode::StateEncoderFailure);
+            }
+            state = *result.value;
+        } catch (const ScorerFailure&) {
+            throw;
+        } catch (const std::bad_alloc&) {
+            throw;
+        } catch (...) {
+            fail(Phase6BcScorerErrorCode::StateEncoderFailure);
+        }
+
+        Phase6BcInferenceV1 output;
+        output.scores.reserve(encoded.candidate_count());
+        for (std::size_t index = 0; index < encoded.candidate_count(); ++index) {
+            Phase6BcCandidateRepresentationV1 candidate;
+            try {
+                const auto candidate_input = candidate_input_from_encoded(
+                    encoded, state_input, candidate_only_locators,
+                    encoded.candidate_features[index]);
+                const auto result = scorer.candidate_encoder(
+                    state, candidate_input);
+                if (!result || !result.value.has_value()) {
+                    fail(Phase6BcScorerErrorCode::CandidateEncoderFailure);
+                }
+                candidate = *result.value;
+            } catch (const ScorerFailure&) {
+                throw;
+            } catch (const std::bad_alloc&) {
+                throw;
+            } catch (...) {
+                fail(Phase6BcScorerErrorCode::CandidateEncoderFailure);
+            }
+
+            try {
+                const auto result = scorer.candidate_scoring_function(state, candidate);
+                if (!result || !result.value.has_value()) {
+                    fail(Phase6BcScorerErrorCode::CandidateScoringFailure);
+                }
+                output.scores.push_back(*result.value);
+            } catch (const ScorerFailure&) {
+                throw;
+            } catch (const std::bad_alloc&) {
+                throw;
+            } catch (...) {
+                fail(Phase6BcScorerErrorCode::CandidateScoringFailure);
+            }
+        }
+
+        const auto selection = select_unchecked(encoded, output.scores);
+        output.selected_candidate_ordinal = selection.selected_candidate_ordinal;
+        output.selected_public_action_key = std::move(selection.selected_public_action_key);
+        return {std::optional<Phase6BcInferenceV1>(std::move(output)), std::nullopt};
+    } catch (const ScorerFailure& error) {
+        return failure<Phase6BcInferenceV1>(error.code());
+    } catch (const std::bad_alloc&) {
+        return failure<Phase6BcInferenceV1>(Phase6BcScorerErrorCode::InternalFailure);
+    } catch (...) {
+        return failure<Phase6BcInferenceV1>(Phase6BcScorerErrorCode::InternalFailure);
+    }
+}
+
+}  // namespace ygo::phase6
