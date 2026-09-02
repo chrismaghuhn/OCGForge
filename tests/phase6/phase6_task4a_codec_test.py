@@ -1,4 +1,5 @@
 import hashlib
+import dataclasses
 import struct
 import unittest
 
@@ -10,17 +11,24 @@ def sample_corpus() -> codec.DerivedCorpusV1:
         bc_sample_identity="bc_sample.v1." + "a" * 64,
         trajectory_record_id="trajectory_record.v1." + "b" * 64,
         episode_semantic_id="c" * 64,
-        public_semantic_decision_id="public_decision.v1." + "d" * 64,
+        public_semantic_decision_id="d" * 64,
         model_input_identity="model_input.v1." + "e" * 64,
         selected_public_action_key="public_action.v1.00",
         partition="train",
         candidate_ordinal=0,
-        ordered_candidate_domain_identity="phase6_ordered_candidate_domain.v1." + "f" * 64,
+        ordered_candidate_domain_identity="",
         state_rows=((1.0, 0.0, 0.25, 0.0, 0.0, 0.0, 0.0, 0.0),),
         candidate_rows=(
             tuple(float(index) / 28.0 for index in range(codec.CANDIDATE_ROW_WIDTH)),
         ),
         routing_keys=("public_action.v1.00",),
+    )
+    sample = dataclasses.replace(
+        sample,
+        ordered_candidate_domain_identity=codec.ordered_candidate_domain_identity(
+            sample.routing_keys
+        ),
+        bc_sample_identity=codec.bc_sample_identity(sample),
     )
     return codec.DerivedCorpusV1(
         source_dataset_identity="1" * 64,
@@ -82,9 +90,16 @@ class Task4ACodecTests(unittest.TestCase):
             actual_optimizer_steps=0,
         )
         self.assertTrue(codec.training_run_identity(manifest).startswith("phase6_training_run.v1."))
+        self.assertEqual(
+            manifest.opponent_policy_source_identities,
+            tuple(sorted(codec.TEACHER_SOURCE_IDENTITIES)),
+        )
         with self.assertRaises(codec.CodecError):
             codec.training_run_identity(codec.replace_training_run(
                 manifest, actual_optimizer_steps=501))
+        with self.assertRaises(codec.CodecError):
+            codec.training_run_identity(codec.replace_training_run(
+                manifest, opponent_policy_source_identities=()))
 
         checkpoint = codec.default_checkpoint_manifest(
             architecture_config_identity=manifest.model_architecture_config_identity,
@@ -110,18 +125,49 @@ class Task4ACodecTests(unittest.TestCase):
             codec.decode_corpus_artifact(bytes(mutated))
 
     def test_selection_response_identity_excludes_score_bytes(self):
-        request = codec.make_inference_request(
-            checkpoint_identity="phase6_checkpoint.v1." + "a" * 64,
+        model_input = codec.make_numeric_model_input(
             model_input_identity="model_input.v1." + "b" * 64,
+            state_rows=((0.0,) * codec.STATE_ROW_WIDTH,),
+            candidate_rows=((0.0,) * codec.CANDIDATE_ROW_WIDTH,
+                            (1.0,) + (0.0,) * (codec.CANDIDATE_ROW_WIDTH - 1)),
             routing_keys=("public_action.v1.00", "public_action.v1.01"),
-            public_semantic_decision_id="public_decision.v1." + "c" * 64,
+            public_candidate_domain_digest=None,
+            public_semantic_decision_id="c" * 64,
             perspective_player=0,
             decision_index=7,
+        )
+        request = codec.make_inference_request(
+            checkpoint_identity="phase6_checkpoint.v1." + "a" * 64,
+            model_input=model_input,
         )
         left = codec.make_inference_response(request, (1.0, 2.0), 1)
         right = codec.make_inference_response(request, (100.0, 200.0), 1)
         self.assertEqual(left.response_identity, right.response_identity)
         self.assertEqual(left.selected_public_action_key, "public_action.v1.01")
+
+    def test_phase5_candidate_domain_digest_precedes_task4_fallback(self):
+        keys = ("public_action.v1.00", "public_action.v1.01")
+        phase5_digest = "9" * 64
+        model_input = codec.make_numeric_model_input(
+            model_input_identity="model_input.v1." + "8" * 64,
+            state_rows=((0.0,) * codec.STATE_ROW_WIDTH,),
+            candidate_rows=((0.0,) * codec.CANDIDATE_ROW_WIDTH,) * 2,
+            routing_keys=keys,
+            public_candidate_domain_digest=phase5_digest,
+            public_semantic_decision_id="7" * 64,
+            perspective_player=0,
+            decision_index=1,
+        )
+        self.assertEqual(model_input.ordered_candidate_domain_identity, phase5_digest)
+        self.assertNotEqual(
+            model_input.ordered_candidate_domain_identity,
+            codec.ordered_candidate_domain_identity(keys),
+        )
+        request = codec.make_inference_request(
+            checkpoint_identity="phase6_checkpoint.v1." + "6" * 64,
+            model_input=model_input,
+        )
+        self.assertEqual(request.ordered_candidate_domain_identity, phase5_digest)
 
 
 if __name__ == "__main__":

@@ -193,6 +193,9 @@ backend decision.
    wrong-length, non-finite, and invalid responses; and
 7. never call Teacher, RandomLegal, heuristic, first-candidate, or another
    policy after a neural failure.
+8. record `GPU_MEMORY_BEFORE`, `GPU_MEMORY_PEAK`, and `GPU_MEMORY_AFTER` as
+   execution provenance for the one CUDA smoke; these values must not enter
+   checkpoint semantic identity.
 
 The provisional backend is PyTorch only for the one explicitly authorized CUDA
 smoke. Task 4B does not choose PyTorch over JAX, JAX over PyTorch, or either as

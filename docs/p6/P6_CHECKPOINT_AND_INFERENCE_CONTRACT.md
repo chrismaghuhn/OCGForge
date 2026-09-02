@@ -246,6 +246,15 @@ An alias MAY be a user-interface locator only when it resolves to one exact
 publication to a future artifact hub MUST pin an exact revision and canonical
 content identity before use.
 
+The implementation may expose a low-level artifact decoder that checks only
+syntax, canonical bytes, and self-consistent weight/content digests. That is
+not an accepted inference load. The accepted inference path MUST require the
+exact expected architecture configuration, all three Phase-5 contract IDs,
+CardVocabulary identity, dataset identity, split identity, BC training
+contract, export codec, and canonical weight content before constructing an
+inference model. Those compatibility values are required inputs on that path;
+an omitted expected context is fail-closed, not an implicit wildcard.
+
 Changing architecture/config, Phase-5 input contract, vocabulary, dataset,
 split, training contract, parent, export contract, or canonical weight content
 requires a new checkpoint identity. Replacing bytes under an old identity is
@@ -294,6 +303,12 @@ freshness validation, but it is not model input and is not part of the public
 model-input identity. The current public decision identity, model-input
 identity, checkpoint identity, and ordered-domain identity together prevent a
 response for decision N from being applied to decision N+1.
+
+The backend adapter MUST pass a single validated numeric projection unit that
+contains the model-input identity, Phase-5-or-fallback domain identity, public
+decision context, and exact state/candidate rows. It MUST NOT accept those
+rows and identities as independently combinable arguments; the unit's derived
+numeric integrity identity is checked before inference.
 
 ## 6. Deterministic inference response
 

@@ -3,6 +3,7 @@ from unittest import mock
 
 import torch
 
+from tools.phase6 import task4_codec as codec
 from tools.phase6 import task4_cuda
 
 
@@ -30,6 +31,25 @@ class Task4ACudaPreflightTests(unittest.TestCase):
         self.assertEqual(result.gpu_name, "NVIDIA GeForce RTX 4060 Ti")
         self.assertEqual(result.actual_optimizer_steps, 0)
         self.assertFalse(result.cpu_fallback)
+        self.assertEqual(
+            result.execution_provenance_identity,
+            codec.execution_provenance_identity_for(result.execution_provenance()),
+        )
+        manifest = task4_cuda.training_run_manifest_from_cuda_preflight(
+            result,
+            source_dataset_identity="1" * 64,
+            dataset_split_identity="phase6_dataset_split.v1." + "2" * 64,
+            card_vocabulary_identity="model_card_vocabulary.v1." + "3" * 64,
+            training_code_commit="4" * 40,
+            actual_optimizer_steps=0,
+        )
+        self.assertEqual(
+            manifest.device_and_distributed_provenance_identity,
+            result.execution_provenance_identity,
+        )
+        self.assertTrue(codec.training_run_identity(manifest).startswith(
+            "phase6_training_run.v1."
+        ))
 
 
 if __name__ == "__main__":

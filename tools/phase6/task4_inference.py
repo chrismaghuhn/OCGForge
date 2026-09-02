@@ -124,7 +124,7 @@ def load_checkpoint_artifact(
     expected_dataset_identity: Optional[str] = None,
     expected_dataset_split_identity: Optional[str] = None,
 ) -> LoadedCheckpointV1:
-    """Validate every semantic checkpoint binding before it can be inferred."""
+    """Decode a self-consistent artifact; this is not accepted inference load."""
 
     try:
         artifact = codec.decode_checkpoint_artifact(artifact_bytes)
@@ -154,6 +154,48 @@ def load_checkpoint_artifact(
     return LoadedCheckpointV1(artifact, config)
 
 
+def load_checkpoint_for_inference(
+    artifact_bytes: bytes,
+    *,
+    architecture_config: codec.ArchitectureConfigV1,
+    card_vocabulary_identity: str,
+    dataset_identity: str,
+    dataset_split_identity: str,
+) -> LoadedCheckpointV1:
+    """Perform the mandatory compatibility checks for an accepted load."""
+
+    try:
+        loaded = load_checkpoint_artifact(artifact_bytes)
+    except Task4InferenceError:
+        raise
+    manifest = loaded.artifact.manifest
+    try:
+        expected_architecture_identity = codec.architecture_config_identity(architecture_config)
+    except codec.CodecError as error:
+        raise _error_from_codec(error, "wrong_architecture") from error
+    if manifest.model_architecture_config_identity != expected_architecture_identity:
+        raise Task4InferenceError("wrong_architecture", "checkpoint architecture identity is not accepted")
+    if manifest.phase5_logical_model_input_contract_identity != "ocgforge.model_logical_input.v1":
+        raise Task4InferenceError("wrong_phase5_contract", "logical Phase-5 contract is not accepted")
+    if manifest.phase5_encoded_model_input_contract_identity != "ocgforge.model_encoded_input.v1":
+        raise Task4InferenceError("wrong_phase5_contract", "encoded Phase-5 contract is not accepted")
+    if manifest.phase5_batch_layout_contract_identity != "ocgforge.model_batch_layout.v1":
+        raise Task4InferenceError("wrong_phase5_contract", "batch-layout Phase-5 contract is not accepted")
+    if manifest.card_vocabulary_identity != card_vocabulary_identity:
+        raise Task4InferenceError("wrong_vocabulary", "checkpoint vocabulary identity is not accepted")
+    if manifest.dataset_identity != dataset_identity:
+        raise Task4InferenceError("wrong_dataset", "checkpoint dataset identity is not accepted")
+    if manifest.dataset_split_identity != dataset_split_identity:
+        raise Task4InferenceError("wrong_split", "checkpoint split identity is not accepted")
+    if manifest.training_contract_identity != "ocgforge.phase6.bc_contract.v1":
+        raise Task4InferenceError("invalid_checkpoint", "checkpoint BC contract is not accepted")
+    if manifest.canonical_weight_export_codec_identity != codec.WEIGHT_EXPORT_CONTRACT_ID:
+        raise Task4InferenceError("invalid_checkpoint", "checkpoint weight codec is not accepted")
+    if loaded.artifact.manifest.model_architecture_config_identity != expected_architecture_identity:
+        raise Task4InferenceError("wrong_architecture", "checkpoint architecture identity is not accepted")
+    return LoadedCheckpointV1(loaded.artifact, architecture_config)
+
+
 def _load_tensor_values(raw: bytes, shape: tuple[int, ...]) -> Tensor:
     values = [codec.f32_value(raw[offset:offset + 4]) for offset in range(0, len(raw), 4)]
     return torch.tensor(values, dtype=torch.float32).reshape(shape)
@@ -162,19 +204,19 @@ def _load_tensor_values(raw: bytes, shape: tuple[int, ...]) -> Tensor:
 def reload_model_from_checkpoint(
     artifact_bytes: bytes,
     *,
-    expected_architecture_config: Optional[codec.ArchitectureConfigV1] = None,
-    expected_card_vocabulary_identity: Optional[str] = None,
-    expected_dataset_identity: Optional[str] = None,
-    expected_dataset_split_identity: Optional[str] = None,
+    architecture_config: codec.ArchitectureConfigV1,
+    card_vocabulary_identity: str,
+    dataset_identity: str,
+    dataset_split_identity: str,
 ) -> tuple[LoadedCheckpointV1, task4_model.Phase6TorchCandidateScorer]:
     """Create a fresh scorer and load only canonical inference tensors."""
 
-    loaded = load_checkpoint_artifact(
+    loaded = load_checkpoint_for_inference(
         artifact_bytes,
-        expected_architecture_config=expected_architecture_config,
-        expected_card_vocabulary_identity=expected_card_vocabulary_identity,
-        expected_dataset_identity=expected_dataset_identity,
-        expected_dataset_split_identity=expected_dataset_split_identity,
+        architecture_config=architecture_config,
+        card_vocabulary_identity=card_vocabulary_identity,
+        dataset_identity=dataset_identity,
+        dataset_split_identity=dataset_split_identity,
     )
     try:
         _, tensors = codec.decode_weight_export_bytes(loaded.artifact.weight_export_bytes)
@@ -194,7 +236,9 @@ def _validate_request(request: codec.InferenceRequestV1, checkpoint: LoadedCheck
     try:
         if codec.inference_request_identity(request) != request.request_identity:
             raise Task4InferenceError("malformed_request", "request identity does not match canonical request bytes")
-        if codec.ordered_candidate_domain_identity(request.routing_keys) != request.ordered_candidate_domain_identity:
+        if codec.ordered_candidate_domain_identity(
+            request.routing_keys, request.public_candidate_domain_digest
+        ) != request.ordered_candidate_domain_identity:
             raise Task4InferenceError("wrong_candidate_domain", "request candidate domain identity is stale")
     except codec.CodecError as error:
         raise _error_from_codec(error, "malformed_request") from error
@@ -252,21 +296,37 @@ def infer_request(
     model: task4_model.Phase6TorchCandidateScorer,
     checkpoint: LoadedCheckpointV1,
     request: codec.InferenceRequestV1,
-    state_rows: Sequence[Sequence[float]] | Tensor,
-    candidate_rows: Sequence[Sequence[float]] | Tensor,
+    model_input: codec.Task4NumericModelInputV1,
     *,
     physical_candidate_capacity: Optional[int] = None,
 ) -> codec.InferenceResponseV1:
-    """Run one exact-domain request and return no response on any failure."""
+    """Run one validated numeric model-input request with no fallback."""
 
     _validate_request(request, checkpoint)
+    try:
+        codec.validate_numeric_model_input(model_input)
+    except codec.CodecError as error:
+        raise _error_from_codec(error, "invalid_model_input") from error
+    if (
+        model_input.model_input_identity != request.model_input_identity or
+        model_input.ordered_candidate_domain_identity != request.ordered_candidate_domain_identity or
+        model_input.public_candidate_domain_digest != request.public_candidate_domain_digest or
+        model_input.public_semantic_decision_id != request.public_semantic_decision_id or
+        model_input.perspective_player != request.perspective_player or
+        model_input.decision_index != request.decision_index or
+        model_input.routing_keys != request.routing_keys
+    ):
+        raise Task4InferenceError(
+            "model_input_binding_mismatch",
+            "numeric model input is not the unit bound by the request",
+        )
     try:
         model_device = next(model.parameters()).device
     except StopIteration as error:
         raise Task4InferenceError("invalid_model", "scorer has no parameters") from error
-    state = _rows_tensor(state_rows, codec.STATE_ROW_WIDTH, model_device, "state rows")
-    candidates = _rows_tensor(candidate_rows, codec.CANDIDATE_ROW_WIDTH, model_device, "candidate rows")
-    if candidates.shape[0] != len(request.routing_keys):
+    state = _rows_tensor(model_input.state_rows, codec.STATE_ROW_WIDTH, model_device, "state rows")
+    candidates = _rows_tensor(model_input.candidate_rows, codec.CANDIDATE_ROW_WIDTH, model_device, "candidate rows")
+    if candidates.shape[0] != len(model_input.routing_keys):
         raise Task4InferenceError("score_count_mismatch", "candidate rows do not equal the ordered domain")
     try:
         was_training = model.training
@@ -382,8 +442,7 @@ class Phase6InferenceRunnerV1:
     def infer(
         self,
         request: codec.InferenceRequestV1,
-        state_rows: Sequence[Sequence[float]] | Tensor,
-        candidate_rows: Sequence[Sequence[float]] | Tensor,
+        model_input: codec.Task4NumericModelInputV1,
     ) -> codec.InferenceResponseV1:
         self.submit_request(request)
         try:
@@ -391,8 +450,7 @@ class Phase6InferenceRunnerV1:
                 self._model,
                 self._checkpoint,
                 request,
-                state_rows,
-                candidate_rows,
+                model_input,
                 physical_candidate_capacity=self._physical_candidate_capacity,
             )
             return self.accept_response(request, response)

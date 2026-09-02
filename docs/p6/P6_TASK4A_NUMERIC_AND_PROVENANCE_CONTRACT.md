@@ -24,12 +24,12 @@ The following identities are fixed for Task 4A:
 | provisional architecture identity prefix | `phase6_architecture_config.v1.` |
 | canonical weight export | `ocgforge.phase6.canonical_weight_export.v1` |
 | canonical weight-content identity prefix | `phase6_weight_content.v1.` |
-| Task-4 smoke corpus | `ocgforge.phase6.task4.smoke_corpus.v1` |
+| Task-4 smoke corpus | `ocgforge.phase6.task4.smoke_corpus.v2` |
 | smoke-corpus derivation | `ocgforge.phase6.task4.numeric_projection.v1` |
-| smoke-corpus artifact identity prefix | `phase6_corpus_artifact.v1.` |
+| smoke-corpus artifact identity prefix | `phase6_corpus_artifact.v2.` |
 | training-run manifest | `ocgforge.phase6.training_run.v1` |
 | training-run identity prefix | `phase6_training_run.v1.` |
-| architecture config sub-identity | `ocgforge.phase6.architecture_config.v1` |
+| architecture config sub-identity | `ocgforge.phase6.bc_architecture_config.v1` |
 | optimizer config sub-identity | `ocgforge.phase6.optimizer_config.v1` |
 | schedule config sub-identity | `ocgforge.phase6.schedule_config.v1` |
 | batch config sub-identity | `ocgforge.phase6.batch_config.v1` |
@@ -72,6 +72,14 @@ The canonical numeric codec is
   score bytes;
 - any future numeric tolerance that could change the selected key is an
   ambiguity failure, not an accepted backend difference.
+
+The state/candidate numeric projection is intentionally a provisional,
+lossy execution representation: normalizing wide integer fields into
+binary32 values can collapse distinct large source values. This is accepted
+for the Task-4A smoke only. It never replaces the exact Phase-5 model-input
+identity, source sample identity, candidate identity, or public action key.
+A future non-smoke baseline may introduce an exact limb-based projection only
+under a new projection identity.
 
 Cross-backend score comparison is diagnostic only until another backend uses
 this same numeric contract. A score mismatch does not authorize a different
@@ -160,6 +168,15 @@ The projection is a derived execution representation. Its identity binds its
 version and architecture config but does not replace DatasetManifest,
 trajectory, sample, public-action, or model-input identity.
 
+Before inference, the projection is carried by one validated
+`Task4NumericModelInputV1` unit. That unit binds the source `model_input_identity`,
+the Phase-5 `public_candidate_domain_digest` when present (otherwise the
+versioned Task-4 fallback domain identity), public decision context, exact
+state/candidate numeric rows, and the ordered routing sidecar. Its own derived
+identity is an integrity check over those fields; it is not a second dataset
+authority. Requests and inference may not combine an identity from one unit
+with rows from another.
+
 ## 5. Derived smoke-corpus artifact
 
 The C++ corpus probe is the only Task-4A corpus producer. Its fixed job set is
@@ -171,7 +188,7 @@ of one. If the fixed set produces no train sample, the probe fails closed.
 The binary artifact body has this exact field order:
 
 ```text
-schema identity:string = ocgforge.phase6.task4.smoke_corpus.v1
+schema identity:string = ocgforge.phase6.task4.smoke_corpus.v2
 source dataset identity:string
 split identity:string
 derivation contract identity:string
@@ -184,6 +201,9 @@ sample:
   episode identity:string
   public semantic decision identity:string
   model-input identity:string
+  Phase-5 public candidate-domain digest:optional string
+  perspective player:u8
+  decision index:u64
   selected public action key:string       // control sidecar only
   partition token:string
   candidate ordinal:u32
@@ -200,15 +220,19 @@ All strings use the canonical length prefix. The derived artifact content
 identity is:
 
 ```text
-phase6_corpus_artifact.v1.<lowercase SHA-256 of the complete artifact body>
+phase6_corpus_artifact.v2.<lowercase SHA-256 of the complete artifact body>
 ```
 
 The digest detects mutation of numeric rows or provenance fields but is not
-DatasetManifest authority. The Python loader MUST verify the digest, schema,
-source dataset/split/derivation identities, every source sample/model-input
-identity, exact candidate/key cardinality, label range, and nonempty train
-partition. Rebuilding the artifact cannot change the source dataset or split
-identity.
+DatasetManifest authority. `decode_corpus_artifact` performs only strict
+schema/canonical/content validation. `admit_corpus_artifact` additionally
+requires an independently supplied expected artifact identity, source
+DatasetManifest identity, split episode vectors/identity, vocabulary identity,
+and the admitted Task-2 source-sample identity set. It recomputes every
+sample identity, the Phase-5-or-fallback ordered-domain identity, every
+episode partition, and exact source-sample/model-input membership. A newly
+hashed self-consistent artifact is not admitted without that authority
+context.
 
 ## 6. Configuration sub-identities
 
@@ -227,7 +251,9 @@ by a training-run manifest:
 - precision config declares binary32 model/input/score execution;
 - execution provenance declares backend identity, exact framework version,
   device type/index, GPU name, PyTorch CUDA build/runtime, capability, and
-  distributed strategy/world size.
+  distributed strategy/world size through structured canonical provenance
+  bytes. The CUDA preflight produces this value and its identity; a training
+  manifest records that exact identity rather than an arbitrary prefix string.
 
 Each sub-identity uses its own domain/schema, fixed field order, canonical
 primitive values, and lowercase SHA-256 digest. Execution provenance is
@@ -277,6 +303,11 @@ phase6_training_run.v1.<lowercase SHA-256 of canonical manifest bytes>
 A Task-4A zero-step manifest is infrastructure/provenance test data, not
 training acceptance evidence.
 
+For the fixed Teacher-vs-Teacher smoke corpus, both accepted Teacher-v1
+artifact identities are required in `behavior_policy_source_identities` and
+in `opponent_policy_source_identities`; the latter cannot be left empty merely
+because the labels are sourced from the behavior side.
+
 ## 8. Canonical weight export
 
 The canonical inference weight body has this exact order:
@@ -315,10 +346,13 @@ identity. Hardware/framework execution provenance may be attached as a
 sidecar, but never enters checkpoint semantic identity.
 
 The inference numeric response contains exactly N finite binary32 scores in
-source order. Request/response identities bind checkpoint, model input,
-ordered candidate domain, and public semantic decision. Response identity hashes
-only the canonical selection envelope. A consumed request cannot be consumed
-again.
+source order. Request/response identities bind checkpoint, the one validated
+numeric model-input unit, ordered candidate domain, and public semantic
+decision. Response identity hashes only the canonical selection envelope. A
+consumed request cannot be consumed again. An existing Phase-5
+`public_candidate_domain_digest` is the ordered-domain identity; the
+`phase6_ordered_candidate_domain.v1` digest is used only when the Phase-5
+field is absent.
 
 Wrong checkpoint/input/domain/decision, stale/late/duplicate response, wrong
 length, non-finite score, invalid ordinal/key, malformed checkpoint, and
@@ -352,7 +386,11 @@ no checkpoint
 Only a separately reviewed Task 4B authorization may execute exactly one real
 CUDA smoke run with at most 500 optimizer steps, verify model/batch/logit/loss
 placement on `cuda:0`, export the canonical checkpoint, reload it into a
-fresh inference object, and produce smoke evidence.
+fresh inference object, and produce smoke evidence. That Task-4B execution
+provenance MUST also record `GPU_MEMORY_BEFORE`, `GPU_MEMORY_PEAK`, and
+`GPU_MEMORY_AFTER` for the one run. These are diagnostic hardware/provenance
+values only and never checkpoint semantic identity; their collection is not a
+Task-4A optimizer or smoke run.
 
 ## 11. Non-goals
 

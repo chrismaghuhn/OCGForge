@@ -24,7 +24,7 @@ The C++ probe is the only producer of the smoke corpus:
         -> DatasetManifest
         -> Phase-6 Task-2 materializer
         -> Task-4 numeric projection
-        -> derived phase6_task4_smoke_corpus.v1
+        -> derived phase6_task4_smoke_corpus.v2
 
 The physical corpus is rebuildable and is not DatasetManifest authority. It
 carries the source dataset semantic identity, split identity, derivation

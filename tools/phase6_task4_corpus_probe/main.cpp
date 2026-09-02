@@ -52,12 +52,16 @@ using ygo::trajectory::PolicyRole;
 using ygo::trajectory::VerifiedAdmissionReceipt;
 
 constexpr std::string_view kCorpusSchemaId =
-    "ocgforge.phase6.task4.smoke_corpus.v1";
-constexpr std::string_view kCorpusArtifactPrefix = "phase6_corpus_artifact.v1.";
+    "ocgforge.phase6.task4.smoke_corpus.v2";
+constexpr std::string_view kCorpusArtifactPrefix = "phase6_corpus_artifact.v2.";
 constexpr std::string_view kOrderedDomainIdentityDomain =
     "ocgforge.phase6.ordered_candidate_domain.v1";
 constexpr std::string_view kOrderedDomainIdentityPrefix =
     "phase6_ordered_candidate_domain.v1.";
+
+static_assert(sizeof(float) == 4, "Task-4A requires four-byte float values");
+static_assert(std::numeric_limits<float>::is_iec559,
+              "Task-4A requires IEEE-754 float values");
 
 void require(const bool condition, const std::string_view message) {
     if (!condition) throw std::runtime_error(std::string(message));
@@ -88,6 +92,11 @@ public:
     void string(const std::string_view value) {
         u32(checked_u32(value.size(), "corpus string exceeds u32 length"));
         bytes_.insert(bytes_.end(), value.begin(), value.end());
+    }
+
+    void optional_string(const std::optional<std::string>& value) {
+        u8(value.has_value() ? 1 : 0);
+        if (value.has_value()) string(*value);
     }
 
     void f32(const float value) {
@@ -257,7 +266,8 @@ DatasetManifest combined_manifest(const std::vector<AdmittedJob>& jobs) {
     return manifest;
 }
 
-std::string ordered_domain_identity(const std::vector<std::string>& routing_keys) {
+std::string fallback_ordered_domain_identity(
+    const std::vector<std::string>& routing_keys) {
     require(!routing_keys.empty(), "ordered candidate domain is empty");
     if (std::adjacent_find(routing_keys.begin(), routing_keys.end()) != routing_keys.end()) {
         throw std::runtime_error("ordered candidate domain contains duplicate keys");
@@ -268,6 +278,14 @@ std::string ordered_domain_identity(const std::vector<std::string>& routing_keys
     for (const auto& key : routing_keys) writer.string(key);
     return std::string(kOrderedDomainIdentityPrefix) +
            ygo::trace::sha256_bytes(std::move(writer).take());
+}
+
+std::string ordered_domain_identity(
+    const ygo::model::EncodedModelInputV1& encoded) {
+    if (encoded.public_candidate_domain_digest.has_value()) {
+        return *encoded.public_candidate_domain_digest;
+    }
+    return fallback_ordered_domain_identity(encoded.routing_keys);
 }
 
 CapturedInput capture_task3_inputs(const ygo::model::EncodedModelInputV1& encoded) {
@@ -320,10 +338,13 @@ void write_sample(Writer& writer,
     writer.string(sample.episode_semantic_id);
     writer.string(sample.supervision.source_public_semantic_decision_id);
     writer.string(sample.supervision.model_input_identity);
+    writer.optional_string(sample.encoded_model_input.public_candidate_domain_digest);
+    writer.u8(sample.encoded_model_input.perspective_player);
+    writer.u64(sample.encoded_model_input.decision_index);
     writer.string(sample.supervision.selected_public_action_key);
     writer.string(partition);
     writer.u32(sample.supervision.candidate_ordinal);
-    writer.string(ordered_domain_identity(sample.encoded_model_input.routing_keys));
+    writer.string(ordered_domain_identity(sample.encoded_model_input));
     writer.rows(state_rows);
     writer.rows(candidate_rows);
     writer.strings(sample.encoded_model_input.routing_keys);
