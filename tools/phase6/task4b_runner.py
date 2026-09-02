@@ -1,7 +1,7 @@
-"""Task-4B runner primitives.
+"""Task-4B runner primitives and the Task-3 CUDA training seam.
 
-The complete smoke runner is added in later authorized plan tasks.  This
-module currently contains only the Task-1 ownership and TRAIN-order helpers.
+Canonical export, completion receipts, execution reports, and post-smoke
+verification remain later authorized plan tasks.
 """
 
 from __future__ import annotations
@@ -330,7 +330,7 @@ class AdmittedCorpusArtifactsV1:
 
 @dataclasses.dataclass(frozen=True)
 class Task4BSmokeRunResult:
-    """Task-2 preparation result; training fields are added only later."""
+    """Authoritative Task-2 preparation plus Task-3 CUDA training result."""
 
     source_root: Path
     output_dir: Path
@@ -366,18 +366,59 @@ def _require_cuda_tensor(
     value: torch.Tensor,
     device: torch.device,
     name: str,
+    *,
+    expected_dtype: torch.dtype | None = None,
+    require_finite: bool = False,
+    actual_optimizer_steps: int = 0,
 ) -> torch.Tensor:
     if not isinstance(value, torch.Tensor) or value.device != device:
         raise Task4BTrainingError(
             "WRONG_DEVICE",
             f"{name} is not on the required CUDA device",
-            0,
+            actual_optimizer_steps,
         )
     if device != torch.device("cuda:0") or value.device.type != "cuda":
         raise Task4BTrainingError(
             "CPU_FALLBACK_FORBIDDEN",
             f"{name} is not on cuda:0",
-            0,
+            actual_optimizer_steps,
+        )
+    if expected_dtype is not None:
+        _require_tensor_dtype_and_finiteness(
+            value,
+            name,
+            expected_dtype=expected_dtype,
+            require_finite=require_finite,
+            actual_optimizer_steps=actual_optimizer_steps,
+        )
+    return value
+
+
+def _require_tensor_dtype_and_finiteness(
+    value: torch.Tensor,
+    name: str,
+    *,
+    expected_dtype: torch.dtype,
+    require_finite: bool,
+    actual_optimizer_steps: int,
+) -> torch.Tensor:
+    if not isinstance(value, torch.Tensor):
+        raise Task4BTrainingError(
+            "INVALID_TENSOR",
+            f"{name} is not a tensor",
+            actual_optimizer_steps,
+        )
+    if value.dtype != expected_dtype:
+        raise Task4BTrainingError(
+            "WRONG_DTYPE",
+            f"{name} is not {expected_dtype}",
+            actual_optimizer_steps,
+        )
+    if require_finite and not torch.isfinite(value).all().item():
+        raise Task4BTrainingError(
+            "NONFINITE_TENSOR",
+            f"{name} contains a non-finite value",
+            actual_optimizer_steps,
         )
     return value
 
@@ -493,31 +534,59 @@ def _loss_for_sample(
             dtype=torch.bool,
             device=device,
         )
-        _require_cuda_tensor(state_tensor, device, "state tensor")
-        _require_cuda_tensor(candidate_tensor, device, "candidate tensor")
-        _require_cuda_tensor(label_tensor, device, "label tensor")
-        _require_cuda_tensor(real_candidate_mask, device, "candidate mask")
+        _require_cuda_tensor(
+            state_tensor,
+            device,
+            "state tensor",
+            expected_dtype=torch.float32,
+            require_finite=True,
+            actual_optimizer_steps=actual_optimizer_steps,
+        )
+        _require_cuda_tensor(
+            candidate_tensor,
+            device,
+            "candidate tensor",
+            expected_dtype=torch.float32,
+            require_finite=True,
+            actual_optimizer_steps=actual_optimizer_steps,
+        )
+        _require_cuda_tensor(
+            label_tensor,
+            device,
+            "label tensor",
+            expected_dtype=torch.long,
+            actual_optimizer_steps=actual_optimizer_steps,
+        )
+        _require_cuda_tensor(
+            real_candidate_mask,
+            device,
+            "candidate mask",
+            expected_dtype=torch.bool,
+            actual_optimizer_steps=actual_optimizer_steps,
+        )
         logits = model(state_tensor, candidate_tensor)
-        _require_cuda_tensor(logits, device, "logits")
+        _require_cuda_tensor(
+            logits,
+            device,
+            "logits",
+            expected_dtype=torch.float32,
+            require_finite=True,
+            actual_optimizer_steps=actual_optimizer_steps,
+        )
         task4_model.validate_logits(logits, len(sample.routing_keys))
-        if not torch.isfinite(logits).all().item():
-            raise Task4BTrainingError(
-                "NONFINITE_LOGITS",
-                "CUDA logits are non-finite",
-                actual_optimizer_steps,
-            )
         loss = task4_model.exact_domain_cross_entropy_from_padded(
             logits.unsqueeze(0),
             label_tensor,
             real_candidate_mask,
         )
-        _require_cuda_tensor(loss, device, "loss")
-        if not torch.isfinite(loss).item():
-            raise Task4BTrainingError(
-                "NONFINITE_LOSS",
-                "CUDA loss is non-finite",
-                actual_optimizer_steps,
-            )
+        _require_cuda_tensor(
+            loss,
+            device,
+            "loss",
+            expected_dtype=torch.float32,
+            require_finite=True,
+            actual_optimizer_steps=actual_optimizer_steps,
+        )
         return loss
     except Task4BTrainingError:
         raise
@@ -726,10 +795,10 @@ def run_task4b_smoke(
     build_dir: Path,
     output_dir: Path,
 ) -> Task4BSmokeRunResult:
-    """Compose the authorized Task-2 preparation seam only.
+    """Run the authoritative Task-2 preparation and Task-3 CUDA seam.
 
-    CUDA preflight, optimizer creation, model updates, export, and evidence
-    finalization are intentionally not part of this Task-2 implementation.
+    Canonical export, completion receipts, execution reports, and post-smoke
+    verification remain later authorized plan tasks.
     """
 
     source_root = _canonical_source_root()

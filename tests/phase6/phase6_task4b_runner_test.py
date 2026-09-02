@@ -427,6 +427,63 @@ class Task4BRunnerTests(unittest.TestCase):
                 "state tensor",
             )
 
+    def test_per_sample_validation_failure_preserves_current_step_count(self):
+        sample = _sample("a" * 64, "train", "00")
+        with self.assertRaises(runner.Task4BTrainingError) as raised:
+            runner._loss_for_sample(
+                mock.Mock(),
+                sample,
+                torch.device("cpu"),
+                237,
+            )
+        self.assertEqual(raised.exception.actual_optimizer_steps, 237)
+
+    def test_float_state_dtype_validation_fails_closed(self):
+        with self.assertRaises(runner.Task4BTrainingError) as raised:
+            runner._require_tensor_dtype_and_finiteness(
+                torch.zeros((1, codec.STATE_ROW_WIDTH), dtype=torch.float64),
+                "state tensor",
+                expected_dtype=torch.float32,
+                require_finite=True,
+                actual_optimizer_steps=41,
+            )
+        self.assertEqual(raised.exception.actual_optimizer_steps, 41)
+
+    def test_nonfinite_float_candidate_validation_fails_closed(self):
+        with self.assertRaises(runner.Task4BTrainingError) as raised:
+            runner._require_tensor_dtype_and_finiteness(
+                torch.tensor(
+                    [[float("nan")] + [0.0] * (codec.CANDIDATE_ROW_WIDTH - 1)],
+                    dtype=torch.float32,
+                ),
+                "candidate tensor",
+                expected_dtype=torch.float32,
+                require_finite=True,
+                actual_optimizer_steps=42,
+            )
+        self.assertEqual(raised.exception.actual_optimizer_steps, 42)
+
+    def test_label_and_mask_dtype_validation_fails_closed(self):
+        with self.assertRaises(runner.Task4BTrainingError) as label_raised:
+            runner._require_tensor_dtype_and_finiteness(
+                torch.tensor([0.0], dtype=torch.float32),
+                "label tensor",
+                expected_dtype=torch.long,
+                require_finite=False,
+                actual_optimizer_steps=43,
+            )
+        self.assertEqual(label_raised.exception.actual_optimizer_steps, 43)
+
+        with self.assertRaises(runner.Task4BTrainingError) as mask_raised:
+            runner._require_tensor_dtype_and_finiteness(
+                torch.ones((1, 2), dtype=torch.uint8),
+                "candidate mask",
+                expected_dtype=torch.bool,
+                require_finite=False,
+                actual_optimizer_steps=44,
+            )
+        self.assertEqual(mask_raised.exception.actual_optimizer_steps, 44)
+
     def test_authoritative_probe_rejects_wrong_expected_hash_before_invocation(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
