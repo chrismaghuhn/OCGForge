@@ -186,6 +186,114 @@ class Task4BRunnerTests(unittest.TestCase):
                 runner._resolve_probe_binary(build_dir)
             self.assertEqual(raised.exception.code, "AMBIGUOUS_PROBE_BINARY")
 
+    def test_authoritative_composition_rejects_dirty_h_exec_before_build_or_probe(self):
+        source_root = Path("C:/source")
+        dirty = runner.Task4BSmokeError("DIRTY_H_EXEC", "source checkout is not clean")
+        with mock.patch.object(runner, "_canonical_source_root", return_value=source_root), \
+             mock.patch.object(runner, "_verify_clean_h_exec", side_effect=dirty), \
+             mock.patch.object(runner, "_build_and_attest_probe") as build_probe, \
+             mock.patch.object(runner, "_run_authoritative_corpus_probe") as run_probe:
+            with self.assertRaises(runner.Task4BSmokeError) as raised:
+                runner.run_task4b_smoke(
+                    build_dir=source_root / "build",
+                    output_dir=source_root / "output",
+                )
+
+        self.assertIs(raised.exception, dirty)
+        build_probe.assert_not_called()
+        run_probe.assert_not_called()
+
+    def test_authoritative_composition_connects_clean_head_to_probe_admission(self):
+        source_root = Path("C:/source")
+        probe = source_root / "build" / "phase6_task4_corpus_probe.exe"
+        probe_hash = "a" * 64
+        admitted = object()
+        calls = []
+
+        def record_clean(_source_root):
+            calls.append("clean")
+            return "b" * 40
+
+        def record_build(_source_root, _build_dir):
+            calls.append("build")
+            return probe, probe_hash
+
+        def record_probe(
+            probe_path,
+            temporary_dir,
+            *,
+            source_root: Path,
+            expected_probe_sha256,
+        ):
+            calls.append("probe")
+            self.assertEqual(probe_path, probe)
+            self.assertEqual(source_root, Path("C:/source"))
+            self.assertEqual(expected_probe_sha256, probe_hash)
+            self.assertTrue(temporary_dir.is_dir())
+            return admitted
+
+        with mock.patch.object(runner, "_canonical_source_root", return_value=source_root), \
+             mock.patch.object(runner, "_verify_clean_h_exec", side_effect=record_clean), \
+             mock.patch.object(runner, "_build_and_attest_probe", side_effect=record_build), \
+             mock.patch.object(runner, "_run_authoritative_corpus_probe", side_effect=record_probe):
+            result = runner.run_task4b_smoke(
+                build_dir=source_root / "build",
+                output_dir=source_root / "output",
+            )
+
+        self.assertEqual(calls, ["clean", "build", "probe"])
+        self.assertEqual(result.h_exec, "b" * 40)
+        self.assertEqual(result.probe_path, probe)
+        self.assertEqual(result.probe_sha256, probe_hash)
+        self.assertIs(result.admitted_corpus, admitted)
+
+    def test_authoritative_probe_rejects_wrong_expected_hash_before_invocation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            probe = root / "phase6_task4_corpus_probe.exe"
+            probe.write_bytes(b"probe")
+            with mock.patch.object(runner, "_run_command") as command:
+                with self.assertRaises(runner.Task4BSmokeError) as raised:
+                    runner._run_authoritative_corpus_probe(
+                        probe,
+                        root / "temporary",
+                        source_root=root,
+                        expected_probe_sha256="0" * 64,
+                    )
+            self.assertEqual(raised.exception.code, "PROBE_HASH_MISMATCH")
+            command.assert_not_called()
+
+    def test_authoritative_probe_rejects_binary_mutation_after_invocation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            probe = root / "phase6_task4_corpus_probe.exe"
+            probe.write_bytes(b"probe")
+            expected_hash = hashlib.sha256(b"probe").hexdigest()
+
+            def emit_outputs_and_mutate(argv, _source_root):
+                Path(argv[2]).write_bytes(b"corpus-bytes")
+                Path(argv[4]).write_bytes(b"authority-bytes")
+                probe.write_bytes(b"mutated")
+
+            with mock.patch.object(
+                runner,
+                "_run_command",
+                side_effect=emit_outputs_and_mutate,
+            ) as command:
+                with self.assertRaises(runner.Task4BSmokeError) as raised:
+                    runner._run_authoritative_corpus_probe(
+                        probe,
+                        root / "temporary",
+                        source_root=root,
+                        expected_probe_sha256=expected_hash,
+                    )
+
+            command.assert_called_once()
+            self.assertEqual(
+                raised.exception.code,
+                "PROBE_HASH_CHANGED_DURING_EXECUTION",
+            )
+
     def test_authoritative_probe_is_invoked_once_and_admitted_from_sidecar(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -202,14 +310,19 @@ class Task4BRunnerTests(unittest.TestCase):
                  mock.patch.object(codec, "decode_corpus_authority_artifact", return_value=authority) as decode_authority, \
                  mock.patch.object(codec, "decode_corpus_artifact", return_value=corpus) as decode_corpus, \
                  mock.patch.object(codec, "admit_corpus_artifact", return_value=corpus) as admit:
-                result = runner._run_authoritative_corpus_probe(probe, root)
+                result = runner._run_authoritative_corpus_probe(
+                    probe,
+                    root,
+                    source_root=root,
+                    expected_probe_sha256=hashlib.sha256(b"probe").hexdigest(),
+                )
 
             command.assert_called_once()
             argv, source_root = command.call_args.args
             self.assertEqual(argv[0], str(probe.resolve()))
             self.assertEqual(argv[1], "--output")
             self.assertEqual(argv[3], "--authority")
-            self.assertEqual(source_root, probe.resolve().parents[1])
+            self.assertEqual(source_root, root.resolve())
             decode_authority.assert_called_once_with(b"authority-bytes")
             decode_corpus.assert_called_once_with(b"corpus-bytes")
             admit.assert_called_once_with(b"corpus-bytes", authority)

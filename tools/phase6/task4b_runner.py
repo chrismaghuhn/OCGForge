@@ -11,6 +11,7 @@ import hashlib
 import os
 import re
 import subprocess
+import tempfile
 from pathlib import Path
 from typing import Sequence
 
@@ -316,10 +317,24 @@ class AdmittedCorpusArtifactsV1:
     authority: codec.CorpusAdmissionAuthorityV1
 
 
+@dataclasses.dataclass(frozen=True)
+class Task4BSmokeRunResult:
+    """Task-2 preparation result; training fields are added only later."""
+
+    source_root: Path
+    output_dir: Path
+    h_exec: str
+    probe_path: Path
+    probe_sha256: str
+    admitted_corpus: AdmittedCorpusArtifactsV1
+
+
 def _run_authoritative_corpus_probe(
     probe_path: Path,
     temporary_dir: Path,
-    source_root: Path | None = None,
+    *,
+    source_root: Path,
+    expected_probe_sha256: str,
 ) -> AdmittedCorpusArtifactsV1:
     """Invoke the already-attested probe once and admit its sidecar-bound output."""
 
@@ -329,15 +344,22 @@ def _run_authoritative_corpus_probe(
             "MISSING_PROBE_BINARY",
             f"corpus probe binary is missing: {probe_path}",
         )
+    if re.fullmatch(r"[0-9a-f]{64}", expected_probe_sha256) is None:
+        raise Task4BSmokeError(
+            "PROBE_HASH_MISMATCH",
+            "expected corpus probe hash is not a lowercase SHA-256 digest",
+        )
+    before_execution_hash = _sha256_file(probe_path)
+    if before_execution_hash != expected_probe_sha256:
+        raise Task4BSmokeError(
+            "PROBE_HASH_MISMATCH",
+            "corpus probe changed after build attestation",
+        )
     temporary_dir = temporary_dir.resolve()
     temporary_dir.mkdir(parents=True, exist_ok=True)
     corpus_path = temporary_dir / "corpus.p6c"
     authority_path = temporary_dir / "corpus.authority.p6a"
-    cwd = (
-        source_root.resolve()
-        if source_root is not None
-        else probe_path.parents[1]
-    )
+    cwd = source_root.resolve()
     try:
         _run_command(
             (
@@ -354,6 +376,12 @@ def _run_authoritative_corpus_probe(
             "CORPUS_PROBE_FAILED",
             f"authoritative corpus probe failed: {error}",
         ) from error
+    after_execution_hash = _sha256_file(probe_path)
+    if after_execution_hash != expected_probe_sha256:
+        raise Task4BSmokeError(
+            "PROBE_HASH_CHANGED_DURING_EXECUTION",
+            "corpus probe changed during or after its execution",
+        )
     try:
         corpus_bytes = corpus_path.read_bytes()
         authority_bytes = authority_path.read_bytes()
@@ -371,9 +399,40 @@ def _run_authoritative_corpus_probe(
             "admitted corpus differs from the decoded corpus",
         )
     return AdmittedCorpusArtifactsV1(
-        probe_sha256=_sha256_file(probe_path),
+        probe_sha256=after_execution_hash,
         corpus_bytes=corpus_bytes,
         authority_bytes=authority_bytes,
         corpus=admitted,
         authority=authority,
+    )
+
+
+def run_task4b_smoke(
+    *,
+    build_dir: Path,
+    output_dir: Path,
+) -> Task4BSmokeRunResult:
+    """Compose the authorized Task-2 preparation seam only.
+
+    CUDA preflight, optimizer creation, model updates, export, and evidence
+    finalization are intentionally not part of this Task-2 implementation.
+    """
+
+    source_root = _canonical_source_root()
+    h_exec = _verify_clean_h_exec(source_root)
+    probe_path, probe_sha256 = _build_and_attest_probe(source_root, build_dir)
+    with tempfile.TemporaryDirectory(prefix="ocgforge-task4b-corpus-") as directory:
+        admitted = _run_authoritative_corpus_probe(
+            probe_path,
+            Path(directory),
+            source_root=source_root,
+            expected_probe_sha256=probe_sha256,
+        )
+    return Task4BSmokeRunResult(
+        source_root=source_root,
+        output_dir=Path(output_dir).resolve(),
+        h_exec=h_exec,
+        probe_path=probe_path,
+        probe_sha256=probe_sha256,
+        admitted_corpus=admitted,
     )
