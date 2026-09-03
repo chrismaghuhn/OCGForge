@@ -982,7 +982,6 @@ presence byte is determined by the exact failure/availability state below.
 | decision_request_family:optional string | REQUIRED | MUST_BE_ABSENT | EXPLICIT_OPTIONAL |
 | continuation_context:optional ContinuationContextV1 | REQUIRED | MUST_BE_ABSENT | EXPLICIT_OPTIONAL |
 | first_divergence_ordinal:optional u64 | REQUIRED | MUST_BE_ABSENT | MUST_BE_ABSENT |
-| terminal_outcome_identity:optional string | MUST_BE_ABSENT | REQUIRED | MUST_BE_ABSENT |
 | terminal_outcome:optional TerminalOutcomeV1 | MUST_BE_ABSENT | REQUIRED | MUST_BE_ABSENT |
 | failure_before_divergence:optional FailureBeforeDivergenceV1 | MUST_BE_ABSENT | MUST_BE_ABSENT | REQUIRED |
 
@@ -1031,11 +1030,13 @@ TerminalOutcomeV1 is exact:
 
     terminal:bool = true
     winner:optional u8
-    win_reason:optional string
+    win_reason:optional u8
 
-It contains only the accepted public terminal outcome. Its
-terminal_outcome_identity is recomputed from the canonical TerminalOutcomeV1
-payload and is required for NO_DIVERGENCE_TERMINAL. That variant has no
+It contains only the accepted public terminal outcome. win_reason is the
+existing public Phase-5 u8 reason code; a readable reason name is derived
+presentation only. NO_DIVERGENCE_TERMINAL carries the TerminalOutcomeV1
+payload directly inside the already content-addressed FirstDivergenceV1
+record. It has no nested terminal-outcome identity. That variant has no
 divergence frame: every frame, candidate, score, and selection tail field is
 MUST_BE_ABSENT.
 
