@@ -49,7 +49,6 @@ recovery_failure = null | {
       build-probe-binding
       gate-execution
       post-gate-integrity
-      evidence-publication
     reached_command_count: integer in [0, 14]
 }
 ```
@@ -64,7 +63,11 @@ zero when failure occurs before gate execution. Commands after the first
 nonrecoverable failure MUST be represented as `NOT_RUN` and MUST NOT be
 counted. An expected anchor or value is not an observed validation fact until
 its validation succeeds; unvalidated observations MUST remain null or
-`NOT_RUN` rather than being copied from expected constants.
+`NOT_RUN` rather than being copied from expected constants. Expected immutable
+constants, when serialized, MUST be kept in explicitly named expected-anchor
+fields. Observed historical and provenance fields MUST remain nullable until
+the corresponding validation succeeds; an expected constant MUST NOT be
+serialized in an observed field merely because it is the expected value.
 
 The recovery directory MUST be newly created for recovery. The original
 `docs/p6/task4b/` files remain a separate immutable input set.
@@ -144,6 +147,13 @@ original_failed_gate_exit_code        = 8
 original_command_record_count         = 14
 ```
 
+The values in the preceding block are expected immutable anchors. They MAY be
+serialized before validation only in explicitly named expected-anchor fields.
+The corresponding `original_attempt` fields are observed validation facts and
+MUST remain null until the Git-object, byte, identity, and status checks for
+those facts have succeeded. A failed validation MUST NOT copy the expected
+value into its observed field.
+
 The original failed gate is a historical fact. Recovery MUST record it as a
 failure and MUST NOT reinterpret it as a skipped gate or as a successful
 result.
@@ -165,7 +175,9 @@ recovery_contract_commit        = exact commit containing this accepted contract
 executed. They are not supplied by a caller as acceptance claims; the recovery
 owner derives and records them from the actual committed source. A recovery
 implementation MUST NOT populate `training_code_commit` with either recovery
-SHA.
+SHA. The frozen values above are expected provenance anchors; observed
+provenance fields MUST remain null until the corresponding commit identity and
+source-boundary validation succeeds.
 
 ## 5. Semantic source-integrity proof
 
@@ -230,8 +242,9 @@ MODEL_TRAINING_INVOCATIONS       = 0
 EVIDENCE_MUTATION                 = false
 ```
 
-The corrected recovery verifier MUST perform exactly three whitelisted
-ephemeral probe regressions with the exact historical probe SHA:
+On a successful recovery, the corrected recovery verifier MUST perform exactly
+three whitelisted ephemeral probe regressions with the exact historical probe
+SHA:
 
 1. the explicit `phase6_task4a_corpus_test` admitted-forward command;
 2. the explicit `phase6_task4a_admitted_model_test` admitted-forward command;
@@ -240,10 +253,13 @@ ephemeral probe regressions with the exact historical probe SHA:
 
 All three regressions MUST write only below private temporary directories and
 MUST never write or replace the historical corpus or authority files. They are
-recorded separately as
-`EPHEMERAL_PROBE_REGRESSION_INVOCATIONS=3`; they are never authoritative
-corpus invocations and never training authority. The authoritative count
-remains `AUTHORITATIVE_CORPUS_PROBE_RERUN=false`.
+recorded separately. On a successful recovery,
+`EPHEMERAL_PROBE_REGRESSION_INVOCATIONS=3`. On a failed recovery, the counter
+MUST equal the actual number of these whitelisted regressions that were
+started before fail-fast termination, in the range 0..3. No later probe may be
+started merely to satisfy the success count after a failure. They are never
+authoritative corpus invocations and never training authority. The
+authoritative count remains `AUTHORITATIVE_CORPUS_PROBE_RERUN=false`.
 
 `ADDITIONAL_OPTIMIZER_STEPS` counts only real model-training optimizer
 updates. Synthetic losses, fake optimizers, mocks, and other test doubles used
@@ -295,6 +311,21 @@ stderr_sha256
 status = PASS | FAIL | NOT_RUN
 ```
 
+For an unreached command, the canonical record MUST be exactly:
+
+```text
+status = NOT_RUN
+exit_code = null
+stdout_sha256 = null
+stderr_sha256 = null
+```
+
+The planned `command_id` and `argv` remain present because they identify the
+frozen command, not an execution. A `PASS` or `FAIL` record MUST instead have
+an integer `exit_code` and 64-character lowercase-hex
+`stdout_sha256`/`stderr_sha256`. No exit code or output digest may be
+manufactured for a command that was not started.
+
 All ten logical gate statuses MUST be `PASS` for recovery success. A missing,
 reordered, nonzero, or unrecorded command FAILS CLOSED.
 
@@ -341,6 +372,17 @@ Recovery writes only the two new files under `recovery-v1/`, atomically and
 from the typed recovery result. It MUST never edit, replace, amend, or
 regenerate any of the ten historical files.
 
+Recovery evaluation and evidence publication are distinct concepts. The
+typed recovery evaluation result is completed before publication and contains
+the recovery statuses, reached facts, command records, and
+`recovery_failure`. Its `recovery_failure` stages cover only evaluation,
+precondition, gate, and post-gate failures; publication failure is an external
+process outcome and is not represented by `recovery_failure` in a payload.
+
+The evidence publication outcome is separate. Publication success, including
+post-publication reread/validation, is required before any recovery evidence
+can establish acceptance.
+
 The two final recovery files MUST be published all-or-fail from one typed
 result. The publisher MUST:
 
@@ -355,9 +397,20 @@ result. The publisher MUST:
 The final directory MUST NOT be created by sequentially replacing its JSON and
 Markdown files. If the final directory already exists, the atomic directory
 rename is unavailable, either payload fails validation, or either final file
-cannot be reread identically, publication FAILS CLOSED at
-`evidence-publication` and a partial final evidence set MUST NOT be accepted.
-The historical directory is never a publication target.
+cannot be reread identically, publication FAILS CLOSED with the stable
+process-level error `RECOVERY_EVIDENCE_PUBLICATION_FAILED`. No final
+`recovery-v1/` directory is accepted in that case; any fully or partially
+visible directory is non-authoritative. The publisher MUST NOT rewrite an
+already-renamed directory to encode that external failure. The historical
+directory is never a publication target.
+
+If publication fails after the typed evaluation result was formed, that result
+MUST NOT be treated as accepted or committed as recovery evidence. The process
+MUST surface `RECOVERY_EVIDENCE_PUBLICATION_FAILED`, STOP, and perform no
+retry without separate authorization. A successful Task-4B recovery requires
+both `TASK4B_FINAL_PASS=true` in the canonical evaluation result and a
+successful all-or-fail publication with successful post-publication
+validation. Staged or partially published bytes never establish acceptance.
 
 There is no retry branch. The following conditions produce an auditable
 recovery result with `TASK4B_RECOVERY_PASS=false` and
@@ -375,7 +428,6 @@ recovery result with `TASK4B_RECOVERY_PASS=false` and
 - any training or model-training invocation;
 - any optimizer step;
 - any attempt to mutate historical evidence;
-- any recovery evidence publication failure.
 
 The ordinary model-forward and inference work required by the two admitted-
 forward validation tests is permitted and is not a training invocation. It

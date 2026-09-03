@@ -29,13 +29,26 @@ smoke-evidence identity, probe hash, and the historical
 `full-non-long-ctest` exit-8 failure are part of the V1 contract. The original
 status remains `SMOKE_PASS=true`, `TASK4B_PASS=false`.
 
+The frozen historical values are expected anchors. If serialized before their
+validation succeeds, they must use explicitly named expected-anchor fields;
+observed `original_attempt` and provenance fields remain nullable until the
+corresponding Git-object, byte, identity, status, and source-boundary checks
+have succeeded.
+
 Every recovery result contains `recovery_failure=null` on success, or a
 non-null object with exactly `error_code`, `failure_stage`, and
 `reached_command_count`. The frozen stages are
 `historical-evidence-validation`, `provenance-validation`,
 `semantic-source-integrity`, `build-probe-binding`, `gate-execution`,
-`post-gate-integrity`, and `evidence-publication`. The reached count is 0..14
-and counts started/recorded commands, including a failed command.
+and `post-gate-integrity`. The reached count is 0..14 and counts
+started/recorded commands, including a failed command. Publication failure is
+an external process outcome, not a `recovery_failure` stage in the canonical
+result.
+
+Expected immutable anchors MAY be serialized in explicitly named
+expected-anchor fields. Observed historical and provenance facts MUST remain
+nullable until their validation succeeds and MUST NOT be populated from an
+expected constant before that validation.
 
 ## Future recovery phases
 
@@ -96,15 +109,22 @@ P4A_HEAVY_REPLAY|M4_HEAVY_LIFECYCLE|M4_ACCEPTANCE_SCALE|P6_PYTORCH_REQUIRED
 The corrected full CTest sweep therefore does not redundantly select the
 PyTorch-required runner test. The two explicit admitted-forward commands and
 the `phase6_task4a_corpus_test` selected by the full CTest sweep MUST execute
-exactly three whitelisted ephemeral probe regressions in total. Each uses the
-exact historical probe SHA and private temporary outputs; none is authoritative
-corpus production.
+the three whitelisted ephemeral probe regressions on a successful recovery.
+Each uses the exact historical probe SHA and private temporary outputs; none
+is authoritative corpus production. On a failed recovery, the ephemeral
+counter equals the actual number of those whitelisted regressions started
+before fail-fast termination, in the range 0..3; no later probe is started to
+reach three.
 
 Recovery is fail-fast at the first nonrecoverable precondition, integrity, or
 gate failure. It records the failure stage and reached command count; every
 remaining fixed command and logical gate is `NOT_RUN`, and no later gate is
 executed. `MODEL_TRAINING_INVOCATIONS` and `ADDITIONAL_OPTIMIZER_STEPS` count
 real model-training work only; synthetic/fake unit-test objects do not count.
+Every unreached command record retains its planned `command_id` and `argv` but
+has exactly `status=NOT_RUN`, `exit_code=null`, `stdout_sha256=null`, and
+`stderr_sha256=null`. PASS/FAIL records require an integer exit code and
+64-character lowercase-hex stdout/stderr digests.
 
 ### 5. Derive recovery and final status
 
@@ -138,11 +158,18 @@ docs/p6/task4b/recovery-v1/task4b-acceptance-recovery.md
 Both are derived from one typed result. Materialize both files in a private
 sibling staging directory, flush/fsync and validate both, then atomically rename
 the complete staging directory to the previously absent `recovery-v1/`
-directory. Sequential final-file replacement is forbidden. A publication
-failure is a recovery failure; it does not alter the original smoke or failure
-evidence. The future evidence commit, if authorized, contains only this
-recovery directory and has an evidence-only commit message selected by the
-acceptance workflow.
+directory. Sequential final-file replacement is forbidden. Recovery evaluation
+is complete before publication; a publication failure is an external outcome,
+not a `recovery_failure` value in the canonical payload. If rename, parent
+fsync, reread, or validation fails, no final recovery directory is accepted,
+any visible directory is non-authoritative, and the process surfaces the stable
+`RECOVERY_EVIDENCE_PUBLICATION_FAILED` error without rewriting an already
+renamed directory. There is no retry without separate authorization. A
+successful acceptance requires both the evaluation result's
+`TASK4B_FINAL_PASS=true` and successful all-or-fail publication plus
+post-publication validation. The future evidence commit, if authorized,
+contains only this recovery directory and has an evidence-only commit message
+selected by the acceptance workflow.
 
 ## Required future failure behavior
 
@@ -159,6 +186,12 @@ the old successful smoke unchanged, and stops for review. It MUST NOT:
 - turn the historical `TASK4B_PASS` true;
 - use a missing, skipped, or inferred gate as PASS;
 - begin Phase-6 Task 5.
+
+These fail-closed payload rules apply to evaluation/precondition/gate and
+post-gate failures. A publication failure does not rewrite the payload with a
+synthetic failure stage; it is surfaced only as
+`RECOVERY_EVIDENCE_PUBLICATION_FAILED`, and the evaluation result is not
+accepted or committed as evidence.
 
 ## Frozen current-state assertion
 
