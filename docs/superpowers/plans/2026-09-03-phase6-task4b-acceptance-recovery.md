@@ -86,9 +86,11 @@ P4A_HEAVY_REPLAY|M4_HEAVY_LIFECYCLE|M4_ACCEPTANCE_SCALE|P6_PYTORCH_REQUIRED
 ```
 
 The corrected full CTest sweep therefore does not redundantly select the
-PyTorch-required runner test. Any admitted-forward probe execution, if
-retained by the accepted recovery implementation, is ephemeral, hash-bound,
-private-output regression only; it is not authoritative corpus production.
+PyTorch-required runner test. The two explicit admitted-forward commands and
+the `phase6_task4a_corpus_test` selected by the full CTest sweep MUST execute
+exactly three whitelisted ephemeral probe regressions in total. Each uses the
+exact historical probe SHA and private temporary outputs; none is authoritative
+corpus production.
 
 ### 5. Derive recovery and final status
 
@@ -100,6 +102,10 @@ ORIGINAL_TASK4B_PASS=false
 TASK4B_RECOVERY_PASS=<all V1 recovery predicates>
 TASK4B_FINAL_PASS=ORIGINAL_SMOKE_PASS && ORIGINAL_TASK4B_PASS == false && TASK4B_RECOVERY_PASS
 ```
+
+The recovery predicate explicitly includes
+`MODEL_TRAINING_INVOCATIONS == 0` and
+`EPHEMERAL_PROBE_REGRESSION_INVOCATIONS == 3`.
 
 The old execution, verification, and acceptance files remain byte-identical.
 No status is inferred from a command that was not run, and no convergence or
@@ -127,7 +133,8 @@ old successful smoke unchanged, and stops for review. It MUST NOT:
 
 - rerun the CUDA smoke;
 - rerun the authoritative probe;
-- perform an optimizer/model-training step;
+- perform a training/model-training invocation or optimizer step;
+- perform an unexpected or non-whitelisted ephemeral probe invocation;
 - rewrite the historical evidence;
 - turn the historical `TASK4B_PASS` true;
 - use a missing, skipped, or inferred gate as PASS;

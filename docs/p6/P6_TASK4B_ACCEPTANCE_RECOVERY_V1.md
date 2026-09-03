@@ -201,13 +201,20 @@ MODEL_TRAINING_INVOCATIONS       = 0
 EVIDENCE_MUTATION                 = false
 ```
 
-The corrected recovery verifier MAY run the two existing admitted-forward
-regression commands only if they use the exact historical probe SHA, private
-temporary output paths, and never write or replace the historical corpus or
-authority files. Such executions are recorded separately as
-`EPHEMERAL_PROBE_REGRESSION_INVOCATIONS`; they are never authoritative corpus
-invocations and never training authority. The authoritative count remains
-zero.
+The corrected recovery verifier MUST perform exactly three whitelisted
+ephemeral probe regressions with the exact historical probe SHA:
+
+1. the explicit `phase6_task4a_corpus_test` admitted-forward command;
+2. the explicit `phase6_task4a_admitted_model_test` admitted-forward command;
+3. the `phase6_task4a_corpus_test` process selected by the corrected
+   `full-non-long-ctest` gate.
+
+All three regressions MUST write only below private temporary directories and
+MUST never write or replace the historical corpus or authority files. They are
+recorded separately as
+`EPHEMERAL_PROBE_REGRESSION_INVOCATIONS=3`; they are never authoritative
+corpus invocations and never training authority. The authoritative count
+remains `AUTHORITATIVE_CORPUS_PROBE_RERUN=false`.
 
 Recovery MUST reuse only the immutable historical smoke artifacts. It MUST
 not rebuild the probe, create a checkpoint, reload a model for training, or
@@ -279,6 +286,8 @@ TASK4B_RECOVERY_PASS =
     && CUDA_SMOKE_RERUN == false
     && AUTHORITATIVE_CORPUS_PROBE_RERUN == false
     && ADDITIONAL_OPTIMIZER_STEPS == 0
+    && MODEL_TRAINING_INVOCATIONS == 0
+    && EPHEMERAL_PROBE_REGRESSION_INVOCATIONS == 3
     && EVIDENCE_MUTATION == false
 
 TASK4B_FINAL_PASS =
@@ -307,9 +316,17 @@ recovery result with `TASK4B_RECOVERY_PASS=false` and
 - any unexpected source or worktree change;
 - any corrected gate FAIL or NOT_RUN;
 - any command omission, reorder, nonzero exit, or hash mismatch;
-- any smoke/probe/training/model/optimizer invocation;
+- any CUDA smoke invocation;
+- any authoritative corpus-probe invocation;
+- any unexpected or non-whitelisted ephemeral probe invocation;
+- any training or model-training invocation;
+- any optimizer step;
 - any attempt to mutate historical evidence;
 - any recovery evidence publication failure.
+
+The ordinary model-forward and inference work required by the two admitted-
+forward validation tests is permitted and is not a training invocation. It
+MUST remain ephemeral and non-authoritative.
 
 A failed recovery MUST preserve the successful original smoke and its original
 `SMOKE_PASS=true` / `TASK4B_PASS=false` result. It MUST be committed, if and
