@@ -275,6 +275,10 @@ invoke the smoke CLI.
 Recovery uses the same ten logical gate IDs and fourteen command-record
 cardinality as the original verifier:
 
+There are always exactly 14 planned command records. A fail-fast result keeps
+the planned identity for every record and marks each unreached record with the
+canonical `NOT_RUN` representation below.
+
 ```text
 task4-focused-python
 admitted-forward
@@ -325,6 +329,30 @@ frozen command, not an execution. A `PASS` or `FAIL` record MUST instead have
 an integer `exit_code` and 64-character lowercase-hex
 `stdout_sha256`/`stderr_sha256`. No exit code or output digest may be
 manufactured for a command that was not started.
+
+For each logical gate, derive its status exactly from its planned command
+records:
+
+```text
+PASS = every planned command for the gate was started and has status PASS
+FAIL = at least one command for the gate has status FAIL
+       OR the gate was partially executed and fail-fast stopped it before
+          its remaining planned commands were started
+NOT_RUN = none of the gate's planned commands was started
+```
+
+After the first nonrecoverable failure, every later command record is
+`NOT_RUN`, and every later gate with zero started commands is `NOT_RUN`. If a
+gate completed all of its planned commands successfully and a later
+post-gate-integrity check fails, that completed gate remains `PASS`; the
+recovery remains failed through `recovery_failure`. A partially executed gate
+MUST NOT be inferred as `PASS`.
+
+During the fixed gate sequence, a command launch/exit failure or a
+pre-command integrity failure maps to `failure_stage=gate-execution`. A
+probe, worktree, or source mutation discovered immediately after a started
+command or during final post-command validation maps to
+`failure_stage=post-gate-integrity`.
 
 All ten logical gate statuses MUST be `PASS` for recovery success. A missing,
 reordered, nonzero, or unrecorded command FAILS CLOSED.
@@ -383,16 +411,30 @@ The evidence publication outcome is separate. Publication success, including
 post-publication reread/validation, is required before any recovery evidence
 can establish acceptance.
 
+Whether staging- or parent-directory synchronization is available and used is
+publication-durability metadata only. It is not a gameplay, model, checkpoint,
+or other semantic input.
+
 The two final recovery files MUST be published all-or-fail from one typed
 result. The publisher MUST:
 
 1. serialize and validate both final byte payloads before publication;
-2. create a private staging directory as a sibling of `recovery-v1/`;
-3. write both files into that staging directory, flush and `fsync` each file,
-   verify their exact bytes, and `fsync` the staging directory;
-4. atomically rename the complete staging directory to the previously absent
-   final `recovery-v1/` directory on the same filesystem; and
-5. `fsync` the parent directory and reread/validate both final files.
+2. create a private staging directory as a sibling of `recovery-v1/`, with the
+   staging and final directories sharing that parent and filesystem;
+3. write both files into that staging directory, flush and `os.fsync` each
+   staged file descriptor, and reread/byte-validate both staged files;
+4. on POSIX, when the host documents and supports opening and syncing the
+   staging directory, sync that directory and fail closed if the attempted
+   sync fails; on Windows, directory sync is not required because no accepted
+   documented V1 directory-sync primitive has been established;
+5. atomically rename the complete staging directory to the previously absent
+   final `recovery-v1/` directory using one same-parent, same-filesystem
+   directory rename operation supported by the host platform; and
+6. on POSIX, when the host documents and supports opening and syncing the
+   parent directory, sync that parent and fail closed if the attempted sync
+   fails, then reread/byte-validate both final files. On Windows, the
+   same-parent atomic directory rename and exact post-rename readback are
+   mandatory; directory sync is not required.
 
 The final directory MUST NOT be created by sequentially replacing its JSON and
 Markdown files. If the final directory already exists, the atomic directory

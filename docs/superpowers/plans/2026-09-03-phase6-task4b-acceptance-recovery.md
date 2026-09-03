@@ -126,6 +126,21 @@ has exactly `status=NOT_RUN`, `exit_code=null`, `stdout_sha256=null`, and
 `stderr_sha256=null`. PASS/FAIL records require an integer exit code and
 64-character lowercase-hex stdout/stderr digests.
 
+Logical gate status is derived exactly from its planned command records:
+`PASS` requires every command in the gate to be started and `PASS`; `FAIL`
+means a command in the gate is `FAIL`, or the gate started but fail-fast
+stopped it before all remaining commands started; `NOT_RUN` means no command in
+the gate started. After the first nonrecoverable failure, later commands are
+`NOT_RUN` and later zero-started gates are `NOT_RUN`. A gate whose complete
+command list passed remains `PASS` if a later post-gate-integrity check fails;
+the recovery itself remains failed. A partial gate is never inferred as
+`PASS`.
+
+Within the fixed gate sequence, command launch/exit failure and pre-command
+integrity failure use `failure_stage=gate-execution`. Probe, worktree, or
+source mutation found immediately after a started command or in final
+post-command validation uses `failure_stage=post-gate-integrity`.
+
 ### 5. Derive recovery and final status
 
 Set only the new recovery fields:
@@ -160,16 +175,26 @@ sibling staging directory, flush/fsync and validate both, then atomically rename
 the complete staging directory to the previously absent `recovery-v1/`
 directory. Sequential final-file replacement is forbidden. Recovery evaluation
 is complete before publication; a publication failure is an external outcome,
-not a `recovery_failure` value in the canonical payload. If rename, parent
-fsync, reread, or validation fails, no final recovery directory is accepted,
-any visible directory is non-authoritative, and the process surfaces the stable
-`RECOVERY_EVIDENCE_PUBLICATION_FAILED` error without rewriting an already
-renamed directory. There is no retry without separate authorization. A
-successful acceptance requires both the evaluation result's
-`TASK4B_FINAL_PASS=true` and successful all-or-fail publication plus
-post-publication validation. The future evidence commit, if authorized,
-contains only this recovery directory and has an evidence-only commit message
-selected by the acceptance workflow.
+not a `recovery_failure` value in the canonical payload. The publisher MUST
+flush and `os.fsync` each staged file, reread/byte-validate both staged files,
+and use a same-parent, same-filesystem atomic directory rename. On Windows,
+directory fsync is not required because no accepted documented V1 directory-
+sync primitive has been established; exact post-rename readback remains
+mandatory. On POSIX, when the host documents and supports opening and syncing
+the staging and parent directories, perform those syncs and fail closed on an
+attempted sync failure. If rename, reread, or validation fails, no final
+recovery directory is accepted, any visible directory is non-authoritative,
+and the process surfaces the stable `RECOVERY_EVIDENCE_PUBLICATION_FAILED`
+error without rewriting an already renamed directory. There is no retry
+without separate authorization. A successful acceptance requires both the
+evaluation result's `TASK4B_FINAL_PASS=true` and successful all-or-fail
+publication plus post-publication validation. The future evidence commit, if
+authorized, contains only this recovery directory and has an evidence-only
+commit message selected by the acceptance workflow.
+
+Directory-synchronization capability and whether a supported directory sync was
+performed are publication-durability metadata only, not gameplay, model,
+checkpoint, or other semantic inputs.
 
 ## Required future failure behavior
 
