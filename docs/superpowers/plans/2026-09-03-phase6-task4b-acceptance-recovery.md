@@ -29,6 +29,14 @@ smoke-evidence identity, probe hash, and the historical
 `full-non-long-ctest` exit-8 failure are part of the V1 contract. The original
 status remains `SMOKE_PASS=true`, `TASK4B_PASS=false`.
 
+Every recovery result contains `recovery_failure=null` on success, or a
+non-null object with exactly `error_code`, `failure_stage`, and
+`reached_command_count`. The frozen stages are
+`historical-evidence-validation`, `provenance-validation`,
+`semantic-source-integrity`, `build-probe-binding`, `gate-execution`,
+`post-gate-integrity`, and `evidence-publication`. The reached count is 0..14
+and counts started/recorded commands, including a failed command.
+
 ## Future recovery phases
 
 The following phases describe the only acceptable future workflow. Each phase
@@ -92,6 +100,12 @@ exactly three whitelisted ephemeral probe regressions in total. Each uses the
 exact historical probe SHA and private temporary outputs; none is authoritative
 corpus production.
 
+Recovery is fail-fast at the first nonrecoverable precondition, integrity, or
+gate failure. It records the failure stage and reached command count; every
+remaining fixed command and logical gate is `NOT_RUN`, and no later gate is
+executed. `MODEL_TRAINING_INVOCATIONS` and `ADDITIONAL_OPTIMIZER_STEPS` count
+real model-training work only; synthetic/fake unit-test objects do not count.
+
 ### 5. Derive recovery and final status
 
 Set only the new recovery fields:
@@ -106,6 +120,7 @@ TASK4B_FINAL_PASS=ORIGINAL_SMOKE_PASS && ORIGINAL_TASK4B_PASS == false && TASK4B
 The recovery predicate explicitly includes
 `MODEL_TRAINING_INVOCATIONS == 0` and
 `EPHEMERAL_PROBE_REGRESSION_INVOCATIONS == 3`.
+It also requires `recovery_failure == null`.
 
 The old execution, verification, and acceptance files remain byte-identical.
 No status is inferred from a command that was not run, and no convergence or
@@ -120,16 +135,21 @@ docs/p6/task4b/recovery-v1/task4b-acceptance-recovery.json
 docs/p6/task4b/recovery-v1/task4b-acceptance-recovery.md
 ```
 
-Both are derived from one typed result. A publication failure is a recovery
-failure; it does not alter the original smoke or failure evidence. The future
-evidence commit, if authorized, contains only this recovery directory and has
-an evidence-only commit message selected by the acceptance workflow.
+Both are derived from one typed result. Materialize both files in a private
+sibling staging directory, flush/fsync and validate both, then atomically rename
+the complete staging directory to the previously absent `recovery-v1/`
+directory. Sequential final-file replacement is forbidden. A publication
+failure is a recovery failure; it does not alter the original smoke or failure
+evidence. The future evidence commit, if authorized, contains only this
+recovery directory and has an evidence-only commit message selected by the
+acceptance workflow.
 
 ## Required future failure behavior
 
 There is no retry for any recovery phase. A failure records the reached facts,
-sets `TASK4B_RECOVERY_PASS=false` and `TASK4B_FINAL_PASS=false`, preserves the
-old successful smoke unchanged, and stops for review. It MUST NOT:
+sets `TASK4B_RECOVERY_PASS=false` and `TASK4B_FINAL_PASS=false`, records a
+non-null `recovery_failure`, marks all unreached commands `NOT_RUN`, preserves
+the old successful smoke unchanged, and stops for review. It MUST NOT:
 
 - rerun the CUDA smoke;
 - rerun the authoritative probe;

@@ -37,6 +37,35 @@ The Markdown file is a presentation-only derivation of the canonical JSON. It
 is not an independent authority and MUST NOT contain a status that is absent
 from or inconsistent with the JSON.
 
+The canonical JSON MUST contain this exact failure representation:
+
+```text
+recovery_failure = null | {
+    error_code: non-empty stable string,
+    failure_stage: one of:
+      historical-evidence-validation
+      provenance-validation
+      semantic-source-integrity
+      build-probe-binding
+      gate-execution
+      post-gate-integrity
+      evidence-publication
+    reached_command_count: integer in [0, 14]
+}
+```
+
+On a successful recovery, `recovery_failure` MUST be `null`. On any
+fail-closed recovery failure, it MUST be non-null and both
+`TASK4B_RECOVERY_PASS` and `TASK4B_FINAL_PASS` MUST be `false`.
+
+`reached_command_count` is the number of fixed recovery commands that were
+actually started and recorded, including a command that returned `FAIL`; it is
+zero when failure occurs before gate execution. Commands after the first
+nonrecoverable failure MUST be represented as `NOT_RUN` and MUST NOT be
+counted. An expected anchor or value is not an observed validation fact until
+its validation succeeds; unvalidated observations MUST remain null or
+`NOT_RUN` rather than being copied from expected constants.
+
 The recovery directory MUST be newly created for recovery. The original
 `docs/p6/task4b/` files remain a separate immutable input set.
 
@@ -216,6 +245,11 @@ recorded separately as
 corpus invocations and never training authority. The authoritative count
 remains `AUTHORITATIVE_CORPUS_PROBE_RERUN=false`.
 
+`ADDITIONAL_OPTIMIZER_STEPS` counts only real model-training optimizer
+updates. Synthetic losses, fake optimizers, mocks, and other test doubles used
+inside the mandatory runner regression do not count as model-training
+invocations or optimizer steps.
+
 Recovery MUST reuse only the immutable historical smoke artifacts. It MUST
 not rebuild the probe, create a checkpoint, reload a model for training, or
 invoke the smoke CLI.
@@ -289,6 +323,7 @@ TASK4B_RECOVERY_PASS =
     && MODEL_TRAINING_INVOCATIONS == 0
     && EPHEMERAL_PROBE_REGRESSION_INVOCATIONS == 3
     && EVIDENCE_MUTATION == false
+    && recovery_failure == null
 
 TASK4B_FINAL_PASS =
     ORIGINAL_SMOKE_PASS
@@ -305,6 +340,24 @@ historical `TASK4B_PASS` field, which remains false forever.
 Recovery writes only the two new files under `recovery-v1/`, atomically and
 from the typed recovery result. It MUST never edit, replace, amend, or
 regenerate any of the ten historical files.
+
+The two final recovery files MUST be published all-or-fail from one typed
+result. The publisher MUST:
+
+1. serialize and validate both final byte payloads before publication;
+2. create a private staging directory as a sibling of `recovery-v1/`;
+3. write both files into that staging directory, flush and `fsync` each file,
+   verify their exact bytes, and `fsync` the staging directory;
+4. atomically rename the complete staging directory to the previously absent
+   final `recovery-v1/` directory on the same filesystem; and
+5. `fsync` the parent directory and reread/validate both final files.
+
+The final directory MUST NOT be created by sequentially replacing its JSON and
+Markdown files. If the final directory already exists, the atomic directory
+rename is unavailable, either payload fails validation, or either final file
+cannot be reread identically, publication FAILS CLOSED at
+`evidence-publication` and a partial final evidence set MUST NOT be accepted.
+The historical directory is never a publication target.
 
 There is no retry branch. The following conditions produce an auditable
 recovery result with `TASK4B_RECOVERY_PASS=false` and
