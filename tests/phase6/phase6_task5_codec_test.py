@@ -303,6 +303,24 @@ class Task5PrimitiveAndIdentityTests(unittest.TestCase):
         )
         self.assertEqual(original.public_action_keys, (_key(0), _key(1)))
 
+    def test_phase5_domain_precedence_requires_request_kind(self):
+        keys = (_key(0), _key(1))
+        raw = codec.public_candidate_domain_digest("card_selection", keys)
+        fallback = codec.fallback_ordered_candidate_domain_identity(keys)
+        self.assertEqual(
+            codec.ordered_candidate_domain_identity(keys, "card_selection"),
+            raw,
+        )
+        self.assertEqual(codec.ordered_candidate_domain_identity(keys), fallback)
+        codec.validate_ordered_candidate_domain_identity(raw, "card_selection", keys)
+        codec.validate_ordered_candidate_domain_identity(fallback, None, keys)
+        with self.assertRaises(codec.CodecError):
+            codec.validate_ordered_candidate_domain_identity(
+                fallback, "card_selection", keys
+            )
+        with self.assertRaises(codec.CodecError):
+            codec.ordered_candidate_domain_identity(keys, "d" * 64)
+
     def test_score_vector_preserves_source_order_and_exact_capacity_witnesses(self):
         for count in (24, 25, 129):
             vector = _score_vector(count)
@@ -552,6 +570,17 @@ class Task5FirstDivergenceTests(unittest.TestCase):
                 dataclasses.replace(
                     divergence,
                     ordered_candidate_domain_identity="d" * 64,
+                )
+            )
+        with self.assertRaises(codec.CodecError):
+            codec.canonical_first_divergence_field_bytes(
+                dataclasses.replace(
+                    divergence,
+                    ordered_candidate_domain_identity=(
+                        codec.fallback_ordered_candidate_domain_identity(
+                            divergence.candidate_public_action_keys
+                        )
+                    ),
                 )
             )
         with self.assertRaises(codec.CodecError):

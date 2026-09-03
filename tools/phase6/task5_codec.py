@@ -1043,7 +1043,7 @@ def canonical_public_candidate_domain_bytes(
     public_action_keys: Sequence[str],
 ) -> bytes:
     _validate_public_text(request_kind, "candidate domain request_kind")
-    _validate_lower_token(request_kind, "candidate domain request_kind")
+    _validate_action_kind_token(request_kind, "candidate domain request_kind")
     keys = _validate_ordered_candidate_keys(public_action_keys)
     return b"".join(
         (
@@ -1088,30 +1088,39 @@ def fallback_ordered_candidate_domain_identity(
 
 def ordered_candidate_domain_identity(
     public_action_keys: Sequence[str],
-    public_candidate_domain_digest: Optional[str] = None,
+    request_kind: Optional[str] = None,
 ) -> str:
     keys = _validate_ordered_candidate_keys(public_action_keys)
-    if public_candidate_domain_digest is not None:
-        _validate_digest(
-            public_candidate_domain_digest,
-            "public_candidate_domain_digest",
-        )
-        return public_candidate_domain_digest
+    if request_kind is not None:
+        return public_candidate_domain_digest(request_kind, keys)
     return fallback_ordered_candidate_domain_identity(keys)
 
 
 def validate_ordered_candidate_domain_identity(
     identity: str,
-    request_kind: str,
-    public_action_keys: Sequence[str],
+    request_kind_or_keys: Optional[str | Sequence[str]],
+    public_action_keys: Optional[Sequence[str]] = None,
 ) -> None:
-    _validate_ordered_candidate_keys(public_action_keys)
-    if isinstance(identity, str) and identity.startswith(ORDERED_CANDIDATE_DOMAIN_ID_PREFIX):
-        _validate_identity(identity, ORDERED_CANDIDATE_DOMAIN_ID_PREFIX, "ordered_candidate_domain_identity")
-        expected = fallback_ordered_candidate_domain_identity(public_action_keys)
+    if public_action_keys is None:
+        request_kind: Optional[str] = None
+        keys = request_kind_or_keys
     else:
+        request_kind = request_kind_or_keys
+        keys = public_action_keys
+    if not isinstance(keys, (tuple, list)):
+        raise CodecError("ordered candidate domain keys are required")
+    ordered_keys = _validate_ordered_candidate_keys(keys)
+    if request_kind is None:
+        if not isinstance(identity, str) or not identity.startswith(ORDERED_CANDIDATE_DOMAIN_ID_PREFIX):
+            raise CodecError("fallback ordered domain identity requires absent request kind")
+        _validate_identity(identity, ORDERED_CANDIDATE_DOMAIN_ID_PREFIX, "ordered_candidate_domain_identity")
+        expected = fallback_ordered_candidate_domain_identity(ordered_keys)
+    else:
+        _validate_action_kind_token(request_kind, "candidate domain request_kind")
+        if isinstance(identity, str) and identity.startswith(ORDERED_CANDIDATE_DOMAIN_ID_PREFIX):
+            raise CodecError("request kind requires the recomputed raw Phase-5 domain digest")
         _validate_digest(identity, "ordered_candidate_domain_identity")
-        expected = public_candidate_domain_digest(request_kind, public_action_keys)
+        expected = public_candidate_domain_digest(request_kind, ordered_keys)
     if identity != expected:
         raise CodecError("ordered candidate domain identity does not match request/keys")
 
