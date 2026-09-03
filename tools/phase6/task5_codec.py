@@ -92,6 +92,7 @@ MODEL_INPUT_ID_PREFIX = "model_input.v1."
 BC_SAMPLE_ID_PREFIX = "bc_sample.v1."
 PUBLIC_ACTION_IDENTITY_SCHEMA_ID = "ocgforge.public_action_identity.v1"
 PUBLIC_ACTION_KEY_PREFIX = "public_action.v1."
+PUBLIC_CANDIDATE_DOMAIN_SCHEMA_ID = "ocgforge.public_candidate_domain.v1"
 
 
 # The accepted Task-5 implementation/acceptance context.  These are semantic
@@ -172,6 +173,21 @@ MEANINGFUL_FIXED_MATCHUP_KIND = "MEANINGFUL_FIXED_MATCHUP"
 GAMEPLAY_JOB_KIND = "GAMEPLAY"
 
 CONTINUATION_OPERATIONS = ("pick", "amount", "finish", "cancel", "bypass")
+ACTION_KIND_TOKENS = (
+    "idle_command",
+    "battle_command",
+    "chain",
+    "option",
+    "card_selection",
+    "announcement",
+    "place",
+    "position",
+    "yes_no",
+    "pick",
+    "finish",
+    "cancel",
+    "assign_amount",
+)
 FAILURE_STAGES = (
     "before_public_decision",
     "public_frame_validation",
@@ -336,13 +352,6 @@ def _validate_public_action_key(value: str, field: str) -> None:
         raise CodecError(f"{field} is not a canonical public-action identity")
 
 
-def _validate_ordered_domain_identity(value: str, field: str) -> None:
-    if isinstance(value, str) and value.startswith(ORDERED_CANDIDATE_DOMAIN_ID_PREFIX):
-        _validate_identity(value, ORDERED_CANDIDATE_DOMAIN_ID_PREFIX, field)
-        return
-    _validate_digest(value, field)
-
-
 def _validate_any_content_identity(value: str, field: str) -> None:
     if not isinstance(value, str) or not value:
         raise CodecError(f"{field} is not an identity")
@@ -448,6 +457,12 @@ def _validate_lower_token(value: str, field: str, *, allow_empty: bool = False) 
         return
     if not _is_lower_token(value):
         raise CodecError(f"{field} is not a canonical lower-case token")
+
+
+def _validate_action_kind_token(value: str, field: str) -> None:
+    _validate_lower_token(value, field)
+    if value not in ACTION_KIND_TOKENS:
+        raise CodecError(f"{field} is not an accepted EnvironmentActionKind token")
 
 
 def _is_observation_locator(value: str) -> bool:
@@ -816,7 +831,7 @@ class PublicCandidateDescriptorV1:
 
     def validate(self) -> None:
         _validate_public_text(self.action_kind, "candidate.action_kind")
-        _validate_lower_token(self.action_kind, "candidate.action_kind")
+        _validate_action_kind_token(self.action_kind, "candidate.action_kind")
         if self.choice is not None:
             self.choice.validate()
         if self.source_reference is not None:
@@ -842,6 +857,8 @@ class PublicCandidateDescriptorV1:
             "candidate.continuation_operation",
             allow_empty=True,
         )
+        if self.continuation_operation and self.continuation_operation not in CONTINUATION_OPERATIONS:
+            raise CodecError("candidate.continuation_operation is not accepted")
         if not isinstance(self.submits_engine_response, bool):
             raise CodecError("candidate.submits_engine_response is not bool")
 
@@ -1006,6 +1023,97 @@ def is_public_action_key(value: str) -> bool:
 def validate_public_action_key(value: str) -> None:
     if not is_public_action_key(value):
         raise CodecError("public_action_key is not a canonical public-action identity")
+
+
+def _validate_ordered_candidate_keys(keys: Sequence[str]) -> tuple[str, ...]:
+    if not isinstance(keys, (tuple, list)) or not keys:
+        raise CodecError("ordered candidate domain is empty")
+    ordered = tuple(keys)
+    seen: set[str] = set()
+    for index, key in enumerate(ordered):
+        _validate_public_action_key(key, f"candidate key {index}")
+        if key in seen:
+            raise CodecError("ordered candidate domain contains duplicate keys")
+        seen.add(key)
+    return ordered
+
+
+def canonical_public_candidate_domain_bytes(
+    request_kind: str,
+    public_action_keys: Sequence[str],
+) -> bytes:
+    _validate_public_text(request_kind, "candidate domain request_kind")
+    _validate_lower_token(request_kind, "candidate domain request_kind")
+    keys = _validate_ordered_candidate_keys(public_action_keys)
+    return b"".join(
+        (
+            pack_string(PUBLIC_CANDIDATE_DOMAIN_SCHEMA_ID),
+            pack_string(request_kind),
+            pack_u32(len(keys)),
+            b"".join(pack_string(key) for key in keys),
+        )
+    )
+
+
+def public_candidate_domain_digest(
+    request_kind: str,
+    public_action_keys: Sequence[str],
+) -> str:
+    return hashlib.sha256(
+        canonical_public_candidate_domain_bytes(request_kind, public_action_keys)
+    ).hexdigest()
+
+
+def canonical_fallback_ordered_candidate_domain_bytes(
+    public_action_keys: Sequence[str],
+) -> bytes:
+    keys = _validate_ordered_candidate_keys(public_action_keys)
+    return b"".join(
+        (
+            pack_string(ORDERED_CANDIDATE_DOMAIN_SCHEMA_ID),
+            pack_u32(len(keys)),
+            b"".join(pack_string(key) for key in keys),
+        )
+    )
+
+
+def fallback_ordered_candidate_domain_identity(
+    public_action_keys: Sequence[str],
+) -> str:
+    return _digest(
+        ORDERED_CANDIDATE_DOMAIN_ID_PREFIX,
+        canonical_fallback_ordered_candidate_domain_bytes(public_action_keys),
+    )
+
+
+def ordered_candidate_domain_identity(
+    public_action_keys: Sequence[str],
+    public_candidate_domain_digest: Optional[str] = None,
+) -> str:
+    keys = _validate_ordered_candidate_keys(public_action_keys)
+    if public_candidate_domain_digest is not None:
+        _validate_digest(
+            public_candidate_domain_digest,
+            "public_candidate_domain_digest",
+        )
+        return public_candidate_domain_digest
+    return fallback_ordered_candidate_domain_identity(keys)
+
+
+def validate_ordered_candidate_domain_identity(
+    identity: str,
+    request_kind: str,
+    public_action_keys: Sequence[str],
+) -> None:
+    _validate_ordered_candidate_keys(public_action_keys)
+    if isinstance(identity, str) and identity.startswith(ORDERED_CANDIDATE_DOMAIN_ID_PREFIX):
+        _validate_identity(identity, ORDERED_CANDIDATE_DOMAIN_ID_PREFIX, "ordered_candidate_domain_identity")
+        expected = fallback_ordered_candidate_domain_identity(public_action_keys)
+    else:
+        _validate_digest(identity, "ordered_candidate_domain_identity")
+        expected = public_candidate_domain_digest(request_kind, public_action_keys)
+    if identity != expected:
+        raise CodecError("ordered candidate domain identity does not match request/keys")
 
 
 @dataclasses.dataclass(frozen=True)
@@ -1945,8 +2053,9 @@ class EvaluationCorpusV1:
         if self.corpus_profile_identity == IMPLEMENTATION_ACCEPTANCE_PROFILE and len(self.evaluation_job_identities) != 8:
             raise CodecError("implementation acceptance corpus must contain eight jobs")
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self, *, context: EvaluationContextV1) -> dict[str, Any]:
         self.validate()
+        _require_aggregate_context(context, corpus=self)
         result = {
             name: (
                 list(getattr(self, name))
@@ -2013,7 +2122,7 @@ def encode_evaluation_corpus_json(
     context: EvaluationContextV1,
 ) -> bytes:
     _require_aggregate_context(context, corpus=value)
-    return canonical_json_bytes(value.to_dict())
+    return canonical_json_bytes(value.to_dict(context=context))
 
 
 def decode_evaluation_corpus_json(data: bytes) -> EvaluationCorpusV1:
@@ -2058,8 +2167,9 @@ class EvaluationIdentityV1:
         _validate_string(self.evaluator_semantic_version, "evaluator_semantic_version")
         _validate_commit(self.evaluator_semantic_source_commit, "evaluator_semantic_source_commit")
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self, *, context: EvaluationContextV1) -> dict[str, Any]:
         self.validate()
+        _require_aggregate_context(context, root=self)
         result = {field.name: getattr(self, field.name) for field in dataclasses.fields(self)}
         result["evaluation_identity"] = evaluation_identity(self)
         return result
@@ -2122,7 +2232,7 @@ def encode_evaluation_identity_json(
     context: EvaluationContextV1,
 ) -> bytes:
     _require_aggregate_context(context, root=value)
-    return canonical_json_bytes(value.to_dict())
+    return canonical_json_bytes(value.to_dict(context=context))
 
 
 def decode_evaluation_identity_json(data: bytes) -> EvaluationIdentityV1:
@@ -2165,8 +2275,9 @@ class EvaluationJobManifestV1:
                 raise CodecError("job manifest vector contains duplicates")
             seen.add(identity)
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self, *, context: EvaluationContextV1) -> dict[str, Any]:
         self.validate()
+        _require_aggregate_context(context, job_manifest=self)
         result = {
             "schema_id": self.schema_id,
             "evaluation_identity": self.evaluation_identity,
@@ -2242,7 +2353,7 @@ def encode_evaluation_job_manifest_json(
     context: EvaluationContextV1,
 ) -> bytes:
     _require_aggregate_context(context, job_manifest=value)
-    return canonical_json_bytes(value.to_dict())
+    return canonical_json_bytes(value.to_dict(context=context))
 
 
 def decode_evaluation_job_manifest_json(data: bytes) -> EvaluationJobManifestV1:
@@ -2323,8 +2434,9 @@ class EvaluationManifestV1:
         if self.evaluation_identity != evaluation_identity(expected_root):
             raise CodecError("evaluation manifest root does not bind its evaluator source")
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self, *, context: EvaluationContextV1) -> dict[str, Any]:
         self.validate()
+        _require_aggregate_context(context, manifest=self)
         result = {name: getattr(self, name) for name in EVALUATION_MANIFEST_FIELD_NAMES}
         result["evaluation_manifest_identity"] = evaluation_manifest_identity(self)
         return result
@@ -2388,7 +2500,7 @@ def encode_evaluation_manifest_json(
     context: EvaluationContextV1,
 ) -> bytes:
     _require_aggregate_context(context, manifest=value)
-    return canonical_json_bytes(value.to_dict())
+    return canonical_json_bytes(value.to_dict(context=context))
 
 
 def decode_evaluation_manifest_json(data: bytes) -> EvaluationManifestV1:
@@ -2655,10 +2767,12 @@ def _validate_candidate_bundle(record: "FirstDivergenceV1") -> None:
         if key in seen:
             raise CodecError("candidate domain contains a duplicate public_action_key")
         seen.add(key)
-    for descriptor in record.candidate_descriptors:
+    for index, descriptor in enumerate(record.candidate_descriptors):
         if not isinstance(descriptor, PublicCandidateDescriptorV1):
             raise CodecError("candidate descriptor has the wrong DTO type")
         descriptor.validate()
+        if public_action_key(descriptor) != record.candidate_public_action_keys[index]:
+            raise CodecError("candidate descriptor and public_action_key pairing differs")
 
 
 def _validate_score_bundle(record: "FirstDivergenceV1") -> None:
@@ -2721,8 +2835,6 @@ class FirstDivergenceV1:
                 _validate_public_identity_or_digest(value, field)
         if self.model_input_identity is not None:
             _validate_identity(self.model_input_identity, MODEL_INPUT_ID_PREFIX, "model_input_identity")
-        if self.ordered_candidate_domain_identity is not None:
-            _validate_ordered_domain_identity(self.ordered_candidate_domain_identity, "ordered_candidate_domain_identity")
         if self.decision_request_family is not None:
             _validate_public_text(self.decision_request_family, "decision_request_family")
             _validate_lower_token(self.decision_request_family, "decision_request_family")
@@ -2746,6 +2858,12 @@ class FirstDivergenceV1:
             self.failure_before_divergence.validate()
 
         _validate_candidate_bundle(self)
+        if self.ordered_candidate_domain_identity is not None and self.decision_request_family is not None and self.candidate_public_action_keys is not None:
+            validate_ordered_candidate_domain_identity(
+                self.ordered_candidate_domain_identity,
+                self.decision_request_family,
+                self.candidate_public_action_keys,
+            )
         _validate_score_bundle(self)
         if self.teacher_selected_public_action_key is not None:
             if self.candidate_public_action_keys is None or self.teacher_selected_public_action_key not in self.candidate_public_action_keys:
@@ -3022,6 +3140,12 @@ __all__ = [
     "public_action_key",
     "is_public_action_key",
     "validate_public_action_key",
+    "canonical_public_candidate_domain_bytes",
+    "public_candidate_domain_digest",
+    "canonical_fallback_ordered_candidate_domain_bytes",
+    "fallback_ordered_candidate_domain_identity",
+    "ordered_candidate_domain_identity",
+    "validate_ordered_candidate_domain_identity",
     "ContinuationContextV1",
     "TerminalOutcomeV1",
     "FailureBeforeDivergenceV1",

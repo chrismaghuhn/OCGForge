@@ -59,6 +59,8 @@ def _key(index: int) -> str:
                 reference_kind=0,
                 public_locator_token=f"visible:{index}",
             ),
+            phase=3,
+            source_index=index,
         )
     )
 
@@ -104,7 +106,9 @@ def _divergence_record(
             semantic_decision_identity="a" * 64,
             public_observation_digest="b" * 64,
             model_input_identity="model_input.v1." + "c" * 64,
-            ordered_candidate_domain_identity="d" * 64,
+            ordered_candidate_domain_identity=codec.public_candidate_domain_digest(
+                "card_selection", scores.public_action_keys
+            ),
             candidate_count=2,
             candidate_public_action_keys=scores.public_action_keys,
             candidate_descriptors=(_descriptor(0), _descriptor(1)),
@@ -160,7 +164,7 @@ class Task5JsonTests(unittest.TestCase):
 
     def test_manifest_json_rejects_missing_and_unknown_fields(self):
         manifest = _manifest()
-        payload = manifest.to_dict()
+        payload = manifest.to_dict(context=_context())
         self.assertEqual(
             codec.decode_evaluation_manifest_json(
                 codec.canonical_json_bytes(payload)
@@ -198,10 +202,38 @@ class Task5PrimitiveAndIdentityTests(unittest.TestCase):
         valid = _key(0)
         self.assertTrue(codec.is_public_action_key(valid))
         self.assertFalse(codec.is_public_action_key("public_action.v1.00"))
+        golden_descriptor = codec.PublicCandidateDescriptorV1(
+            action_kind="card_selection",
+            source_reference=codec.PublicReferenceV1(
+                reference_kind=1,
+                public_locator_token="p0:SPELL_TRAP_ZONE:0",
+            ),
+            source_index=3,
+        )
+        golden_key = codec.public_action_key(golden_descriptor)
+        self.assertEqual(
+            golden_key,
+            "public_action.v1.000000226f6367666f7267652e7075626c69635f616374696f6e5f6964656e746974792e7631"
+            "000000226f6367666f7267652e7075626c69635f616374696f6e5f6964656e746974792e7631"
+            "0000000e636172645f73656c656374696f6e0001010000001470303a5350454c4c5f545241505f5a4f4e453a3000000001000000030000000000",
+        )
+        self.assertEqual(
+            codec.public_candidate_domain_digest("card_selection", (golden_key,)),
+            "b35640b35822c76ed165a65f86c6d7ac5520abdf4359482b7608bf125274e1e6",
+        )
         with self.assertRaises(codec.CodecError):
             codec.PublicChoiceV1(kind=1, value=1, response_index=0).validate()
         with self.assertRaises(codec.CodecError):
             codec.PublicChoiceV1(kind=4, value=1, response_index=None).validate()
+        with self.assertRaises(codec.CodecError):
+            codec.PublicCandidateDescriptorV1(
+                action_kind="unsupported_action",
+            ).validate()
+        with self.assertRaises(codec.CodecError):
+            codec.PublicCandidateDescriptorV1(
+                action_kind="card_selection",
+                continuation_operation="arbitrary_token",
+            ).validate()
 
     def test_score_bits_preserve_zero_sign_and_reject_invalid_values(self):
         self.assertEqual(codec.score_f32_bits(0.0), "00000000")
@@ -355,21 +387,27 @@ class Task5JobTests(unittest.TestCase):
         )
 
     def test_dataset_and_split_use_their_exact_accepted_grammars(self):
-        corpus = dataclasses.replace(
-            _corpus(),
-            source_dataset_identity=(
-                "24b690ae989f9176fecc8931b86d282dbcd3cb0912044317c32a2a0815b8b936"
-            ),
-            dataset_split_identity="phase6_dataset_split.v1." + "2" * 64,
+        corpus = _corpus()
+        payload = corpus.to_dict(context=_context())
+        payload["source_dataset_identity"] = (
+            "24b690ae989f9176fecc8931b86d282dbcd3cb0912044317c32a2a0815b8b936"
         )
+        payload["dataset_split_identity"] = "phase6_dataset_split.v1." + "2" * 64
+        modified_corpus = dataclasses.replace(
+            corpus,
+            source_dataset_identity=payload["source_dataset_identity"],
+            dataset_split_identity=payload["dataset_split_identity"],
+        )
+        modified_corpus.validate()
+        payload["evaluation_corpus_identity"] = codec.evaluation_corpus_identity(
+            modified_corpus
+        )
+        corpus = codec.decode_evaluation_corpus_json(codec.canonical_json_bytes(payload))
         corpus.validate()
+        invalid_payload = copy.deepcopy(payload)
+        invalid_payload["source_dataset_identity"] = "dataset.v1." + "3" * 64
         with self.assertRaises(codec.CodecError):
-            codec.EvaluationCorpusV1.from_dict(
-                dataclasses.replace(
-                    corpus,
-                    source_dataset_identity="dataset.v1." + "3" * 64,
-                ).to_dict()
-            )
+            codec.decode_evaluation_corpus_json(codec.canonical_json_bytes(invalid_payload))
 
     def test_aggregate_context_binds_root_manifest_corpus_jobs_and_source(self):
         context = _context()
@@ -501,6 +539,23 @@ class Task5FirstDivergenceTests(unittest.TestCase):
         divergence = _divergence_record(codec.DIVERGENCE)
         with self.assertRaises(codec.CodecError):
             codec.canonical_first_divergence_field_bytes(
+                dataclasses.replace(
+                    divergence,
+                    candidate_descriptors=(
+                        dataclasses.replace(_descriptor(0), phase=4),
+                        _descriptor(1),
+                    ),
+                )
+            )
+        with self.assertRaises(codec.CodecError):
+            codec.canonical_first_divergence_field_bytes(
+                dataclasses.replace(
+                    divergence,
+                    ordered_candidate_domain_identity="d" * 64,
+                )
+            )
+        with self.assertRaises(codec.CodecError):
+            codec.canonical_first_divergence_field_bytes(
                 dataclasses.replace(divergence, model_input_identity=None)
             )
         with self.assertRaises(codec.CodecError):
@@ -566,7 +621,9 @@ class Task5FirstDivergenceTests(unittest.TestCase):
         frame = {
             "semantic_decision_identity": "a" * 64,
             "public_observation_digest": "b" * 64,
-            "ordered_candidate_domain_identity": "d" * 64,
+            "ordered_candidate_domain_identity": codec.public_candidate_domain_digest(
+                "card_selection", (_key(0), _key(1))
+            ),
             "candidate_count": 2,
             "candidate_public_action_keys": (_key(0), _key(1)),
             "candidate_descriptors": (_descriptor(0), _descriptor(1)),
