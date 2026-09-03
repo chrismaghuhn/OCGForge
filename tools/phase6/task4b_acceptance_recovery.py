@@ -22,8 +22,6 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from . import task4_codec as codec
-from . import task4_cuda
-from . import task4_inference
 from . import task4b_verify as verifier
 
 
@@ -192,7 +190,18 @@ class _ValidatedHistoricalArtifacts:
     checkpoint: codec.CheckpointArtifactV1
     training_run_manifest: codec.TrainingRunManifestV1
     smoke_evidence: codec.Task4BSmokeEvidenceV1
-    completion_receipt: task4_inference.Task4BCompletionReceiptV1
+    completion_receipt: "_HistoricalCompletionReceiptV1"
+
+
+@dataclasses.dataclass(frozen=True)
+class _HistoricalCompletionReceiptV1:
+    checkpoint_identity: str
+    model_input_identity: str
+    ordered_candidate_domain_identity: str
+    request_identity: str
+    response_identity: str
+    fresh_checkpoint_reload: bool
+    deterministic_frozen_inference: bool
 
 
 @dataclasses.dataclass(frozen=True)
@@ -308,6 +317,10 @@ class _RecoveryGateCommand:
     command_id: str
     argv: tuple[str, ...]
     probe_dependent: bool
+
+
+class _RecoveryCommandLaunchError(RuntimeError):
+    """Raised when no CompletedProcess exists for a planned command."""
 
 
 def _canonical_json_bytes(value: object) -> bytes:
@@ -426,9 +439,9 @@ def _validate_original_report_status(
         raise Task4BAcceptanceRecoveryError("ORIGINAL_EVIDENCE_IDENTITY_MISMATCH")
 
 
-def _reconstruct_historical_preflight(
+def _reconstruct_historical_execution_provenance(
     report: Mapping[str, object],
-) -> task4_cuda.CudaPreflightResultV1:
+) -> tuple[codec.ExecutionProvenanceV1, codec.CudaPreflightFactsV1]:
     try:
         verifier._validate_cuda_preflight_report(report)
     except verifier.Task4BVerificationError as error:
@@ -444,75 +457,123 @@ def _reconstruct_historical_preflight(
         "device_count",
         "capability_major",
         "capability_minor",
+        "cuda_available",
         "cpu_fallback",
+        "distributed_strategy",
+        "world_size",
+        "deterministic_algorithms",
+        "deterministic_warn_only",
+        "float32_matmul_precision",
+        "backend_identity",
+        "cuda_preflight_identity",
     )
     values = {key: report.get(key) for key in required}
     if not all(value is not None for value in values.values()):
         raise Task4BAcceptanceRecoveryError("INVALID_HISTORICAL_CUDA_PREFLIGHT")
     try:
-        preflight = task4_cuda.CudaPreflightResultV1(
+        provenance = codec.ExecutionProvenanceV1(
+            backend_identity=values["backend_identity"],  # type: ignore[arg-type]
+            framework_version=values["framework_version"],  # type: ignore[arg-type]
             device_type=values["device_type"],  # type: ignore[arg-type]
             device_index=values["device_index"],  # type: ignore[arg-type]
             gpu_name=values["gpu_name"],  # type: ignore[arg-type]
-            framework_version=values["framework_version"],  # type: ignore[arg-type]
             torch_cuda_version_reported=values["torch_cuda_version_reported"],  # type: ignore[arg-type]
-            device_count=values["device_count"],  # type: ignore[arg-type]
             capability_major=values["capability_major"],  # type: ignore[arg-type]
             capability_minor=values["capability_minor"],  # type: ignore[arg-type]
-            actual_optimizer_steps=0,
-            cpu_fallback=values["cpu_fallback"],  # type: ignore[arg-type]
-            _attestation=task4_cuda._CUDA_PREFLIGHT_ATTESTATION,
+            distributed_strategy=values["distributed_strategy"],  # type: ignore[arg-type]
+            world_size=values["world_size"],  # type: ignore[arg-type]
+            deterministic_algorithms=values["deterministic_algorithms"],  # type: ignore[arg-type]
+            deterministic_warn_only=values["deterministic_warn_only"],  # type: ignore[arg-type]
+            float32_matmul_precision=values["float32_matmul_precision"],  # type: ignore[arg-type]
         )
-        if preflight.cuda_preflight_identity != report.get("cuda_preflight_identity"):
+        codec.canonical_execution_provenance_bytes(provenance)
+        facts = codec.CudaPreflightFactsV1(
+            cuda_available=values["cuda_available"],  # type: ignore[arg-type]
+            device_count=values["device_count"],  # type: ignore[arg-type]
+            execution_provenance=provenance,
+        )
+        if codec.cuda_preflight_identity_for(facts) != values["cuda_preflight_identity"]:
             raise Task4BAcceptanceRecoveryError(
                 "ORIGINAL_CUDA_PREFLIGHT_IDENTITY_MISMATCH"
             )
-    except (task4_cuda.CudaPreflightError, codec.CodecError, TypeError, ValueError) as error:
+    except (codec.CodecError, TypeError, ValueError) as error:
         if isinstance(error, Task4BAcceptanceRecoveryError):
             raise
         raise Task4BAcceptanceRecoveryError(
             "INVALID_HISTORICAL_CUDA_PREFLIGHT"
         ) from error
-    return preflight
+    return provenance, facts
 
 
-def _reconstruct_historical_completion_receipt(
-    checkpoint_bytes: bytes,
-    checkpoint: codec.CheckpointArtifactV1,
+def _validate_historical_completion_receipt_projection(
     receipt: Mapping[str, object],
-) -> task4_inference.Task4BCompletionReceiptV1:
+) -> _HistoricalCompletionReceiptV1:
+    expected_keys = {
+        "checkpoint_identity",
+        "model_input_identity",
+        "ordered_candidate_domain_identity",
+        "request_identity",
+        "response_identity",
+        "fresh_checkpoint_reload",
+        "deterministic_frozen_inference",
+    }
+    if set(receipt) != expected_keys:
+        raise Task4BAcceptanceRecoveryError("INVALID_HISTORICAL_RECEIPT_BINDING")
     try:
-        exported = task4_inference.ExportedCheckpointV1(
-            artifact_bytes=checkpoint_bytes,
-            artifact=checkpoint,
-            _attestation=task4_inference._CANONICAL_EXPORT_ATTESTATION,
+        checkpoint_identity = receipt["checkpoint_identity"]
+        model_input_identity = receipt["model_input_identity"]
+        ordered_domain_identity = receipt["ordered_candidate_domain_identity"]
+        request_identity = receipt["request_identity"]
+        response_identity = receipt["response_identity"]
+        if not isinstance(checkpoint_identity, str):
+            raise TypeError("checkpoint identity is not a string")
+        codec._validate_prefixed_digest(
+            checkpoint_identity,
+            codec.CHECKPOINT_ID_PREFIX,
+            "historical receipt checkpoint identity",
         )
-        reconstructed = task4_inference.Task4BCompletionReceiptV1(
-            checkpoint_identity=receipt["checkpoint_identity"],  # type: ignore[arg-type]
-            model_input_identity=receipt["model_input_identity"],  # type: ignore[arg-type]
-            ordered_candidate_domain_identity=receipt[
-                "ordered_candidate_domain_identity"
-            ],  # type: ignore[arg-type]
-            request_identity=receipt["request_identity"],  # type: ignore[arg-type]
-            response_identity=receipt["response_identity"],  # type: ignore[arg-type]
-            _exported_checkpoint=exported,
-            _binding_identity="",
-            _attestation=task4_inference._COMPLETION_RECEIPT_ATTESTATION,
+        if not isinstance(model_input_identity, str):
+            raise TypeError("model input identity is not a string")
+        codec._validate_prefixed_digest(
+            model_input_identity,
+            "model_input.v1.",
+            "historical receipt model-input identity",
         )
-        reconstructed = dataclasses.replace(
-            reconstructed,
-            _binding_identity=task4_inference._completion_receipt_binding_identity(
-                reconstructed
-            ),
+        if not isinstance(ordered_domain_identity, str):
+            raise TypeError("ordered domain identity is not a string")
+        codec._validate_ordered_domain_identity(
+            ordered_domain_identity,
+            "historical receipt ordered domain identity",
         )
-        return task4_inference.validate_task4b_completion_receipt(reconstructed)
-    except (
-        KeyError,
-        codec.CodecError,
-        task4_inference.Task4InferenceError,
-        TypeError,
-        ValueError,
-    ) as error:
+        if not isinstance(request_identity, str):
+            raise TypeError("request identity is not a string")
+        codec._validate_prefixed_digest(
+            request_identity,
+            codec.REQUEST_ID_PREFIX,
+            "historical receipt request identity",
+        )
+        if not isinstance(response_identity, str):
+            raise TypeError("response identity is not a string")
+        codec._validate_prefixed_digest(
+            response_identity,
+            codec.RESPONSE_ID_PREFIX,
+            "historical receipt response identity",
+        )
+        if (
+            receipt["fresh_checkpoint_reload"] is not True
+            or receipt["deterministic_frozen_inference"] is not True
+        ):
+            raise ValueError("historical receipt completion booleans are not true")
+        return _HistoricalCompletionReceiptV1(
+            checkpoint_identity=checkpoint_identity,
+            model_input_identity=model_input_identity,
+            ordered_candidate_domain_identity=ordered_domain_identity,
+            request_identity=request_identity,
+            response_identity=response_identity,
+            fresh_checkpoint_reload=True,
+            deterministic_frozen_inference=True,
+        )
+    except (KeyError, codec.CodecError, TypeError, ValueError) as error:
         raise Task4BAcceptanceRecoveryError(
             "INVALID_HISTORICAL_RECEIPT_BINDING"
         ) from error
@@ -569,7 +630,12 @@ def _reconstruct_historical_artifacts(
     checkpoint_identity: str,
     smoke_evidence_identity: str,
 ) -> _ValidatedHistoricalArtifacts:
-    preflight = _reconstruct_historical_preflight(execution_report)
+    execution_provenance, cuda_preflight_facts = (
+        _reconstruct_historical_execution_provenance(execution_report)
+    )
+    execution_provenance_identity = codec.execution_provenance_identity_for(
+        execution_provenance
+    )
     train_count = sum(sample.partition == "train" for sample in corpus.samples)
     validation_count = sum(
         sample.partition == "validation" for sample in corpus.samples
@@ -604,24 +670,23 @@ def _reconstruct_historical_artifacts(
             training_code_commit=H_SMOKE_EXEC,
             actual_optimizer_steps=0,
         )
-        training_run_manifest = task4_cuda.finalize_training_run_manifest_from_cuda_preflight(
-            preflight,
+        training_run_manifest = dataclasses.replace(
             base_manifest,
+            framework_version=execution_report["framework_version"],  # type: ignore[arg-type]
+            device_and_distributed_provenance_identity=execution_provenance_identity,
             final_exported_checkpoint_identity=checkpoint_identity,
         )
         manifest_bytes = codec.canonical_training_run_manifest_bytes(
             training_run_manifest
         )
-    except (codec.CodecError, task4_cuda.CudaPreflightError, TypeError, ValueError) as error:
+    except (codec.CodecError, TypeError, ValueError) as error:
         raise Task4BAcceptanceRecoveryError(
             "INVALID_HISTORICAL_TRAINING_MANIFEST"
         ) from error
     if manifest_bytes != contents["docs/p6/task4b/training-run-manifest.p6m"]:
         raise Task4BAcceptanceRecoveryError("ORIGINAL_TRAINING_MANIFEST_MISMATCH")
     training_run_identity = codec.training_run_identity(training_run_manifest)
-    reconstructed_receipt = _reconstruct_historical_completion_receipt(
-        contents["docs/p6/task4b/checkpoint.p6k"],
-        checkpoint,
+    reconstructed_receipt = _validate_historical_completion_receipt_projection(
         receipt_projection,
     )
     request = _reconstruct_historical_request(corpus, checkpoint_identity)
@@ -639,18 +704,54 @@ def _reconstruct_historical_artifacts(
     ):
         raise Task4BAcceptanceRecoveryError("ORIGINAL_RECEIPT_BINDING_MISMATCH")
     try:
-        smoke_evidence = task4_cuda.smoke_evidence_from_cuda_preflight(
-            preflight,
-            training_run_manifest,
-            reconstructed_receipt,
+        smoke_evidence = codec.Task4BSmokeEvidenceV1(
+            training_run_identity=training_run_identity,
+            source_dataset_identity=training_run_manifest.source_dataset_identity,
+            dataset_split_identity=training_run_manifest.dataset_split_identity,
+            model_architecture_config_identity=(
+                training_run_manifest.model_architecture_config_identity
+            ),
+            card_vocabulary_identity=training_run_manifest.card_vocabulary_identity,
+            optimizer_configuration_identity=(
+                training_run_manifest.optimizer_configuration_identity
+            ),
+            learning_rate_schedule_identity=(
+                training_run_manifest.learning_rate_schedule_identity
+            ),
+            batch_configuration_identity=training_run_manifest.batch_configuration_identity,
+            gradient_accumulation_configuration_identity=(
+                training_run_manifest.gradient_accumulation_configuration_identity
+            ),
+            training_rng_contract_identity=(
+                training_run_manifest.training_rng_contract_identity
+            ),
+            training_seed_or_initialization_identity=(
+                training_run_manifest.training_seed_or_initialization_identity
+            ),
+            precision_mode_identity=training_run_manifest.precision_mode_identity,
+            deterministic_execution_configuration_identity=(
+                codec.deterministic_execution_identity()
+            ),
+            device_and_distributed_provenance_identity=(
+                training_run_manifest.device_and_distributed_provenance_identity
+            ),
+            cuda_preflight_identity=codec.cuda_preflight_identity_for(
+                cuda_preflight_facts
+            ),
+            maximum_optimizer_steps=codec.SMOKE_MAX_OPTIMIZER_STEPS,
             actual_optimizer_steps=execution_report["actual_optimizer_steps"],  # type: ignore[arg-type]
+            final_exported_checkpoint_identity=checkpoint_identity,
+            fresh_checkpoint_reload=reconstructed_receipt.fresh_checkpoint_reload,
+            deterministic_frozen_inference=(
+                reconstructed_receipt.deterministic_frozen_inference
+            ),
             gpu_memory_before=execution_report["GPU_MEMORY_BEFORE"],  # type: ignore[arg-type]
             gpu_memory_peak=execution_report["GPU_MEMORY_PEAK"],  # type: ignore[arg-type]
             gpu_memory_after=execution_report["GPU_MEMORY_AFTER"],  # type: ignore[arg-type]
         )
         smoke_bytes = codec.canonical_smoke_evidence_bytes(smoke_evidence)
         rebuilt_smoke_identity = codec.smoke_evidence_identity(smoke_evidence)
-    except (codec.CodecError, task4_cuda.CudaPreflightError, TypeError, ValueError) as error:
+    except (codec.CodecError, TypeError, ValueError) as error:
         raise Task4BAcceptanceRecoveryError(
             "INVALID_HISTORICAL_SMOKE_EVIDENCE"
         ) from error
@@ -1249,15 +1350,12 @@ def _run_recovery_command(
             capture_output=True,
             text=False,
         )
-        stdout = _output_bytes(completed.stdout)
-        stderr = _output_bytes(completed.stderr)
-        exit_code = int(completed.returncode)
-        status = "PASS" if exit_code == 0 else "FAIL"
     except Exception as error:
-        stdout = b""
-        stderr = str(error).encode("utf-8")
-        exit_code = -1
-        status = "FAIL"
+        raise _RecoveryCommandLaunchError from error
+    stdout = _output_bytes(completed.stdout)
+    stderr = _output_bytes(completed.stderr)
+    exit_code = int(completed.returncode)
+    status = "PASS" if exit_code == 0 else "FAIL"
     return RecoveryCommandRecordV1(
         command_id=command.command_id,
         argv=command.argv,
@@ -1305,9 +1403,19 @@ def _run_recovery_commands(
                     records=records,
                     ephemeral_probe_regressions=ephemeral_probe_regressions,
                 ) from error
+        try:
+            record = _run_recovery_command(command, source_root)
+        except _RecoveryCommandLaunchError as error:
+            raise Task4BAcceptanceRecoveryError(
+                "RECOVERY_COMMAND_LAUNCH_FAILED",
+                failure_stage="gate-execution",
+                reached_command_count=len(records),
+                records=records,
+                ephemeral_probe_regressions=ephemeral_probe_regressions,
+            ) from error
         if command.probe_dependent:
             ephemeral_probe_regressions += 1
-        records.append(_run_recovery_command(command, source_root))
+        records.append(record)
         try:
             _verify_recovery_worktree(
                 source_root=source_root,
@@ -1382,20 +1490,35 @@ def _derive_final_pass(
 
 def _markdown_from_evidence(evidence: Task4BAcceptanceRecoveryEvidenceV1) -> str:
     original = evidence.original_attempt
+    recovery_failure = (
+        "null"
+        if evidence.recovery_failure is None
+        else _canonical_json_bytes(dataclasses.asdict(evidence.recovery_failure)).decode(
+            "utf-8"
+        )
+    )
+
+    def display(value: object) -> str:
+        if value is None:
+            return "null"
+        if isinstance(value, bool):
+            return "true" if value else "false"
+        return str(value)
+
     lines = [
         "# Task4B Acceptance-Recovery V1",
         "",
-        f"H_SMOKE_EXEC: {None if original is None else original.h_smoke_exec}",
-        f"H_FAILURE_EVIDENCE: {None if original is None else original.h_failure_evidence}",
-        f"training_code_commit: {None if evidence.provenance is None else evidence.provenance.training_code_commit}",
-        f"failed_evidence_commit: {None if evidence.provenance is None else evidence.provenance.failed_evidence_commit}",
-        f"verifier_fix_commit: {None if evidence.provenance is None else evidence.provenance.verifier_fix_commit}",
-        f"recovery_verifier_source_commit: {None if evidence.provenance is None else evidence.provenance.recovery_verifier_source_commit}",
-        f"ORIGINAL_SMOKE_PASS: {str(evidence.ORIGINAL_SMOKE_PASS).lower()}",
-        f"ORIGINAL_TASK4B_PASS: {str(evidence.ORIGINAL_TASK4B_PASS).lower()}",
-        f"TASK4B_RECOVERY_PASS: {str(evidence.TASK4B_RECOVERY_PASS).lower()}",
-        f"TASK4B_FINAL_PASS: {str(evidence.TASK4B_FINAL_PASS).lower()}",
-        f"recovery_failure: {None if evidence.recovery_failure is None else dataclasses.asdict(evidence.recovery_failure)}",
+        f"H_SMOKE_EXEC: {display(None if original is None else original.h_smoke_exec)}",
+        f"H_FAILURE_EVIDENCE: {display(None if original is None else original.h_failure_evidence)}",
+        f"training_code_commit: {display(None if evidence.provenance is None else evidence.provenance.training_code_commit)}",
+        f"failed_evidence_commit: {display(None if evidence.provenance is None else evidence.provenance.failed_evidence_commit)}",
+        f"verifier_fix_commit: {display(None if evidence.provenance is None else evidence.provenance.verifier_fix_commit)}",
+        f"recovery_verifier_source_commit: {display(None if evidence.provenance is None else evidence.provenance.recovery_verifier_source_commit)}",
+        f"ORIGINAL_SMOKE_PASS: {display(evidence.ORIGINAL_SMOKE_PASS)}",
+        f"ORIGINAL_TASK4B_PASS: {display(evidence.ORIGINAL_TASK4B_PASS)}",
+        f"TASK4B_RECOVERY_PASS: {display(evidence.TASK4B_RECOVERY_PASS)}",
+        f"TASK4B_FINAL_PASS: {display(evidence.TASK4B_FINAL_PASS)}",
+        f"recovery_failure: {recovery_failure}",
         "",
         "| gate | status |",
         "| --- | --- |",
@@ -1472,8 +1595,6 @@ def _write_staged_file(path: Path, data: bytes) -> None:
 def _publish_recovery_evidence(
     output_dir: Path,
     evidence: Task4BAcceptanceRecoveryEvidenceV1,
-    *,
-    markdown: str | None = None,
 ) -> None:
     output_dir = output_dir.resolve()
     if output_dir.name != Path(RECOVERY_OUTPUT_DIRECTORY).name:
@@ -1493,12 +1614,7 @@ def _publish_recovery_evidence(
             raise Task4BAcceptanceRecoveryError(
                 "RECOVERY_EVIDENCE_PUBLICATION_FAILED"
             )
-        derived_markdown = _markdown_from_evidence(evidence)
-        if markdown is not None and markdown != derived_markdown:
-            raise Task4BAcceptanceRecoveryError(
-                "RECOVERY_EVIDENCE_PUBLICATION_FAILED"
-            )
-        markdown_bytes = derived_markdown.encode("utf-8")
+        markdown_bytes = _markdown_from_evidence(evidence).encode("utf-8")
         staging_dir = Path(
             tempfile.mkdtemp(prefix=".recovery-v1-", dir=str(parent))
         )
@@ -1816,6 +1932,5 @@ def run_acceptance_recovery(
     _publish_recovery_evidence(
         requested_output,
         evaluation,
-        markdown=_markdown_from_evidence(evaluation),
     )
     return evaluation

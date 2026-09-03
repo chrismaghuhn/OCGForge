@@ -8,6 +8,8 @@ from pathlib import Path
 from unittest import mock
 
 from tools.phase6 import task4_codec as codec
+from tools.phase6 import task4_cuda
+from tools.phase6 import task4_inference
 from tools.phase6 import task4b_verify as verifier
 from tools.phase6 import task4b_acceptance_recovery as recovery
 
@@ -155,6 +157,39 @@ class Task4BAcceptanceRecoveryTests(unittest.TestCase):
             recovery.HISTORICAL_SMOKE_EVIDENCE_IDENTITY,
         )
 
+    def test_historical_reconstruction_never_uses_execution_attestation_paths(self):
+        fixture = _historical_fixture()
+        with mock.patch.object(
+            task4_cuda,
+            "require_task4_cuda",
+            side_effect=AssertionError("historical validation must not preflight"),
+        ), mock.patch.object(
+            task4_cuda,
+            "smoke_evidence_from_cuda_preflight",
+            side_effect=AssertionError("historical validation must not use live smoke seam"),
+        ), mock.patch.object(
+            task4_inference,
+            "issue_task4b_completion_receipt",
+            side_effect=AssertionError("historical validation must not issue a receipt"),
+        ), mock.patch.object(
+            task4_inference,
+            "validate_task4b_completion_receipt",
+            side_effect=AssertionError("historical validation must not validate an attested receipt"),
+        ), mock.patch.object(
+            recovery,
+            "_git_object_bytes",
+            side_effect=lambda _root, _commit, relative: fixture[relative],
+        ):
+            historical = recovery._load_historical_evidence(Path("C:/source"))
+        self.assertIsNotNone(historical.validated_artifacts)
+        assert historical.validated_artifacts is not None
+        self.assertEqual(
+            historical.validated_artifacts.completion_receipt.response_identity,
+            json.loads(fixture["docs/p6/task4b/completion-receipt.json"])[
+                "response_identity"
+            ],
+        )
+
     def test_wrong_reconstructed_manifest_or_smoke_evidence_is_rejected(self):
         fixture = _historical_fixture()
         manifest_path = "docs/p6/task4b/training-run-manifest.p6m"
@@ -242,6 +277,97 @@ class Task4BAcceptanceRecoveryTests(unittest.TestCase):
         self.assertEqual(raised.exception.failure_stage, "gate-execution")
         self.assertEqual(raised.exception.reached_command_count, 1)
         self.assertEqual(len(raised.exception.records), 1)
+
+    def test_command_launch_failure_is_not_recorded_or_counted(self):
+        commands = recovery._recovery_gate_commands(
+            Path("C:/build"),
+            Path("C:/build/phase6_task4_corpus_probe.exe"),
+            H_SMOKE_EXEC,
+        )
+        with mock.patch.object(recovery, "_verify_recovery_worktree"), mock.patch.object(
+            recovery.subprocess,
+            "run",
+            side_effect=OSError("executable missing"),
+        ):
+            with self.assertRaises(recovery.Task4BAcceptanceRecoveryError) as raised:
+                recovery._run_recovery_commands(
+                    commands,
+                    source_root=Path("C:/source"),
+                    expected_head=H_RECOVERY,
+                    output_dir=Path("C:/source/docs/p6/task4b/recovery-v1"),
+                    probe_path=Path("C:/build/phase6_task4_corpus_probe.exe"),
+                )
+        self.assertEqual(raised.exception.code, "RECOVERY_COMMAND_LAUNCH_FAILED")
+        self.assertEqual(raised.exception.failure_stage, "gate-execution")
+        self.assertEqual(raised.exception.reached_command_count, 0)
+        self.assertEqual(raised.exception.records, ())
+        self.assertEqual(raised.exception.ephemeral_probe_regressions, 0)
+
+    def test_probe_launch_failure_does_not_increment_probe_counter_or_fabricate_facts(self):
+        commands = recovery._recovery_gate_commands(
+            Path("C:/build"),
+            Path("C:/build/phase6_task4_corpus_probe.exe"),
+            H_SMOKE_EXEC,
+        )
+        with mock.patch.object(recovery, "_verify_recovery_worktree"), mock.patch.object(
+            recovery,
+            "_sha256_file",
+            return_value=recovery.HISTORICAL_PROBE_SHA256,
+        ), mock.patch.object(
+            recovery.subprocess,
+            "run",
+            side_effect=OSError("probe executable missing"),
+        ):
+            with self.assertRaises(recovery.Task4BAcceptanceRecoveryError) as raised:
+                recovery._run_recovery_commands(
+                    commands[1:2],
+                    source_root=Path("C:/source"),
+                    expected_head=H_RECOVERY,
+                    output_dir=Path("C:/source/docs/p6/task4b/recovery-v1"),
+                    probe_path=Path("C:/build/phase6_task4_corpus_probe.exe"),
+                )
+        self.assertEqual(raised.exception.reached_command_count, 0)
+        self.assertEqual(raised.exception.ephemeral_probe_regressions, 0)
+        self.assertEqual(raised.exception.records, ())
+
+    def test_launch_failure_inside_admitted_forward_keeps_first_pass_and_marks_gate_partial(self):
+        commands = recovery._recovery_gate_commands(
+            Path("C:/build"),
+            Path("C:/build/phase6_task4_corpus_probe.exe"),
+            H_SMOKE_EXEC,
+        )
+        first_process = subprocess.CompletedProcess(
+            args=commands[1].argv,
+            returncode=0,
+            stdout=b"",
+            stderr=b"",
+        )
+        with mock.patch.object(recovery, "_verify_recovery_worktree"), mock.patch.object(
+            recovery,
+            "_sha256_file",
+            return_value=recovery.HISTORICAL_PROBE_SHA256,
+        ), mock.patch.object(
+            recovery.subprocess,
+            "run",
+            side_effect=(first_process, OSError("second probe executable launch failed")),
+        ):
+            with self.assertRaises(recovery.Task4BAcceptanceRecoveryError) as raised:
+                recovery._run_recovery_commands(
+                    commands[1:],
+                    source_root=Path("C:/source"),
+                    expected_head=H_RECOVERY,
+                    output_dir=Path("C:/source/docs/p6/task4b/recovery-v1"),
+                    probe_path=Path("C:/build/phase6_task4_corpus_probe.exe"),
+                )
+        self.assertEqual(raised.exception.reached_command_count, 1)
+        self.assertEqual(raised.exception.ephemeral_probe_regressions, 1)
+        self.assertEqual(len(raised.exception.records), 1)
+        self.assertEqual(raised.exception.records[0].status, "PASS")
+        full_records = [recovery._not_run_record(command) for command in commands]
+        full_records[1] = raised.exception.records[0]
+        statuses = recovery._derive_recovery_gate_statuses(commands, full_records)
+        self.assertEqual(statuses["admitted-forward"], "FAIL")
+        self.assertEqual(statuses["full-non-long-ctest"], "NOT_RUN")
 
     def test_fail_fast_within_multi_command_gate_counts_started_probe_once(self):
         commands = recovery._recovery_gate_commands(
