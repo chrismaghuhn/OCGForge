@@ -321,6 +321,32 @@ class Task5PrimitiveAndIdentityTests(unittest.TestCase):
         with self.assertRaises(codec.CodecError):
             codec.ordered_candidate_domain_identity(keys, "d" * 64)
 
+    def test_decision_kind_vocabulary_is_distinct_from_action_kind_vocabulary(self):
+        keys = (_key(0), _key(1))
+        for request_kind in (
+            "idle_command",
+            "battle_command",
+            "chain",
+            "option",
+            "card_selection",
+            "tribute",
+            "sum",
+            "place",
+            "counter",
+            "ordering",
+            "announcement",
+            "unselect_card",
+            "position",
+            "yes_no",
+        ):
+            digest = codec.public_candidate_domain_digest(request_kind, keys)
+            codec.validate_ordered_candidate_domain_identity(
+                digest, request_kind, keys
+            )
+        for invalid_request_kind in ("pick", "finish", "unsupported"):
+            with self.assertRaises(codec.CodecError):
+                codec.public_candidate_domain_digest(invalid_request_kind, keys)
+
     def test_score_vector_preserves_source_order_and_exact_capacity_witnesses(self):
         for count in (24, 25, 129):
             vector = _score_vector(count)

@@ -188,6 +188,22 @@ ACTION_KIND_TOKENS = (
     "cancel",
     "assign_amount",
 )
+DECISION_KIND_TOKENS = (
+    "idle_command",
+    "battle_command",
+    "chain",
+    "option",
+    "card_selection",
+    "tribute",
+    "sum",
+    "place",
+    "counter",
+    "ordering",
+    "announcement",
+    "unselect_card",
+    "position",
+    "yes_no",
+)
 FAILURE_STAGES = (
     "before_public_decision",
     "public_frame_validation",
@@ -463,6 +479,12 @@ def _validate_action_kind_token(value: str, field: str) -> None:
     _validate_lower_token(value, field)
     if value not in ACTION_KIND_TOKENS:
         raise CodecError(f"{field} is not an accepted EnvironmentActionKind token")
+
+
+def _validate_decision_kind_token(value: str, field: str) -> None:
+    _validate_lower_token(value, field)
+    if value not in DECISION_KIND_TOKENS:
+        raise CodecError(f"{field} is not an accepted EnvironmentDecisionKind token")
 
 
 def _is_observation_locator(value: str) -> bool:
@@ -1043,7 +1065,7 @@ def canonical_public_candidate_domain_bytes(
     public_action_keys: Sequence[str],
 ) -> bytes:
     _validate_public_text(request_kind, "candidate domain request_kind")
-    _validate_action_kind_token(request_kind, "candidate domain request_kind")
+    _validate_decision_kind_token(request_kind, "candidate domain request_kind")
     keys = _validate_ordered_candidate_keys(public_action_keys)
     return b"".join(
         (
@@ -1116,7 +1138,7 @@ def validate_ordered_candidate_domain_identity(
         _validate_identity(identity, ORDERED_CANDIDATE_DOMAIN_ID_PREFIX, "ordered_candidate_domain_identity")
         expected = fallback_ordered_candidate_domain_identity(ordered_keys)
     else:
-        _validate_action_kind_token(request_kind, "candidate domain request_kind")
+        _validate_decision_kind_token(request_kind, "candidate domain request_kind")
         if isinstance(identity, str) and identity.startswith(ORDERED_CANDIDATE_DOMAIN_ID_PREFIX):
             raise CodecError("request kind requires the recomputed raw Phase-5 domain digest")
         _validate_digest(identity, "ordered_candidate_domain_identity")
@@ -2846,7 +2868,7 @@ class FirstDivergenceV1:
             _validate_identity(self.model_input_identity, MODEL_INPUT_ID_PREFIX, "model_input_identity")
         if self.decision_request_family is not None:
             _validate_public_text(self.decision_request_family, "decision_request_family")
-            _validate_lower_token(self.decision_request_family, "decision_request_family")
+            _validate_decision_kind_token(self.decision_request_family, "decision_request_family")
         for field in FIRST_DIVERGENCE_SELECTION_FIELDS:
             value = getattr(self, field)
             if value is not None:
