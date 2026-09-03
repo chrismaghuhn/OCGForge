@@ -89,11 +89,13 @@ ORDERED_CANDIDATE_DOMAIN_ID_PREFIX = "phase6_ordered_candidate_domain.v1."
 CHECKPOINT_SCHEMA_ID = "ocgforge.phase6.checkpoint_manifest.v1"
 CHECKPOINT_ID_PREFIX = "phase6_checkpoint.v1."
 MODEL_INPUT_ID_PREFIX = "model_input.v1."
+BC_SAMPLE_ID_PREFIX = "bc_sample.v1."
+PUBLIC_ACTION_IDENTITY_SCHEMA_ID = "ocgforge.public_action_identity.v1"
+PUBLIC_ACTION_KEY_PREFIX = "public_action.v1."
 
 
 # The accepted Task-5 implementation/acceptance context.  These are semantic
 # bindings, never execution provenance.
-ACCEPTED_T5A_BASE_COMMIT = "f5a3b3bc6604fd68971c43a390fc2be2b740b447"
 EVALUATOR_SEMANTIC_VERSION = "ocgforge.phase6.task5.evaluator.v1"
 
 MATCHUP_ID = "ocgforge.matchup.swordsoul_salamangreat.v1"
@@ -321,12 +323,17 @@ def _validate_string(value: str, field: str, *, nonempty: bool = True) -> None:
 
 
 def _validate_public_action_key(value: str, field: str) -> None:
-    prefix = "public_action.v1."
-    if not isinstance(value, str) or not value.startswith(prefix):
+    if not isinstance(value, str) or not value.startswith(PUBLIC_ACTION_KEY_PREFIX):
         raise CodecError(f"{field} has the wrong public-action prefix")
-    suffix = value[len(prefix):]
-    if not suffix or len(suffix) % 2 or not _is_lower_hex(suffix, len(suffix)):
+    suffix = value[len(PUBLIC_ACTION_KEY_PREFIX):]
+    if not suffix or len(suffix) % 2 or not re.fullmatch(r"[0-9a-f]+", suffix):
         raise CodecError(f"{field} is not a lowercase hexadecimal public key")
+    try:
+        raw = bytes.fromhex(suffix)
+    except ValueError as error:
+        raise CodecError(f"{field} is not hexadecimal") from error
+    if not _is_canonical_public_action_key_bytes(raw):
+        raise CodecError(f"{field} is not a canonical public-action identity")
 
 
 def _validate_ordered_domain_identity(value: str, field: str) -> None:
@@ -350,18 +357,44 @@ def _validate_any_content_identity(value: str, field: str) -> None:
         raise CodecError(f"{field} is not a versioned identity")
 
 
+def _validate_dataset_identity(value: str, field: str) -> None:
+    _validate_digest(value, field)
+    if set(value) == {"0"}:
+        raise CodecError(f"{field} is a reserved all-zero placeholder")
+
+
+def _validate_dataset_split_identity(value: str, field: str) -> None:
+    _validate_nonzero_identity(value, "phase6_dataset_split.v1.", field)
+
+
+def _validate_checkpoint_identity(value: str, field: str) -> None:
+    _validate_nonzero_identity(value, CHECKPOINT_ID_PREFIX, field)
+
+
+def _validate_bc_sample_identity(value: str, field: str) -> None:
+    _validate_nonzero_identity(value, BC_SAMPLE_ID_PREFIX, field)
+
+
 _FORBIDDEN_PRIVACY_TERMS = (
     "corehost",
     "raw_engine",
     "raw engine",
+    "engine_state",
+    "raw_response",
+    "response_bytes",
     "submissiontoken",
+    "semantic_key",
     "pointer",
     "object_id",
     "objectid",
+    "pid",
     "private",
     "omniscient",
     "hidden_card",
     "hidden card",
+    "hidden_hand",
+    "hidden_deck",
+    "persistent_locator",
     "filesystem",
     "wall_time",
     "thread_id",
@@ -395,6 +428,34 @@ def _reject_private_json_value(value: Any, field: str = "JSON") -> None:
 def _validate_public_text(value: str, field: str, *, nonempty: bool = True) -> None:
     _validate_string(value, field, nonempty=nonempty)
     _reject_private_text(value, field)
+
+
+def _is_lower_token(value: str) -> bool:
+    return bool(
+        isinstance(value, str)
+        and value
+        and all(
+            ("a" <= character <= "z")
+            or ("0" <= character <= "9")
+            or character == "_"
+            for character in value
+        )
+    )
+
+
+def _validate_lower_token(value: str, field: str, *, allow_empty: bool = False) -> None:
+    if allow_empty and value == "":
+        return
+    if not _is_lower_token(value):
+        raise CodecError(f"{field} is not a canonical lower-case token")
+
+
+def _is_observation_locator(value: str) -> bool:
+    try:
+        raw = value.encode("utf-8", "strict")
+    except (AttributeError, UnicodeError):
+        return False
+    return bool(value) and all(byte >= 0x20 and byte != 0x7F for byte in raw)
 
 
 class _Reader:
@@ -642,6 +703,17 @@ class PublicChoiceV1:
         _validate_u64(self.value, "choice.value")
         if self.response_index is not None:
             _validate_u32(self.response_index, "choice.response_index")
+        if self.kind in (1, 2):
+            if self.value > 1 or self.response_index is not None:
+                raise CodecError("boolean public choice has invalid value/response index")
+        elif self.kind == 3:
+            if self.value > 0xFFFFFFFF or self.response_index is not None:
+                raise CodecError("effect-choice public choice has invalid value/response index")
+        elif self.kind in (4, 5):
+            if self.response_index is None:
+                raise CodecError("option/announcement choice requires response_index")
+        else:
+            raise CodecError("choice.kind is not an accepted PublicChoiceKind")
 
     def to_dict(self) -> dict[str, Any]:
         self.validate()
@@ -680,7 +752,11 @@ class PublicReferenceV1:
 
     def validate(self) -> None:
         _validate_u8(self.reference_kind, "reference.reference_kind")
+        if self.reference_kind not in (0, 1):
+            raise CodecError("reference.reference_kind is not an accepted PublicCardReferenceKind")
         _validate_public_text(self.public_locator_token, "reference.public_locator_token")
+        if not _is_observation_locator(self.public_locator_token):
+            raise CodecError("reference.public_locator_token is not a public observation locator")
         if self.current_entity_ordinal is not None:
             _validate_u32(self.current_entity_ordinal, "reference.current_entity_ordinal")
 
@@ -740,6 +816,7 @@ class PublicCandidateDescriptorV1:
 
     def validate(self) -> None:
         _validate_public_text(self.action_kind, "candidate.action_kind")
+        _validate_lower_token(self.action_kind, "candidate.action_kind")
         if self.choice is not None:
             self.choice.validate()
         if self.source_reference is not None:
@@ -760,8 +837,11 @@ class PublicCandidateDescriptorV1:
             "candidate.continuation_operation",
             nonempty=False,
         )
-        if self.continuation_operation and self.continuation_operation not in CONTINUATION_OPERATIONS:
-            raise CodecError("candidate.continuation_operation is not accepted")
+        _validate_lower_token(
+            self.continuation_operation,
+            "candidate.continuation_operation",
+            allow_empty=True,
+        )
         if not isinstance(self.submits_engine_response, bool):
             raise CodecError("candidate.submits_engine_response is not bool")
 
@@ -833,6 +913,99 @@ def _decode_public_candidate_descriptor(reader: _Reader) -> PublicCandidateDescr
     )
     value.validate()
     return value
+
+
+def _canonical_public_action_reference_bytes(
+    value: Optional[PublicReferenceV1],
+) -> bytes:
+    if value is None:
+        return pack_u8(0)
+    value.validate()
+    return pack_u8(1) + pack_u8(value.reference_kind) + pack_string(value.public_locator_token)
+
+
+def canonical_public_action_key_bytes(value: PublicCandidateDescriptorV1) -> bytes:
+    """Encode the accepted full PublicActionKey descriptor, not a digest alias."""
+
+    if not isinstance(value, PublicCandidateDescriptorV1):
+        raise CodecError("public action key input has the wrong DTO type")
+    value.validate()
+    return b"".join(
+        (
+            pack_string(PUBLIC_ACTION_IDENTITY_SCHEMA_ID),
+            pack_string(PUBLIC_ACTION_IDENTITY_SCHEMA_ID),
+            pack_string(value.action_kind),
+            pack_optional(value.choice, canonical_public_choice_bytes),
+            _canonical_public_action_reference_bytes(value.source_reference),
+            _canonical_public_action_reference_bytes(value.target_reference),
+            pack_optional(value.phase, pack_u32),
+            pack_optional(value.position, pack_u8),
+            pack_optional(value.source_index, pack_u32),
+            pack_optional(value.amount, pack_i32),
+            pack_string(value.continuation_operation),
+        )
+    )
+
+
+def public_action_key(value: PublicCandidateDescriptorV1) -> str:
+    return PUBLIC_ACTION_KEY_PREFIX + canonical_public_action_key_bytes(value).hex()
+
+
+def _is_canonical_public_action_key_bytes(raw: bytes) -> bool:
+    try:
+        reader = _Reader(raw)
+        if reader.string() != PUBLIC_ACTION_IDENTITY_SCHEMA_ID:
+            return False
+        if reader.string() != PUBLIC_ACTION_IDENTITY_SCHEMA_ID:
+            return False
+        action_kind = reader.string()
+        _validate_public_text(action_kind, "public action action_kind")
+        _validate_lower_token(action_kind, "public action action_kind")
+        reader.optional(lambda: _decode_public_choice(reader))
+        for index in range(2):
+            present = reader.u8()
+            if present == 0:
+                continue
+            if present != 1:
+                return False
+            reference_kind = reader.u8()
+            locator = reader.string()
+            reference = PublicReferenceV1(reference_kind, locator)
+            reference.validate()
+        for reader_function in (reader.u32, reader.u8, reader.u32, reader.i32):
+            reader.optional(reader_function)
+        continuation_operation = reader.string()
+        _validate_public_text(
+            continuation_operation,
+            "public action continuation_operation",
+            nonempty=False,
+        )
+        _validate_lower_token(
+            continuation_operation,
+            "public action continuation_operation",
+            allow_empty=True,
+        )
+        reader.require_end()
+        return True
+    except CodecError:
+        return False
+
+
+def is_public_action_key(value: str) -> bool:
+    if not isinstance(value, str) or not value.startswith(PUBLIC_ACTION_KEY_PREFIX):
+        return False
+    suffix = value[len(PUBLIC_ACTION_KEY_PREFIX):]
+    if not suffix or len(suffix) % 2 or not re.fullmatch(r"[0-9a-f]+", suffix):
+        return False
+    try:
+        return _is_canonical_public_action_key_bytes(bytes.fromhex(suffix))
+    except ValueError:
+        return False
+
+
+def validate_public_action_key(value: str) -> None:
+    if not is_public_action_key(value):
+        raise CodecError("public_action_key is not a canonical public-action identity")
 
 
 @dataclasses.dataclass(frozen=True)
@@ -1475,7 +1648,7 @@ class EvaluationJobV1:
     deterministic_seed: int = 1
     starting_player: int = 0
     evaluator_semantic_version: str = EVALUATOR_SEMANTIC_VERSION
-    evaluator_semantic_source_commit: str = ACCEPTED_T5A_BASE_COMMIT
+    evaluator_semantic_source_commit: str = ""
 
     def validate(self) -> None:
         names = tuple(field.name for field in dataclasses.fields(self))
@@ -1485,7 +1658,10 @@ class EvaluationJobV1:
             value = getattr(self, name)
             if name in JOB_OPTIONAL_FIELDS:
                 if value is not None:
-                    _validate_any_content_identity(value, name)
+                    if name == "source_dataset_identity":
+                        _validate_dataset_identity(value, name)
+                    else:
+                        _validate_dataset_split_identity(value, name)
             elif name in JOB_U8_FIELDS:
                 _validate_u8(value, name)
             elif name in JOB_U64_FIELDS:
@@ -1523,9 +1699,8 @@ class EvaluationJobV1:
             SALAMANGREAT_DECK_ID,
         } or self.seat_0_deck_role_id == self.seat_1_deck_role_id:
             raise CodecError("evaluation job must use both fixed deck roles")
-        _validate_nonzero_identity(
+        _validate_checkpoint_identity(
             self.evaluated_policy_checkpoint_identity,
-            CHECKPOINT_ID_PREFIX,
             "evaluated_policy_checkpoint_identity",
         )
         if self.evaluated_policy_seat not in (0, 1) or self.opponent_policy_seat not in (0, 1):
@@ -1573,25 +1748,17 @@ class EvaluationJobV1:
         _validate_string(self.evaluator_semantic_version, "evaluator_semantic_version")
         _validate_commit(self.evaluator_semantic_source_commit, "evaluator_semantic_source_commit")
 
-    def to_dict(self) -> dict[str, Any]:
+    def identity_input_dict(self) -> dict[str, Any]:
         self.validate()
         result = {name: getattr(self, name) for name in JOB_IDENTITY_FIELD_NAMES}
         result["evaluation_job_identity"] = evaluation_job_identity(self)
         return result
 
-    @classmethod
-    def from_dict(cls, payload: Any) -> "EvaluationJobV1":
-        fields = JOB_IDENTITY_FIELD_NAMES + ("evaluation_job_identity",)
-        data = _strict_object(payload, fields, label="EvaluationJobV1")
-        value = cls(**{name: data[name] for name in JOB_IDENTITY_FIELD_NAMES})
-        value.validate()
-        if data["evaluation_job_identity"] != evaluation_job_identity(value):
-            raise CodecError("evaluation job identity does not match its payload")
-        return value
 
-
-def default_evaluation_job() -> EvaluationJobV1:
-    value = EvaluationJobV1()
+def default_evaluation_job(*, evaluator_semantic_source_commit: str) -> EvaluationJobV1:
+    value = EvaluationJobV1(
+        evaluator_semantic_source_commit=evaluator_semantic_source_commit
+    )
     value.validate()
     return value
 
@@ -1618,15 +1785,12 @@ def evaluation_job_identity(value: EvaluationJobV1) -> str:
     return _digest(EVALUATION_JOB_IDENTITY_PREFIX, canonical_evaluation_job_bytes(value))
 
 
-def encode_evaluation_job_json(value: EvaluationJobV1) -> bytes:
-    return canonical_json_bytes(value.to_dict())
-
-
-def decode_evaluation_job_json(data: bytes) -> EvaluationJobV1:
-    return EvaluationJobV1.from_dict(parse_canonical_json(data))
-
-
-def _job_for_roles(seed: int, seat_0_role: str, starting_player: int) -> EvaluationJobV1:
+def _job_for_roles(
+    seed: int,
+    seat_0_role: str,
+    starting_player: int,
+    evaluator_semantic_source_commit: str,
+) -> EvaluationJobV1:
     seat_1_role = SALAMANGREAT_DECK_ID if seat_0_role == SWORDSOUL_DECK_ID else SWORDSOUL_DECK_ID
     _, seat_0_sha = _deck_values(seat_0_role)
     _, seat_1_sha = _deck_values(seat_1_role)
@@ -1649,12 +1813,20 @@ def _job_for_roles(seed: int, seat_0_role: str, starting_player: int) -> Evaluat
         opponent_policy_role_id=seat_1_role,
         deterministic_seed=seed,
         starting_player=starting_player,
+        evaluator_semantic_source_commit=evaluator_semantic_source_commit,
     )
 
 
-def implementation_acceptance_jobs() -> tuple[EvaluationJobV1, ...]:
+def implementation_acceptance_jobs(
+    *, evaluator_semantic_source_commit: str
+) -> tuple[EvaluationJobV1, ...]:
     jobs = tuple(
-        _job_for_roles(seed, seat_0_role, starting_player)
+        _job_for_roles(
+            seed,
+            seat_0_role,
+            starting_player,
+            evaluator_semantic_source_commit,
+        )
         for seed in (1, 2)
         for seat_0_role in (SWORDSOUL_DECK_ID, SALAMANGREAT_DECK_ID)
         for starting_player in (0, 1)
@@ -1713,11 +1885,7 @@ class EvaluationCorpusV1:
     checkpoint_identity: str = SMOKE_CHECKPOINT_ID
     source_dataset_identity: Optional[str] = None
     dataset_split_identity: Optional[str] = None
-    evaluation_job_identities: tuple[str, ...] = dataclasses.field(
-        default_factory=lambda: tuple(
-            evaluation_job_identity(job) for job in implementation_acceptance_jobs()
-        )
-    )
+    evaluation_job_identities: tuple[str, ...] = ()
 
     def validate(self) -> None:
         names = tuple(field.name for field in dataclasses.fields(self))
@@ -1727,7 +1895,10 @@ class EvaluationCorpusV1:
             value = getattr(self, name)
             if name in ("source_dataset_identity", "dataset_split_identity"):
                 if value is not None:
-                    _validate_any_content_identity(value, name)
+                    if name == "source_dataset_identity":
+                        _validate_dataset_identity(value, name)
+                    else:
+                        _validate_dataset_split_identity(value, name)
             elif name == "evaluation_job_identities":
                 if not isinstance(value, tuple) or not value:
                     raise CodecError("evaluation corpus job vector is not ordered")
@@ -1768,15 +1939,11 @@ class EvaluationCorpusV1:
             or self.deck_role_1_content_sha256 != SALAMANGREAT_DECK_SHA256
         ):
             raise CodecError("evaluation corpus fixed binding is not accepted")
-        _validate_nonzero_identity(self.checkpoint_identity, CHECKPOINT_ID_PREFIX, "checkpoint_identity")
+        _validate_checkpoint_identity(self.checkpoint_identity, "checkpoint_identity")
         if (self.source_dataset_identity is None) != (self.dataset_split_identity is None):
             raise CodecError("evaluation corpus dataset and split optionals are not paired")
-        if self.corpus_profile_identity == IMPLEMENTATION_ACCEPTANCE_PROFILE:
-            expected = tuple(
-                evaluation_job_identity(job) for job in implementation_acceptance_jobs()
-            )
-            if self.evaluation_job_identities != expected:
-                raise CodecError("evaluation corpus job vector is not the frozen schedule")
+        if self.corpus_profile_identity == IMPLEMENTATION_ACCEPTANCE_PROFILE and len(self.evaluation_job_identities) != 8:
+            raise CodecError("implementation acceptance corpus must contain eight jobs")
 
     def to_dict(self) -> dict[str, Any]:
         self.validate()
@@ -1807,14 +1974,18 @@ class EvaluationCorpusV1:
         return value
 
 
-def default_evaluation_corpus() -> EvaluationCorpusV1:
-    value = EvaluationCorpusV1()
+def default_evaluation_corpus(*, evaluator_semantic_source_commit: str) -> EvaluationCorpusV1:
+    jobs = implementation_acceptance_jobs(
+        evaluator_semantic_source_commit=evaluator_semantic_source_commit
+    )
+    value = EvaluationCorpusV1(
+        evaluation_job_identities=tuple(evaluation_job_identity(job) for job in jobs)
+    )
     value.validate()
     return value
 
 
-def canonical_evaluation_corpus_bytes(value: Optional[EvaluationCorpusV1] = None) -> bytes:
-    value = default_evaluation_corpus() if value is None else value
+def canonical_evaluation_corpus_bytes(value: EvaluationCorpusV1) -> bytes:
     if not isinstance(value, EvaluationCorpusV1):
         raise CodecError("evaluation corpus has the wrong DTO type")
     value.validate()
@@ -1832,11 +2003,16 @@ def canonical_evaluation_corpus_bytes(value: Optional[EvaluationCorpusV1] = None
     return b"".join(encoded)
 
 
-def evaluation_corpus_identity(value: Optional[EvaluationCorpusV1] = None) -> str:
+def evaluation_corpus_identity(value: EvaluationCorpusV1) -> str:
     return _digest(EVALUATION_CORPUS_IDENTITY_PREFIX, canonical_evaluation_corpus_bytes(value))
 
 
-def encode_evaluation_corpus_json(value: EvaluationCorpusV1) -> bytes:
+def encode_evaluation_corpus_json(
+    value: EvaluationCorpusV1,
+    *,
+    context: EvaluationContextV1,
+) -> bytes:
+    _require_aggregate_context(context, corpus=value)
     return canonical_json_bytes(value.to_dict())
 
 
@@ -1851,12 +2027,10 @@ class EvaluationIdentityV1:
     evaluation_contract_identity: str = dataclasses.field(
         default_factory=lambda: evaluation_contract_identity()
     )
-    evaluation_corpus_identity: str = dataclasses.field(
-        default_factory=lambda: evaluation_corpus_identity(default_evaluation_corpus())
-    )
-    checkpoint_identity: str = SMOKE_CHECKPOINT_ID
+    evaluation_corpus_identity: str = ""
+    checkpoint_identity: str = ""
     evaluator_semantic_version: str = EVALUATOR_SEMANTIC_VERSION
-    evaluator_semantic_source_commit: str = ACCEPTED_T5A_BASE_COMMIT
+    evaluator_semantic_source_commit: str = ""
 
     def validate(self) -> None:
         if tuple(field.name for field in dataclasses.fields(self)) != (
@@ -1880,11 +2054,7 @@ class EvaluationIdentityV1:
             EVALUATION_CORPUS_IDENTITY_PREFIX,
             "evaluation_corpus_identity",
         )
-        _validate_nonzero_identity(
-            self.checkpoint_identity,
-            CHECKPOINT_ID_PREFIX,
-            "checkpoint_identity",
-        )
+        _validate_checkpoint_identity(self.checkpoint_identity, "checkpoint_identity")
         _validate_string(self.evaluator_semantic_version, "evaluator_semantic_version")
         _validate_commit(self.evaluator_semantic_source_commit, "evaluator_semantic_source_commit")
 
@@ -1910,14 +2080,22 @@ class EvaluationIdentityV1:
         return value
 
 
-def default_evaluation_identity() -> EvaluationIdentityV1:
-    value = EvaluationIdentityV1()
+def default_evaluation_identity(
+    *, evaluator_semantic_source_commit: str
+) -> EvaluationIdentityV1:
+    corpus = default_evaluation_corpus(
+        evaluator_semantic_source_commit=evaluator_semantic_source_commit
+    )
+    value = EvaluationIdentityV1(
+        evaluation_corpus_identity=evaluation_corpus_identity(corpus),
+        checkpoint_identity=SMOKE_CHECKPOINT_ID,
+        evaluator_semantic_source_commit=evaluator_semantic_source_commit,
+    )
     value.validate()
     return value
 
 
-def canonical_evaluation_identity_bytes(value: Optional[EvaluationIdentityV1] = None) -> bytes:
-    value = default_evaluation_identity() if value is None else value
+def canonical_evaluation_identity_bytes(value: EvaluationIdentityV1) -> bytes:
     if not isinstance(value, EvaluationIdentityV1):
         raise CodecError("evaluation identity has the wrong DTO type")
     value.validate()
@@ -1934,11 +2112,16 @@ def canonical_evaluation_identity_bytes(value: Optional[EvaluationIdentityV1] = 
     )
 
 
-def evaluation_identity(value: Optional[EvaluationIdentityV1] = None) -> str:
+def evaluation_identity(value: EvaluationIdentityV1) -> str:
     return _digest(EVALUATION_IDENTITY_PREFIX, canonical_evaluation_identity_bytes(value))
 
 
-def encode_evaluation_identity_json(value: EvaluationIdentityV1) -> bytes:
+def encode_evaluation_identity_json(
+    value: EvaluationIdentityV1,
+    *,
+    context: EvaluationContextV1,
+) -> bytes:
+    _require_aggregate_context(context, root=value)
     return canonical_json_bytes(value.to_dict())
 
 
@@ -1958,20 +2141,10 @@ JOB_MANIFEST_FIELD_NAMES = (
 @dataclasses.dataclass(frozen=True)
 class EvaluationJobManifestV1:
     schema_id: str = JOB_MANIFEST_SCHEMA_ID
-    evaluation_identity: str = dataclasses.field(
-        default_factory=lambda: evaluation_identity(default_evaluation_identity())
-    )
-    evaluation_contract_identity: str = dataclasses.field(
-        default_factory=lambda: evaluation_contract_identity()
-    )
-    evaluation_corpus_identity: str = dataclasses.field(
-        default_factory=lambda: evaluation_corpus_identity(default_evaluation_corpus())
-    )
-    evaluation_job_identities: tuple[str, ...] = dataclasses.field(
-        default_factory=lambda: tuple(
-            evaluation_job_identity(job) for job in implementation_acceptance_jobs()
-        )
-    )
+    evaluation_identity: str = ""
+    evaluation_contract_identity: str = ""
+    evaluation_corpus_identity: str = ""
+    evaluation_job_identities: tuple[str, ...] = ()
 
     def validate(self) -> None:
         if tuple(field.name for field in dataclasses.fields(self)) != JOB_MANIFEST_FIELD_NAMES:
@@ -2021,8 +2194,24 @@ class EvaluationJobManifestV1:
         return value
 
 
-def default_evaluation_job_manifest() -> EvaluationJobManifestV1:
-    value = EvaluationJobManifestV1()
+def default_evaluation_job_manifest(
+    *, evaluator_semantic_source_commit: str
+) -> EvaluationJobManifestV1:
+    jobs = implementation_acceptance_jobs(
+        evaluator_semantic_source_commit=evaluator_semantic_source_commit
+    )
+    corpus = default_evaluation_corpus(
+        evaluator_semantic_source_commit=evaluator_semantic_source_commit
+    )
+    root = default_evaluation_identity(
+        evaluator_semantic_source_commit=evaluator_semantic_source_commit
+    )
+    value = EvaluationJobManifestV1(
+        evaluation_identity=evaluation_identity(root),
+        evaluation_contract_identity=evaluation_contract_identity(),
+        evaluation_corpus_identity=evaluation_corpus_identity(corpus),
+        evaluation_job_identities=tuple(evaluation_job_identity(job) for job in jobs),
+    )
     value.validate()
     return value
 
@@ -2047,7 +2236,12 @@ def evaluation_job_manifest_identity(value: EvaluationJobManifestV1) -> str:
     return _digest(JOB_MANIFEST_ID_PREFIX, canonical_evaluation_job_manifest_bytes(value))
 
 
-def encode_evaluation_job_manifest_json(value: EvaluationJobManifestV1) -> bytes:
+def encode_evaluation_job_manifest_json(
+    value: EvaluationJobManifestV1,
+    *,
+    context: EvaluationContextV1,
+) -> bytes:
+    _require_aggregate_context(context, job_manifest=value)
     return canonical_json_bytes(value.to_dict())
 
 
@@ -2082,25 +2276,17 @@ MANIFEST_OPTIONAL_FIELDS = frozenset(
 @dataclasses.dataclass(frozen=True)
 class EvaluationManifestV1:
     schema_id: str = EVALUATION_MANIFEST_SCHEMA_ID
-    evaluation_identity: str = dataclasses.field(
-        default_factory=lambda: evaluation_identity(default_evaluation_identity())
-    )
-    evaluation_contract_identity: str = dataclasses.field(
-        default_factory=lambda: evaluation_contract_identity()
-    )
-    evaluation_corpus_identity: str = dataclasses.field(
-        default_factory=lambda: evaluation_corpus_identity(default_evaluation_corpus())
-    )
-    evaluation_job_manifest_identity: str = dataclasses.field(
-        default_factory=lambda: evaluation_job_manifest_identity(default_evaluation_job_manifest())
-    )
-    checkpoint_identity: str = SMOKE_CHECKPOINT_ID
+    evaluation_identity: str = ""
+    evaluation_contract_identity: str = ""
+    evaluation_corpus_identity: str = ""
+    evaluation_job_manifest_identity: str = ""
+    checkpoint_identity: str = ""
     source_dataset_identity: Optional[str] = None
     dataset_split_identity: Optional[str] = None
     teacher_state_population_identity: Optional[str] = None
     bc_induced_population_identity: Optional[str] = None
     evaluator_semantic_version: str = EVALUATOR_SEMANTIC_VERSION
-    evaluator_semantic_source_commit: str = ACCEPTED_T5A_BASE_COMMIT
+    evaluator_semantic_source_commit: str = ""
 
     def validate(self) -> None:
         if tuple(field.name for field in dataclasses.fields(self)) != EVALUATION_MANIFEST_FIELD_NAMES:
@@ -2113,11 +2299,16 @@ class EvaluationManifestV1:
         _validate_identity(self.evaluation_job_manifest_identity, JOB_MANIFEST_ID_PREFIX, "evaluation_job_manifest_identity")
         if self.evaluation_contract_identity != evaluation_contract_identity():
             raise CodecError("evaluation manifest contract identity is not accepted")
-        _validate_nonzero_identity(self.checkpoint_identity, CHECKPOINT_ID_PREFIX, "checkpoint_identity")
+        _validate_checkpoint_identity(self.checkpoint_identity, "checkpoint_identity")
         for name in MANIFEST_OPTIONAL_FIELDS:
             value = getattr(self, name)
             if value is not None:
-                _validate_any_content_identity(value, name)
+                if name == "source_dataset_identity":
+                    _validate_dataset_identity(value, name)
+                elif name == "dataset_split_identity":
+                    _validate_dataset_split_identity(value, name)
+                else:
+                    _validate_any_content_identity(value, name)
         if (self.source_dataset_identity is None) != (self.dataset_split_identity is None):
             raise CodecError("manifest dataset and split optionals are not paired")
         _validate_string(self.evaluator_semantic_version, "evaluator_semantic_version")
@@ -2149,8 +2340,26 @@ class EvaluationManifestV1:
         return value
 
 
-def default_evaluation_manifest() -> EvaluationManifestV1:
-    value = EvaluationManifestV1()
+def default_evaluation_manifest(
+    *, evaluator_semantic_source_commit: str
+) -> EvaluationManifestV1:
+    root = default_evaluation_identity(
+        evaluator_semantic_source_commit=evaluator_semantic_source_commit
+    )
+    corpus = default_evaluation_corpus(
+        evaluator_semantic_source_commit=evaluator_semantic_source_commit
+    )
+    job_manifest = default_evaluation_job_manifest(
+        evaluator_semantic_source_commit=evaluator_semantic_source_commit
+    )
+    value = EvaluationManifestV1(
+        evaluation_identity=evaluation_identity(root),
+        evaluation_contract_identity=evaluation_contract_identity(),
+        evaluation_corpus_identity=evaluation_corpus_identity(corpus),
+        evaluation_job_manifest_identity=evaluation_job_manifest_identity(job_manifest),
+        checkpoint_identity=SMOKE_CHECKPOINT_ID,
+        evaluator_semantic_source_commit=evaluator_semantic_source_commit,
+    )
     value.validate()
     return value
 
@@ -2173,12 +2382,158 @@ def evaluation_manifest_identity(value: EvaluationManifestV1) -> str:
     return _digest(EVALUATION_MANIFEST_ID_PREFIX, canonical_evaluation_manifest_bytes(value))
 
 
-def encode_evaluation_manifest_json(value: EvaluationManifestV1) -> bytes:
+def encode_evaluation_manifest_json(
+    value: EvaluationManifestV1,
+    *,
+    context: EvaluationContextV1,
+) -> bytes:
+    _require_aggregate_context(context, manifest=value)
     return canonical_json_bytes(value.to_dict())
 
 
 def decode_evaluation_manifest_json(data: bytes) -> EvaluationManifestV1:
     return EvaluationManifestV1.from_dict(parse_canonical_json(data))
+
+
+def validate_evaluation_context(
+    root: EvaluationIdentityV1,
+    manifest: EvaluationManifestV1,
+    corpus: EvaluationCorpusV1,
+    job_manifest: EvaluationJobManifestV1,
+    jobs: Sequence[EvaluationJobV1],
+) -> None:
+    """Fail-closed aggregate validation required before manifest issuance.
+
+    Individual DTO validation checks shape and local invariants.  This
+    function proves the cross-artifact graph: every identity is recomputed
+    from its payload, the job vector is the same ordered vector at each
+    aggregate, and evaluator/checkpoint context is consistent throughout.
+    """
+
+    for value, expected_type in (
+        (root, EvaluationIdentityV1),
+        (manifest, EvaluationManifestV1),
+        (corpus, EvaluationCorpusV1),
+        (job_manifest, EvaluationJobManifestV1),
+    ):
+        if not isinstance(value, expected_type):
+            raise CodecError("evaluation context contains the wrong DTO type")
+        value.validate()
+    if not isinstance(jobs, (tuple, list)) or not jobs:
+        raise CodecError("evaluation context requires an ordered non-empty job vector")
+    ordered_jobs = tuple(jobs)
+    for job in ordered_jobs:
+        if not isinstance(job, EvaluationJobV1):
+            raise CodecError("evaluation context job vector contains the wrong DTO type")
+        job.validate()
+
+    source_commits = {job.evaluator_semantic_source_commit for job in ordered_jobs}
+    versions = {job.evaluator_semantic_version for job in ordered_jobs}
+    if source_commits != {root.evaluator_semantic_source_commit}:
+        raise CodecError("job evaluator source commits do not match root context")
+    if versions != {root.evaluator_semantic_version}:
+        raise CodecError("job evaluator versions do not match root context")
+    if root.evaluation_contract_identity != corpus.evaluation_contract_identity:
+        raise CodecError("root and corpus contract identities differ")
+    if root.evaluation_contract_identity != manifest.evaluation_contract_identity:
+        raise CodecError("root and manifest contract identities differ")
+    if root.evaluation_contract_identity != job_manifest.evaluation_contract_identity:
+        raise CodecError("root and job-manifest contract identities differ")
+    if any(job.evaluation_contract_identity != root.evaluation_contract_identity for job in ordered_jobs):
+        raise CodecError("job contract identity differs from aggregate context")
+    if any(job.corpus_profile_identity != corpus.corpus_profile_identity for job in ordered_jobs):
+        raise CodecError("job corpus profile differs from aggregate context")
+    if any(job.evaluated_policy_checkpoint_identity != corpus.checkpoint_identity for job in ordered_jobs):
+        raise CodecError("job checkpoint identity differs from corpus context")
+    if root.checkpoint_identity != corpus.checkpoint_identity or manifest.checkpoint_identity != corpus.checkpoint_identity:
+        raise CodecError("checkpoint identity differs across evaluation context")
+    if manifest.evaluator_semantic_version != root.evaluator_semantic_version or manifest.evaluator_semantic_source_commit != root.evaluator_semantic_source_commit:
+        raise CodecError("manifest evaluator source context differs from root")
+    if job_manifest.evaluation_identity != evaluation_identity(root):
+        raise CodecError("job manifest root identity differs from root context")
+    if (manifest.source_dataset_identity, manifest.dataset_split_identity) != (
+        corpus.source_dataset_identity,
+        corpus.dataset_split_identity,
+    ):
+        raise CodecError("manifest dataset context differs from corpus")
+
+    job_identities = tuple(evaluation_job_identity(job) for job in ordered_jobs)
+    if corpus.evaluation_job_identities != job_identities:
+        raise CodecError("corpus job vector is not the ordered job input vector")
+    if job_manifest.evaluation_job_identities != job_identities:
+        raise CodecError("job manifest vector is not the ordered job input vector")
+    if evaluation_corpus_identity(corpus) != root.evaluation_corpus_identity:
+        raise CodecError("root corpus identity does not match corpus payload")
+    if evaluation_corpus_identity(corpus) != manifest.evaluation_corpus_identity:
+        raise CodecError("manifest corpus identity does not match corpus payload")
+    if evaluation_corpus_identity(corpus) != job_manifest.evaluation_corpus_identity:
+        raise CodecError("job manifest corpus identity does not match corpus payload")
+    if evaluation_identity(root) != manifest.evaluation_identity:
+        raise CodecError("manifest root identity does not match root payload")
+    if evaluation_job_manifest_identity(job_manifest) != manifest.evaluation_job_manifest_identity:
+        raise CodecError("manifest job-manifest identity does not match payload")
+
+    if corpus.corpus_profile_identity == IMPLEMENTATION_ACCEPTANCE_PROFILE:
+        expected_jobs = implementation_acceptance_jobs(
+            evaluator_semantic_source_commit=root.evaluator_semantic_source_commit
+        )
+        if ordered_jobs != expected_jobs:
+            raise CodecError("implementation acceptance context is not the exact frozen eight-job schedule")
+
+
+@dataclasses.dataclass(frozen=True)
+class EvaluationContextV1:
+    """The complete typed context required to issue aggregate artifacts."""
+
+    root: EvaluationIdentityV1
+    manifest: EvaluationManifestV1
+    corpus: EvaluationCorpusV1
+    job_manifest: EvaluationJobManifestV1
+    jobs: tuple[EvaluationJobV1, ...]
+
+    def validate(self) -> None:
+        validate_evaluation_context(
+            self.root,
+            self.manifest,
+            self.corpus,
+            self.job_manifest,
+            self.jobs,
+        )
+
+
+def _require_aggregate_context(
+    context: EvaluationContextV1,
+    **expected: Any,
+) -> None:
+    if not isinstance(context, EvaluationContextV1):
+        raise CodecError("aggregate evaluation context is required before issuance")
+    context.validate()
+    for name, value in expected.items():
+        if getattr(context, name) != value:
+            raise CodecError("artifact is not the value validated by aggregate context")
+
+
+def default_evaluation_context(
+    *, evaluator_semantic_source_commit: str
+) -> EvaluationContextV1:
+    jobs = implementation_acceptance_jobs(
+        evaluator_semantic_source_commit=evaluator_semantic_source_commit
+    )
+    corpus = default_evaluation_corpus(
+        evaluator_semantic_source_commit=evaluator_semantic_source_commit
+    )
+    root = default_evaluation_identity(
+        evaluator_semantic_source_commit=evaluator_semantic_source_commit
+    )
+    job_manifest = default_evaluation_job_manifest(
+        evaluator_semantic_source_commit=evaluator_semantic_source_commit
+    )
+    manifest = default_evaluation_manifest(
+        evaluator_semantic_source_commit=evaluator_semantic_source_commit
+    )
+    context = EvaluationContextV1(root, manifest, corpus, job_manifest, jobs)
+    context.validate()
+    return context
 
 
 # ---------------------------------------------------------------------------
@@ -2273,9 +2628,7 @@ FIRST_DIVERGENCE_SELECTION_FIELDS = (
 
 
 def _validate_public_identity_or_digest(value: str, field: str) -> None:
-    if _is_lower_hex(value, 64):
-        return
-    _validate_any_content_identity(value, field)
+    _validate_digest(value, field)
 
 
 def _validate_candidate_bundle(record: "FirstDivergenceV1") -> None:
@@ -2334,9 +2687,7 @@ def _validate_score_bundle(record: "FirstDivergenceV1") -> None:
 class FirstDivergenceV1:
     schema_id: str = FIRST_DIVERGENCE_SCHEMA_ID
     record_kind: int = DIVERGENCE
-    evaluation_job_identity: str = dataclasses.field(
-        default_factory=lambda: evaluation_job_identity(default_evaluation_job())
-    )
+    evaluation_job_identity: str = ""
     observed_public_decision_count: int = 0
     semantic_decision_identity: Optional[str] = None
     public_observation_digest: Optional[str] = None
@@ -2374,6 +2725,7 @@ class FirstDivergenceV1:
             _validate_ordered_domain_identity(self.ordered_candidate_domain_identity, "ordered_candidate_domain_identity")
         if self.decision_request_family is not None:
             _validate_public_text(self.decision_request_family, "decision_request_family")
+            _validate_lower_token(self.decision_request_family, "decision_request_family")
         for field in FIRST_DIVERGENCE_SELECTION_FIELDS:
             value = getattr(self, field)
             if value is not None:
@@ -2461,7 +2813,7 @@ class FirstDivergenceV1:
         if self.teacher_selected_public_action_key is None or self.model_selected_public_action_key is None:
             raise CodecError(f"{stage} requires both selected keys")
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_field_dict(self) -> dict[str, Any]:
         self.validate()
         result: dict[str, Any] = {
             "schema_id": self.schema_id,
@@ -2480,42 +2832,7 @@ class FirstDivergenceV1:
                 result[field] = value.to_dict()
             else:
                 result[field] = value
-        result["first_divergence_identity"] = first_divergence_identity(self)
         return result
-
-    @classmethod
-    def from_dict(cls, payload: Any) -> "FirstDivergenceV1":
-        fields = (
-            "schema_id", "record_kind", "evaluation_job_identity",
-            "observed_public_decision_count",
-        ) + FIRST_DIVERGENCE_TAIL_FIELD_NAMES + ("first_divergence_identity",)
-        data = _strict_object(payload, fields, label="FirstDivergenceV1")
-        value = cls(
-            schema_id=data["schema_id"],
-            record_kind=data["record_kind"],
-            evaluation_job_identity=data["evaluation_job_identity"],
-            observed_public_decision_count=data["observed_public_decision_count"],
-            semantic_decision_identity=data["semantic_decision_identity"],
-            public_observation_digest=data["public_observation_digest"],
-            model_input_identity=data["model_input_identity"],
-            ordered_candidate_domain_identity=data["ordered_candidate_domain_identity"],
-            candidate_count=data["candidate_count"],
-            candidate_public_action_keys=None if data["candidate_public_action_keys"] is None else tuple(data["candidate_public_action_keys"]),
-            candidate_descriptors=None if data["candidate_descriptors"] is None else tuple(PublicCandidateDescriptorV1.from_dict(item) for item in data["candidate_descriptors"]),
-            score_vector_identity=data["score_vector_identity"],
-            score_f32_bits=None if data["score_f32_bits"] is None else tuple(data["score_f32_bits"]),
-            teacher_selected_public_action_key=data["teacher_selected_public_action_key"],
-            model_selected_public_action_key=data["model_selected_public_action_key"],
-            decision_request_family=data["decision_request_family"],
-            continuation_context=None if data["continuation_context"] is None else ContinuationContextV1.from_dict(data["continuation_context"]),
-            first_divergence_ordinal=data["first_divergence_ordinal"],
-            terminal_outcome=None if data["terminal_outcome"] is None else TerminalOutcomeV1.from_dict(data["terminal_outcome"]),
-            failure_before_divergence=None if data["failure_before_divergence"] is None else FailureBeforeDivergenceV1.from_dict(data["failure_before_divergence"]),
-        )
-        value.validate()
-        if data["first_divergence_identity"] != first_divergence_identity(value):
-            raise CodecError("FirstDivergenceV1 identity does not match its payload")
-        return value
 
 
 def _pack_optional_candidate_keys(value: Optional[tuple[str, ...]]) -> bytes:
@@ -2536,7 +2853,7 @@ def _pack_optional_score_bits(value: Optional[tuple[str, ...]]) -> bytes:
     return pack_u8(1) + pack_string_vector(value)
 
 
-def canonical_first_divergence_bytes(value: FirstDivergenceV1) -> bytes:
+def canonical_first_divergence_field_bytes(value: FirstDivergenceV1) -> bytes:
     if not isinstance(value, FirstDivergenceV1):
         raise CodecError("FirstDivergenceV1 has the wrong DTO type")
     value.validate()
@@ -2566,7 +2883,7 @@ def canonical_first_divergence_bytes(value: FirstDivergenceV1) -> bytes:
     )
 
 
-def decode_first_divergence_bytes(data: bytes) -> FirstDivergenceV1:
+def decode_first_divergence_field_bytes(data: bytes) -> FirstDivergenceV1:
     reader = _Reader(data)
     record = FirstDivergenceV1(
         schema_id=reader.string(),
@@ -2592,21 +2909,9 @@ def decode_first_divergence_bytes(data: bytes) -> FirstDivergenceV1:
     )
     reader.require_end()
     record.validate()
-    if canonical_first_divergence_bytes(record) != bytes(data):
+    if canonical_first_divergence_field_bytes(record) != bytes(data):
         raise CodecError("FirstDivergenceV1 payload is not canonical")
     return record
-
-
-def first_divergence_identity(value: FirstDivergenceV1) -> str:
-    return _digest(FIRST_DIVERGENCE_ID_PREFIX, canonical_first_divergence_bytes(value))
-
-
-def encode_first_divergence_json(value: FirstDivergenceV1) -> bytes:
-    return canonical_json_bytes(value.to_dict())
-
-
-def decode_first_divergence_json(data: bytes) -> FirstDivergenceV1:
-    return FirstDivergenceV1.from_dict(parse_canonical_json(data))
 
 
 # ---------------------------------------------------------------------------
@@ -2665,7 +2970,7 @@ def validate_offline_sample_order(records: Sequence[Mapping[str, Any]]) -> None:
         if partition not in ("validation", "test"):
             raise CodecError("offline sample has an invalid partition")
         identity = _record_identity(record, "bc_sample_identity")
-        _validate_any_content_identity(identity, "bc_sample_identity")
+        _validate_bc_sample_identity(identity, "bc_sample_identity")
         if partition == "validation" and previous_partition == "test":
             raise CodecError("offline sample validation record follows a test record")
         if partition != previous_partition:
@@ -2713,6 +3018,10 @@ __all__ = [
     "PublicChoiceV1",
     "PublicReferenceV1",
     "PublicCandidateDescriptorV1",
+    "canonical_public_action_key_bytes",
+    "public_action_key",
+    "is_public_action_key",
+    "validate_public_action_key",
     "ContinuationContextV1",
     "TerminalOutcomeV1",
     "FailureBeforeDivergenceV1",
@@ -2723,6 +3032,7 @@ __all__ = [
     "EvaluationIdentityV1",
     "EvaluationJobManifestV1",
     "EvaluationManifestV1",
+    "EvaluationContextV1",
     "FirstDivergenceV1",
     "canonical_public_choice_bytes",
     "canonical_public_reference_bytes",
@@ -2745,20 +3055,18 @@ __all__ = [
     "evaluation_job_manifest_identity",
     "canonical_evaluation_manifest_bytes",
     "evaluation_manifest_identity",
-    "canonical_first_divergence_bytes",
-    "decode_first_divergence_bytes",
-    "first_divergence_identity",
+    "canonical_first_divergence_field_bytes",
+    "decode_first_divergence_field_bytes",
     "default_evaluation_job",
     "default_evaluation_corpus",
     "default_evaluation_identity",
     "default_evaluation_contract_identity",
     "default_evaluation_job_manifest",
     "default_evaluation_manifest",
+    "default_evaluation_context",
     "implementation_acceptance_jobs",
     "encode_score_vector_json",
     "decode_score_vector_json",
-    "encode_evaluation_job_json",
-    "decode_evaluation_job_json",
     "encode_evaluation_corpus_json",
     "decode_evaluation_corpus_json",
     "encode_evaluation_identity_json",
@@ -2769,9 +3077,8 @@ __all__ = [
     "decode_evaluation_manifest_json",
     "encode_evaluation_contract_identity_json",
     "decode_evaluation_contract_identity_json",
-    "encode_first_divergence_json",
-    "decode_first_divergence_json",
     "select_score_vector",
+    "validate_evaluation_context",
     "validate_gameplay_job_order",
     "validate_first_divergence_order",
     "validate_offline_sample_order",

@@ -5,14 +5,68 @@ import unittest
 from tools.phase6 import task5_codec as codec
 
 
+TEST_EVALUATOR_SOURCE_COMMIT = "1" * 40
+
+
+def _job() -> codec.EvaluationJobV1:
+    return codec.default_evaluation_job(
+        evaluator_semantic_source_commit=TEST_EVALUATOR_SOURCE_COMMIT
+    )
+
+
+def _jobs() -> tuple[codec.EvaluationJobV1, ...]:
+    return codec.implementation_acceptance_jobs(
+        evaluator_semantic_source_commit=TEST_EVALUATOR_SOURCE_COMMIT
+    )
+
+
+def _corpus() -> codec.EvaluationCorpusV1:
+    return codec.default_evaluation_corpus(
+        evaluator_semantic_source_commit=TEST_EVALUATOR_SOURCE_COMMIT
+    )
+
+
+def _identity() -> codec.EvaluationIdentityV1:
+    return codec.default_evaluation_identity(
+        evaluator_semantic_source_commit=TEST_EVALUATOR_SOURCE_COMMIT
+    )
+
+
+def _manifest() -> codec.EvaluationManifestV1:
+    return codec.default_evaluation_manifest(
+        evaluator_semantic_source_commit=TEST_EVALUATOR_SOURCE_COMMIT
+    )
+
+
+def _job_manifest() -> codec.EvaluationJobManifestV1:
+    return codec.default_evaluation_job_manifest(
+        evaluator_semantic_source_commit=TEST_EVALUATOR_SOURCE_COMMIT
+    )
+
+
+def _context() -> codec.EvaluationContextV1:
+    return codec.default_evaluation_context(
+        evaluator_semantic_source_commit=TEST_EVALUATOR_SOURCE_COMMIT
+    )
+
+
 def _key(index: int) -> str:
-    return "public_action.v1." + format(index, "02x")
+    return codec.public_action_key(
+        codec.PublicCandidateDescriptorV1(
+            action_kind="card_selection",
+            choice=codec.PublicChoiceV1(kind=1, value=index % 2),
+            source_reference=codec.PublicReferenceV1(
+                reference_kind=0,
+                public_locator_token=f"visible:{index}",
+            ),
+        )
+    )
 
 
 def _descriptor(index: int = 0) -> codec.PublicCandidateDescriptorV1:
     return codec.PublicCandidateDescriptorV1(
         action_kind="card_selection",
-        choice=codec.PublicChoiceV1(kind=1, value=index, response_index=index),
+        choice=codec.PublicChoiceV1(kind=1, value=index % 2),
         source_reference=codec.PublicReferenceV1(
             reference_kind=0,
             public_locator_token=f"visible:{index}",
@@ -40,7 +94,7 @@ def _score_vector(count: int = 2) -> codec.ScoreVectorV1:
 def _divergence_record(
     kind: int = codec.DIVERGENCE,
 ) -> codec.FirstDivergenceV1:
-    job = codec.default_evaluation_job()
+    job = _job()
     if kind == codec.DIVERGENCE:
         scores = _score_vector()
         return codec.FirstDivergenceV1(
@@ -105,7 +159,7 @@ class Task5JsonTests(unittest.TestCase):
             codec.canonical_json_bytes({"score": 1.0})
 
     def test_manifest_json_rejects_missing_and_unknown_fields(self):
-        manifest = codec.default_evaluation_manifest()
+        manifest = _manifest()
         payload = manifest.to_dict()
         self.assertEqual(
             codec.decode_evaluation_manifest_json(
@@ -130,16 +184,25 @@ class Task5JsonTests(unittest.TestCase):
         with self.assertRaises(codec.CodecError):
             codec.parse_canonical_json(b'{"value":1}\r\n')
         record = codec.FirstDivergenceV1(
-            evaluation_job_identity=codec.evaluation_job_identity(codec.default_evaluation_job()),
+            evaluation_job_identity=codec.evaluation_job_identity(_job()),
             record_kind=codec.NO_DIVERGENCE_TERMINAL,
             terminal_outcome=codec.TerminalOutcomeV1(),
-        ).to_dict()
+        ).to_field_dict()
         record["terminal_outcome"]["CoreHost"] = "private"
         with self.assertRaises(codec.CodecError):
-            codec.decode_first_divergence_json(codec.canonical_json_bytes(record))
+            codec.TerminalOutcomeV1.from_dict(record["terminal_outcome"])
 
 
 class Task5PrimitiveAndIdentityTests(unittest.TestCase):
+    def test_public_action_keys_use_the_complete_accepted_descriptor_codec(self):
+        valid = _key(0)
+        self.assertTrue(codec.is_public_action_key(valid))
+        self.assertFalse(codec.is_public_action_key("public_action.v1.00"))
+        with self.assertRaises(codec.CodecError):
+            codec.PublicChoiceV1(kind=1, value=1, response_index=0).validate()
+        with self.assertRaises(codec.CodecError):
+            codec.PublicChoiceV1(kind=4, value=1, response_index=None).validate()
+
     def test_score_bits_preserve_zero_sign_and_reject_invalid_values(self):
         self.assertEqual(codec.score_f32_bits(0.0), "00000000")
         self.assertEqual(codec.score_f32_bits(-0.0), "80000000")
@@ -155,7 +218,7 @@ class Task5PrimitiveAndIdentityTests(unittest.TestCase):
                 codec.score_f32_bytes(value)
 
     def test_identity_preimages_start_with_domain_and_schema(self):
-        root = codec.default_evaluation_identity()
+        root = _identity()
         root_bytes = codec.canonical_evaluation_identity_bytes(root)
         self.assertTrue(
             root_bytes.startswith(
@@ -240,7 +303,7 @@ class Task5PrimitiveAndIdentityTests(unittest.TestCase):
 
 class Task5JobTests(unittest.TestCase):
     def test_fixed_implementation_acceptance_matrix_has_eight_ordered_jobs(self):
-        jobs = codec.implementation_acceptance_jobs()
+        jobs = _jobs()
         self.assertEqual(len(jobs), 8)
         self.assertEqual([job.deterministic_seed for job in jobs], [1, 1, 1, 1, 2, 2, 2, 2])
         self.assertEqual(
@@ -261,14 +324,14 @@ class Task5JobTests(unittest.TestCase):
         self.assertEqual(len(set(identities)), 8)
 
     def test_job_and_corpus_reencoding_is_deterministic(self):
-        job = codec.default_evaluation_job()
+        job = _job()
         first = codec.evaluation_job_identity(job)
         second = codec.evaluation_job_identity(dataclasses.replace(job))
         self.assertEqual(first, second)
-        corpus = codec.default_evaluation_corpus()
+        corpus = _corpus()
         self.assertEqual(
             codec.decode_evaluation_corpus_json(
-                codec.encode_evaluation_corpus_json(corpus)
+                codec.encode_evaluation_corpus_json(corpus, context=_context())
             ),
             corpus,
         )
@@ -277,8 +340,100 @@ class Task5JobTests(unittest.TestCase):
             codec.evaluation_corpus_identity(dataclasses.replace(corpus)),
         )
 
+    def test_evaluator_source_commit_is_explicit_and_semantic(self):
+        self.assertFalse(hasattr(codec, "ACCEPTED_T5A_BASE_COMMIT"))
+        with self.assertRaises(TypeError):
+            codec.default_evaluation_job()
+        with self.assertRaises(TypeError):
+            codec.default_evaluation_identity()
+        other = codec.default_evaluation_job(
+            evaluator_semantic_source_commit="2" * 40
+        )
+        self.assertNotEqual(
+            codec.evaluation_job_identity(_job()),
+            codec.evaluation_job_identity(other),
+        )
+
+    def test_dataset_and_split_use_their_exact_accepted_grammars(self):
+        corpus = dataclasses.replace(
+            _corpus(),
+            source_dataset_identity=(
+                "24b690ae989f9176fecc8931b86d282dbcd3cb0912044317c32a2a0815b8b936"
+            ),
+            dataset_split_identity="phase6_dataset_split.v1." + "2" * 64,
+        )
+        corpus.validate()
+        with self.assertRaises(codec.CodecError):
+            codec.EvaluationCorpusV1.from_dict(
+                dataclasses.replace(
+                    corpus,
+                    source_dataset_identity="dataset.v1." + "3" * 64,
+                ).to_dict()
+            )
+
+    def test_aggregate_context_binds_root_manifest_corpus_jobs_and_source(self):
+        context = _context()
+        jobs = context.jobs
+        corpus = context.corpus
+        root = context.root
+        job_manifest = context.job_manifest
+        manifest = context.manifest
+        self.assertIsNone(
+            codec.validate_evaluation_context(
+                root, manifest, corpus, job_manifest, jobs
+            )
+        )
+        with self.assertRaises(TypeError):
+            codec.encode_evaluation_job_manifest_json(job_manifest)
+        self.assertEqual(
+            codec.decode_evaluation_job_manifest_json(
+                codec.encode_evaluation_job_manifest_json(
+                    job_manifest,
+                    context=context,
+                )
+            ),
+            job_manifest,
+        )
+        with self.assertRaises(TypeError):
+            codec.encode_evaluation_manifest_json(manifest)
+        self.assertEqual(
+            codec.decode_evaluation_manifest_json(
+                codec.encode_evaluation_manifest_json(
+                    manifest,
+                    context=context,
+                )
+            ),
+            manifest,
+        )
+        with self.assertRaises(codec.CodecError):
+            codec.validate_evaluation_context(
+                root,
+                manifest,
+                corpus,
+                dataclasses.replace(
+                    job_manifest,
+                    evaluation_job_identities=tuple(
+                        reversed(job_manifest.evaluation_job_identities)
+                    ),
+                ),
+                jobs,
+            )
+        with self.assertRaises(codec.CodecError):
+            codec.validate_evaluation_context(
+                root,
+                manifest,
+                dataclasses.replace(
+                    corpus,
+                    evaluation_job_identities=tuple(
+                        reversed(corpus.evaluation_job_identities)
+                    ),
+                ),
+                job_manifest,
+                jobs,
+            )
+
     def test_wrong_job_binding_and_provenance_are_rejected_or_excluded(self):
-        job = codec.default_evaluation_job()
+        job = _job()
         with self.assertRaises(codec.CodecError):
             codec.canonical_evaluation_job_bytes(
                 dataclasses.replace(
@@ -298,26 +453,27 @@ class Task5JobTests(unittest.TestCase):
 
 
 class Task5FirstDivergenceTests(unittest.TestCase):
+    def test_t5a_does_not_issue_t5c_or_t5d_artifacts(self):
+        self.assertFalse(hasattr(codec, "encode_evaluation_job_json"))
+        self.assertFalse(hasattr(codec, "decode_evaluation_job_json"))
+        self.assertFalse(hasattr(codec.EvaluationJobV1, "to_dict"))
+        self.assertFalse(hasattr(codec.EvaluationJobV1, "from_dict"))
+        self.assertFalse(hasattr(codec, "encode_first_divergence_json"))
+        self.assertFalse(hasattr(codec, "decode_first_divergence_json"))
+        self.assertFalse(hasattr(codec, "first_divergence_identity"))
+        self.assertFalse(hasattr(codec.FirstDivergenceV1, "to_dict"))
+        self.assertFalse(hasattr(codec.FirstDivergenceV1, "from_dict"))
+
     def test_divergence_roundtrip_preserves_complete_public_frame(self):
         record = _divergence_record(codec.DIVERGENCE)
-        encoded = codec.canonical_first_divergence_bytes(record)
-        decoded = codec.decode_first_divergence_bytes(encoded)
+        encoded = codec.canonical_first_divergence_field_bytes(record)
+        decoded = codec.decode_first_divergence_field_bytes(encoded)
         self.assertEqual(decoded, record)
-        self.assertEqual(
-            codec.first_divergence_identity(record),
-            codec.first_divergence_identity(decoded),
-        )
-        self.assertEqual(
-            codec.decode_first_divergence_json(
-                codec.encode_first_divergence_json(record)
-            ),
-            record,
-        )
 
     def test_no_divergence_terminal_has_only_terminal_payload(self):
         record = _divergence_record(codec.NO_DIVERGENCE_TERMINAL)
-        encoded = codec.canonical_first_divergence_bytes(record)
-        decoded = codec.decode_first_divergence_bytes(encoded)
+        encoded = codec.canonical_first_divergence_field_bytes(record)
+        decoded = codec.decode_first_divergence_field_bytes(encoded)
         self.assertEqual(decoded, record)
         self.assertEqual(record.terminal_outcome.win_reason, 7)
         self.assertFalse(hasattr(record, "terminal_outcome_identity"))
@@ -326,12 +482,12 @@ class Task5FirstDivergenceTests(unittest.TestCase):
             public_observation_digest="b" * 64,
         )
         with self.assertRaises(codec.CodecError):
-            codec.canonical_first_divergence_bytes(invalid)
+            codec.canonical_first_divergence_field_bytes(invalid)
 
     def test_failure_before_public_decision_has_no_fabricated_public_fields(self):
         record = _divergence_record(codec.FAILURE_BEFORE_DIVERGENCE)
-        encoded = codec.canonical_first_divergence_bytes(record)
-        decoded = codec.decode_first_divergence_bytes(encoded)
+        encoded = codec.canonical_first_divergence_field_bytes(record)
+        decoded = codec.decode_first_divergence_field_bytes(encoded)
         self.assertEqual(decoded, record)
         self.assertEqual(
             decoded.failure_before_divergence.failure_stage,
@@ -344,11 +500,11 @@ class Task5FirstDivergenceTests(unittest.TestCase):
     def test_union_rejects_wrong_variant_presence_and_partial_bundles(self):
         divergence = _divergence_record(codec.DIVERGENCE)
         with self.assertRaises(codec.CodecError):
-            codec.canonical_first_divergence_bytes(
+            codec.canonical_first_divergence_field_bytes(
                 dataclasses.replace(divergence, model_input_identity=None)
             )
         with self.assertRaises(codec.CodecError):
-            codec.canonical_first_divergence_bytes(
+            codec.canonical_first_divergence_field_bytes(
                 dataclasses.replace(
                     divergence,
                     terminal_outcome=codec.TerminalOutcomeV1(),
@@ -356,7 +512,7 @@ class Task5FirstDivergenceTests(unittest.TestCase):
             )
         terminal = _divergence_record(codec.NO_DIVERGENCE_TERMINAL)
         with self.assertRaises(codec.CodecError):
-            codec.canonical_first_divergence_bytes(
+            codec.canonical_first_divergence_field_bytes(
                 dataclasses.replace(
                     terminal,
                     candidate_count=0,
@@ -364,7 +520,7 @@ class Task5FirstDivergenceTests(unittest.TestCase):
             )
         failure = _divergence_record(codec.FAILURE_BEFORE_DIVERGENCE)
         with self.assertRaises(codec.CodecError):
-            codec.canonical_first_divergence_bytes(
+            codec.canonical_first_divergence_field_bytes(
                 dataclasses.replace(
                     failure,
                     failure_before_divergence=codec.FailureBeforeDivergenceV1(
@@ -376,7 +532,7 @@ class Task5FirstDivergenceTests(unittest.TestCase):
                 )
             )
         with self.assertRaises(codec.CodecError):
-            codec.canonical_first_divergence_bytes(
+            codec.canonical_first_divergence_field_bytes(
                 dataclasses.replace(
                     divergence,
                     candidate_count=2,
@@ -384,7 +540,7 @@ class Task5FirstDivergenceTests(unittest.TestCase):
                 )
             )
         with self.assertRaises(codec.CodecError):
-            codec.canonical_first_divergence_bytes(
+            codec.canonical_first_divergence_field_bytes(
                 dataclasses.replace(
                     divergence,
                     score_vector_identity="phase6_score_vector.v1." + "e" * 64,
@@ -392,7 +548,7 @@ class Task5FirstDivergenceTests(unittest.TestCase):
                 )
             )
         with self.assertRaises(codec.CodecError):
-            codec.canonical_first_divergence_bytes(
+            codec.canonical_first_divergence_field_bytes(
                 dataclasses.replace(
                     divergence,
                     model_selected_public_action_key=_key(0),
@@ -401,7 +557,7 @@ class Task5FirstDivergenceTests(unittest.TestCase):
                 )
             )
         with self.assertRaises(codec.CodecError):
-            codec.canonical_first_divergence_bytes(
+            codec.canonical_first_divergence_field_bytes(
                 dataclasses.replace(divergence, candidate_count=1)
             )
 
@@ -429,7 +585,7 @@ class Task5FirstDivergenceTests(unittest.TestCase):
                     failure_stage=stage,
                 ),
             )
-            codec.canonical_first_divergence_bytes(record)
+            codec.canonical_first_divergence_field_bytes(record)
         inference = dataclasses.replace(
             base,
             **frame,
@@ -440,7 +596,7 @@ class Task5FirstDivergenceTests(unittest.TestCase):
             ),
             teacher_selected_public_action_key=_key(0),
         )
-        codec.canonical_first_divergence_bytes(inference)
+        codec.canonical_first_divergence_field_bytes(inference)
         selection = dataclasses.replace(
             inference,
             score_vector_identity=codec.score_vector_identity(_score_vector()),
@@ -450,7 +606,7 @@ class Task5FirstDivergenceTests(unittest.TestCase):
                 failure_stage="selection",
             ),
         )
-        codec.canonical_first_divergence_bytes(selection)
+        codec.canonical_first_divergence_field_bytes(selection)
         for stage in ("environment", "replay", "admission"):
             post_selection = dataclasses.replace(
                 selection,
@@ -460,7 +616,7 @@ class Task5FirstDivergenceTests(unittest.TestCase):
                     failure_stage=stage,
                 ),
             )
-            codec.canonical_first_divergence_bytes(post_selection)
+            codec.canonical_first_divergence_field_bytes(post_selection)
 
 
 class Task5JsonlTests(unittest.TestCase):
@@ -478,10 +634,10 @@ class Task5JsonlTests(unittest.TestCase):
                 codec.parse_canonical_jsonl(invalid)
 
     def test_jsonl_stream_order_is_not_worker_completion_order(self):
-        jobs = codec.implementation_acceptance_jobs()
+        jobs = _jobs()
         job_ids = tuple(codec.evaluation_job_identity(job) for job in jobs)
         records = [
-            job.to_dict() for job in jobs
+            job.identity_input_dict() for job in jobs
         ]
         self.assertEqual(
             codec.validate_gameplay_job_order(records, job_ids),
@@ -490,14 +646,14 @@ class Task5JsonlTests(unittest.TestCase):
         with self.assertRaises(codec.CodecError):
             codec.validate_gameplay_job_order(list(reversed(records)), job_ids)
         divergence_records = [
-            _divergence_record(codec.FAILURE_BEFORE_DIVERGENCE).to_dict()
+            _divergence_record(codec.FAILURE_BEFORE_DIVERGENCE).to_field_dict()
         ]
         divergence_records[0]["evaluation_job_identity"] = job_ids[3]
         divergence_records.append(
             dataclasses.replace(
                 _divergence_record(codec.NO_DIVERGENCE_TERMINAL),
                 evaluation_job_identity=job_ids[7],
-            ).to_dict()
+            ).to_field_dict()
         )
         self.assertIsNone(
             codec.validate_first_divergence_order(
