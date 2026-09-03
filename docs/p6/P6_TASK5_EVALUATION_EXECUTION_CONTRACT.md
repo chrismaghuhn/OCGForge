@@ -101,6 +101,8 @@ the deterministic orchestration subset:
     explicit_not_run_gates
     forbidden_scope
     task5_implementation_authorized
+    lifecycle
+    jsonl_stream_order
 
 The following overlapping values MUST agree exactly between this document and
 the JSON plan:
@@ -117,6 +119,8 @@ the JSON plan:
 | not-run set | every P6-G00 through P6-G18 | explicit_not_run_gates |
 | forbidden scope | the exact token list in the Scope boundary section | forbidden_scope |
 | implementation authorization | NO for Task-5 implementation | task5_implementation_authorized |
+| lifecycle | the Task5 tooling / Task6 / Task7 lifecycle table | lifecycle |
+| JSONL order | the canonical stream-order token block | jsonl_stream_order |
 
 A future consistency validator MUST:
 
@@ -140,17 +144,28 @@ orchestration value changes, the JSON plan in the same reviewed change.
 The ordered prerequisite_contract_ids value is:
 
     ocgforge.public_environment_observation.v1
+    ocgforge.public_safe_state.v1
     ocgforge.public_action_identity.v1
+    ocgforge.public_candidate_domain.v1
+    ocgforge.public_semantic_decision_identity.v1
     ocgforge.episodic_environment.v2
     ocgforge.trusted_trajectory.v1
     ocgforge.admission_receipt.v1
     ocgforge.dataset_manifest.v1
     ocgforge.policy_provenance.v1
+    ocgforge.policy.teacher_core.v1
+    ocgforge.policy.deterministic_lexicographic_argmax.v1
+    ocgforge.no_policy_rng.v1
     ocgforge.model_logical_input.v1
     ocgforge.model_encoded_input.v1
     ocgforge.model_batch_layout.v1
+    ocgforge.model_card_vocabulary.v1
+    ocgforge.model_input_identity.v1
     ocgforge.model_supervision_sample.v1
+    ocgforge.phase6.model_input_inspection.v1
     ocgforge.phase6.bc_contract.v1
+    ocgforge.phase6.bc_candidate_scorer.v1
+    ocgforge.phase6.bc_objective.v1
     ocgforge.phase6.dataset_membership.v1
     ocgforge.phase6.dataset_split.v1
     ocgforge.phase6.checkpoint_manifest.v1
@@ -159,6 +174,8 @@ The ordered prerequisite_contract_ids value is:
     ocgforge.phase6.inference_request.v1
     ocgforge.phase6.inference_response.v1
     ocgforge.phase6.inference_numeric.v1
+    ocgforge.phase6.ordered_candidate_domain.v1
+    ocgforge.phase6.numeric.f32_ieee754_be.v1
     ocgforge.phase6.bc.inference_tiebreak.v1
     ocgforge.phase6.task4.numeric_projection.v1
     ocgforge.phase6.task4.smoke_corpus.v2
@@ -252,6 +269,7 @@ content hash is not issued by this documentation task.
 
 | Artifact or nested value | Contract/schema identity | Authority classification |
 | --- | --- | --- |
+| root evaluation identity | ocgforge.phase6.evaluation_identity.v1; phase6_evaluation.v1.<sha256> | authoritative root binding of one evaluation |
 | evaluation manifest | ocgforge.phase6.task5.evaluation_manifest.v1; phase6_evaluation_manifest.v1.<sha256> | authoritative orchestration and semantic bindings |
 | top-level evaluation summary | ocgforge.phase6.task5.evaluation_summary.v1; phase6_evaluation_summary.v1.<sha256> | authoritative typed summary/index |
 | evaluation job manifest | ocgforge.phase6.task5.evaluation_job_manifest.v1; phase6_evaluation_job_manifest.v1.<sha256> | authoritative ordered job population |
@@ -274,6 +292,41 @@ content hash is not issued by this documentation task.
 The Task-4B checkpoint, Task-4B smoke evidence, accepted DatasetManifest,
 admission receipts, and Phase-5 values are external accepted inputs. They are
 not rewritten into Task-5 output authority.
+
+### Canonical JSONL streams
+
+Every authoritative JSONL stream uses the same file contract:
+
+    one canonical JSON object per physical line
+    UTF-8 without BOM
+    LF byte 0x0a as the only line terminator
+    no blank lines, leading/trailing whitespace, or multiline objects
+    ensure_ascii=true, allow_nan=false, sort_keys=true, separators=(",", ":")
+    no authoritative score or metric encoded as an unvalidated JSON float
+
+Each line is independently schema-validated and identity-validated. A line
+failure rejects the stream; a reader MUST NOT skip, reorder, repair, or
+deduplicate it. The stream itself retains the file-level order below:
+
+| Stream | Record contract | Exact record order |
+| --- | --- | --- |
+| offline/samples.jsonl | ocgforge.phase6.offline_sample.v1 | all validation records first, then all test records; within each partition, ascending unsigned UTF-8 bc_sample_identity |
+| gameplay/jobs.jsonl | ocgforge.phase6.task5.evaluation_job.v1 | exactly the ordered evaluation_job_identities vector in the evaluation job manifest; the initial eight records use matrix order 0 through 7 |
+| divergence/first_divergences.jsonl | ocgforge.phase6.first_divergence.v1 | one record for each started job, in evaluation job manifest order; an early failure uses FAILURE_BEFORE_DIVERGENCE, and an unstarted job has no divergence record and remains NOT_RUN in its job result |
+
+The offline stream contains one result for every eligible validation/test
+sample, including rejected and unscored results. It never contains training
+samples. The gameplay job stream is the frozen schedule, not a completion
+log, so every planned job appears even when its result later fails. The
+first-divergence stream contains at most one record per started job and never
+appends later divergences. File order is not derived from worker completion
+order, filesystem traversal, PID, or wall time.
+
+The machine-plan jsonl_stream_order value is exactly:
+
+    offline_samples = validation_then_test_then_ascending_unsigned_utf8_bc_sample_identity
+    gameplay_jobs = evaluation_job_manifest_vector_order
+    first_divergences = started_jobs_in_evaluation_job_manifest_vector_order
 
 ## 5. Canonical serialization and identity separation
 
@@ -302,15 +355,33 @@ identities must also validate against the expected context.
 
 ### Semantic evaluation identities
 
-The top-level evaluation identity is:
+All Task-5 content identities use the primitive encoding in this section.
+Every field below is encoded exactly once, in the listed order. A named vector
+is encoded as a u32be count followed by its entries in the listed order. A
+named optional value is encoded as presence:u8 followed by its value only when
+present. No grouped phrase below is an implicit hash input.
+
+The root evaluation identity is:
 
     phase6_evaluation.v1.<lowercase hexadecimal SHA-256>
 
-Its canonical fields, in order, are evaluation_contract_identity,
-evaluation_corpus_identity, checkpoint_identity, evaluator_semantic_version,
-evaluator_semantic_source_commit, and the ordered population identities
-referenced by the manifest. The top-level identity is a container binding; it
-does not replace any sub-identity.
+Its contract/schema identity is ocgforge.phase6.evaluation_identity.v1. Its
+canonical preimage is EvaluationIdentityV1 with these required fields in
+exact order:
+
+    0 identity_domain:string = ocgforge.phase6.evaluation_identity.v1
+    1 identity_schema:string = ocgforge.phase6.evaluation_identity.v1
+    2 evaluation_contract_identity:string
+    3 evaluation_corpus_identity:string
+    4 checkpoint_identity:string
+    5 evaluator_semantic_version:string
+    6 evaluator_semantic_source_commit:string
+
+The root identity is an input/container identity. Teacher-state and
+BC-induced population identities are output references in the manifest and
+summary; they do not enter this root preimage. This prevents a result
+publication from changing the identity of the evaluation inputs and removes
+any identity cycle.
 
 #### evaluation_contract_identity
 
@@ -318,34 +389,87 @@ The evaluation contract identity is:
 
     phase6_evaluation_contract.v1.<lowercase hexadecimal SHA-256>
 
-It identifies the semantic evaluation rules, not one run or one worker. Its
-canonical fields, in order, are:
+It identifies the exact semantic rules for this Task-5 fixed curriculum. Its
+contract/schema identity is ocgforge.phase6.evaluation_contract_identity.v1.
+Its canonical preimage is EvaluationContractIdentityV1 with these fields in
+exact order:
 
-    identity domain = ocgforge.phase6.evaluation_contract_identity.v1
-    identity schema = ocgforge.phase6.evaluation_contract_identity.v1
-    human contract identity
-    evaluation manifest schema identity
-    evaluation job manifest schema identity
-    evaluation job schema identity
-    offline metrics schema identity
-    offline slice schema identity
-    gameplay job-result schema identity
-    gameplay summary schema identity
-    first-divergence schema identity
-    distribution-shift schema identity
-    report derivation schema identity
-    score-vector schema identity
-    accepted inference numeric identity
-    accepted binary32 codec identity
-    accepted inference tie-break identity
-    accepted Wilson-95 metric identity
-    fixed matchup identity
-    fixed rules-bundle identity
-    fixed deck-role identities in role order
-    failure/quarantine semantics = this human contract identity
-    public/privacy semantics = accepted Phase-5 public-boundary identities
-    replay/admission path identities = trusted_trajectory.v1 and admission_receipt.v1
-    separate-population identity = ocgforge.phase6.distribution_shift.v1
+    0 identity_domain:string = ocgforge.phase6.evaluation_contract_identity.v1
+    1 identity_schema:string = ocgforge.phase6.evaluation_contract_identity.v1
+    2 human_contract_id:string = ocgforge.phase6.task5.evaluation_execution_contract.v1
+    3 evaluation_manifest_schema_id:string = ocgforge.phase6.task5.evaluation_manifest.v1
+    4 evaluation_summary_schema_id:string = ocgforge.phase6.task5.evaluation_summary.v1
+    5 evaluation_job_manifest_schema_id:string = ocgforge.phase6.task5.evaluation_job_manifest.v1
+    6 evaluation_job_schema_id:string = ocgforge.phase6.task5.evaluation_job.v1
+    7 offline_metrics_schema_id:string = ocgforge.phase6.offline_metrics.v1
+    8 offline_slice_schema_id:string = ocgforge.phase6.offline_slice.v1
+    9 offline_sample_schema_id:string = ocgforge.phase6.offline_sample.v1
+    10 score_vector_schema_id:string = ocgforge.phase6.score_vector.v1
+    11 gameplay_job_result_schema_id:string = ocgforge.phase6.gameplay_job_result.v1
+    12 gameplay_summary_schema_id:string = ocgforge.phase6.gameplay_summary.v1
+    13 replay_admission_summary_schema_id:string = ocgforge.phase6.task5.replay_admission_summary.v1
+    14 first_divergence_schema_id:string = ocgforge.phase6.first_divergence.v1
+    15 distribution_shift_schema_id:string = ocgforge.phase6.distribution_shift.v1
+    16 report_schema_id:string = ocgforge.phase6.task5.report.v1
+    17 public_environment_observation_contract_id:string = ocgforge.public_environment_observation.v1
+    18 public_safe_state_contract_id:string = ocgforge.public_safe_state.v1
+    19 public_action_identity_contract_id:string = ocgforge.public_action_identity.v1
+    20 public_candidate_domain_contract_id:string = ocgforge.public_candidate_domain.v1
+    21 public_semantic_decision_identity_contract_id:string = ocgforge.public_semantic_decision_identity.v1
+    22 logical_model_input_contract_id:string = ocgforge.model_logical_input.v1
+    23 encoded_model_input_contract_id:string = ocgforge.model_encoded_input.v1
+    24 batch_layout_contract_id:string = ocgforge.model_batch_layout.v1
+    25 card_vocabulary_contract_id:string = ocgforge.model_card_vocabulary.v1
+    26 model_input_identity_contract_id:string = ocgforge.model_input_identity.v1
+    27 supervision_sample_contract_id:string = ocgforge.model_supervision_sample.v1
+    28 model_input_inspection_contract_id:string = ocgforge.phase6.model_input_inspection.v1
+    29 bc_contract_id:string = ocgforge.phase6.bc_contract.v1
+    30 bc_candidate_scorer_contract_id:string = ocgforge.phase6.bc_candidate_scorer.v1
+    31 bc_objective_contract_id:string = ocgforge.phase6.bc_objective.v1
+    32 inference_tiebreak_contract_id:string = ocgforge.phase6.bc.inference_tiebreak.v1
+    33 dataset_membership_contract_id:string = ocgforge.phase6.dataset_membership.v1
+    34 dataset_split_contract_id:string = ocgforge.phase6.dataset_split.v1
+    35 checkpoint_manifest_contract_id:string = ocgforge.phase6.checkpoint_manifest.v1
+    36 checkpoint_artifact_contract_id:string = ocgforge.phase6.checkpoint_artifact.v1
+    37 canonical_weight_export_contract_id:string = ocgforge.phase6.canonical_weight_export.v1
+    38 inference_request_contract_id:string = ocgforge.phase6.inference_request.v1
+    39 inference_response_contract_id:string = ocgforge.phase6.inference_response.v1
+    40 inference_numeric_contract_id:string = ocgforge.phase6.inference_numeric.v1
+    41 ordered_candidate_domain_contract_id:string = ocgforge.phase6.ordered_candidate_domain.v1
+    42 f32_codec_id:string = ocgforge.phase6.numeric.f32_ieee754_be.v1
+    43 task4_numeric_projection_contract_id:string = ocgforge.phase6.task4.numeric_projection.v1
+    44 task4_smoke_corpus_contract_id:string = ocgforge.phase6.task4.smoke_corpus.v2
+    45 task4_corpus_authority_contract_id:string = ocgforge.phase6.task4.corpus_authority.v1
+    46 task4b_smoke_evidence_contract_id:string = ocgforge.phase6.task4b.smoke_evidence.v1
+    47 task4b_recovery_contract_id:string = ocgforge.phase6.task4b.acceptance_recovery.v1
+    48 policy_provenance_contract_id:string = ocgforge.policy_provenance.v1
+    49 teacher_producer_identity:string = ocgforge.policy.teacher_core.v1
+    50 teacher_sampling_contract_identity:string = ocgforge.policy.deterministic_lexicographic_argmax.v1
+    51 teacher_rng_contract_identity:string = ocgforge.no_policy_rng.v1
+    52 teacher_strategy_profile_identities:vector<string> = [ocgforge.strategy_profile.v1.7a96ab091b52b8988a6873beb3b7d58575d5ea6f0e0aa7bf5059a1c87a748f74, ocgforge.strategy_profile.v1.3499e34962230eda64e9ef52af53433272cda5ca45ffae61258e0809dbfefa55]
+    53 teacher_binding_identities:vector<string> = [ocgforge.teacher_policy_binding.v1.4f78a100a75f98b8c5a7845198984a8ea34db8b6a75b6fde396c19d2b3ca6d0c, ocgforge.teacher_policy_binding.v1.ecbf2ae56dab29e93f319399a08930a3700466cd3d9ab553ef964fc109846c56]
+    54 teacher_policy_artifact_identities:vector<string> = [policy_artifact.v1.52f56b550a2a674430439d3db104a0b2281b69df79891573e4d71967e3d4310d, policy_artifact.v1.a68642ee28f0dd53ebe4908994664f178b3d5cea6fb7c06421990729cd9c4527]
+    55 gameplay_metrics_identity:string = ocgforge.phase6.gameplay_metrics.wilson_95.v1
+    56 fixed_matchup_id:string = ocgforge.matchup.swordsoul_salamangreat.v1
+    57 fixed_rules_bundle_id:string = 3adfe6b4cfe2c2805e50b389fc0eb4e70a3b0b6107436614d328fddc865e585f
+    58 fixed_format_id:string = TCG_ADVANCED_2026_05_18
+    59 fixed_duel_mode_id:string = DUEL_MODE_MR5
+    60 fixed_duel_flags:u64 = 190464
+    61 fixed_deck_role_0_id:string = ocgforge.swordsoul_tenyi.ml_v1
+    62 fixed_deck_role_0_content_sha256:string = 8ee4b699de19ff256e388d46f35b8696a60ff6ec59f0324f060a2468876711b7
+    63 fixed_deck_role_1_id:string = ocgforge.salamangreat.ml_v1
+    64 fixed_deck_role_1_content_sha256:string = 6041abe0a59463d0715ae1da9100090ad487de02a02794e8ec0686d4c0513188
+    65 failure_policy_token:string = ocgforge.phase6.task5.fail_closed_no_policy_fallback.v1
+    66 privacy_policy_token:string = ocgforge.phase6.task5.public_model_audit_boundary.v1
+    67 replay_path_contract_ids:vector<string> = [ocgforge.episodic_environment.v2, ocgforge.trusted_trajectory.v1, ocgforge.admission_receipt.v1]
+    68 population_separation_token:string = ocgforge.phase6.task5.separate_teacher_bc_populations.v1
+    69 jsonl_stream_policy_token:string = ocgforge.phase6.task5.canonical_jsonl_stream.v1
+
+Fields 65, 66, 68, and 69 are literal semantic tokens owned by this
+contract, not external prerequisites or independent artifact authorities.
+Their meanings are, respectively, no policy fallback, public model-audit
+boundary, separate Teacher/BC populations, and canonical JSONL stream
+serialization.
 
 Changing any semantic field above requires a new evaluation contract version or
 an explicit migration. Framework, device, worker, PID, path, and wall time do
@@ -359,30 +483,47 @@ One job identity is:
 
 Its canonical fields, in order, are:
 
-    identity domain = ocgforge.phase6.evaluation_job_identity.v1
-    identity schema = ocgforge.phase6.evaluation_job_identity.v1
-    evaluation schema/version
-    evaluation_contract_identity
-    evaluation corpus profile identity
-    matchup identity
-    rules-bundle identity
-    seat/deck-role assignment
-    locked deck identity for seat 0
-    locked deck identity for seat 1
-    checkpoint identity
-    Phase-5 logical model-input contract identity
-    Phase-5 encoded model-input contract identity
-    Phase-5 batch-layout contract identity
-    CardVocabulary identity
-    Teacher policy producer identity
-    Teacher policy artifact/binding identity for each acting role
-    exact opponent policy identity for each opposing role
-    dataset identity with explicit absence when not relevant
-    dataset split identity with explicit absence when not relevant
-    deterministic seed as u64
-    starting-player assignment
-    evaluator semantic version
-    evaluator semantic source commit
+    0 identity_domain:string = ocgforge.phase6.evaluation_job_identity.v1
+    1 identity_schema:string = ocgforge.phase6.evaluation_job_identity.v1
+    2 evaluation_schema_id:string = ocgforge.phase6.task5.evaluation_job.v1
+    3 evaluation_schema_version:string = v1
+    4 evaluation_contract_identity:string
+    5 corpus_profile_identity:string
+    6 job_kind:string = GAMEPLAY
+    7 matchup_id:string = ocgforge.matchup.swordsoul_salamangreat.v1
+    8 rules_bundle_id:string = 3adfe6b4cfe2c2805e50b389fc0eb4e70a3b0b6107436614d328fddc865e585f
+    9 format_id:string = TCG_ADVANCED_2026_05_18
+    10 duel_mode_id:string = DUEL_MODE_MR5
+    11 duel_flags:u64 = 190464
+    12 seat_0_deck_role_id:string
+    13 seat_0_deck_content_sha256:string
+    14 seat_1_deck_role_id:string
+    15 seat_1_deck_content_sha256:string
+    16 evaluated_policy_checkpoint_identity:string
+    17 evaluated_policy_seat:u8
+    18 evaluated_policy_deck_role_id:string
+    19 opponent_policy_seat:u8
+    20 opponent_policy_deck_role_id:string
+    21 phase5_logical_model_input_contract_id:string = ocgforge.model_logical_input.v1
+    22 phase5_encoded_model_input_contract_id:string = ocgforge.model_encoded_input.v1
+    23 phase5_batch_layout_contract_id:string = ocgforge.model_batch_layout.v1
+    24 card_vocabulary_contract_id:string = ocgforge.model_card_vocabulary.v1
+    25 teacher_policy_producer_id:string = ocgforge.policy.teacher_core.v1
+    26 teacher_policy_sampling_id:string = ocgforge.policy.deterministic_lexicographic_argmax.v1
+    27 teacher_policy_rng_id:string = ocgforge.no_policy_rng.v1
+    28 teacher_policy_artifact_role_0_id:string
+    29 teacher_policy_binding_role_0_id:string
+    30 teacher_policy_artifact_role_1_id:string
+    31 teacher_policy_binding_role_1_id:string
+    32 opponent_policy_artifact_id:string
+    33 opponent_policy_binding_id:string
+    34 opponent_policy_role_id:string
+    35 source_dataset_identity:optional string
+    36 dataset_split_identity:optional string
+    37 deterministic_seed:u64
+    38 starting_player:u8
+    39 evaluator_semantic_version:string
+    40 evaluator_semantic_source_commit:string
 
 The seat/deck-role assignment is a semantic token, not a seat number inferred
 from map order. The starting-player assignment is explicit. For offline-only
@@ -404,42 +545,58 @@ One fixed population identity is:
 
 Its canonical fields, in order, are:
 
-    identity domain = ocgforge.phase6.evaluation_corpus_identity.v1
-    identity schema = ocgforge.phase6.evaluation_corpus_identity.v1
-    evaluation_contract_identity
-    corpus profile identity
-    fixed matchup, rules bundle, and locked deck-role identities
-    checkpoint identity when the corpus evaluates a checkpoint
-    dataset and split identities when the corpus contains offline samples
-    ordered vector of evaluation_job_identity values
+    0 identity_domain:string = ocgforge.phase6.evaluation_corpus_identity.v1
+    1 identity_schema:string = ocgforge.phase6.evaluation_corpus_identity.v1
+    2 evaluation_contract_identity:string
+    3 corpus_profile_identity:string
+    4 corpus_kind:string
+    5 matchup_id:string = ocgforge.matchup.swordsoul_salamangreat.v1
+    6 rules_bundle_id:string = 3adfe6b4cfe2c2805e50b389fc0eb4e70a3b0b6107436614d328fddc865e585f
+    7 format_id:string = TCG_ADVANCED_2026_05_18
+    8 duel_mode_id:string = DUEL_MODE_MR5
+    9 duel_flags:u64 = 190464
+    10 deck_role_0_id:string = ocgforge.swordsoul_tenyi.ml_v1
+    11 deck_role_0_content_sha256:string = 8ee4b699de19ff256e388d46f35b8696a60ff6ec59f0324f060a2468876711b7
+    12 deck_role_1_id:string = ocgforge.salamangreat.ml_v1
+    13 deck_role_1_content_sha256:string = 6041abe0a59463d0715ae1da9100090ad487de02a02794e8ec0686d4c0513188
+    14 checkpoint_identity:string
+    15 source_dataset_identity:optional string
+    16 dataset_split_identity:optional string
+    17 evaluation_job_identities:vector<string> in exact job-manifest order
 
-The ordered job vector is the explicit corpus schedule. Reordering jobs
-changes the corpus identity but not the identity of an unchanged individual
-job. The implementation/acceptance and meaningful fixed-matchup profiles are
-distinct even when they later use overlapping semantic dimensions.
+The corpus profile identity is exactly one of:
+
+    ocgforge.phase6.task5.evaluation_corpus.implementation_acceptance.v1
+    ocgforge.phase6.task5.evaluation_corpus.meaningful_fixed_matchup.v1
+
+The corpus kind is exactly IMPLEMENTATION_ACCEPTANCE or
+MEANINGFUL_FIXED_MATCHUP. The ordered job vector is the explicit schedule.
+Reordering jobs changes the corpus identity but not the identity of an
+unchanged individual job. Dataset and split optionals use presence:u8 and
+are present only when the corpus includes offline samples.
 
 ### Identity-input applicability matrix
 
 The identity layers intentionally do not all repeat the same fields. This
 matrix is normative and makes every requested identity input explicit:
 
-| Semantic input | evaluation_contract_identity | evaluation_job_identity | evaluation_corpus_identity | first_divergence_identity |
-| --- | --- | --- | --- | --- |
-| evaluation schema/version | direct contract field | direct field | direct through contract and job vector | inherited from job and record schema |
-| rules bundle, matchup, and locked decks | fixed contract field | direct fields and explicit seat assignment | direct fixed fields and job vector | inherited from the job |
-| checkpoint identity | not a contract field; varies by evaluation | direct field | direct field when checkpointed | inherited from the job |
-| Phase-5 model/input contract identities | direct contract field | direct fields | inherited through contract and jobs | inherited through the job |
-| DatasetManifest and split identity | not a universal contract field | present for offline jobs, explicit absent for gameplay jobs | present for offline populations, explicit absent otherwise | inherited from the job when relevant |
-| Teacher and opponent policy identities | fixed policy rule and identity family | direct producer, binding, artifact, and opponent fields | inherited through the ordered job vector | inherited from the job |
-| seed and job definition | not a run field | direct deterministic u64 seed and job definition | ordered job-identity vector | inherited from the job |
-| seat/deck-role and starting-player assignment | fixed role vocabulary only | direct explicit fields | inherited through the ordered job vector | inherited from the job |
-| evaluator semantic version/source identity | contract rule for immutable source binding | direct version and immutable source commit | inherited through jobs and top-level binding | inherited from the job |
+| Semantic input | evaluation_identity | evaluation_contract_identity | evaluation_job_identity | evaluation_corpus_identity | first_divergence_identity |
+| --- | --- | --- | --- | --- | --- |
+| evaluation schema/version | direct fields 0–1 | direct fields 0–1 | direct fields 2–3 | direct fields 0–1 and job vector | direct record schema and inherited job schema |
+| rules bundle, matchup, and locked decks | inherited through corpus | direct fields 56–64 | direct fields 7–15 | direct fields 5–13 | inherited through the job |
+| checkpoint identity | direct field 4 | not a contract field; supplied by the concrete evaluation | direct field 16 | direct field 14 | inherited through the job |
+| Phase-5 model/input contract identities | inherited through contract | direct fields 17–27 | direct fields 21–24 | inherited through contract and jobs | inherited through the job |
+| DatasetManifest and split identity | inherited through corpus when offline | fixed applicability rules only | optional fields 35–36 | optional fields 15–16 | inherited through the job when present |
+| Teacher and opponent policy identities | inherited through corpus/jobs | direct fields 48–54 | direct fields 25–34 | inherited through the ordered job vector | inherited through the job |
+| seed and job definition | inherited through corpus | not a run field | direct field 37 and the job definition | ordered job-identity vector | inherited through the job |
+| seat/deck-role and starting-player assignment | inherited through corpus/jobs | fixed role fields 61–64 | direct fields 12–20 and 38 | inherited through the ordered job vector | inherited through the job |
+| evaluator semantic version/source identity | direct fields 5–6 | immutable-source rule only | direct fields 39–40 | inherited through jobs | inherited through the job |
 
 “Not a contract field” means the value is deliberately supplied by the
 concrete job or corpus identity; it is not omitted from the evaluation
 identity. “Inherited” means the referenced identity is included exactly once
 at its owning layer and is not duplicated with a second, independently
-canonicalized value.
+canonicalized value. Field numbers refer to the exact preimages below.
 
 ### Semantic versus provenance-only values
 
@@ -781,63 +938,159 @@ and BC from the same immutable initial job identity and compares the semantic
 public decision sequence. The first record is the earliest semantic
 divergence; later divergences are not substituted for it.
 
-The canonical record retains:
+FirstDivergenceV1 is a tagged union with exactly three record kinds:
 
-    evaluation_job_identity
-    semantic decision identity when the public frame provides it
-    public observation digest
-    model-input identity
-    complete ordered candidate-domain identity
-    candidate count
-    candidate public_action_key vector in source order
-    candidate action kinds and accepted public candidate fields in source order
-    exact score_f32_bits vector in source order
-    score-vector identity
-    Teacher-selected public_action_key
-    model-selected public_action_key
-    decision/request family
-    continuation versus non-continuation context
-    first-divergence ordinal
-    explicit record kind
-    explicit failure-before-divergence value when applicable
+    record_kind:u8 = 0  DIVERGENCE
+    record_kind:u8 = 1  NO_DIVERGENCE_TERMINAL
+    record_kind:u8 = 2  FAILURE_BEFORE_DIVERGENCE
 
-The allowed record kinds are DIVERGENCE,
-NO_DIVERGENCE_TERMINAL, and FAILURE_BEFORE_DIVERGENCE. A failure-before-
-divergence record has a stable public failure stage and error code. Model
-scores and model-selected key are absent when no model response was accepted;
-the evaluator never invents a candidate or a divergence. If no public
-decision identity exists before a failure, the field is explicitly absent
-with the failure record kind, not silently replaced by an internal ID.
+The common canonical prefix is the following, in exact order:
 
-The public candidate descriptor vector contains, in source order, only the
-accepted public fields action_kind, optional choice, optional source_reference,
-optional target_reference, optional phase, optional position, optional
-source_index, optional amount, continuation_operation, and
-submits_engine_response. Optional presence is preserved. public_action_key is
-the separate routing vector. Internal semantic keys and private locators are
-never descriptor fields.
+    0 schema_id:string = ocgforge.phase6.first_divergence.v1
+    1 record_kind:u8
+    2 evaluation_job_identity:string
+    3 observed_public_decision_count:u64
 
-The first-divergence identity canonical fields, in order, are:
+All common-prefix fields are REQUIRED for all three record kinds:
 
-    identity domain = ocgforge.phase6.first_divergence.v1
-    identity schema = ocgforge.phase6.first_divergence.v1
-    evaluation_job_identity
-    record kind
-    first-divergence ordinal
-    semantic decision identity optional value
-    public observation digest
-    model-input identity
-    ordered candidate-domain identity
-    candidate count
-    ordered public_action_key vector
-    ordered public candidate descriptor vector
-    ordered score_f32_bits vector
-    score-vector identity
-    Teacher-selected public_action_key optional value
-    model-selected public_action_key optional value
-    decision/request family
-    continuation context
-    failure-before-divergence value optional
+| Common field | DIVERGENCE | NO_DIVERGENCE_TERMINAL | FAILURE_BEFORE_DIVERGENCE |
+| --- | --- | --- | --- |
+| schema_id:string | REQUIRED | REQUIRED | REQUIRED |
+| record_kind:u8 | REQUIRED | REQUIRED | REQUIRED |
+| evaluation_job_identity:string | REQUIRED | REQUIRED | REQUIRED |
+| observed_public_decision_count:u64 | REQUIRED | REQUIRED | REQUIRED |
+
+The union tail follows the prefix in this exact order. Every tail field has
+one presence:u8 byte. Presence 1 is followed by the declared payload;
+presence 0 has no payload. REQUIRED means presence must be 1,
+MUST_BE_ABSENT means presence must be 0, and EXPLICIT_OPTIONAL means the
+presence byte is determined by the exact failure/availability state below.
+
+| Tail field | DIVERGENCE | NO_DIVERGENCE_TERMINAL | FAILURE_BEFORE_DIVERGENCE |
+| --- | --- | --- | --- |
+| semantic_decision_identity:optional string | REQUIRED | MUST_BE_ABSENT | EXPLICIT_OPTIONAL |
+| public_observation_digest:optional string | REQUIRED | MUST_BE_ABSENT | EXPLICIT_OPTIONAL |
+| model_input_identity:optional string | REQUIRED | MUST_BE_ABSENT | EXPLICIT_OPTIONAL |
+| ordered_candidate_domain_identity:optional string | REQUIRED | MUST_BE_ABSENT | EXPLICIT_OPTIONAL |
+| candidate_count:optional u32 | REQUIRED | MUST_BE_ABSENT | EXPLICIT_OPTIONAL |
+| candidate_public_action_keys:optional vector<string> | REQUIRED | MUST_BE_ABSENT | EXPLICIT_OPTIONAL |
+| candidate_descriptors:optional vector<PublicCandidateDescriptorV1> | REQUIRED | MUST_BE_ABSENT | EXPLICIT_OPTIONAL |
+| score_vector_identity:optional string | REQUIRED | MUST_BE_ABSENT | EXPLICIT_OPTIONAL |
+| score_f32_bits:optional vector<string> | REQUIRED | MUST_BE_ABSENT | EXPLICIT_OPTIONAL |
+| teacher_selected_public_action_key:optional string | REQUIRED | MUST_BE_ABSENT | EXPLICIT_OPTIONAL |
+| model_selected_public_action_key:optional string | REQUIRED | MUST_BE_ABSENT | EXPLICIT_OPTIONAL |
+| decision_request_family:optional string | REQUIRED | MUST_BE_ABSENT | EXPLICIT_OPTIONAL |
+| continuation_context:optional ContinuationContextV1 | REQUIRED | MUST_BE_ABSENT | EXPLICIT_OPTIONAL |
+| first_divergence_ordinal:optional u64 | REQUIRED | MUST_BE_ABSENT | MUST_BE_ABSENT |
+| terminal_outcome_identity:optional string | MUST_BE_ABSENT | REQUIRED | MUST_BE_ABSENT |
+| terminal_outcome:optional TerminalOutcomeV1 | MUST_BE_ABSENT | REQUIRED | MUST_BE_ABSENT |
+| failure_before_divergence:optional FailureBeforeDivergenceV1 | MUST_BE_ABSENT | MUST_BE_ABSENT | REQUIRED |
+
+The public candidate descriptor payload is exact and contains no routing key:
+
+    PublicCandidateDescriptorV1:
+      action_kind:string
+      choice:optional PublicChoiceV1
+      source_reference:optional PublicReferenceV1
+      target_reference:optional PublicReferenceV1
+      phase:optional u32
+      position:optional u8
+      source_index:optional u32
+      amount:optional signed i32 encoded as u32 two's-complement bits
+      continuation_operation:string
+      submits_engine_response:bool
+
+    PublicChoiceV1:
+      kind:u8
+      value:u64
+      response_index:optional u32
+
+    PublicReferenceV1:
+      reference_kind:u8
+      public_locator_token:string
+      current_entity_ordinal:optional u32
+
+The candidate descriptor vector and public_action_key vector have equal
+length and preserve exact source order. The accepted public candidate
+contract owns the allowed action kinds, reference kinds, optional presence,
+and continuation-operation tokens. A public locator token is frame-local and
+is never a private or persistent identity.
+
+ContinuationContextV1 is exact:
+
+    is_continuation:bool
+    public_continuation_operation:optional string
+
+For is_continuation=false, public_continuation_operation MUST be absent. For
+is_continuation=true, it is present only when the accepted public frame
+contains one of pick, amount, finish, cancel, or bypass. Environment-
+internal selected-index masks, continuation IDs, and pending engine state are
+never encoded.
+
+TerminalOutcomeV1 is exact:
+
+    terminal:bool = true
+    winner:optional u8
+    win_reason:optional string
+
+It contains only the accepted public terminal outcome. Its
+terminal_outcome_identity is recomputed from the canonical TerminalOutcomeV1
+payload and is required for NO_DIVERGENCE_TERMINAL. That variant has no
+divergence frame: every frame, candidate, score, and selection tail field is
+MUST_BE_ABSENT.
+
+FailureBeforeDivergenceV1 is exact:
+
+    failure_stage:string
+    error_code:string
+    failed_decision_ordinal:u64
+
+failure_stage is exactly one of before_public_decision,
+public_frame_validation, model_input_validation, inference, selection,
+environment, replay, or admission. error_code is non-empty, stable, and
+public-safe. failed_decision_ordinal is the zero-based attempted public
+decision; it is 0 when no public decision was available.
+
+The EXPLICIT_OPTIONAL fields in FAILURE_BEFORE_DIVERGENCE are constrained by
+the failure stage. The following stage profiles are exhaustive:
+
+| failure stage | public frame fields | model-input identity | score identity and bits | selected keys |
+| --- | --- | --- | --- | --- |
+| before_public_decision | all MUST_BE_ABSENT | MUST_BE_ABSENT | MUST_BE_ABSENT | MUST_BE_ABSENT |
+| public_frame_validation | all public frame fields REQUIRED | MUST_BE_ABSENT | MUST_BE_ABSENT | MUST_BE_ABSENT |
+| model_input_validation | all public frame fields REQUIRED | MUST_BE_ABSENT | MUST_BE_ABSENT | MUST_BE_ABSENT |
+| inference | all public frame fields REQUIRED | REQUIRED | both MUST_BE_ABSENT | Teacher optional; model MUST_BE_ABSENT |
+| selection | all public frame fields REQUIRED | REQUIRED | both REQUIRED | Teacher optional; model MUST_BE_ABSENT |
+| environment | all public frame fields REQUIRED | REQUIRED | both REQUIRED | both REQUIRED |
+| replay | all public frame fields REQUIRED | REQUIRED | both REQUIRED | both REQUIRED |
+| admission | all public frame fields REQUIRED | REQUIRED | both REQUIRED | both REQUIRED |
+
+“All public frame fields” means semantic_decision_identity,
+public_observation_digest, ordered_candidate_domain_identity,
+candidate_count, candidate_public_action_keys, candidate_descriptors,
+decision_request_family, and continuation_context. In the
+FAILURE_BEFORE_DIVERGENCE variant, the candidate-count/key/descriptor bundle
+is either the complete bundle shown above or absent; no partial candidate
+domain is accepted. score_vector_identity and score_f32_bits are either both
+present or both absent. A model-selected key is never present without the
+score bundle.
+
+The first-divergence identity is:
+
+    phase6_first_divergence.v1.<lowercase hexadecimal SHA-256>
+
+Its canonical preimage is exactly the canonical FirstDivergenceV1 bytes:
+the common prefix followed by the full tail field sequence and each required
+presence byte. There is no second identity field order. The evaluator
+recomputes the identity after validating the tagged-union presence matrix.
+
+A failure before any public decision therefore has only the common job/count
+prefix, zero presence for every public-frame, model-input, candidate, score,
+and selection field, and one required failure_before_divergence payload. It
+does not invent observation, model-input, candidate-domain, score, or action
+identities. For identical accepted job, checkpoint, policy, public-input, and
+evaluator identities, the same record or the same explicit
+failure-before-divergence record must be reproduced.
 
 The canonical record MUST NOT contain CoreHost state, raw engine state, hidden
 opponent card identities, private hand/deck contents, face-down Extra Deck
@@ -845,11 +1098,6 @@ identity, private or internal locators, raw response bytes, SubmissionToken,
 pointers, object IDs, hidden-derived hashes, or omniscient debug state. A
 privacy validation failure before publication is FAIL CLOSED and quarantines
 the job; it is not rendered as a convenient public record.
-
-For identical accepted job, checkpoint, policy, public-input, and evaluator
-identities, the same record or the same explicit failure-before-divergence
-record must be reproduced. The score vector is diagnostic evidence over the
-already-public candidate rows; it is never hidden state.
 
 ## 11. Distribution-shift evidence
 
@@ -1191,6 +1439,37 @@ promoted by documentation, smoke wiring, or a historical record.
 | P6-G16 | accepted trajectory/replay/admission path | T5C | accepted replay/admission result | NOT_RUN |
 | P6-G17 | fixed rules/decks and Teacher identities | REGRESSION_ONLY | fixed-scope regression | NOT_RUN |
 | P6-G18 | accepted Phase-5 regression | REGRESSION_ONLY | Phase-5 regression | NOT_RUN |
+
+### Task5 tooling final pass versus baseline-dependent evidence
+
+Task5 tooling FINAL PASS is a separate lifecycle status from the P6-G00
+through P6-G18 evidence statuses. It means that the T5A, T5B, T5C, and T5D
+tooling contracts, codecs, negative tests, deterministic report derivation,
+and applicable implementation checks have each been accepted. It does not
+mean that every baseline-dependent gameplay or distribution result exists.
+
+The exact lifecycle rule is:
+
+    task5_tooling_final_pass_is_separate_from_p6_gates = true
+    task6_entry_requires_task5_tooling_final_pass = true
+    baseline_dependent_p6_gates = [P6-G14]
+    p6_g14_status_until_task7 = NOT_RUN/BLOCKED_BY_MEANINGFUL_BASELINE
+    task7_checkpoint_produces_baseline_for_p6_g14 = true
+
+The intended sequence is:
+
+    TASK5_TOOLING_FINAL_PASS
+        → TASK6_BACKEND_BAKEOFF
+        → TASK7_FIRST_MEANINGFUL_BC_BASELINE
+        → TASK5_EVALUATOR_ON_TASK7_CHECKPOINT
+
+Task 6 may begin after Task5 tooling FINAL PASS even while P6-G14 remains
+NOT_RUN/BLOCKED. Task 6 does not require a meaningful BC checkpoint and does
+not produce P6-G14 evidence. Task 7 produces the first meaningful BC
+checkpoint; the frozen Task5 evaluator then runs against that checkpoint to
+produce baseline-dependent P6-G14 and related evidence. A Task5 tooling FINAL
+PASS therefore does not wait for Task7, and Task7 does not redefine the
+Task5 evaluator.
 
 P6-G14 is explicitly NOT_RUN/BLOCKED when only the Task-4B smoke checkpoint
 exists. P6-G13, P6-G15, and the other future gates also remain NOT_RUN until
