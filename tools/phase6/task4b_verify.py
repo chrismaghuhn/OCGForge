@@ -680,7 +680,7 @@ def _fixed_gate_commands(
                 "-j",
                 "1",
                 "-LE",
-                "P4A_HEAVY_REPLAY|M4_HEAVY_LIFECYCLE|M4_ACCEPTANCE_SCALE",
+                "P4A_HEAVY_REPLAY|M4_HEAVY_LIFECYCLE|M4_ACCEPTANCE_SCALE|P6_PYTORCH_REQUIRED",
             ),
         ),
         _GateCommand(

@@ -239,6 +239,21 @@ class Task4BVerificationTests(unittest.TestCase):
                 self.assertIsInstance(command.exit_code, int)
                 self.assertRegex(command.stdout_sha256, r"^[0-9a-f]{64}$")
                 self.assertRegex(command.stderr_sha256, r"^[0-9a-f]{64}$")
+            focused = next(
+                command
+                for command in result.commands
+                if command.command_id == "task4-focused-python"
+            )
+            self.assertIn("tests.phase6.phase6_task4b_runner_test", focused.argv)
+            full_ctest = next(
+                command
+                for command in result.commands
+                if command.command_id == "full-non-long-ctest"
+            )
+            self.assertEqual(
+                full_ctest.argv[-1],
+                "P4A_HEAVY_REPLAY|M4_HEAVY_LIFECYCLE|M4_ACCEPTANCE_SCALE|P6_PYTORCH_REQUIRED",
+            )
             self.assertTrue(all(cwd == source_root for _, cwd in calls))
             self.assertTrue(
                 all(
