@@ -2,7 +2,14 @@
 
 ## Status and scope
 
-**Status:** **ACCEPTED / independent review PASS**.
+**Status:** The semantic materialization design is **ACCEPTED / independent
+review PASS**. The configuration-byte amendment in section 6 is
+**PROPOSED / pending independent review**.
+
+```text
+SEMANTIC_MATERIALIZATION_DESIGN=ACCEPTED
+CONFIG_BYTES_AMENDMENT=PROPOSED_PENDING_INDEPENDENT_REVIEW
+```
 
 This is the P6-T6R1 documentation-only contract freeze for the first Task7
 production gap identified by the accepted Task6 readiness audit. It defines a
@@ -249,6 +256,558 @@ sample carries the accepted source identities named in section 13. Canonical
 materialization bytes are reproducibility/integrity data; their digest, if an
 implementation exposes one, MUST NOT become an independent membership or
 semantic authority.
+
+### 6.1 Amendment scope
+
+This amendment freezes the executable byte grammar for the existing
+configuration identity. It does not change the accepted materialization table
+semantics, source types, row order, candidate behavior, privacy boundary, or
+Phase-5 ownership. The exact semantic design above remains accepted while this
+byte-level amendment awaits independent review.
+
+### 6.2 Canonical primitive grammar
+
+Configuration bytes use only these primitives:
+
+```text
+u8
+    = one unsigned byte
+
+u16
+    = two-byte unsigned big-endian
+
+u32
+    = four-byte unsigned big-endian
+
+u64
+    = eight-byte unsigned big-endian
+
+string
+    = u32be byte_length
+      || exact UTF-8 bytes
+
+vector<T>
+    = u32be element_count
+      || T[0]
+      || ...
+      || T[n-1]
+
+optional_string
+    = u8 present
+      || string(value) when present = 0x01
+```
+
+`present` is exactly `0x00` or `0x01`; any other byte is invalid. An absent
+optional string is exactly one `0x00` byte and has no following string. The
+grammar emits no BOM, NUL terminator, newline, Unicode normalization, trailing
+bytes, document text, path, Git revision, or runtime metadata. Every frozen
+token below is ASCII and is emitted as its exact listed UTF-8 bytes.
+
+### 6.3 Top-level configuration byte grammar
+
+`Task7MaterializationConfigBytesV1` is exactly:
+
+```text
+string(configuration_schema_id)
+|| string(materialization_schema_id)
+|| vector<string>(phase5_contract_ids)
+|| string(limb_order_token)
+|| string(integer_tensor_type_token)
+|| string(boolean_tensor_type_token)
+|| vector<reference_descriptor>(reference_descriptors)
+|| vector<table_descriptor>(table_descriptors)
+|| vector<rule_descriptor>(rule_descriptors)
+```
+
+The first six values are exactly:
+
+```text
+configuration_schema_id =
+ocgforge.phase6.task7.input_materialization_config.v1
+
+materialization_schema_id =
+ocgforge.phase6.task7.input_materialization.v1
+
+phase5_contract_ids = [
+  ocgforge.model_logical_input.v1,
+  ocgforge.model_encoded_input.v1,
+  ocgforge.model_card_vocabulary.v1,
+  ocgforge.model_input_identity.v1,
+  ocgforge.model_batch_layout.v1
+]
+
+limb_order_token =
+u16_most_significant_first
+
+integer_tensor_type_token =
+torch.int64
+
+boolean_tensor_type_token =
+torch.bool
+```
+
+The vectors use this listed order. They MUST NOT be sorted, deduplicated, or
+derived from Markdown traversal.
+
+### 6.4 Reference descriptor grammar
+
+Each `reference_descriptor` is exactly:
+
+```text
+string(reference_name)
+|| vector<reference_component_descriptor>(components)
+```
+
+Each `reference_component_descriptor` is exactly:
+
+```text
+string(component_name)
+|| string(source_type_token)
+|| string(presence_rule_token)
+```
+
+The reference descriptor vector has exactly these entries in this order:
+
+| Reference | Canonical component vector, in order |
+| --- | --- |
+| `R` | (`public_locator_ordinal`, `U32`, `required`); (`current_entity_ordinal`, `P<U32>`, `optional`) |
+| `OR` | (`present`, `Bool`, `required`); (`reference`, `R`, `composite_defined`) |
+| `CR` | (`present`, `Bool`, `required`); (`kind_code`, `U8`, `composite_defined`); (`reference`, `R`, `composite_defined`) |
+| `HR` | (`present`, `Bool`, `required`); (`public_locator_ordinal`, `U32`, `composite_defined`) |
+
+`R` is `EncodedCurrentReference`; `OR` is optional
+`EncodedCurrentReference`; `CR` is optional `EncodedCardReference`; and `HR`
+is the historical reference form. `kind_code` is present only in the `CR`
+descriptor. No descriptor or materializer may invent it for `R` or `OR`.
+
+### 6.5 Table and column descriptor grammar
+
+Each `table_descriptor` is exactly:
+
+```text
+string(table_identity)
+|| string(table_kind_token)
+|| string(row_order_token)
+|| optional_string(parent_table_identity)
+|| optional_string(parent_offset_identity)
+|| string(row_mask_rule_token)
+|| vector<column_descriptor>(columns)
+```
+
+Each `column_descriptor` is exactly:
+
+```text
+string(column_name)
+|| string(source_type_token)
+|| u8(limb_count)
+|| string(presence_rule_token)
+|| string(padding_rule_token)
+```
+
+An absent parent table or parent offset uses `optional_string` with present
+byte `0x00`; it is never encoded as an empty string. Only the five child
+tables listed in section 6.8 have a parent and parent-offset identity. The
+ordinary per-sample ragged offsets remain Phase-5 layout execution metadata and
+are deliberately excluded from per-sample canonical materialization bytes as
+already specified in section 12.
+
+### 6.6 Closed descriptor-token vocabularies
+
+The only permitted table-kind tokens are:
+
+| Token | Meaning |
+| --- | --- |
+| `singleton` | one real row per sample in sample order |
+| `ragged` | source-order flat rows with per-sample offsets |
+| `child` | source-order rows owned by the declared parent and parent offset |
+| `candidate` | the complete current candidate domain in source order |
+| `control_sidecar` | exact non-learned control metadata |
+
+The only permitted source-type tokens and limb counts are:
+
+| Source type | `limb_count` | Meaning |
+| --- | ---: | --- |
+| `U8` | 1 | exact unsigned 8-bit value |
+| `U16` | 1 | exact unsigned 16-bit value |
+| `U32` | 2 | exact unsigned 32-bit value |
+| `U64` | 4 | exact unsigned 64-bit value |
+| `I32` | 2 | exact two's-complement 32-bit bit pattern |
+| `Bool` | 0 | one `torch.bool` value |
+| `P<U8>` | 1 | optional unsigned 8-bit value |
+| `P<U16>` | 1 | optional unsigned 16-bit value |
+| `P<U32>` | 2 | optional unsigned 32-bit value |
+| `P<U64>` | 4 | optional unsigned 64-bit value |
+| `P<I32>` | 2 | optional two's-complement 32-bit bit pattern |
+| `R` | 0 | expansion governed by the `R` reference descriptor |
+| `OR` | 0 | expansion governed by the `OR` reference descriptor |
+| `CR` | 0 | expansion governed by the `CR` reference descriptor |
+| `HR` | 0 | expansion governed by the `HR` reference descriptor |
+| `String` | 0 | exact UTF-8 control-sidecar string; never a learner tensor |
+
+The only permitted presence-rule tokens are:
+
+| Token | Meaning |
+| --- | --- |
+| `required` | the declared field exists without a field-local presence mask |
+| `optional` | the declared `P<T>` field has its own exact presence mask; absent value limbs are zero |
+| `composite_defined` | a composite/reference expansion owns presence under its reference descriptor; direct limb count is zero |
+
+The only permitted padding-rule tokens are:
+
+| Token | Meaning |
+| --- | --- |
+| `zero` | numeric limbs are zero; optional presence is false when absent or padded |
+| `false` | boolean value is false in physical padding |
+| `pad_id_zero` | CardVocabulary ID 0 is physical padding only; a real redacted entity remains ID 1 |
+| `not_applicable` | a composite/reference expansion or non-learned string has no direct limb padding; derived sidecar padding remains the exact empty control entry required by section 11 |
+
+The only permitted row-mask-rule tokens are:
+
+| Token | Meaning |
+| --- | --- |
+| `singleton_all_true` | one real row per sample and every source row mask is true |
+| `real_rows_true` | every unpadded flat source row mask is true; only a derivative padded view may emit false rows |
+
+### 6.7 Closed row-order vocabulary
+
+The only permitted row-order tokens are below. Each maps to the already
+accepted rule named in its meaning; no prose sentence is hashed as an order.
+
+| Token | Accepted rule and use |
+| --- | --- |
+| `sample_order` | physical batch sample order for singleton tables |
+| `life_point_source_order` | Phase-5 life-point vector order |
+| `public_observation_context_reference_order` | public-observation context-reference order |
+| `public_safe_state_zone_order` | existing `public_safe_state.v1` decoder zone order |
+| `canonical_locator_order` | current decoded canonical locator order for entities |
+| `entity_property_role_order` | exactly `printed` then `current` for each entity |
+| `property_link_marker_source_order` | accepted per-property link-marker order |
+| `property_counter_source_order` | accepted per-property counter-pair order |
+| `relationship_source_order` | accepted canonical relationship order |
+| `chain_link_source_order` | authoritative Phase-5 chain-link order |
+| `chain_target_source_order` | authoritative target order within each chain link |
+| `visible_event_source_order` | canonical visible-event-index order |
+| `visible_event_target_source_order` | authoritative target order within each visible event |
+| `deck_public_safe_order` | public-safe deck-vector order |
+| `public_locator_token_order` | exact unsigned UTF-8 public-locator-token source order |
+| `candidate_source_order` | exact current public candidate source order and aligned routing-sidecar order |
+
+### 6.8 Canonical table descriptor vector
+
+The `table_descriptors` vector contains exactly these 23 table descriptors in
+this order. `—` denotes an absent `optional_string` (`0x00`), not an empty
+string.
+
+| Position | Table identity | Kind | Row order | Parent table | Parent offset | Row mask rule |
+| ---: | --- | --- | --- | --- | --- | --- |
+| 0 | `sample_header` | `singleton` | `sample_order` | — | — | `singleton_all_true` |
+| 1 | `globals` | `singleton` | `sample_order` | — | — | `singleton_all_true` |
+| 2 | `chain_state` | `singleton` | `sample_order` | — | — | `singleton_all_true` |
+| 3 | `match_context` | `singleton` | `sample_order` | — | — | `singleton_all_true` |
+| 4 | `life_points` | `ragged` | `life_point_source_order` | — | — | `real_rows_true` |
+| 5 | `decision_context_references` | `ragged` | `public_observation_context_reference_order` | — | — | `real_rows_true` |
+| 6 | `zones` | `ragged` | `public_safe_state_zone_order` | — | — | `real_rows_true` |
+| 7 | `entities` | `ragged` | `canonical_locator_order` | — | — | `real_rows_true` |
+| 8 | `entity_properties` | `child` | `entity_property_role_order` | `entities` | `entity_property_offsets` | `real_rows_true` |
+| 9 | `property_link_markers` | `child` | `property_link_marker_source_order` | `entity_properties` | `property_link_marker_offsets` | `real_rows_true` |
+| 10 | `property_counters` | `child` | `property_counter_source_order` | `entity_properties` | `property_counter_offsets` | `real_rows_true` |
+| 11 | `relationships` | `ragged` | `relationship_source_order` | — | — | `real_rows_true` |
+| 12 | `chain_links` | `ragged` | `chain_link_source_order` | — | — | `real_rows_true` |
+| 13 | `chain_targets` | `child` | `chain_target_source_order` | `chain_links` | `chain_target_offsets` | `real_rows_true` |
+| 14 | `visible_events` | `ragged` | `visible_event_source_order` | — | — | `real_rows_true` |
+| 15 | `visible_event_targets` | `child` | `visible_event_target_source_order` | `visible_events` | `visible_event_target_offsets` | `real_rows_true` |
+| 16 | `own_main_deck_ids` | `ragged` | `deck_public_safe_order` | — | — | `real_rows_true` |
+| 17 | `opponent_main_deck_ids` | `ragged` | `deck_public_safe_order` | — | — | `real_rows_true` |
+| 18 | `own_extra_deck_ids` | `ragged` | `deck_public_safe_order` | — | — | `real_rows_true` |
+| 19 | `opponent_extra_deck_ids` | `ragged` | `deck_public_safe_order` | — | — | `real_rows_true` |
+| 20 | `public_locator_control_sidecar` | `control_sidecar` | `public_locator_token_order` | — | — | `real_rows_true` |
+| 21 | `candidates` | `candidate` | `candidate_source_order` | — | — | `real_rows_true` |
+| 22 | `routing_key_control_sidecar` | `control_sidecar` | `candidate_source_order` | — | — | `real_rows_true` |
+
+The routing sidecar's one-to-one candidate alignment is bound by its
+`candidate_source_order` token and the ordered `candidate_cardinality` and
+`candidate_order` rule descriptors below; it is not a child table and therefore
+has no invented parent offset.
+
+### 6.9 Canonical column descriptor vectors
+
+Each list below is the exact `columns` vector for its table. Every tuple is:
+
+```text
+(column_name, source_type_token, limb_count, presence_rule_token, padding_rule_token)
+```
+
+#### `sample_header`
+
+```text
+(perspective_player, U8, 1, required, zero)
+(decision_index, U64, 4, required, zero)
+(public_observation_context_kind_code, P<U16>, 1, optional, zero)
+(public_observation_context_player, P<U8>, 1, optional, zero)
+(public_locator_count, U32, 2, required, zero)
+(candidate_count, U32, 2, required, zero)
+```
+
+#### `globals`
+
+```text
+(duel_flags, U64, 4, required, zero)
+(player_to_act, P<U8>, 1, optional, zero)
+(turn_player, P<U8>, 1, optional, zero)
+(turn_count, P<U32>, 2, optional, zero)
+(phase, P<U32>, 2, optional, zero)
+(chain_length, U32, 2, required, zero)
+(winner, P<U8>, 1, optional, zero)
+(win_reason, P<U8>, 1, optional, zero)
+(terminal, Bool, 0, required, false)
+```
+
+#### `chain_state`
+
+```text
+(length, U32, 2, required, zero)
+```
+
+#### `match_context`
+
+```text
+(perspective_player, U8, 1, required, zero)
+(duel_flags, U64, 4, required, zero)
+(own_decklist_known, Bool, 0, required, false)
+(opponent_decklist_known, Bool, 0, required, false)
+(own_deck_known, Bool, 0, required, false)
+(opponent_deck_known, Bool, 0, required, false)
+```
+
+#### `life_points`
+
+```text
+(value, U32, 2, required, zero)
+```
+
+#### `decision_context_references`
+
+```text
+(public_locator_ordinal, U32, 2, required, zero)
+```
+
+#### `zones`
+
+```text
+(player, U8, 1, required, zero)
+(kind_code, U8, 1, required, zero)
+(total_count, U32, 2, required, zero)
+(public_identity_count, U32, 2, required, zero)
+(hidden_count, U32, 2, required, zero)
+(player_observable_order, Bool, 0, required, false)
+```
+
+#### `entities`
+
+```text
+(public_locator_ordinal, U32, 2, required, zero)
+(identity_known, Bool, 0, required, false)
+(card_vocabulary_id, U32, 2, required, pad_id_zero)
+(owner, P<U8>, 1, optional, zero)
+(controller, P<U8>, 1, optional, zero)
+(zone_code, U8, 1, required, zero)
+(sequence, P<U32>, 2, optional, zero)
+(overlay_sequence, P<U32>, 2, optional, zero)
+(position_code, U8, 1, required, zero)
+(face_up, Bool, 0, required, false)
+(face_down, Bool, 0, required, false)
+```
+
+#### `entity_properties`
+
+```text
+(property_role, U8, 1, required, zero)
+(property_present, Bool, 0, required, false)
+(type, P<U32>, 2, optional, zero)
+(attribute, P<U32>, 2, optional, zero)
+(race, P<U64>, 4, optional, zero)
+(attack, P<I32>, 2, optional, zero)
+(defense, P<I32>, 2, optional, zero)
+(base_attack, P<I32>, 2, optional, zero)
+(base_defense, P<I32>, 2, optional, zero)
+(level, P<U32>, 2, optional, zero)
+(rank, P<U32>, 2, optional, zero)
+(link_rating, P<U32>, 2, optional, zero)
+(left_scale, P<U32>, 2, optional, zero)
+(right_scale, P<U32>, 2, optional, zero)
+(status_flags, P<U32>, 2, optional, zero)
+```
+
+#### `property_link_markers`
+
+```text
+(link_marker_code, U8, 1, required, zero)
+```
+
+#### `property_counters`
+
+```text
+(type, U32, 2, required, zero)
+(count, U32, 2, required, zero)
+```
+
+#### `relationships`
+
+```text
+(kind_code, U8, 1, required, zero)
+(source, R, 0, composite_defined, not_applicable)
+(target, R, 0, composite_defined, not_applicable)
+```
+
+#### `chain_links`
+
+```text
+(index, U32, 2, required, zero)
+(activating_player, P<U8>, 1, optional, zero)
+(source, OR, 0, composite_defined, not_applicable)
+(activation_zone_code, P<U8>, 1, optional, zero)
+(effect_description, P<U64>, 4, optional, zero)
+```
+
+#### `chain_targets`
+
+```text
+(target, R, 0, composite_defined, not_applicable)
+```
+
+#### `visible_events`
+
+```text
+(event_index, U64, 4, required, zero)
+(kind_code, U8, 1, required, zero)
+(player, P<U8>, 1, optional, zero)
+(entity, HR, 0, composite_defined, not_applicable)
+(public_card_vocabulary_id, P<U32>, 2, optional, zero)
+(from_zone_code, P<U8>, 1, optional, zero)
+(to_zone_code, P<U8>, 1, optional, zero)
+(count, P<U32>, 2, optional, zero)
+(amount, P<I32>, 2, optional, zero)
+(counter_type, P<U32>, 2, optional, zero)
+(phase, P<U32>, 2, optional, zero)
+(winner, P<U8>, 1, optional, zero)
+(win_reason, P<U8>, 1, optional, zero)
+(effect_description, P<U64>, 4, optional, zero)
+```
+
+#### `visible_event_targets`
+
+```text
+(public_locator_ordinal, U32, 2, required, zero)
+```
+
+#### Deck-ID tables
+
+The following four tables each have exactly this one-column vector:
+
+```text
+own_main_deck_ids
+opponent_main_deck_ids
+own_extra_deck_ids
+opponent_extra_deck_ids
+
+(card_vocabulary_id, U32, 2, required, pad_id_zero)
+```
+
+#### `public_locator_control_sidecar`
+
+```text
+(public_locator_token, String, 0, required, not_applicable)
+```
+
+#### `candidates`
+
+```text
+(action_kind_code, U16, 1, required, zero)
+(choice_present, Bool, 0, required, false)
+(choice_kind_code, U8, 1, required, zero)
+(choice_value, U64, 4, required, zero)
+(choice_response_index, P<U32>, 2, optional, zero)
+(source_reference, CR, 0, composite_defined, not_applicable)
+(target_reference, CR, 0, composite_defined, not_applicable)
+(phase, P<U32>, 2, optional, zero)
+(position, P<U8>, 1, optional, zero)
+(source_index, P<U32>, 2, optional, zero)
+(amount, P<I32>, 2, optional, zero)
+(continuation_operation_code, U8, 1, required, zero)
+(submits_engine_response, Bool, 0, required, false)
+```
+
+#### `routing_key_control_sidecar`
+
+```text
+(public_action_key, String, 0, required, not_applicable)
+```
+
+### 6.10 Canonical global rule descriptor vector
+
+Each `rule_descriptor` is exactly:
+
+```text
+string(rule_id)
+|| string(rule_value)
+```
+
+The `rule_descriptors` vector has exactly these entries in this order:
+
+| Position | `rule_id` | `rule_value` |
+| ---: | --- | --- |
+| 0 | `candidate_cardinality` | `N_TO_N` |
+| 1 | `candidate_order` | `SOURCE_ORDER` |
+| 2 | `candidate_split` | `FORBIDDEN` |
+| 3 | `routing_key_learned_feature` | `NO` |
+| 4 | `raw_locator_learned_feature` | `NO` |
+| 5 | `padding_semantic` | `NO` |
+| 6 | `ragged_authority` | `RAGGED_FIRST` |
+| 7 | `padded_equivalence` | `EXACT_UNPAD` |
+| 8 | `globals_chain_length_source` | `DISTINCT` |
+| 9 | `chain_state_length_source` | `DISTINCT` |
+
+### 6.11 Configuration identity and known-answer vector
+
+The identity function is exactly:
+
+```text
+configuration_digest =
+lowercase_hex(SHA256(Task7MaterializationConfigBytesV1))
+
+configuration_identity =
+"phase6_task7_input_materialization_config.v1."
+|| configuration_digest
+```
+
+The SHA-256 input is only the byte stream defined in sections 6.2 through
+6.10. It has no appended newline, document hash, file path, Git commit,
+device, framework version beyond the frozen physical type tokens, batch
+composition, padding width, or runtime provenance.
+
+The normative known-answer vector is:
+
+```text
+CONFIG_CANONICAL_BYTES_LENGTH=8133
+CONFIG_CANONICAL_BYTES_SHA256=20f394c888e959446fa263c3520f3dd3b1f48b3a23e58373da7153a691ab1e7a
+CONFIGURATION_IDENTITY=phase6_task7_input_materialization_config.v1.20f394c888e959446fa263c3520f3dd3b1f48b3a23e58373da7153a691ab1e7a
+CONFIG_CANONICAL_BYTES_PREFIX_HEX=000000356f6367666f7267652e7068617365362e7461736b372e696e7075745f6d6174657269616c697a6174696f6e5f
+CONFIG_CANONICAL_BYTES_SUFFIX_HEX=495354494e435400000019636861696e5f73746174655f6c656e6774685f736f757263650000000844495354494e4354
+```
+
+This KAT is derived from the grammar and descriptor vectors above. It is not a
+hardcoded substitute for them.
+
+### 6.12 Independent-implementation acceptance and non-goals
+
+Two independent implementations using only this amended contract MUST produce
+byte-identical `Task7MaterializationConfigBytesV1`, the KAT digest, and the
+same configuration identity. They MUST NOT share source code, hash this
+document, or rely on a path, commit, framework runtime, or execution host.
+
+This amendment authorizes neither a Task7 materializer nor any C++/Python test,
+PyTorch adapter, neural architecture, scorer, optimizer, loss, training,
+dataset, trajectory, checkpoint, Task5C work, RL, self-play, or Meta-8 work.
 
 ## 7. Exact primitive materialization and losslessness proof
 
@@ -850,16 +1409,19 @@ new gameplay, legality, observation, candidate, replay, or dataset authority
 
 ## 19. Remaining Task7 blockers
 
-Independent review accepted this contract. A separately authorized and
-independently accepted implementation is still required before this first gap
-is resolved. The second gap remains intentionally separate: the current Task5C
-evaluator has no meaningful fixed-matchup context/job path for a Task7
-checkpoint.
+Independent review accepted the semantic materialization design. This
+configuration-byte amendment remains pending independent review. A separately
+authorized and independently accepted implementation is still required before
+this first gap is resolved. The second gap remains intentionally separate: the
+current Task5C evaluator has no meaningful fixed-matchup context/job path for
+a Task7 checkpoint.
 
 ```text
 TASK7_INPUT_MATERIALIZATION_CONTRACT=ACCEPTED
 CONTRACT_INDEPENDENT_REVIEW=PASS
 CONTRACT_FINAL_PASS=YES
+
+CONFIG_BYTES_AMENDMENT=PROPOSED_PENDING_INDEPENDENT_REVIEW
 
 MATERIALIZATION_IMPLEMENTATION_AUTHORIZED=NO
 IMPLEMENTATION_STARTED=NO
