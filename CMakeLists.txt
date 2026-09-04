@@ -225,6 +225,7 @@ add_library(ygo_phase6 STATIC
     src/phase6/supervision_dataset.cpp
     src/phase6/model_input_inspector.cpp
     src/phase6/bc_candidate_scorer.cpp
+    src/phase6/task7_input_materialization.cpp
 )
 target_include_directories(ygo_phase6 PUBLIC "${CMAKE_SOURCE_DIR}/include")
 target_link_libraries(ygo_phase6 PUBLIC ygo_model)
@@ -266,6 +267,27 @@ add_executable(phase6_bc_candidate_scorer_test
 target_link_libraries(phase6_bc_candidate_scorer_test PRIVATE ygo_phase6)
 add_test(NAME phase6_bc_candidate_scorer_test
          COMMAND phase6_bc_candidate_scorer_test)
+
+add_executable(phase6_task7_input_materialization_test
+               tests/phase6/phase6_task7_input_materialization_test.cpp)
+target_include_directories(phase6_task7_input_materialization_test PRIVATE
+                           "${CMAKE_SOURCE_DIR}/src/environment")
+target_link_libraries(phase6_task7_input_materialization_test PRIVATE ygo_phase6)
+add_test(NAME phase6_task7_input_materialization_test
+         COMMAND phase6_task7_input_materialization_test)
+
+add_executable(phase6_task7_materialization_probe
+               tools/phase6_task7_materialization_probe/main.cpp)
+target_link_libraries(phase6_task7_materialization_probe PRIVATE ygo_phase6)
+
+add_test(NAME phase6_task7_input_materialization_python_test
+         COMMAND "${Python3_EXECUTABLE}" -B -m
+                 tests.phase6.phase6_task7_input_materialization_test
+                 "$<TARGET_FILE:phase6_task7_materialization_probe>"
+                 "$<TARGET_FILE:phase6_task7_input_materialization_test>")
+set_tests_properties(phase6_task7_input_materialization_python_test PROPERTIES
+                     LABELS "P6_PYTORCH_REQUIRED"
+                     WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
 
 add_executable(phase6_task4_corpus_probe
                tools/phase6_task4_corpus_probe/main.cpp
