@@ -2,7 +2,7 @@
 
 ## Status and scope
 
-**Status:** **PROPOSED / pending independent review**.
+**Status:** **ACCEPTED / independent review PASS**.
 
 This is the P6-T6R1 documentation-only contract freeze for the first Task7
 production gap identified by the accepted Task6 readiness audit. It defines a
@@ -850,19 +850,25 @@ new gameplay, legality, observation, candidate, replay, or dataset authority
 
 ## 19. Remaining Task7 blockers
 
-Independent review must accept this proposal before an implementation slice can
-begin. Even then, a separately authorized and independently accepted
-implementation is required before this first gap is resolved. The second gap
-remains intentionally separate: the current Task5C evaluator has no meaningful
-fixed-matchup context/job path for a Task7 checkpoint.
+Independent review accepted this contract. A separately authorized and
+independently accepted implementation is still required before this first gap
+is resolved. The second gap remains intentionally separate: the current Task5C
+evaluator has no meaningful fixed-matchup context/job path for a Task7
+checkpoint.
 
 ```text
-TASK7_INPUT_MATERIALIZATION_CONTRACT=PROPOSED
+TASK7_INPUT_MATERIALIZATION_CONTRACT=ACCEPTED
+CONTRACT_INDEPENDENT_REVIEW=PASS
+CONTRACT_FINAL_PASS=YES
+
+MATERIALIZATION_IMPLEMENTATION_AUTHORIZED=NO
+IMPLEMENTATION_STARTED=NO
 TASK7_INPUT_MATERIALIZATION_IMPLEMENTED=NO
 
 TASK5C_MEANINGFUL_PROFILE_IMPLEMENTED=NO
 
 TASK7_READINESS=BLOCKED
 TASK7_AUTHORIZED=NO
+TASK7_FULL_AUTHORIZED=NO
 TASK7_STARTED=NO
 ```
