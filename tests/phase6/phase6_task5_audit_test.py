@@ -190,6 +190,77 @@ def _offline_result() -> task5_offline.OfflineEvaluationResultV1:
     )
 
 
+def _offline_result_with_failure(
+    reason: str,
+) -> task5_offline.OfflineEvaluationResultV1:
+    base = _offline_result()
+    original = base.sample_results[0]
+    label_status = (
+        task5_offline.LABEL_FAIL
+        if reason == task5_offline.FailureReason.LABEL_MISMATCH
+        else task5_offline.LABEL_PASS
+        if reason in {
+            task5_offline.FailureReason.CANDIDATE_CAPACITY_FAILURE,
+            task5_offline.FailureReason.PADDING_MASK_VIOLATION,
+            task5_offline.FailureReason.SCORE_COUNT_MISMATCH,
+            task5_offline.FailureReason.NONFINITE_SCORE,
+            task5_offline.FailureReason.MODEL_BINDING_FAILURE,
+            task5_offline.FailureReason.INFERENCE_FAILURE,
+        }
+        else task5_offline.LABEL_NOT_RUN
+    )
+    failed = dataclasses.replace(
+        original,
+        status=(
+            task5_offline.STATUS_REJECTED
+            if reason in {
+                task5_offline.FailureReason.LABEL_MISMATCH,
+                task5_offline.FailureReason.SPLIT_LEAKAGE,
+                task5_offline.FailureReason.CANDIDATE_DOMAIN_FAILURE,
+                task5_offline.FailureReason.PUBLIC_INPUT_REJECTION,
+            }
+            else task5_offline.STATUS_UNSCORED
+        ),
+        failure_reason=reason,
+        score_vector=None,
+        score_vector_identity=None,
+        loss_f64_bits=None,
+        model_selected_public_action_key=None,
+        model_candidate_ordinal=None,
+        top1_agreement=None,
+        top_k_agreement=None,
+        label_consistency=label_status,
+        teacher_key_consistency=(True if label_status == task5_offline.LABEL_PASS else None),
+        teacher_ordinal_consistency=(True if label_status == task5_offline.LABEL_PASS else None),
+    )
+    samples = (failed,) + base.sample_results[1:]
+    metrics = task5_offline.aggregate_offline_metrics(
+        samples,
+        evaluation_identity=base.evaluation_identity,
+        evaluation_contract_identity=base.evaluation_contract_identity,
+        teacher_state_population_identity=base.teacher_state_population_identity,
+        selected_partitions=("validation", "test"),
+        top_k=None,
+    )
+    slices = task5_offline.derive_offline_slices(
+        samples,
+        evaluation_identity=base.evaluation_identity,
+        evaluation_contract_identity=base.evaluation_contract_identity,
+        teacher_state_population_identity=base.teacher_state_population_identity,
+        top_k=None,
+    )
+    result = task5_offline.OfflineEvaluationResultV1(
+        evaluation_identity=base.evaluation_identity,
+        evaluation_contract_identity=base.evaluation_contract_identity,
+        teacher_state_population_identity=base.teacher_state_population_identity,
+        sample_results=samples,
+        slice_results=slices,
+        metrics=metrics,
+    )
+    result.validate()
+    return result
+
+
 def _bc_population(
     context: task5.EvaluationContextV1,
 ) -> audit.BCInducedPopulationV1:
@@ -573,6 +644,63 @@ class Task5DAuditTests(unittest.TestCase):
         )
         with self.assertRaises(audit.AuditCodecError):
             invalid.validate()
+
+    def test_teacher_capacity_uses_proven_gate_progress_not_candidate_presence(self):
+        for reason in (
+            task5_offline.FailureReason.LABEL_MISMATCH,
+            task5_offline.FailureReason.SPLIT_LEAKAGE,
+            task5_offline.FailureReason.CANDIDATE_DOMAIN_FAILURE,
+            task5_offline.FailureReason.PUBLIC_INPUT_REJECTION,
+        ):
+            with self.subTest(reason=reason):
+                profile = audit._offline_profile(_offline_result_with_failure(reason))
+                self.assertEqual(
+                    profile.capacity_compliance_rate.status,
+                    audit.COMPLIANCE_NOT_RUN_UNPROVEN,
+                )
+                self.assertNotEqual(
+                    profile.capacity_compliance_rate.status,
+                    audit.COMPLIANCE_PASS,
+                )
+
+        explicit_failure = audit._offline_profile(
+            _offline_result_with_failure(
+                task5_offline.FailureReason.CANDIDATE_CAPACITY_FAILURE
+            )
+        )
+        self.assertEqual(
+            explicit_failure.capacity_compliance_rate.status,
+            audit.COMPLIANCE_FAIL,
+        )
+
+        scored = audit._offline_profile(_offline_result())
+        self.assertEqual(scored.capacity_compliance_rate.status, audit.COMPLIANCE_PASS)
+
+        for reason in (
+            task5_offline.FailureReason.PADDING_MASK_VIOLATION,
+            task5_offline.FailureReason.SCORE_COUNT_MISMATCH,
+            task5_offline.FailureReason.NONFINITE_SCORE,
+            task5_offline.FailureReason.MODEL_BINDING_FAILURE,
+            task5_offline.FailureReason.INFERENCE_FAILURE,
+        ):
+            with self.subTest(post_capacity_reason=reason):
+                post_capacity_failure = audit._offline_profile(
+                    _offline_result_with_failure(reason)
+                )
+                self.assertEqual(
+                    post_capacity_failure.capacity_compliance_rate.status,
+                    audit.COMPLIANCE_PASS,
+                )
+
+        mixed = audit._offline_profile(
+            _offline_result_with_failure(task5_offline.FailureReason.LABEL_MISMATCH)
+        )
+        self.assertEqual(
+            mixed.capacity_compliance_rate.status,
+            audit.COMPLIANCE_NOT_RUN_UNPROVEN,
+        )
+        self.assertEqual(mixed.capacity_compliance_rate.numerator, 1)
+        self.assertEqual(mixed.capacity_compliance_rate.denominator, 1)
 
     def test_jsonl_noncanonical_and_wrong_population_order_fail_closed(self):
         context = _context()

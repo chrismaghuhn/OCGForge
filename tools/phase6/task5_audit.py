@@ -58,6 +58,21 @@ COMPLIANCE_STATUSES = (
 SLICE_PRESENT = task5_offline.SLICE_PRESENT
 SLICE_NOT_PRESENT = task5_offline.SLICE_NOT_PRESENT
 
+# T5B checks physical candidate capacity only after split, public-input,
+# candidate-domain, and Teacher-label validation. These are the only
+# unscored failure reasons emitted by the accepted T5B scoring path after
+# that gate has been crossed. Candidate-count presence is audit context,
+# not evidence of execution progress.
+_CAPACITY_PROVEN_POST_GATE_FAILURES = frozenset(
+    {
+        task5_offline.FailureReason.PADDING_MASK_VIOLATION,
+        task5_offline.FailureReason.SCORE_COUNT_MISMATCH,
+        task5_offline.FailureReason.NONFINITE_SCORE,
+        task5_offline.FailureReason.MODEL_BINDING_FAILURE,
+        task5_offline.FailureReason.INFERENCE_FAILURE,
+    }
+)
+
 GAMEPLAY_JOB_STATUSES = (
     "TRUSTED_WIN",
     "TRUSTED_LOSS",
@@ -1906,6 +1921,36 @@ def _compliance(
     return result
 
 
+def _teacher_capacity_evidence_status(
+    sample: task5_offline.OfflineSampleResultV1,
+) -> str:
+    """Classify capacity only from progress proven by the T5B flow.
+
+    A scored sample has crossed the gate by construction.  The accepted
+    unscored provider-path failures also carry the complete post-label public
+    context that T5B emits after the gate.  Any weaker or differently staged
+    result remains unproven, even when it happens to preserve a candidate
+    count.
+    """
+
+    if sample.status == task5_offline.STATUS_SCORED:
+        return COMPLIANCE_PASS
+    if sample.failure_reason == task5_offline.FailureReason.CANDIDATE_CAPACITY_FAILURE:
+        return COMPLIANCE_FAIL
+    if (
+        sample.status == task5_offline.STATUS_UNSCORED
+        and sample.failure_reason in _CAPACITY_PROVEN_POST_GATE_FAILURES
+        and sample.candidate_count is not None
+        and sample.candidate_public_action_keys is not None
+        and sample.ordered_candidate_domain_identity is not None
+        and sample.teacher_selected_public_action_key is not None
+        and sample.teacher_candidate_ordinal is not None
+        and sample.label_consistency == task5_offline.LABEL_PASS
+    ):
+        return COMPLIANCE_PASS
+    return COMPLIANCE_NOT_RUN_UNPROVEN
+
+
 def _offline_profile(
     result: task5_offline.OfflineEvaluationResultV1,
 ) -> PopulationProfileV1:
@@ -1922,15 +1967,21 @@ def _offline_profile(
         else task5_offline.SLICE_COORDINATE_ABSENT
         for sample in samples
     )
-    capacity_proven = sum(
-        sample.candidate_count is not None
-        and sample.failure_reason != task5_offline.FailureReason.CANDIDATE_CAPACITY_FAILURE
-        for sample in samples
-    )
-    capacity_failures = sum(
-        sample.failure_reason == task5_offline.FailureReason.CANDIDATE_CAPACITY_FAILURE
-        for sample in samples
-    )
+    capacity_proven = 0
+    capacity_failures = 0
+    capacity_unproven = 0
+    for sample in samples:
+        evidence_status = _teacher_capacity_evidence_status(sample)
+        if evidence_status == COMPLIANCE_PASS:
+            # A scored result, or a known post-capacity T5B failure with its
+            # complete public context, crossed and passed the width check.
+            capacity_proven += 1
+        elif evidence_status == COMPLIANCE_FAIL:
+            capacity_failures += 1
+        else:
+            # Candidate-count/key context can survive an earlier failure; it
+            # does not prove that the capacity gate ran.
+            capacity_unproven += 1
     padding_failures = sum(
         sample.failure_reason == task5_offline.FailureReason.PADDING_MASK_VIOLATION
         for sample in samples
@@ -1953,7 +2004,7 @@ def _offline_profile(
             population_identity,
             capacity_proven,
             capacity_failures,
-            sum(sample.candidate_count is None for sample in samples),
+            capacity_unproven,
         ),
         padding_compliance_rate=_compliance(
             population_identity,
