@@ -406,10 +406,13 @@ string(column_name)
 
 An absent parent table or parent offset uses `optional_string` with present
 byte `0x00`; it is never encoded as an empty string. Only the five child
-tables listed in section 6.8 have a parent and parent-offset identity. The
-ordinary per-sample ragged offsets remain Phase-5 layout execution metadata and
-are deliberately excluded from per-sample canonical materialization bytes as
-already specified in section 12.
+tables listed in section 6.8 have a parent and parent-offset identity.
+Batch-global `sample_offsets[B+1]` remain Phase-5 execution-layout metadata and
+are excluded from one sample's canonical materialization bytes.
+
+Per-sample canonical materialization includes every variable-table offset
+required by section 12, rebased to zero within that sample, together with the
+required child parent-offset structures and real-row masks.
 
 ### 6.6 Closed descriptor-token vocabularies
 
