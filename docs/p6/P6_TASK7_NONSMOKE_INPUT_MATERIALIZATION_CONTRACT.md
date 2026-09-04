@@ -2,13 +2,12 @@
 
 ## Status and scope
 
-**Status:** The semantic materialization design is **ACCEPTED / independent
-review PASS**. The configuration-byte amendment in section 6 is
-**PROPOSED / pending independent review**.
+**Status:** **ACCEPTED / independent review PASS**.
 
 ```text
 SEMANTIC_MATERIALIZATION_DESIGN=ACCEPTED
-CONFIG_BYTES_AMENDMENT=PROPOSED_PENDING_INDEPENDENT_REVIEW
+CONFIG_BYTES_AMENDMENT=ACCEPTED
+INDEPENDENT_REVIEW=PASS
 ```
 
 This is the P6-T6R1 documentation-only contract freeze for the first Task7
@@ -1412,19 +1411,20 @@ new gameplay, legality, observation, candidate, replay, or dataset authority
 
 ## 19. Remaining Task7 blockers
 
-Independent review accepted the semantic materialization design. This
-configuration-byte amendment remains pending independent review. A separately
-authorized and independently accepted implementation is still required before
-this first gap is resolved. The second gap remains intentionally separate: the
-current Task5C evaluator has no meaningful fixed-matchup context/job path for
-a Task7 checkpoint.
+Independent review accepted the semantic materialization design and this
+configuration-byte amendment. A separately authorized and independently
+accepted implementation is still required before this first gap is resolved.
+The second gap remains intentionally separate: the current Task5C evaluator
+has no meaningful fixed-matchup context/job path for a Task7 checkpoint.
 
 ```text
 TASK7_INPUT_MATERIALIZATION_CONTRACT=ACCEPTED
 CONTRACT_INDEPENDENT_REVIEW=PASS
 CONTRACT_FINAL_PASS=YES
 
-CONFIG_BYTES_AMENDMENT=PROPOSED_PENDING_INDEPENDENT_REVIEW
+CONFIG_BYTES_AMENDMENT=ACCEPTED
+INDEPENDENT_REVIEW=PASS
+CONFIG_BYTES_AMENDMENT_FINAL_PASS=YES
 
 MATERIALIZATION_IMPLEMENTATION_AUTHORIZED=NO
 IMPLEMENTATION_STARTED=NO
