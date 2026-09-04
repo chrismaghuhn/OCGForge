@@ -61,11 +61,13 @@ The boundary group is intentionally unordered. Elfnote and Blitzclique must not 
 When the M8-0 freeze gate is eventually evaluated, candidate selection should use the following lexicographic rule instead of an arbitrary weighted score:
 
 1. Require a minimum freeze-grade competitive-evidence threshold.
-2. Exclude candidates with unresolved blocking mechanics or card-closure risk unless the curriculum role cannot be filled safely otherwise.
-3. Prefer the candidate that adds the most currently uncovered strategic/mechanical role.
-4. Among candidates with equivalent curriculum value, prefer lower OCGForge closure and Teacher risk.
+2. Exclude candidates with unresolved blocking mechanics or card-closure risk. A necessity exception is allowed only when a required curriculum coverage column would otherwise remain completely unfilled at confirmed `H` exposure and the candidate itself has confirmed `H` exposure in that column. `U` cells are unconfirmed coverage and cannot satisfy this necessity test. `M` or `V` exposure also cannot establish the exception.
+3. Prefer additional strategic/mechanical coverage over lower OCGForge/Teacher risk only when the candidate closes at least one such confirmed `H`-coverage hole: a column for which no already selected or otherwise admissible lower-risk candidate supplies confirmed `H` exposure. `U`, `M`, and `V` cells do not count as closing that materiality threshold.
+4. In every comparison where Step 3's materiality threshold is not met, prefer lower OCGForge closure and Teacher risk.
 5. Use stronger competitive evidence to break remaining ties.
 6. If the evidence still cannot separate candidates, retain an explicit `TIED / UNORDERED` status.
+
+This rule makes the risk override deliberately narrow. Unknown mechanics cannot be treated as implied novelty, and a marginal increase from `M` to `H`, or from `U` to a hoped-for role, cannot justify selecting a materially riskier deck. Coverage outranks risk only to prevent a completely absent high-exposure curriculum role.
 
 This intentionally avoids a synthetic formula such as `meta_share * weight + novelty * weight - risk * weight`, because unvalidated weights would only move the false precision into a score.
 
