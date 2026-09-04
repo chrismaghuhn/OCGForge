@@ -32,7 +32,7 @@ admission-backed supervision derivation. Phase 6 infrastructure and
 evaluation implementation exists through merged T5D, while the first
 strategically meaningful accepted BC baseline does not exist yet. Task 6 and
 Task 7 remain unauthorized. T5D main acceptance and the Task 5 tooling final
-pass remain pending post-merge CI review.
+pass are complete; P6-G14 remains baseline-dependent.
 
 Do not silently upgrade this claim into:
 

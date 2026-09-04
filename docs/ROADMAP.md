@@ -263,14 +263,15 @@ Accepted evidence: `H_exec=3c99e86c487361fc4e0f5f12678b4867e59232b7`,
 
 ## Phase 6 — Behavior Cloning baseline
 
-Status: **active infrastructure; Task 5 tooling final acceptance pending**.
+Status: **Task 5 tooling FINAL PASS; Task 6 dependency barrier cleared; Task 6
+not authorized**.
 
 Phase 6 Tasks 1–4B are accepted and merged. Task 5 contract freeze and T5A–T5C
-are final and merged. T5D is merged at
-`c0156a3451a7f8cc4495d544f7a34cab925e3c5a`; its main acceptance and the Task 5
-tooling final pass remain pending post-merge CI review. The accepted Task4B
-checkpoint is a bounded technical smoke artifact, not a meaningful BC baseline
-or strategic-strength claim.
+are final and merged. T5D is final, merged, and accepted on main at
+`c0156a3451a7f8cc4495d544f7a34cab925e3c5a`, based on post-merge CI run
+`33892943953`. Task 5 tooling is FINAL PASS and P6-G15 is PASS. The accepted
+Task4B checkpoint is a real trained technical smoke artifact, not a meaningful
+BC baseline or strategic-strength claim.
 
 | Phase-6 task | Status |
 | --- | --- |
@@ -283,8 +284,9 @@ or strategic-strength claim.
 | T5A — schemas, codecs, identities, and job manifests | **FINAL / MERGED** |
 | T5B — offline evaluator, metrics, and deterministic slicing | **FINAL / MERGED** |
 | T5C — frozen gameplay evaluator | **FINAL / MERGED** |
-| T5D — public audit, first divergence, distribution shift, and derived report | **MERGED / POST-MERGE ACCEPTANCE PENDING** |
-| Task 5 tooling FINAL PASS | **PENDING** |
+| T5D — public audit, first divergence, distribution shift, and derived report | **FINAL / MERGED / ACCEPTED ON MAIN** |
+| Task 5 tooling FINAL PASS | **FINAL PASS** |
+| Task 5 | **FINAL PASS** |
 | Task 6 — PyTorch/JAX backend bake-off | **NOT AUTHORIZED** |
 | Task 7 — first accepted BC baseline and checkpoint evidence | **NOT AUTHORIZED** |
 
@@ -305,8 +307,7 @@ and the architecture rationale in
 The Task-5 implementation is split into T5A schemas/codecs/identities/job
 manifests, T5B offline evaluation, T5C frozen gameplay evaluation, and T5D
 public audit, first divergence, distribution shift, and deterministic derived
-reporting. P6-G15 is supported by T5D but remains pending post-merge review.
-P6-G14 remains **NOT_RUN/BLOCKED_BY_MEANINGFUL_BASELINE** and is not required
+reporting. P6-G15 is **PASS**. P6-G14 remains **NOT_RUN/BLOCKED_BY_MEANINGFUL_BASELINE** and is not required
 for the Task 5 tooling final pass.
 
 The required sequence remains:

@@ -1,8 +1,8 @@
 # OCGForge Current Project State
 
 **Snapshot date:** 2026-09-04
-**Repository baseline inspected:** `main` at `c0156a3451a7f8cc4495d544f7a34cab925e3c5a` (T5D merge; post-merge CI acceptance pending)
-**Latest project checkpoint described here:** T5D merged; Task 5 tooling final pass pending post-merge CI run `33892943953` and independent supervisor review
+**Repository baseline inspected:** `main` at `c0156a3451a7f8cc4495d544f7a34cab925e3c5a` (T5D accepted main checkpoint)
+**Latest project checkpoint described here:** T5D and Task 5 tooling FINAL PASS, accepted by post-merge CI run `33892943953`
 
 This document is a summary. Detailed acceptance evidence remains in the milestone files.
 
@@ -18,7 +18,7 @@ The repository also records final acceptance for Episodic V2, Phase 3A/3B,
 Phase 4A/4B/4C, and Phase 5. Phase 6 Tasks 1–4B are accepted and merged;
 Task 5 contract freeze and T5A–T5C are final and merged, and T5D is merged at
 `c0156a3451a7f8cc4495d544f7a34cab925e3c5a`. T5D main acceptance and the Task
-5 tooling final pass remain pending post-merge CI review.
+5 tooling final pass are complete.
 
 The project must **not** generalize that claim to arbitrary Yu-Gi-Oh! decks.
 
@@ -39,7 +39,7 @@ The project must **not** generalize that claim to arbitrary Yu-Gi-Oh! decks.
 | Phase 5 | **FINAL PASS** | framework-neutral logical/encoded/batch model input plus admission-backed supervision samples |
 | Phase 6 Tasks 1–4B | **FINAL / MERGED** | contract, data, model-input, provisional backend, and bounded smoke/recovery infrastructure |
 | Task 5 contract freeze; T5A–T5C | **FINAL / MERGED** | evaluation contracts, codecs, offline evaluator, and frozen gameplay evaluator |
-| T5D | **MERGED / POST-MERGE ACCEPTANCE PENDING** | public audit, first divergence, distribution shift, and derived report |
+| T5D | **FINAL / MERGED / ACCEPTED ON MAIN** | public audit, first divergence, distribution shift, and derived report |
 
 ## M3/M3.5 recorded acceptance
 
@@ -151,18 +151,19 @@ manifests, T5B owns offline evaluation and deterministic slicing, T5C owns
 the frozen gameplay evaluator, and T5D owns public audit, first divergence,
 distribution shift, and deterministic derived reporting.
 
-T5D branch review, PR review, and PR CI passed before the merge. P6-G15 is
-supported by T5D but remains pending post-merge acceptance. The post-merge CI
-run is `33892943953` on this `main` head; its acceptance remains with the
-independent supervisor.
+T5D branch review, PR review, PR CI, and post-merge CI passed. The post-merge
+CI run is `33892943953` on this `main` head. P6-G15 is **PASS** and Task 5
+tooling is **FINAL PASS**.
 
-P6-G14 remains `NOT_RUN/BLOCKED_BY_MEANINGFUL_BASELINE`. P6-G15 is supported
-by T5D but remains `SUPPORTED_PENDING_POST_MERGE_ACCEPTANCE`.
+P6-G14 remains `NOT_RUN/BLOCKED_BY_MEANINGFUL_BASELINE`. It is independent of
+Task 5 tooling FINAL PASS and remains blocked until Task 7 produces a
+meaningful baseline.
 
 The Task4B checkpoint
 `phase6_checkpoint.v1.62f4532a5e551886affbd65bc47f7645017dedf6c5ca3a0b7b87b4a978943327`
-remains a bounded technical smoke artifact. It is not an accepted strategic
-baseline, a playable policy, a converged model, or a backend decision.
+is a real trained technical smoke artifact. It remains bounded and is not an
+accepted strategic baseline, a playable policy, a converged model, a
+Teacher-parity claim, or a backend decision.
 
 ## Important remaining limitations
 
@@ -288,7 +289,7 @@ tracker status. It is not a repository invariant.
 
 ## Immediate documentation/maintenance priorities
 
-1. complete independent post-merge acceptance of T5D and the Task 5 tooling;
+1. preserve the accepted Task 5 tooling and its evidence boundaries;
 2. require explicit Task 6 authorization before any PyTorch/JAX bakeoff;
 3. require an accepted Task 6 decision and explicit authorization before Task 7;
 4. create issues before broadening certified deck/card scope;

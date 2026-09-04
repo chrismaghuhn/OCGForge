@@ -1,10 +1,11 @@
 # OCGForge Testing and Acceptance
 
 The accepted repository state is M0–M4, Episodic V2, Phase 3A/3B,
-Phase 4A/4B/4C, Phase 5 **FINAL PASS**, and Phase 6 Tasks 1–4B plus T5A–T5C
-for their defined scopes. T5D is merged, with Task 5 final acceptance pending
-post-merge review. Historical acceptance artifacts remain immutable; this
-document describes current verification entry points.
+Phase 4A/4B/4C, Phase 5 **FINAL PASS**, and Phase 6 Tasks 1–4B plus T5A–T5D
+for their defined scopes. Task 5 tooling and Task 5 are **FINAL PASS**; P6-G14
+remains `NOT_RUN/BLOCKED_BY_MEANINGFUL_BASELINE`. Historical acceptance
+artifacts remain immutable; this document describes current verification entry
+points.
 
 OCGForge uses layered evidence because “the duel completed” is not sufficient proof for a deterministic game-AI environment.
 
@@ -218,9 +219,9 @@ another framework and does not implement learning.
 
 Phase 6 now has contract/data/model-input checks, Task4A runner and smoke/
 recovery checks, and Task5 offline, frozen-gameplay, and public-audit
-regressions. These checks exercise implementation surfaces; documentation
-status does not itself mark a Phase-6 gate `PASS`. In particular, the merged
-T5D main checkpoint still awaits post-merge acceptance, and P6-G14 remains
+regressions. The merged T5D main checkpoint is accepted by post-merge CI run
+`33892943953`, and P6-G15 is **PASS**. Documentation status does not itself
+alter gate semantics; P6-G14 remains
 `NOT_RUN/BLOCKED_BY_MEANINGFUL_BASELINE`.
 
 ## 14. CI

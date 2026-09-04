@@ -10,8 +10,9 @@ explicit and reproducible before adding learner or training code.
 > **Current maturity:** M0–M4, Episodic V2, Phase 3A/3B, Phase 4A/4B/4C,
 > Phase 5, and Phase 6 Tasks 1–4B are accepted final checkpoints for their
 > defined scopes. Task 5 evaluation tooling is implemented through T5D and
-> merged; post-merge acceptance of T5D and the Task 5 tooling final pass are
-> pending supervisor review. Task 6 and Task 7 remain unauthorized. The
+> is final, merged, and accepted on main. P6-G15 and the Task 5 tooling final
+> pass are complete; P6-G14 remains baseline-dependent. Task 6 and Task 7
+> remain unauthorized. The
 > certified gameplay slice remains fixed-matchup and is not general all-deck
 > Yu-Gi-Oh! support.
 
@@ -34,7 +35,7 @@ OCGForge currently provides:
 - a framework-neutral `ygo::model` path from public observations and complete
   candidate domains through logical input, encoded input, and ragged/padded
   batch layout;
-- admission-backed `ModelSupervisionSampleV1` derivation.
+- admission-backed `ModelSupervisionSampleV1` derivation;
 - Phase 6 evaluation tooling through T5D: offline metrics, frozen gameplay
   evidence, first-divergence audit, distribution-shift comparison, and a
   deterministic derived report.
@@ -45,11 +46,11 @@ OCGForge intentionally does **not** currently claim:
 - a stable general-purpose Gym-style API;
 - checkpoint/fork support;
 - high-throughput vectorized simulation;
-- a learned/neural policy;
 - a search system;
-- a training stack;
+- a strategically meaningful accepted learned policy;
+- a selected production ML backend;
+- a mature general-purpose training stack;
 - a strategically meaningful accepted BC baseline;
-- a selected PyTorch/JAX backend;
 - competitive playing strength.
 
 ## Project priorities
@@ -71,7 +72,7 @@ Performance work must not weaken the first six properties.
 
 Documentation baseline: `main` at post-T5D merge
 `c0156a3451a7f8cc4495d544f7a34cab925e3c5a` (2026-09-04). T5D main
-acceptance remains pending post-merge CI review.
+acceptance is complete from post-merge CI run `33892943953`.
 
 The current accepted milestone sequence is:
 
@@ -79,10 +80,10 @@ The current accepted milestone sequence is:
 - Episodic V2: **FINAL PASS**;
 - Phase 3A / 3B: **FINAL PASS**;
 - Phase 4A / 4B / 4C: **FINAL PASS**;
-- Phase 5: **FINAL PASS**.
+- Phase 5: **FINAL PASS**;
 - Phase 6 Tasks 1–4B: **FINAL / MERGED**;
 - Task 5 contract freeze and T5A–T5C: **FINAL / MERGED**;
-- T5D: **MERGED / POST-MERGE ACCEPTANCE PENDING**.
+- T5D and Task 5 tooling: **FINAL PASS / MERGED / ACCEPTED ON MAIN**.
 
 Phase 5 is documented by the [model contract](docs/p5/P5_MODEL_CONTRACT.md)
 and [final acceptance evidence](docs/p5/P5_ACCEPTANCE_EVIDENCE.md). Its
@@ -103,14 +104,15 @@ labels, while `public_action_key` remains selection/routing identity.
 Phase 6 is active. Tasks 1–4B are accepted and merged. Task 5 evaluation
 tooling is implemented through T5D and merged at
 `c0156a3451a7f8cc4495d544f7a34cab925e3c5a`; T5D main acceptance and the Task
-5 tooling final pass are pending post-merge CI review. Task 6 remains the
-PyTorch/JAX backend bakeoff, and Task 7 remains the first meaningful
-feed-forward BC baseline; neither task is authorized.
+5 tooling final pass are complete. Task 6 remains the PyTorch/JAX backend
+bakeoff, and Task 7 remains the first meaningful feed-forward BC baseline;
+neither task is authorized.
 
 The accepted Task4B checkpoint,
 `phase6_checkpoint.v1.62f4532a5e551886affbd65bc47f7645017dedf6c5ca3a0b7b87b4a978943327`,
-is a bounded technical smoke artifact. It is not a meaningful BC baseline,
-playable policy, converged model, or strategic-strength claim.
+is a real trained technical smoke artifact. It is not a meaningful BC baseline,
+playable strategic policy, convergence claim, Teacher-parity claim, backend
+winner, general Yu-Gi-Oh! policy, or strategic-strength claim.
 
 The accepted Phase-5 evidence records `H_exec=3c99e86c487361fc4e0f5f12678b4867e59232b7`,
 `H_evidence=da3376fc2ab645377f9de2dd9fd6195c1aa8c081`, and a fresh `163/163`

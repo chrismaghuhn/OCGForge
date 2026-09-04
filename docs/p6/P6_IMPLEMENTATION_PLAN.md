@@ -34,8 +34,9 @@ training backend or ML dependency is selected by this plan's Task 1.
 | T5A | schemas, codecs, identities, and job manifests | FINAL / MERGED |
 | T5B | offline evaluator, metrics, and deterministic slicing | FINAL / MERGED |
 | T5C | frozen gameplay evaluator | FINAL / MERGED |
-| T5D | public audit, first divergence, distribution shift, and derived report | MERGED / POST-MERGE ACCEPTANCE PENDING |
-| Task 5 tooling final pass | complete Task 5 tooling acceptance | PENDING |
+| T5D | public audit, first divergence, distribution shift, and derived report | FINAL / MERGED / ACCEPTED ON MAIN |
+| Task 5 tooling final pass | complete Task 5 tooling acceptance | FINAL PASS |
+| Task 5 | complete Task 5 tooling and evaluation scope | FINAL PASS |
 | Task 6 | controlled PyTorch/JAX backend bake-off and primary-backend ADR | NOT AUTHORIZED |
 | Task 7 | first accepted BC baseline run and canonical checkpoint evidence | NOT AUTHORIZED |
 
@@ -226,8 +227,10 @@ before any result is used in evaluation.
 
 ## 7. Task 5 — Frozen offline, gameplay, and first-divergence evaluation
 
-**Status:** T5A–T5C FINAL / MERGED; T5D MERGED / POST-MERGE ACCEPTANCE PENDING.
-Task 5 tooling FINAL PASS remains PENDING post-merge acceptance.
+**Status:** T5A–T5C FINAL / MERGED; T5D FINAL / MERGED / ACCEPTED ON MAIN.
+Task 5 tooling and Task 5 are FINAL PASS. Main acceptance is bound to
+post-merge CI run `33892943953` on
+`c0156a3451a7f8cc4495d544f7a34cab925e3c5a`.
 
 Task 5 implementation ownership is split as follows:
 
@@ -238,9 +241,10 @@ Task 5 implementation ownership is split as follows:
 - **T5D:** public audit, first divergence, distribution shift, and deterministic
   derived report.
 
-T5D supports P6-G15, but final main acceptance remains pending the post-merge
-CI review. P6-G14 remains **NOT_RUN/BLOCKED_BY_MEANINGFUL_BASELINE**; it is not
-required for Task 5 tooling FINAL PASS.
+T5D owns and closes P6-G15; P6-G15 is **PASS**. P6-G14 remains
+**NOT_RUN/BLOCKED_BY_MEANINGFUL_BASELINE**; it is not required for Task 5
+tooling FINAL PASS and remains blocked until Task 7 produces a meaningful
+baseline.
 
 **Purpose:** Evaluate a frozen checkpoint through the normal public environment
 and trusted trajectory/admission paths.
@@ -267,8 +271,9 @@ divergence. Run the P6-G08 through P6-G18 evidence applicable to the task.
 
 ## 8. Task 6 — Controlled PyTorch/JAX backend bake-off
 
-**Status:** NOT AUTHORIZED. Requires Task 5 tooling FINAL PASS and explicit
-authorization after a real BC workload and Task-5 evaluation evidence exist.
+**Status:** NOT AUTHORIZED. The Task 5 tooling prerequisite is complete, but
+explicit Task 6 authorization remains required before a real BC workload or
+backend bakeoff.
 
 **Purpose:** Compare PyTorch and JAX only after both can be evaluated under one
 accepted semantic workload. This task produces evidence and a later primary

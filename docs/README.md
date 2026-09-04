@@ -10,11 +10,10 @@ This index keeps those layers separate.
 
 Current repository status: M0–M4, Episodic V2, Phase 3A/3B,
 Phase 4A/4B/4C, Phase 5, and Phase 6 Tasks 1–4B are accepted for their
-defined scopes. Task 5 contract freeze and T5A–T5C are **FINAL / MERGED**;
-T5D is **MERGED / POST-MERGE ACCEPTANCE PENDING** on `main` at
-`c0156a3451a7f8cc4495d544f7a34cab925e3c5a`. Task 5 tooling final pass is
-pending supervisor review of post-merge CI. Task 6 and Task 7 remain
-unauthorized.
+defined scopes. Task 5 contract freeze, T5A–T5C, and T5D are **FINAL / MERGED
+/ ACCEPTED ON MAIN** at `c0156a3451a7f8cc4495d544f7a34cab925e3c5a`.
+P6-G15 is **PASS** and Task 5 tooling is **FINAL PASS**. Task 6 and Task 7
+remain unauthorized; P6-G14 remains `NOT_RUN/BLOCKED_BY_MEANINGFUL_BASELINE`.
 
 ## Start here
 
@@ -126,8 +125,9 @@ this status index.
 | T5A schemas, codecs, identities, and job manifests | **FINAL / MERGED** |
 | T5B offline evaluator, metrics, and deterministic slicing | **FINAL / MERGED** |
 | T5C frozen gameplay evaluator | **FINAL / MERGED** |
-| T5D public audit, first divergence, distribution shift, and derived report | **MERGED / POST-MERGE ACCEPTANCE PENDING** |
-| Task 5 tooling final pass | **PENDING POST-MERGE ACCEPTANCE** |
+| T5D public audit, first divergence, distribution shift, and derived report | **FINAL / MERGED / ACCEPTED ON MAIN** |
+| Task 5 tooling final pass | **FINAL PASS** |
+| Task 5 | **FINAL PASS** |
 | Task 6 | **NOT AUTHORIZED** |
 | Task 7 | **NOT AUTHORIZED** |
 
@@ -136,7 +136,7 @@ Frozen Phase-6 authorities:
 - [Phase-6 BC contract](p6/P6_BC_CONTRACT.md)
 - [Phase-6 dataset and split contract](p6/P6_DATASET_AND_SPLIT_CONTRACT.md)
 - [Phase-6 checkpoint and inference contract](p6/P6_CHECKPOINT_AND_INFERENCE_CONTRACT.md)
-- [Phase-6 evaluation plan](p6/P6_EVALUATION_PLAN.md) — gate statuses remain independently governed
+- [Phase-6 evaluation plan](p6/P6_EVALUATION_PLAN.md) — P6-G14 remains baseline-dependent
 - [Phase-6 implementation plan](p6/P6_IMPLEMENTATION_PLAN.md) — living sequencing status
 - [Task4A numeric/provenance contract](p6/P6_TASK4A_NUMERIC_AND_PROVENANCE_CONTRACT.md)
 - [Task4B acceptance/recovery contract](p6/P6_TASK4B_ACCEPTANCE_RECOVERY_V1.md)
@@ -150,9 +150,10 @@ Implemented Task-5 tooling is visible in the narrow Phase-6 modules:
 - [T5C gameplay evaluator header](../include/ygo/phase6/task5c_gameplay.hpp)
 - [T5D public audit and report layer](../tools/phase6/task5_audit.py)
 
-The accepted Task4B checkpoint is a bounded technical smoke artifact. It is
+The accepted Task4B checkpoint is a real trained technical smoke artifact. It is
 not a meaningful BC baseline, a playable policy, or evidence of strategic
-strength. See [ADR-0007](adr/ADR-0007-phase6-behavior-cloning-boundary.md) for
+strength, convergence, Teacher parity, or backend selection. See
+[ADR-0007](adr/ADR-0007-phase6-behavior-cloning-boundary.md) for
 the ownership rationale.
 
 ## Decision-protocol evidence
