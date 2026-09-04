@@ -2,11 +2,11 @@
 
 ## Status
 
-Proposed / pending independent Task6 review.
+Accepted — independent Task6 review PASS; Task7 readiness remains BLOCKED.
 
-This branch-local decision record is not an independent acceptance, does not
-claim `FINAL PASS`, and does not authorize Task7. The accompanying readiness
-record is authoritative for the bounded Task6 audit result.
+This decision record is accepted for the bounded Task6 decision. It does not
+authorize Task7 or claim Task7 acceptance. The accompanying readiness record
+retains the two implementation gaps and the resulting Task7 block.
 
 ## Context
 
@@ -270,5 +270,6 @@ bake-off, new checkpoint, Teacher regeneration, or generated-evidence update.
 The exact commands and outcomes are recorded in
 [`P6_TASK6_PYTORCH_READINESS.md`](../p6/P6_TASK6_PYTORCH_READINESS.md).
 
-The Task6 branch must stop for independent review. It must not create a PR,
-merge, authorize Task7, or claim independent Task6 acceptance.
+The Task6 decision is closed after independent review. It must not authorize
+Task7 or claim Task7 acceptance; any PR or merge remains a separate repository
+operation.

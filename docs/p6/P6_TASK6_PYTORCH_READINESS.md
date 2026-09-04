@@ -19,15 +19,18 @@ TASK7_FRAMEWORK=PYTORCH
 TASK7_FRAMEWORK_VERSION=2.12.1+cu126
 TASK7_READINESS=BLOCKED
 TASK6_READINESS=BLOCKED_BY_IMPLEMENTATION_GAP
+TASK6_TECHNICAL_REVIEW=PASS
+TASK6_INDEPENDENT_REVIEW=PASS
+TASK6_FINAL_PASS=YES
 TASK7_AUTHORIZED=NO
 TASK7_STARTED=NO
 
 TASK6_SELF_FINAL_PASS=NO
-TASK6_STATUS=STOP_FOR_INDEPENDENT_REVIEW
+TASK6_STATUS=FINAL_PASS_AFTER_INDEPENDENT_REVIEW
 ```
 
-This is a bounded Task6 audit, not independent acceptance. No Task7 work is
-authorized by this record.
+This record reflects the bounded Task6 audit and the independent technical
+review PASS. No Task7 work is authorized by this record.
 
 ## Verified Task4B provenance
 
