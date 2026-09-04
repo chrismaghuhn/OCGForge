@@ -126,7 +126,9 @@ Fixture make_fixture(const std::size_t count, const bool rich) {
         link.effect_description = std::numeric_limits<std::uint64_t>::max();
         link.targets = {{1, 1}};
         encoded.chain.length = 7;
-        encoded.chain.links = {link};
+        ygo::model::EncodedChainLink empty_source;
+        empty_source.index = 8;
+        encoded.chain.links = {link, empty_source};
         ygo::model::EncodedVisibleEvent event;
         event.event_index = 9;
         event.kind_code = 3;
@@ -142,7 +144,9 @@ Fixture make_fixture(const std::size_t count, const bool rich) {
         event.win_reason = 8;
         event.effect_description = 0;
         event.target_public_locator_ordinals = {0, 1};
-        encoded.visible_events = {event};
+        ygo::model::EncodedVisibleEvent empty_entity;
+        empty_entity.event_index = 10;
+        encoded.visible_events = {event, empty_entity};
         encoded.match_context.own_decklist_known = true;
         encoded.match_context.opponent_decklist_known = true;
         encoded.match_context.own_deck.known = true;

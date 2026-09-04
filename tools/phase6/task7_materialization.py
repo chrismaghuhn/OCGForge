@@ -55,25 +55,25 @@ class Task7MaterializationError(ValueError):
 
 
 def _pack_u8(value: int) -> bytes:
-    if not isinstance(value, int) or not 0 <= value <= 0xFF:
+    if isinstance(value, bool) or not isinstance(value, int) or not 0 <= value <= 0xFF:
         raise Task7MaterializationError("u8 is out of range")
     return struct.pack(">B", value)
 
 
 def _pack_u16(value: int) -> bytes:
-    if not isinstance(value, int) or not 0 <= value <= 0xFFFF:
+    if isinstance(value, bool) or not isinstance(value, int) or not 0 <= value <= 0xFFFF:
         raise Task7MaterializationError("u16 is out of range")
     return struct.pack(">H", value)
 
 
 def _pack_u32(value: int) -> bytes:
-    if not isinstance(value, int) or not 0 <= value <= 0xFFFFFFFF:
+    if isinstance(value, bool) or not isinstance(value, int) or not 0 <= value <= 0xFFFFFFFF:
         raise Task7MaterializationError("u32 is out of range")
     return struct.pack(">I", value)
 
 
 def _pack_u64(value: int) -> bytes:
-    if not isinstance(value, int) or not 0 <= value <= 0xFFFFFFFFFFFFFFFF:
+    if isinstance(value, bool) or not isinstance(value, int) or not 0 <= value <= 0xFFFFFFFFFFFFFFFF:
         raise Task7MaterializationError("u64 is out of range")
     return struct.pack(">Q", value)
 
@@ -484,13 +484,14 @@ def u64_limbs(value: int) -> Tuple[int, int, int, int]:
 
 
 def i32_limbs(value: int) -> Tuple[int, int]:
-    if not isinstance(value, int) or not -(1 << 31) <= value < (1 << 31):
+    if isinstance(value, bool) or not isinstance(value, int) or not -(1 << 31) <= value < (1 << 31):
         raise Task7MaterializationError("i32 is out of range")
     return u32_limbs(value & 0xFFFFFFFF)
 
 
 def reconstruct_limbs(limbs: Sequence[int]) -> int:
-    if not limbs or any(not isinstance(value, int) or not 0 <= value <= 0xFFFF for value in limbs):
+    if not limbs or any(isinstance(value, bool) or not isinstance(value, int) or
+                        not 0 <= value <= 0xFFFF for value in limbs):
         raise Task7MaterializationError("invalid limb")
     value = 0
     for limb in limbs:
@@ -646,6 +647,13 @@ class Task7MaterializedBatchV1:
         if any(sample.configuration_identity != self.configuration_identity
                for sample in self.samples):
             raise Task7MaterializationError("Task7 batch configuration is inconsistent")
+        expected_tables = tuple(table.identity for table in self.samples[0].tables)
+        if any(tuple(table.identity for table in sample.tables) != expected_tables
+               for sample in self.samples[1:]):
+            raise Task7MaterializationError("Task7 batch table surface is inconsistent")
+
+    def pad(self, widths: Optional[Mapping[str, int]] = None) -> "Task7PaddedBatchV1":
+        return Task7PaddedBatchV1.from_batch(self, widths)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -666,10 +674,21 @@ class Task7PaddedSampleV1:
         normalized: dict[str, int] = {}
         for table in sample.tables:
             width = table.row_count if table.kind == "singleton" else widths.get(table.identity, table.row_count)
+            if (isinstance(width, bool) or
+                    table.kind == "singleton" and table.identity in widths and width != table.row_count):
+                raise Task7MaterializationError("singleton table width is not canonical")
             if not isinstance(width, int) or width < table.row_count:
                 raise Task7MaterializationError("padding capacity is below a real collection")
             normalized[table.identity] = width
-            padded_tables.append(_pad_table(table, width))
+        for table in sample.tables:
+            padded_tables.append(
+                _pad_table(
+                    table,
+                    normalized[table.identity],
+                    None if table.parent_table_identity is None
+                    else normalized[table.parent_table_identity],
+                )
+            )
         return cls(sample, MappingProxyType(normalized), tuple(padded_tables))
 
     def table(self, identity: str) -> Task7MaterializedTableV1:
@@ -682,12 +701,61 @@ class Task7PaddedSampleV1:
         real_tables_list: list[Task7MaterializedTableV1] = []
         for table in self.tables:
             original = self.source.table(table.identity)
-            unpadded = _unpad_table(table, original.row_count)
+            parent_width = (
+                None if original.parent_table_identity is None
+                else self.table(original.parent_table_identity).row_count
+            )
+            original_parent_count = (
+                None if original.parent_table_identity is None
+                else self.source.table(original.parent_table_identity).row_count
+            )
+            unpadded = _unpad_table(
+                table, original.row_count, original_parent_count, parent_width
+            )
             if not _tables_equal(unpadded, original):
                 raise Task7MaterializationError("padded real rows differ from source")
             real_tables_list.append(unpadded)
         real_tables = tuple(real_tables_list)
         return dataclasses.replace(self.source, tables=real_tables)
+
+
+@dataclasses.dataclass(frozen=True)
+class Task7PaddedBatchV1:
+    source: Task7MaterializedBatchV1
+    widths: Mapping[str, int]
+    samples: tuple[Task7PaddedSampleV1, ...]
+
+    @classmethod
+    def from_batch(cls, batch: Task7MaterializedBatchV1,
+                   widths: Optional[Mapping[str, int]] = None) -> "Task7PaddedBatchV1":
+        if widths is not None and not isinstance(widths, Mapping):
+            raise Task7MaterializationError("batch padding widths are not a mapping")
+        known_tables = {table.identity for table in batch.samples[0].tables}
+        requested = {} if widths is None else dict(widths)
+        if any(identity not in known_tables for identity in requested):
+            raise Task7MaterializationError("batch padding width names are not canonical")
+        normalized: dict[str, int] = {}
+        for table in batch.samples[0].tables:
+            maximum = max(sample.table(table.identity).row_count for sample in batch.samples)
+            value = maximum if table.kind != "singleton" else 1
+            if table.identity in requested:
+                value = requested[table.identity]
+            if isinstance(value, bool) or table.kind == "singleton" and value != 1:
+                raise Task7MaterializationError("singleton table width is not canonical")
+            if not isinstance(value, int) or value < maximum:
+                raise Task7MaterializationError("padding capacity is below a real collection")
+            normalized[table.identity] = value
+        padded = tuple(sample.pad(normalized) for sample in batch.samples)
+        return cls(batch, MappingProxyType(normalized), padded)
+
+    def table(self, sample_index: int, identity: str) -> Task7MaterializedTableV1:
+        return self.samples[sample_index].table(identity)
+
+    def unpad(self) -> Task7MaterializedBatchV1:
+        samples = tuple(sample.unpad() for sample in self.samples)
+        return Task7MaterializedBatchV1(
+            MATERIALIZATION_SCHEMA_ID, self.source.configuration_identity, samples
+        )
 
 
 def _torch_required() -> Any:
@@ -712,7 +780,8 @@ def _bool_tensor(values: Sequence[bool]) -> Any:
 
 def _offset_tensor(values: Sequence[int]) -> Any:
     runtime = _torch_required()
-    if any(not isinstance(value, int) or value < 0 or value > (1 << 63) - 1 for value in values):
+    if any(isinstance(value, bool) or not isinstance(value, int) or
+           value < 0 or value > (1 << 63) - 1 for value in values):
         raise Task7MaterializationError("offset is outside executable range")
     return runtime.tensor(list(values), dtype=runtime.int64)
 
@@ -1160,17 +1229,37 @@ def _pad_column(column: Task7MaterializedColumnV1, width: int,
     return dataclasses.replace(column, values=padded_values, presence=padded_presence)
 
 
-def _pad_table(table: Task7MaterializedTableV1, width: int) -> Task7MaterializedTableV1:
+def _pad_table(table: Task7MaterializedTableV1, width: int,
+               parent_width: Optional[int]) -> Task7MaterializedTableV1:
     runtime = _torch_required()
     if width < table.row_count:
         raise Task7MaterializationError("padding capacity is below a real collection")
+    if table.parent_offsets is None:
+        if parent_width is not None:
+            raise Task7MaterializationError("non-child table has a parent width")
+        padded_parent_offsets = None
+    else:
+        if parent_width is None:
+            raise Task7MaterializationError("child table has no parent width")
+        real_parent_count = table.parent_offsets.shape[0] - 1
+        if parent_width < real_parent_count:
+            raise Task7MaterializationError("parent padding capacity is below real rows")
+        # The real child terminal is retained; every newly padded parent owns
+        # an empty span at that terminal rather than a fabricated child row.
+        terminal = table.parent_offsets[-1].reshape(1)
+        if parent_width == real_parent_count:
+            padded_parent_offsets = table.parent_offsets
+        else:
+            padded_parent_offsets = runtime.cat(
+                (table.parent_offsets, terminal.repeat(parent_width - real_parent_count))
+            )
     columns = tuple(_pad_column(column, width, table.row_count) for column in table.columns)
     mask = runtime.zeros((width,), dtype=runtime.bool)
     if table.row_count:
         mask[:table.row_count] = True
     return dataclasses.replace(
         table, row_count=width, sample_offsets=_offset_tensor((0, table.row_count)),
-        parent_offsets=table.parent_offsets, columns=columns, row_mask=mask
+        parent_offsets=padded_parent_offsets, columns=columns, row_mask=mask
     )
 
 
@@ -1255,17 +1344,40 @@ def _tables_equal(left: Task7MaterializedTableV1,
     return True
 
 
-def _unpad_table(table: Task7MaterializedTableV1, real_count: int) -> Task7MaterializedTableV1:
+def _unpad_table(table: Task7MaterializedTableV1, real_count: int,
+                 real_parent_count: Optional[int],
+                 padded_parent_width: Optional[int]) -> Task7MaterializedTableV1:
     runtime = _torch_required()
     if real_count < 0 or real_count > table.row_count:
         raise Task7MaterializationError("invalid real row count")
+    if table.sample_offsets.shape != (2,) or table.sample_offsets.tolist() != [0, real_count]:
+        raise Task7MaterializationError("padded sample offsets have wrong terminal")
     if bool(table.row_mask[real_count:].any().item()):
         raise Task7MaterializationError("padding row mask is true")
     if bool(table.row_mask[:real_count].logical_not().any().item()):
         raise Task7MaterializationError("real row mask is false")
+    if table.parent_offsets is None:
+        if real_parent_count is not None or padded_parent_width is not None:
+            raise Task7MaterializationError("non-child table has parent offsets")
+        parent_offsets = None
+    else:
+        if real_parent_count is None or padded_parent_width is None:
+            raise Task7MaterializationError("child table parent metadata is missing")
+        if table.parent_offsets.shape[0] != padded_parent_width + 1:
+            raise Task7MaterializationError("padded child parent offsets have wrong width")
+        offsets = table.parent_offsets.tolist()
+        if offsets[0] != 0 or offsets[-1] != real_count:
+            raise Task7MaterializationError("padded child parent offsets have wrong terminal")
+        if any(left > right for left, right in zip(offsets, offsets[1:])):
+            raise Task7MaterializationError("padded child parent offsets are not monotonic")
+        # Parent rows beyond the source width must all be empty child spans.
+        if any(value != real_count for value in offsets[real_parent_count + 1:]):
+            raise Task7MaterializationError("padded parent row has a nonempty child span")
+        parent_offsets = table.parent_offsets[:real_parent_count + 1]
     return dataclasses.replace(
         table, row_count=real_count, sample_offsets=_offset_tensor((0, real_count)),
         columns=tuple(_unpad_column(column, real_count) for column in table.columns),
+        parent_offsets=parent_offsets,
         row_mask=runtime.ones((real_count,), dtype=runtime.bool)
     )
 

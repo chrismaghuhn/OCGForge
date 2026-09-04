@@ -1,3 +1,4 @@
+import dataclasses
 import os
 import subprocess
 import sys
@@ -5,9 +6,14 @@ import unittest
 
 from tools.phase6 import task7_materialization as task7
 
-PROBE_PATH = next(
-    (argument for argument in sys.argv[1:] if argument.lower().endswith((".exe", ".com"))),
-    os.path.join("build", "dev-windows", "phase6_task7_materialization_probe.exe"),
+EXECUTABLE_ARGUMENTS = tuple(
+    argument for argument in sys.argv[1:] if argument.lower().endswith((".exe", ".com"))
+)
+PROBE_PATH = EXECUTABLE_ARGUMENTS[0] if EXECUTABLE_ARGUMENTS else os.path.join(
+    "build", "dev-windows", "phase6_task7_materialization_probe.exe"
+)
+PAIRED_PROBE_PATH = EXECUTABLE_ARGUMENTS[1] if len(EXECUTABLE_ARGUMENTS) > 1 else os.path.join(
+    os.path.dirname(PROBE_PATH), "phase6_task7_input_materialization_test.exe"
 )
 
 
@@ -39,6 +45,7 @@ class Task7InputMaterializationTests(unittest.TestCase):
         self.assertEqual(task7.u32_limbs(0xFFFFFFFE), (65535, 65534))
         self.assertEqual(task7.u32_limbs(0xFFFFFFFF), (65535, 65535))
         self.assertEqual(task7.u64_limbs(1 << 24), (0, 0, 256, 0))
+        self.assertEqual(task7.u64_limbs(1), (0, 0, 0, 1))
         self.assertEqual(task7.u64_limbs((1 << 32) - 1), (0, 0, 65535, 65535))
         self.assertEqual(task7.u64_limbs(1 << 32), (0, 1, 0, 0))
         self.assertEqual(task7.u64_limbs((1 << 32) + 1), (0, 1, 0, 1))
@@ -46,6 +53,7 @@ class Task7InputMaterializationTests(unittest.TestCase):
         self.assertEqual(task7.i32_limbs(-(1 << 31)), (32768, 0))
         self.assertEqual(task7.i32_limbs(-1), (65535, 65535))
         self.assertEqual(task7.i32_limbs(0), (0, 0))
+        self.assertEqual(task7.i32_limbs(1), (0, 1))
         self.assertEqual(task7.i32_limbs((1 << 31) - 1), (32767, 65535))
 
     @unittest.skipIf(task7.torch is None, "PyTorch is not available in this Python runtime")
@@ -85,10 +93,15 @@ class Task7InputMaterializationTests(unittest.TestCase):
         self.assertTrue(bool(candidate_source.outer_present[0].item()))
         self.assertTrue(bool(candidate_source.current_entity_present[0].item()))
         self.assertTrue(bool(sample.table("chain_links").column("source").values.outer_present[0].item()))
+        self.assertFalse(bool(sample.table("chain_links").column("source").values.outer_present[1].item()))
         self.assertTrue(bool(sample.table("visible_events").column("entity").values.outer_present[0].item()))
+        self.assertFalse(bool(sample.table("visible_events").column("entity").values.outer_present[1].item()))
+        absent_candidate = self._probe_sample().table("candidates").column("source_reference").values
+        self.assertFalse(bool(absent_candidate.outer_present[0].item()))
+        self.assertEqual(absent_candidate.kind_code.tolist(), [[0]])
         self.assertEqual(sample.table("entity_properties").parent_offsets.tolist(), [0, 2, 4])
-        self.assertEqual(sample.table("chain_targets").parent_offsets.tolist(), [0, 1])
-        self.assertEqual(sample.table("visible_event_targets").parent_offsets.tolist(), [0, 2])
+        self.assertEqual(sample.table("chain_targets").parent_offsets.tolist(), [0, 1, 1])
+        self.assertEqual(sample.table("visible_event_targets").parent_offsets.tolist(), [0, 2, 2])
         globals_length = sample.table("globals").column("chain_length").values
         chain_length = sample.table("chain_state").column("length").values
         self.assertNotEqual(globals_length.tolist(), chain_length.tolist())
@@ -115,6 +128,25 @@ class Task7InputMaterializationTests(unittest.TestCase):
         self.assertNotEqual((False, (0, 0)), (True, (0, 0)))
 
     @unittest.skipIf(task7.torch is None, "PyTorch is not available in this Python runtime")
+    def test_every_optional_primitive_family_keeps_presence(self):
+        zero_limbs = {
+            "U8": task7.u8_limbs(0),
+            "U16": task7.u16_limbs(0),
+            "U32": task7.u32_limbs(0),
+            "U64": task7.u64_limbs(0),
+            "I32": task7.i32_limbs(0),
+        }
+        for source_type, limbs in zero_limbs.items():
+            self.assertNotEqual((False, limbs), (True, limbs), source_type)
+        sample = self._probe_sample("--rich")
+        self.assertTrue(bool(sample.table("entities").column("owner").presence[0].item()))
+        self.assertEqual(task7.reconstruct_limbs(sample.table("entities").column("owner").values[0].tolist()), 0)
+        self.assertTrue(bool(sample.table("sample_header").column("public_observation_context_kind_code").presence[0].item()))
+        self.assertTrue(bool(sample.table("entity_properties").column("left_scale").presence[2].item()))
+        self.assertTrue(bool(sample.table("visible_events").column("effect_description").presence[0].item()))
+        self.assertEqual(task7.reconstruct_limbs(sample.table("visible_events").column("effect_description").values[0].tolist()), 0)
+
+    @unittest.skipIf(task7.torch is None, "PyTorch is not available in this Python runtime")
     def test_candidate_cardinality_and_source_order(self):
         for count in (1, 24, 25, 129):
             sample = self._probe_sample(count)
@@ -128,11 +160,19 @@ class Task7InputMaterializationTests(unittest.TestCase):
     @unittest.skipIf(task7.torch is None, "PyTorch is not available in this Python runtime")
     def test_padding_round_trip_and_capacity_failure(self):
         sample = self._probe_sample("--rich")
+        exact_widths = {table.identity: table.row_count for table in sample.tables
+                        if table.kind != "singleton"}
+        self.assertEqual(sample.pad(exact_widths).unpad().canonical_bytes,
+                         sample.canonical_bytes)
         widths = {table.identity: table.row_count + 2 for table in sample.tables
                   if table.kind != "singleton"}
         padded = sample.pad(widths)
         self.assertTrue(bool(padded.table("candidates").row_mask[0].item()))
         self.assertTrue(not bool(padded.table("candidates").row_mask[-1].item()))
+        self.assertEqual(padded.table("entity_properties").parent_offsets.tolist(), [0, 2, 4, 4, 4])
+        self.assertEqual(padded.table("property_link_markers").parent_offsets.tolist(), [0, 0, 0, 2, 4, 4, 4])
+        self.assertEqual(padded.table("chain_targets").parent_offsets.tolist(), [0, 1, 1, 1, 1])
+        self.assertEqual(padded.table("visible_event_targets").parent_offsets.tolist(), [0, 2, 2, 2, 2])
         padded_entities = padded.table("entities")
         self.assertFalse(bool(padded_entities.row_mask[-1].item()))
         self.assertEqual(
@@ -148,8 +188,92 @@ class Task7InputMaterializationTests(unittest.TestCase):
         padded.table("candidates").column("action_kind_code").values[0, 0] += 1
         with self.assertRaises(task7.Task7MaterializationError):
             padded.unpad()
+        malformed_offsets = sample.pad(widths)
+        malformed_offsets.table("entity_properties").parent_offsets[-1] += 1
+        with self.assertRaises(task7.Task7MaterializationError):
+            malformed_offsets.unpad()
+        malformed_sample_offsets = sample.pad(widths)
+        malformed_sample_offsets.table("entities").sample_offsets[-1] += 1
+        with self.assertRaises(task7.Task7MaterializationError):
+            malformed_sample_offsets.unpad()
+        malformed_numeric = sample.pad(widths)
+        malformed_numeric.table("entities").column("card_vocabulary_id").values[-1, 0] = 1
+        with self.assertRaises(task7.Task7MaterializationError):
+            malformed_numeric.unpad()
+        malformed_presence = sample.pad(widths)
+        malformed_presence.table("globals").column("winner").presence[-1] = True
+        with self.assertRaises(task7.Task7MaterializationError):
+            malformed_presence.unpad()
+        malformed_reference = sample.pad(widths)
+        malformed_reference.table("relationships").column("source").values.public_locator_ordinal[-1, 0] = 1
+        with self.assertRaises(task7.Task7MaterializationError):
+            malformed_reference.unpad()
+        locator_index = next(index for index, table in enumerate(padded.tables)
+                             if table.identity == "public_locator_control_sidecar")
+        locator_table = padded.tables[locator_index]
+        locator_column = locator_table.column("public_locator_token")
+        bad_locator_column = dataclasses.replace(
+            locator_column, values=tuple(locator_column.values[:-1]) + ("leak",)
+        )
+        bad_locator_table = dataclasses.replace(locator_table, columns=(bad_locator_column,))
+        bad_tables = list(padded.tables)
+        bad_tables[locator_index] = bad_locator_table
+        malformed_string = dataclasses.replace(padded, tables=tuple(bad_tables))
+        with self.assertRaises(task7.Task7MaterializationError):
+            malformed_string.unpad()
         with self.assertRaises(task7.Task7MaterializationError):
             sample.pad({"candidates": 0})
+
+    @unittest.skipIf(task7.torch is None, "PyTorch is not available in this Python runtime")
+    def test_multi_sample_padding_preserves_each_source(self):
+        first = self._probe_sample(1, "--rich")
+        second = self._probe_sample(25, "--rich")
+        batch = task7.decode_canonical_batch((first.canonical_bytes, second.canonical_bytes))
+        padded = batch.pad()
+        self.assertEqual(padded.widths["candidates"], 25)
+        self.assertEqual(int(padded.table(0, "candidates").row_mask.sum().item()), 1)
+        self.assertEqual(int(padded.table(1, "candidates").row_mask.sum().item()), 25)
+        restored = padded.unpad()
+        self.assertEqual(tuple(sample.canonical_bytes for sample in restored.samples),
+                         (first.canonical_bytes, second.canonical_bytes))
+        first_alone = first.pad({table.identity: table.row_count for table in first.tables
+                                 if table.kind != "singleton"})
+        first_in_batch = padded.samples[0]
+        self.assertEqual(first_alone.unpad().canonical_bytes,
+                         first_in_batch.unpad().canonical_bytes)
+
+    @unittest.skipIf(task7.torch is None, "PyTorch is not available in this Python runtime")
+    def test_real_paired_hidden_world_materialization_is_equal(self):
+        if not os.path.exists(PAIRED_PROBE_PATH):
+            self.skipTest("Task7 paired-world probe is not built")
+        output = subprocess.check_output([PAIRED_PROBE_PATH, "--paired-probe"], text=True).splitlines()
+        fields = dict(line.split("=", 1) for line in output if "=" in line)
+        self.assertEqual(fields["task7_config"], task7.CONFIGURATION_IDENTITY)
+        left = task7.decode_canonical_sample(bytes.fromhex(fields["task7_paired_sample_hex_a"]))
+        right = task7.decode_canonical_sample(bytes.fromhex(fields["task7_paired_sample_hex_b"]))
+        self.assertEqual(left.canonical_bytes, right.canonical_bytes)
+        self.assertEqual(left.model_input_identity, right.model_input_identity)
+        self.assertEqual(left.card_vocabulary_identity, right.card_vocabulary_identity)
+        self.assertEqual(left.public_observation_digest, right.public_observation_digest)
+        self.assertEqual(left.public_candidate_domain_digest, right.public_candidate_domain_digest)
+        self.assertEqual(left.routing_keys, right.routing_keys)
+        self.assertEqual(left.candidate_count, right.candidate_count)
+        for left_table, right_table in zip(left.tables, right.tables):
+            self.assertEqual(left_table.identity, right_table.identity)
+            self.assertTrue(task7.torch.equal(left_table.sample_offsets, right_table.sample_offsets))
+            self.assertTrue(task7.torch.equal(left_table.row_mask, right_table.row_mask))
+            if left_table.parent_offsets is not None:
+                self.assertTrue(task7.torch.equal(left_table.parent_offsets, right_table.parent_offsets))
+            for left_column, right_column in zip(left_table.columns, right_table.columns):
+                if isinstance(left_column.values, task7.Task7ReferenceColumnV1):
+                    self.assertTrue(all(task7.torch.equal(a, b) for (_, a), (_, b)
+                                        in zip(left_column.values.learner_tensors(), right_column.values.learner_tensors())))
+                elif hasattr(left_column.values, "dtype"):
+                    self.assertTrue(task7.torch.equal(left_column.values, right_column.values))
+                else:
+                    self.assertEqual(left_column.values, right_column.values)
+                if left_column.presence is not None:
+                    self.assertTrue(task7.torch.equal(left_column.presence, right_column.presence))
 
     @unittest.skipIf(task7.torch is None, "PyTorch is not available in this Python runtime")
     def test_corrupt_canonical_bytes_fail_closed(self):

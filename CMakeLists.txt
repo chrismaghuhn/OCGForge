@@ -270,6 +270,8 @@ add_test(NAME phase6_bc_candidate_scorer_test
 
 add_executable(phase6_task7_input_materialization_test
                tests/phase6/phase6_task7_input_materialization_test.cpp)
+target_include_directories(phase6_task7_input_materialization_test PRIVATE
+                           "${CMAKE_SOURCE_DIR}/src/environment")
 target_link_libraries(phase6_task7_input_materialization_test PRIVATE ygo_phase6)
 add_test(NAME phase6_task7_input_materialization_test
          COMMAND phase6_task7_input_materialization_test)
@@ -278,21 +280,11 @@ add_executable(phase6_task7_materialization_probe
                tools/phase6_task7_materialization_probe/main.cpp)
 target_link_libraries(phase6_task7_materialization_probe PRIVATE ygo_phase6)
 
-set(TASK7_PYTHON_EXECUTABLE "${Python3_EXECUTABLE}")
-execute_process(
-    COMMAND python -c "import sys; print(sys.executable)"
-    RESULT_VARIABLE TASK7_PYTHON_RESULT
-    OUTPUT_VARIABLE TASK7_PYTHON_FROM_PATH
-    OUTPUT_STRIP_TRAILING_WHITESPACE
-    ERROR_QUIET)
-if(TASK7_PYTHON_RESULT EQUAL 0 AND EXISTS "${TASK7_PYTHON_FROM_PATH}")
-    set(TASK7_PYTHON_EXECUTABLE "${TASK7_PYTHON_FROM_PATH}")
-endif()
-
 add_test(NAME phase6_task7_input_materialization_python_test
-         COMMAND "${TASK7_PYTHON_EXECUTABLE}" -B -m
+         COMMAND "${Python3_EXECUTABLE}" -B -m
                  tests.phase6.phase6_task7_input_materialization_test
-                 "$<TARGET_FILE:phase6_task7_materialization_probe>")
+                 "$<TARGET_FILE:phase6_task7_materialization_probe>"
+                 "$<TARGET_FILE:phase6_task7_input_materialization_test>")
 set_tests_properties(phase6_task7_input_materialization_python_test PROPERTIES
                      LABELS "P6_PYTORCH_REQUIRED"
                      WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
