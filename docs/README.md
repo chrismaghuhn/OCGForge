@@ -9,9 +9,12 @@ OCGForge has three kinds of documentation:
 This index keeps those layers separate.
 
 Current repository status: M0–M4, Episodic V2, Phase 3A/3B,
-Phase 4A/4B/4C, and Phase 5 are **FINAL PASS** for their defined scopes.
-Phase 6 Task 1 is **CURRENT / AUTHORIZED** as a documentation-only contract
-freeze; Phase-6 implementation and training have not started.
+Phase 4A/4B/4C, Phase 5, and Phase 6 Tasks 1–4B are accepted for their
+defined scopes. Task 5 contract freeze and T5A–T5C are **FINAL / MERGED**;
+T5D is **MERGED / POST-MERGE ACCEPTANCE PENDING** on `main` at
+`c0156a3451a7f8cc4495d544f7a34cab925e3c5a`. Task 5 tooling final pass is
+pending supervisor review of post-merge CI. Task 6 and Task 7 remain
+unauthorized.
 
 ## Start here
 
@@ -100,33 +103,57 @@ PublicEnvironmentObservation
 
 `public_action_key` remains selection/routing identity, candidate ordinals are
 derived training-label metadata, and physical batch layout is excluded from
-model-input identity. Phase 6 Task 1 is the current documentation-only
-contract freeze; no learner, neural network, framework implementation, RL, or
-self-play implementation has started.
+model-input identity. Phase 6 now contains provisional framework execution,
+inference, and evaluation tooling, but no strategically meaningful accepted BC
+baseline exists yet.
 
 Accepted evidence records `H_exec=3c99e86c487361fc4e0f5f12678b4867e59232b7`,
 `H_evidence=da3376fc2ab645377f9de2dd9fd6195c1aa8c081`, and fresh `163/163`
 native CTest regression.
 
-## Phase 6 Behavior Cloning contract freeze
+## Phase 6 Behavior Cloning and evaluation
 
-Task 1 freezes the first framework-neutral BC boundary. It keeps the
-Environment as the legality and complete-candidate authority, accepts only
-admitted DatasetManifest membership, partitions by episode/duel identity, and
-binds training provenance, canonical checkpoint export, deterministic
-inference, offline imitation, frozen gameplay, and first-divergence evaluation
-without adding a learner or selecting PyTorch/JAX.
+The living sequence is maintained in the [Phase-6 implementation plan](p6/P6_IMPLEMENTATION_PLAN.md).
+The frozen contracts and historical acceptance records remain separate from
+this status index.
 
-- [Phase-6 BC contract](p6/P6_BC_CONTRACT.md) — current Task-1 contract
+| Phase-6 area | Status |
+| --- | --- |
+| Tasks 1–3 | **FINAL / MERGED** |
+| Task 4A | **FINAL / MERGED** |
+| Task 4B | **FINAL / MERGED** |
+| Task 5 contract freeze | **FINAL / MERGED** |
+| T5A schemas, codecs, identities, and job manifests | **FINAL / MERGED** |
+| T5B offline evaluator, metrics, and deterministic slicing | **FINAL / MERGED** |
+| T5C frozen gameplay evaluator | **FINAL / MERGED** |
+| T5D public audit, first divergence, distribution shift, and derived report | **MERGED / POST-MERGE ACCEPTANCE PENDING** |
+| Task 5 tooling final pass | **PENDING POST-MERGE ACCEPTANCE** |
+| Task 6 | **NOT AUTHORIZED** |
+| Task 7 | **NOT AUTHORIZED** |
+
+Frozen Phase-6 authorities:
+
+- [Phase-6 BC contract](p6/P6_BC_CONTRACT.md)
 - [Phase-6 dataset and split contract](p6/P6_DATASET_AND_SPLIT_CONTRACT.md)
 - [Phase-6 checkpoint and inference contract](p6/P6_CHECKPOINT_AND_INFERENCE_CONTRACT.md)
-- [Phase-6 evaluation plan](p6/P6_EVALUATION_PLAN.md) — future gates remain `NOT_RUN`
-- [Phase-6 implementation plan](p6/P6_IMPLEMENTATION_PLAN.md) — later tasks remain `NOT AUTHORIZED`
+- [Phase-6 evaluation plan](p6/P6_EVALUATION_PLAN.md) — gate statuses remain independently governed
+- [Phase-6 implementation plan](p6/P6_IMPLEMENTATION_PLAN.md) — living sequencing status
+- [Task4A numeric/provenance contract](p6/P6_TASK4A_NUMERIC_AND_PROVENANCE_CONTRACT.md)
+- [Task4B acceptance/recovery contract](p6/P6_TASK4B_ACCEPTANCE_RECOVERY_V1.md)
+- [Task5 evaluation execution contract](p6/P6_TASK5_EVALUATION_EXECUTION_CONTRACT.md)
+- [Task5 execution plan](p6/task5/task5_execution_plan.v1.json)
 
-Task 1 does not authorize neural networks, training, checkpoint generation,
-ML dependencies, Project Ignis/EDOPro, RL, self-play, broader decks, or Phase
-7. See [ADR-0007](adr/ADR-0007-phase6-behavior-cloning-boundary.md) for the
-architecture rationale.
+Implemented Task-5 tooling is visible in the narrow Phase-6 modules:
+
+- [T5A codec and identity layer](../tools/phase6/task5_codec.py)
+- [T5B offline evaluator](../tools/phase6/task5_offline.py)
+- [T5C gameplay evaluator header](../include/ygo/phase6/task5c_gameplay.hpp)
+- [T5D public audit and report layer](../tools/phase6/task5_audit.py)
+
+The accepted Task4B checkpoint is a bounded technical smoke artifact. It is
+not a meaningful BC baseline, a playable policy, or evidence of strategic
+strength. See [ADR-0007](adr/ADR-0007-phase6-behavior-cloning-boundary.md) for
+the ownership rationale.
 
 ## Decision-protocol evidence
 

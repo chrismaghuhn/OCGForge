@@ -263,22 +263,28 @@ Accepted evidence: `H_exec=3c99e86c487361fc4e0f5f12678b4867e59232b7`,
 
 ## Phase 6 — Behavior Cloning baseline
 
-Status: **Task 4A CURRENT / AUTHORIZED — zero-step backend infrastructure**.
+Status: **active infrastructure; Task 5 tooling final acceptance pending**.
 
-Phase 6 Tasks 1–3 are merged. Task 4A implements only the provisional
-PyTorch-side numeric/configuration codecs, admitted smoke-corpus bridge,
-checkpoint/inference boundary, and CUDA preflight; it executes zero optimizer
-steps and produces no trained-policy or gameplay claim. PyTorch is not selected
-as the primary backend, and Task 4B remains separately gated.
+Phase 6 Tasks 1–4B are accepted and merged. Task 5 contract freeze and T5A–T5C
+are final and merged. T5D is merged at
+`c0156a3451a7f8cc4495d544f7a34cab925e3c5a`; its main acceptance and the Task 5
+tooling final pass remain pending post-merge CI review. The accepted Task4B
+checkpoint is a bounded technical smoke artifact, not a meaningful BC baseline
+or strategic-strength claim.
 
 | Phase-6 task | Status |
 | --- | --- |
 | Task 1 — BC/data/checkpoint/evaluation contract freeze | **FINAL / MERGED** |
 | Task 2 — admitted supervision materialization, split, and model-input inspector | **FINAL / MERGED** |
 | Task 3 — framework-neutral BC architecture and reference interface | **FINAL / MERGED** |
-| Task 4A — provisional backend infrastructure, codecs, runner, and CUDA preflight | **CURRENT / AUTHORIZED — zero optimizer steps** |
-| Task 4B — one CUDA smoke run, canonical export/reload, and inference evidence | **NOT AUTHORIZED** |
-| Task 5 — frozen offline/gameplay evaluation and first divergence | **NOT AUTHORIZED** |
+| Task 4A — provisional backend infrastructure, codecs, runner, and CUDA preflight | **FINAL / MERGED** |
+| Task 4B — one CUDA smoke run, canonical export/reload, and inference evidence | **FINAL / MERGED** |
+| Task 5 contract freeze | **FINAL / MERGED** |
+| T5A — schemas, codecs, identities, and job manifests | **FINAL / MERGED** |
+| T5B — offline evaluator, metrics, and deterministic slicing | **FINAL / MERGED** |
+| T5C — frozen gameplay evaluator | **FINAL / MERGED** |
+| T5D — public audit, first divergence, distribution shift, and derived report | **MERGED / POST-MERGE ACCEPTANCE PENDING** |
+| Task 5 tooling FINAL PASS | **PENDING** |
 | Task 6 — PyTorch/JAX backend bake-off | **NOT AUTHORIZED** |
 | Task 7 — first accepted BC baseline and checkpoint evidence | **NOT AUTHORIZED** |
 
@@ -288,13 +294,33 @@ The current contract and implementation set is [P6_BC_CONTRACT.md](p6/P6_BC_CONT
 [P6_EVALUATION_PLAN.md](p6/P6_EVALUATION_PLAN.md), and
 [P6_IMPLEMENTATION_PLAN.md](p6/P6_IMPLEMENTATION_PLAN.md), with the Task-4A
 numeric/provenance supplement in
-[P6_TASK4A_NUMERIC_AND_PROVENANCE_CONTRACT.md](p6/P6_TASK4A_NUMERIC_AND_PROVENANCE_CONTRACT.md)
+[P6_TASK4A_NUMERIC_AND_PROVENANCE_CONTRACT.md](p6/P6_TASK4A_NUMERIC_AND_PROVENANCE_CONTRACT.md),
+the Task-4B acceptance/recovery contract in
+[P6_TASK4B_ACCEPTANCE_RECOVERY_V1.md](p6/P6_TASK4B_ACCEPTANCE_RECOVERY_V1.md),
+the Task-5 execution contract in
+[P6_TASK5_EVALUATION_EXECUTION_CONTRACT.md](p6/P6_TASK5_EVALUATION_EXECUTION_CONTRACT.md),
 and the architecture rationale in
 [ADR-0007](adr/ADR-0007-phase6-behavior-cloning-boundary.md).
 
-Later tasks require separate authorization and independent review. They must
-not weaken determinism, privacy, candidate completeness, replay, or admission
-semantics. Phase 7 is **NOT STARTED**.
+The Task-5 implementation is split into T5A schemas/codecs/identities/job
+manifests, T5B offline evaluation, T5C frozen gameplay evaluation, and T5D
+public audit, first divergence, distribution shift, and deterministic derived
+reporting. P6-G15 is supported by T5D but remains pending post-merge review.
+P6-G14 remains **NOT_RUN/BLOCKED_BY_MEANINGFUL_BASELINE** and is not required
+for the Task 5 tooling final pass.
+
+The required sequence remains:
+
+```text
+Task 5 tooling FINAL PASS
+    → Task 6 PyTorch/JAX backend bakeoff
+    → Task 7 first meaningful feed-forward BC baseline
+```
+
+Task 6 requires Task 5 tooling FINAL PASS and explicit authorization. Task 7
+requires an accepted Task 6 backend decision and explicit authorization. Later
+tasks must not weaken determinism, privacy, candidate completeness, replay, or
+admission semantics. Phase 7 is **NOT STARTED**.
 
 ### Phase 7 — Not started
 
@@ -339,9 +365,10 @@ M4 does not imply vectorized simulation or framework-specific ML readiness.
 
 ## Deferred Phase 6 and later workstreams
 
-These are deferred directions, not authorization to begin the later Phase-6
-tasks or accepted numbered-milestone evidence. The active Task-1 contract
-freeze above owns the current Phase-6 boundary.
+These are deferred directions, not authorization to begin later Phase-6 tasks
+or accepted numbered-milestone evidence. The active status and sequencing
+section above owns the current Phase-6 boundary; frozen contracts own semantic
+meaning.
 
 ### A. Episodic environment API — completed
 

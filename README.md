@@ -8,7 +8,10 @@ deterministic traces, model-facing representations, and conformance evidence
 explicit and reproducible before adding learner or training code.
 
 > **Current maturity:** M0–M4, Episodic V2, Phase 3A/3B, Phase 4A/4B/4C,
-> and Phase 5 are accepted final checkpoints for their defined scopes. The
+> Phase 5, and Phase 6 Tasks 1–4B are accepted final checkpoints for their
+> defined scopes. Task 5 evaluation tooling is implemented through T5D and
+> merged; post-merge acceptance of T5D and the Task 5 tooling final pass are
+> pending supervisor review. Task 6 and Task 7 remain unauthorized. The
 > certified gameplay slice remains fixed-matchup and is not general all-deck
 > Yu-Gi-Oh! support.
 
@@ -32,6 +35,9 @@ OCGForge currently provides:
   candidate domains through logical input, encoded input, and ragged/padded
   batch layout;
 - admission-backed `ModelSupervisionSampleV1` derivation.
+- Phase 6 evaluation tooling through T5D: offline metrics, frozen gameplay
+  evidence, first-divergence audit, distribution-shift comparison, and a
+  deterministic derived report.
 
 OCGForge intentionally does **not** currently claim:
 
@@ -42,6 +48,8 @@ OCGForge intentionally does **not** currently claim:
 - a learned/neural policy;
 - a search system;
 - a training stack;
+- a strategically meaningful accepted BC baseline;
+- a selected PyTorch/JAX backend;
 - competitive playing strength.
 
 ## Project priorities
@@ -61,7 +69,9 @@ Performance work must not weaken the first six properties.
 
 ## Current checkpoint
 
-Documentation baseline: `main` at post-Phase-5 merge `6c238addb353fc0bf7e68c6dfdc6f19b36c84bf4` (2026-09-01).
+Documentation baseline: `main` at post-T5D merge
+`c0156a3451a7f8cc4495d544f7a34cab925e3c5a` (2026-09-04). T5D main
+acceptance remains pending post-merge CI review.
 
 The current accepted milestone sequence is:
 
@@ -70,6 +80,9 @@ The current accepted milestone sequence is:
 - Phase 3A / 3B: **FINAL PASS**;
 - Phase 4A / 4B / 4C: **FINAL PASS**;
 - Phase 5: **FINAL PASS**.
+- Phase 6 Tasks 1–4B: **FINAL / MERGED**;
+- Task 5 contract freeze and T5A–T5C: **FINAL / MERGED**;
+- T5D: **MERGED / POST-MERGE ACCEPTANCE PENDING**.
 
 Phase 5 is documented by the [model contract](docs/p5/P5_MODEL_CONTRACT.md)
 and [final acceptance evidence](docs/p5/P5_ACCEPTANCE_EVIDENCE.md). Its
@@ -87,7 +100,17 @@ The Phase-5 supervision path derives `ModelSupervisionSampleV1` only from an
 admission-backed trusted trajectory record. Candidate ordinals remain training
 labels, while `public_action_key` remains selection/routing identity.
 
-Phase 6 is the next milestone. It has not started.
+Phase 6 is active. Tasks 1–4B are accepted and merged. Task 5 evaluation
+tooling is implemented through T5D and merged at
+`c0156a3451a7f8cc4495d544f7a34cab925e3c5a`; T5D main acceptance and the Task
+5 tooling final pass are pending post-merge CI review. Task 6 remains the
+PyTorch/JAX backend bakeoff, and Task 7 remains the first meaningful
+feed-forward BC baseline; neither task is authorized.
+
+The accepted Task4B checkpoint,
+`phase6_checkpoint.v1.62f4532a5e551886affbd65bc47f7645017dedf6c5ca3a0b7b87b4a978943327`,
+is a bounded technical smoke artifact. It is not a meaningful BC baseline,
+playable policy, converged model, or strategic-strength claim.
 
 The accepted Phase-5 evidence records `H_exec=3c99e86c487361fc4e0f5f12678b4867e59232b7`,
 `H_evidence=da3376fc2ab645377f9de2dd9fd6195c1aa8c081`, and a fresh `163/163`
@@ -253,6 +276,11 @@ Core project documents:
 - [Glossary](docs/GLOSSARY.md)
 - [Phase 5 model contract](docs/p5/P5_MODEL_CONTRACT.md)
 - [Phase 5 acceptance evidence](docs/p5/P5_ACCEPTANCE_EVIDENCE.md)
+- [Phase 6 implementation plan](docs/p6/P6_IMPLEMENTATION_PLAN.md)
+- [Phase 6 Task5 evaluation execution contract](docs/p6/P6_TASK5_EVALUATION_EXECUTION_CONTRACT.md)
+- [Phase 6 Task5 execution plan](docs/p6/task5/task5_execution_plan.v1.json)
+- [Phase 6 Task4A numeric/provenance contract](docs/p6/P6_TASK4A_NUMERIC_AND_PROVENANCE_CONTRACT.md)
+- [Phase 6 Task4B acceptance/recovery contract](docs/p6/P6_TASK4B_ACCEPTANCE_RECOVERY_V1.md)
 
 Existing detailed evidence and contracts remain authoritative within their scope:
 

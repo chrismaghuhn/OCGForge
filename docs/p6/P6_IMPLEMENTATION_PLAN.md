@@ -28,9 +28,14 @@ training backend or ML dependency is selected by this plan's Task 1.
 | Task 1 | BC/data/checkpoint/evaluation contract freeze | FINAL / MERGED |
 | Task 2 | admitted supervision materialization, deterministic split, model-input inspector | FINAL / MERGED |
 | Task 3 | framework-neutral BC architecture and reference scorer/inference interface | FINAL / MERGED |
-| Task 4A | corpus, numeric/config sub-codecs, provisional PyTorch architecture, checkpoint/inference runner, CUDA preflight | CURRENT / AUTHORIZED — zero optimizer steps |
-| Task 4B | one CUDA smoke run, canonical export/reload, deterministic inference evidence | NOT AUTHORIZED |
-| Task 5 | frozen offline/gameplay evaluation and first-divergence tooling | NOT AUTHORIZED |
+| Task 4A | corpus, numeric/config sub-codecs, provisional PyTorch architecture, checkpoint/inference runner, CUDA preflight | FINAL / MERGED |
+| Task 4B | one CUDA smoke run, canonical export/reload, deterministic inference evidence | FINAL / MERGED |
+| Task 5 contract freeze | evaluation execution contract and machine-readable plan | FINAL / MERGED |
+| T5A | schemas, codecs, identities, and job manifests | FINAL / MERGED |
+| T5B | offline evaluator, metrics, and deterministic slicing | FINAL / MERGED |
+| T5C | frozen gameplay evaluator | FINAL / MERGED |
+| T5D | public audit, first divergence, distribution shift, and derived report | MERGED / POST-MERGE ACCEPTANCE PENDING |
+| Task 5 tooling final pass | complete Task 5 tooling acceptance | PENDING |
 | Task 6 | controlled PyTorch/JAX backend bake-off and primary-backend ADR | NOT AUTHORIZED |
 | Task 7 | first accepted BC baseline run and canonical checkpoint evidence | NOT AUTHORIZED |
 
@@ -154,7 +159,7 @@ authorized by this task.
 
 ## 5. Task 4A — First backend infrastructure, codecs, runner, and CUDA preflight
 
-**Status:** CURRENT / AUTHORIZED — zero-step Task-4A implementation.
+**Status:** FINAL / MERGED — accepted zero-step Task-4A infrastructure.
 
 Task 4A defines and validates the Task-4 numeric/configuration/checkpoint
 sub-codecs, the rebuildable admitted smoke-corpus projection, the provisional
@@ -174,12 +179,11 @@ step counts, CUDA-preflight attestation, deterministic execution identity, and
 GPU-memory measurements are emitted in a separate smoke-evidence sidecar.
 
 Task 4A does not issue accepted training-run or trained-checkpoint evidence.
-Task 4B requires a separate authorization after independent review.
+The separately authorized Task-4B smoke/recovery scope is complete.
 
 ## 6. Task 4B — One CUDA smoke run, canonical export, and fail-closed runner evidence
 
-**Status:** NOT AUTHORIZED. Requires separate authorization after Task 4A
-review.
+**Status:** FINAL / MERGED — accepted bounded smoke/recovery implementation.
 
 **Purpose:** Exercise one provisional implementation backend on a small real BC
 workload, export a canonical inference checkpoint, and prove the runner's
@@ -222,7 +226,21 @@ before any result is used in evaluation.
 
 ## 7. Task 5 — Frozen offline, gameplay, and first-divergence evaluation
 
-**Status:** NOT AUTHORIZED. Requires separate authorization after Task 4 review.
+**Status:** T5A–T5C FINAL / MERGED; T5D MERGED / POST-MERGE ACCEPTANCE PENDING.
+Task 5 tooling FINAL PASS remains PENDING post-merge acceptance.
+
+Task 5 implementation ownership is split as follows:
+
+- **T5A:** schemas, codecs, identities, and evaluation/job manifests;
+- **T5B:** offline evaluator, metrics, and deterministic slicing;
+- **T5C:** frozen gameplay evaluator through the normal policy, environment,
+  recorder, replay, and admission path;
+- **T5D:** public audit, first divergence, distribution shift, and deterministic
+  derived report.
+
+T5D supports P6-G15, but final main acceptance remains pending the post-merge
+CI review. P6-G14 remains **NOT_RUN/BLOCKED_BY_MEANINGFUL_BASELINE**; it is not
+required for Task 5 tooling FINAL PASS.
 
 **Purpose:** Evaluate a frozen checkpoint through the normal public environment
 and trusted trajectory/admission paths.
@@ -249,8 +267,8 @@ divergence. Run the P6-G08 through P6-G18 evidence applicable to the task.
 
 ## 8. Task 6 — Controlled PyTorch/JAX backend bake-off
 
-**Status:** NOT AUTHORIZED. Requires a separate authorization after a real BC
-workload and Task-5 evaluation evidence exist.
+**Status:** NOT AUTHORIZED. Requires Task 5 tooling FINAL PASS and explicit
+authorization after a real BC workload and Task-5 evaluation evidence exist.
 
 **Purpose:** Compare PyTorch and JAX only after both can be evaluated under one
 accepted semantic workload. This task produces evidence and a later primary
@@ -293,8 +311,8 @@ hidden-state shortcuts, or silent fallback.
 
 ## 9. Task 7 — First accepted BC baseline
 
-**Status:** NOT AUTHORIZED. Requires the backend decision and explicit
-authorization after Tasks 2–6 are reviewed.
+**Status:** NOT AUTHORIZED. Requires an accepted Task 6 backend decision and
+explicit authorization after Tasks 2–6 are reviewed.
 
 **Purpose:** Run the first accepted BC baseline only after the data, model,
 runner, evaluation, and backend evidence is complete.

@@ -1,9 +1,11 @@
 # OCGForge Development Guide
 
 The current repository records FINAL PASS for M0–M4, Episodic V2,
-Phase 3A/3B, Phase 4A/4B/4C, and Phase 5. Phase 6 is next but has not
-started. Keep framework-specific learner work outside the accepted
-framework-neutral `ygo::model` layer.
+Phase 3A/3B, Phase 4A/4B/4C, and Phase 5. Phase 6 Tasks 1–4B and Task 5
+T5A–T5C are accepted and merged; T5D is merged, but Task 5 final acceptance
+is pending post-merge review. Task 6 and Task 7 are not authorized. Keep
+framework-specific learner work outside the accepted framework-neutral
+`ygo::model` layer.
 
 ## Supported development shape
 
@@ -164,7 +166,8 @@ Notable areas:
 - rules-bundle fetch/verify;
 - ocgcore patchset preparation/verification;
 - M3 deck/catalog/coverage/audit tooling;
-- core and observation probes.
+- core and observation probes;
+- Phase-6 Task5 evaluation codecs, offline evaluation, and public audit/report tooling.
 
 ### `fixtures/`
 
