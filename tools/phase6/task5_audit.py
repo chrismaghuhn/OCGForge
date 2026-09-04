@@ -47,6 +47,16 @@ DIAGNOSTIC_ONLY_TOKENS = (
     "teacher_agreement_is_diagnostic_only",
     "offline_agreement_is_not_online_parity",
 )
+COMPLIANCE_PASS = "PASS"
+COMPLIANCE_FAIL = "FAIL"
+COMPLIANCE_NOT_RUN_UNPROVEN = "NOT_RUN/UNPROVEN"
+COMPLIANCE_STATUSES = (
+    COMPLIANCE_PASS,
+    COMPLIANCE_FAIL,
+    COMPLIANCE_NOT_RUN_UNPROVEN,
+)
+SLICE_PRESENT = task5_offline.SLICE_PRESENT
+SLICE_NOT_PRESENT = task5_offline.SLICE_NOT_PRESENT
 
 GAMEPLAY_JOB_STATUSES = (
     "TRUSTED_WIN",
@@ -1528,14 +1538,111 @@ class RateV1:
 
 
 @dataclasses.dataclass(frozen=True)
+class ComplianceEvidenceV1:
+    population_identity: str
+    status: str
+    numerator: int
+    denominator: int
+
+    def validate(self) -> None:
+        _validate_population_identity(self.population_identity, "population_identity")
+        if self.status not in COMPLIANCE_STATUSES:
+            raise AuditCodecError("compliance status is not accepted")
+        _validate_u64(self.numerator, "compliance.numerator")
+        _validate_u64(self.denominator, "compliance.denominator")
+        if self.numerator > self.denominator:
+            raise AuditCodecError("compliance numerator exceeds denominator")
+        if self.status == COMPLIANCE_PASS and (
+            self.denominator == 0 or self.numerator != self.denominator
+        ):
+            raise AuditCodecError("PASS compliance requires a complete proven denominator")
+        if self.status == COMPLIANCE_FAIL and (
+            self.denominator == 0 or self.numerator == self.denominator
+        ):
+            raise AuditCodecError("FAIL compliance requires a proven failing member")
+
+    def to_dict(self) -> dict[str, Any]:
+        self.validate()
+        return {
+            "denominator": self.denominator,
+            "numerator": self.numerator,
+            "population_identity": self.population_identity,
+            "status": self.status,
+        }
+
+
+@dataclasses.dataclass(frozen=True)
+class SliceComparisonV1:
+    slice_kind: str
+    coordinates: tuple[str, ...]
+    teacher_status: str
+    teacher_count: int
+    bc_status: str
+    bc_count: int
+
+    def validate(self) -> None:
+        if self.slice_kind not in task5_offline.SLICE_KIND_ORDER:
+            raise AuditCodecError("slice comparison kind is not accepted")
+        if not isinstance(self.coordinates, tuple) or len(self.coordinates) != len(
+            task5_offline.SLICE_DIMENSION_ORDER
+        ):
+            raise AuditCodecError("slice comparison coordinates are not complete")
+        for coordinate in self.coordinates:
+            _validate_text(coordinate, "slice comparison coordinate")
+        active_dimensions = {
+            "decision_request_family": {"decision_request_family"},
+            "candidate_domain_size": {"candidate_domain_size"},
+            "candidate_domain_witness": {"candidate_domain_size"},
+            "phase_decision_context": {"phase", "turn_index"},
+            "acting_participant_deck_role": {"acting_participant", "locked_deck_role"},
+            "starting_player": {"starting_player"},
+            "continuation": {"continuation"},
+            "rare_critical": {"rare_critical"},
+        }[self.slice_kind]
+        coordinate_by_dimension = dict(
+            zip(task5_offline.SLICE_DIMENSION_ORDER, self.coordinates)
+        )
+        for dimension, coordinate in coordinate_by_dimension.items():
+            if dimension not in active_dimensions and coordinate != task5_offline.SLICE_COORDINATE_ABSENT:
+                raise AuditCodecError("slice comparison contains an inactive coordinate")
+        if self.slice_kind == "candidate_domain_witness" and coordinate_by_dimension["candidate_domain_size"] not in {"24", "25", "129"}:
+            raise AuditCodecError("slice comparison witness is not accepted")
+        if self.teacher_status not in (SLICE_PRESENT, SLICE_NOT_PRESENT):
+            raise AuditCodecError("Teacher slice status is not accepted")
+        if self.bc_status not in (SLICE_PRESENT, SLICE_NOT_PRESENT):
+            raise AuditCodecError("BC slice status is not accepted")
+        _validate_u64(self.teacher_count, "teacher slice count")
+        _validate_u64(self.bc_count, "BC slice count")
+        if self.teacher_status == SLICE_NOT_PRESENT and self.teacher_count != 0:
+            raise AuditCodecError("NOT_PRESENT Teacher slice has members")
+        if self.bc_status == SLICE_NOT_PRESENT and self.bc_count != 0:
+            raise AuditCodecError("NOT_PRESENT BC slice has members")
+        if self.teacher_status == SLICE_PRESENT and self.teacher_count == 0:
+            raise AuditCodecError("PRESENT Teacher slice has no members")
+        if self.bc_status == SLICE_PRESENT and self.bc_count == 0:
+            raise AuditCodecError("PRESENT BC slice has no members")
+
+    def to_dict(self) -> dict[str, Any]:
+        self.validate()
+        return {
+            "bc_count": self.bc_count,
+            "bc_status": self.bc_status,
+            "coordinates": list(self.coordinates),
+            "slice_kind": self.slice_kind,
+            "teacher_count": self.teacher_count,
+            "teacher_status": self.teacher_status,
+        }
+
+
+@dataclasses.dataclass(frozen=True)
 class PopulationProfileV1:
     population_identity: str
     population_label: str
     decision_count: int
     decision_request_family_counts: tuple[tuple[str, int], ...]
     candidate_domain_size_counts: tuple[tuple[str, int], ...]
-    capacity_compliance_rate: RateV1
-    padding_compliance_rate: RateV1
+    capacity_compliance_rate: ComplianceEvidenceV1
+    padding_compliance_rate: ComplianceEvidenceV1
     inference_failure_rate: RateV1
     quarantine_rate: RateV1
     replay_rate: RateV1
@@ -1571,9 +1678,14 @@ class PopulationProfileV1:
             raise AuditCodecError("decision-family counts do not conserve population decisions")
         if sum(count for _, count in self.candidate_domain_size_counts) != self.decision_count:
             raise AuditCodecError("domain-size counts do not conserve population decisions")
-        for rate in (
+        for compliance in (
             self.capacity_compliance_rate,
             self.padding_compliance_rate,
+        ):
+            compliance.validate()
+            if compliance.population_identity != self.population_identity:
+                raise AuditCodecError("compliance population identity differs")
+        for rate in (
             self.inference_failure_rate,
             self.quarantine_rate,
             self.replay_rate,
@@ -1634,6 +1746,7 @@ class DistributionShiftV1:
     bc_induced_population_identity: str
     teacher_profile: PopulationProfileV1
     bc_profile: PopulationProfileV1
+    slice_comparisons: tuple[SliceComparisonV1, ...]
     schema_id: str = DISTRIBUTION_SHIFT_SCHEMA_ID
     diagnostic_only_tokens: tuple[str, ...] = DIAGNOSTIC_ONLY_TOKENS
     declared_identity: str = dataclasses.field(default="", compare=False)
@@ -1661,6 +1774,27 @@ class DistributionShiftV1:
             raise AuditCodecError("Teacher distribution profile is not bound")
         if self.bc_profile.population_identity != self.bc_induced_population_identity or self.bc_profile.population_label != "BC_INDUCED":
             raise AuditCodecError("BC distribution profile is not bound")
+        if not isinstance(self.slice_comparisons, tuple) or not self.slice_comparisons:
+            raise AuditCodecError("slice comparisons are required")
+        if {value.slice_kind for value in self.slice_comparisons} != set(
+            task5_offline.SLICE_KIND_ORDER
+        ):
+            raise AuditCodecError("slice comparisons do not cover every required slice kind")
+        previous: Optional[tuple[int, tuple[bytes, ...]]] = None
+        seen: set[tuple[str, tuple[str, ...]]] = set()
+        for comparison in self.slice_comparisons:
+            comparison.validate()
+            key = (comparison.slice_kind, comparison.coordinates)
+            if key in seen:
+                raise AuditCodecError("slice comparisons contain duplicates")
+            seen.add(key)
+            order = (
+                task5_offline.SLICE_KIND_ORDER.index(comparison.slice_kind),
+                tuple(value.encode("utf-8") for value in comparison.coordinates),
+            )
+            if previous is not None and order < previous:
+                raise AuditCodecError("slice comparisons are not in fixed order")
+            previous = order
         if self.declared_identity and self.declared_identity != self.identity:
             raise AuditCodecError("distribution-shift identity does not recompute")
 
@@ -1674,6 +1808,9 @@ class DistributionShiftV1:
             "identity_domain": DISTRIBUTION_SHIFT_IDENTITY_DOMAIN,
             "identity_schema": DISTRIBUTION_SHIFT_SCHEMA_ID,
             "schema_id": self.schema_id,
+            "slice_comparisons": [
+                value.to_dict() for value in self.slice_comparisons
+            ],
             "teacher_profile": self.teacher_profile.to_dict(),
             "teacher_state_population_identity": self.teacher_state_population_identity,
         }
@@ -1692,7 +1829,9 @@ def _sorted_counts(values: Iterable[str]) -> tuple[tuple[str, int], ...]:
     return tuple(sorted(counts.items(), key=lambda item: item[0].encode("utf-8")))
 
 
-def _frame_slice_labels(frame: PublicDecisionFrameV1) -> tuple[str, ...]:
+def _frame_slice_items(
+    frame: PublicDecisionFrameV1,
+) -> tuple[tuple[str, tuple[str, ...]], ...]:
     absent = task5_offline.SLICE_COORDINATE_ABSENT
     coordinates = (
         frame.decision_request_family,
@@ -1725,14 +1864,46 @@ def _frame_slice_labels(frame: PublicDecisionFrameV1) -> tuple[str, ...]:
             value if index in indices else absent
             for index, value in enumerate(coordinates)
         )
-        labels.append(f"{kind}|{'/'.join(projected)}")
+        labels.append((kind, projected))
     return tuple(labels)
+
+
+def _frame_slice_labels(frame: PublicDecisionFrameV1) -> tuple[str, ...]:
+    return tuple(
+        f"{kind}|{'/'.join(coordinates)}"
+        for kind, coordinates in _frame_slice_items(frame)
+    )
 
 
 def _rate(population_identity: str, numerator: int, denominator: int) -> RateV1:
     rate = RateV1(population_identity, numerator, denominator)
     rate.validate()
     return rate
+
+
+def _compliance(
+    population_identity: str,
+    proven_pass_count: int,
+    proven_fail_count: int,
+    unproven_count: int,
+) -> ComplianceEvidenceV1:
+    denominator = proven_pass_count + proven_fail_count
+    if proven_fail_count:
+        status = COMPLIANCE_FAIL
+    elif unproven_count:
+        status = COMPLIANCE_NOT_RUN_UNPROVEN
+    elif proven_pass_count:
+        status = COMPLIANCE_PASS
+    else:
+        status = COMPLIANCE_NOT_RUN_UNPROVEN
+    result = ComplianceEvidenceV1(
+        population_identity=population_identity,
+        status=status,
+        numerator=proven_pass_count,
+        denominator=denominator,
+    )
+    result.validate()
+    return result
 
 
 def _offline_profile(
@@ -1751,14 +1922,13 @@ def _offline_profile(
         else task5_offline.SLICE_COORDINATE_ABSENT
         for sample in samples
     )
-    capacity_denominator = sum(sample.candidate_count is not None for sample in samples)
-    capacity_failures = sum(
-        sample.failure_reason == task5_offline.FailureReason.CANDIDATE_CAPACITY_FAILURE
+    capacity_proven = sum(
+        sample.candidate_count is not None
+        and sample.failure_reason != task5_offline.FailureReason.CANDIDATE_CAPACITY_FAILURE
         for sample in samples
     )
-    padding_denominator = sum(
-        sample.score_vector is not None
-        or sample.failure_reason == task5_offline.FailureReason.PADDING_MASK_VIOLATION
+    capacity_failures = sum(
+        sample.failure_reason == task5_offline.FailureReason.CANDIDATE_CAPACITY_FAILURE
         for sample in samples
     )
     padding_failures = sum(
@@ -1779,15 +1949,17 @@ def _offline_profile(
         decision_count=len(samples),
         decision_request_family_counts=family,
         candidate_domain_size_counts=sizes,
-        capacity_compliance_rate=_rate(
+        capacity_compliance_rate=_compliance(
             population_identity,
-            capacity_denominator - capacity_failures,
-            capacity_denominator,
+            capacity_proven,
+            capacity_failures,
+            sum(sample.candidate_count is None for sample in samples),
         ),
-        padding_compliance_rate=_rate(
+        padding_compliance_rate=_compliance(
             population_identity,
-            padding_denominator - padding_failures,
-            padding_denominator,
+            0,
+            padding_failures,
+            len(samples) - padding_failures,
         ),
         inference_failure_rate=_rate(
             population_identity,
@@ -1844,12 +2016,13 @@ def _bc_profile(population: BCInducedPopulationV1) -> PopulationProfileV1:
         decision_count=len(frames),
         decision_request_family_counts=family,
         candidate_domain_size_counts=sizes,
-        capacity_compliance_rate=_rate(
+        capacity_compliance_rate=_compliance(
             identity,
-            sum(True for _ in frames),
-            len(frames),
+            len(decisions),
+            0,
+            len(frames) - len(decisions),
         ),
-        padding_compliance_rate=_rate(identity, len(frames), len(frames)),
+        padding_compliance_rate=_compliance(identity, 0, 0, len(frames)),
         inference_failure_rate=_rate(
             identity,
             sum(result.failure_stage == "inference" for result in population.gameplay_job_results),
@@ -1884,6 +2057,60 @@ def _bc_profile(population: BCInducedPopulationV1) -> PopulationProfileV1:
     return profile
 
 
+def _derive_slice_comparisons(
+    offline_result: task5_offline.OfflineEvaluationResultV1,
+    bc_population: BCInducedPopulationV1,
+) -> tuple[SliceComparisonV1, ...]:
+    teacher: dict[tuple[str, tuple[str, ...]], tuple[str, int]] = {}
+    for slice_result in offline_result.slice_results:
+        key = (slice_result.slice_kind, slice_result.coordinates)
+        if key in teacher:
+            raise AuditValidationError("offline evidence contains duplicate slice definitions")
+        teacher[key] = (slice_result.presence, slice_result.total_count)
+    missing_kinds = set(task5_offline.SLICE_KIND_ORDER) - {
+        kind for kind, _ in teacher
+    }
+    if missing_kinds:
+        raise AuditValidationError(
+            "offline evidence is missing required slice kinds: " + ",".join(sorted(missing_kinds))
+        )
+
+    bc_counts: Counter[tuple[str, tuple[str, ...]]] = Counter()
+    for job in bc_population.shared_jobs:
+        frames = [decision.frame for decision in job.decisions]
+        if job.failure is not None and job.failure.frame is not None:
+            frames.append(job.failure.frame)
+        for frame in frames:
+            bc_counts.update(_frame_slice_items(frame))
+
+    keys = set(teacher) | set(bc_counts)
+    ordered_keys = sorted(
+        keys,
+        key=lambda key: (
+            task5_offline.SLICE_KIND_ORDER.index(key[0]),
+            tuple(value.encode("utf-8") for value in key[1]),
+        ),
+    )
+    comparisons = []
+    for key in ordered_keys:
+        teacher_status, teacher_count = teacher.get(key, (SLICE_NOT_PRESENT, 0))
+        bc_count = bc_counts.get(key, 0)
+        bc_status = SLICE_PRESENT if bc_count else SLICE_NOT_PRESENT
+        comparisons.append(
+            SliceComparisonV1(
+                slice_kind=key[0],
+                coordinates=key[1],
+                teacher_status=teacher_status,
+                teacher_count=teacher_count,
+                bc_status=bc_status,
+                bc_count=bc_count,
+            )
+        )
+    for comparison in comparisons:
+        comparison.validate()
+    return tuple(comparisons)
+
+
 def derive_distribution_shift(
     offline_result: task5_offline.OfflineEvaluationResultV1,
     bc_population: BCInducedPopulationV1,
@@ -1897,6 +2124,7 @@ def derive_distribution_shift(
         raise AuditValidationError("offline evidence evaluation identity differs")
     teacher_profile = _offline_profile(offline_result)
     bc_profile = _bc_profile(bc_population)
+    slice_comparisons = _derive_slice_comparisons(offline_result, bc_population)
     result = DistributionShiftV1(
         evaluation_identity=evaluation_identity,
         evaluation_contract_identity=context.root.evaluation_contract_identity,
@@ -1904,6 +2132,7 @@ def derive_distribution_shift(
         bc_induced_population_identity=bc_population.identity,
         teacher_profile=teacher_profile,
         bc_profile=bc_profile,
+        slice_comparisons=slice_comparisons,
     )
     result.validate()
     return result
@@ -1912,6 +2141,22 @@ def derive_distribution_shift(
 def _rate_from_dict(payload: Any, label: str) -> RateV1:
     data = _strict_object(payload, ("denominator", "numerator", "population_identity"), label)
     result = RateV1(data["population_identity"], data["numerator"], data["denominator"])
+    result.validate()
+    return result
+
+
+def _compliance_from_dict(payload: Any, label: str) -> ComplianceEvidenceV1:
+    data = _strict_object(
+        payload,
+        ("denominator", "numerator", "population_identity", "status"),
+        label,
+    )
+    result = ComplianceEvidenceV1(
+        population_identity=data["population_identity"],
+        status=data["status"],
+        numerator=data["numerator"],
+        denominator=data["denominator"],
+    )
     result.validate()
     return result
 
@@ -1941,8 +2186,8 @@ def _profile_from_dict(payload: Any) -> PopulationProfileV1:
         decision_count=data["decision_count"],
         decision_request_family_counts=_count_vector_from_dict(data["decision_request_family_counts"], "decision families"),
         candidate_domain_size_counts=_count_vector_from_dict(data["candidate_domain_size_counts"], "domain sizes"),
-        capacity_compliance_rate=_rate_from_dict(data["capacity_compliance_rate"], "capacity rate"),
-        padding_compliance_rate=_rate_from_dict(data["padding_compliance_rate"], "padding rate"),
+        capacity_compliance_rate=_compliance_from_dict(data["capacity_compliance_rate"], "capacity rate"),
+        padding_compliance_rate=_compliance_from_dict(data["padding_compliance_rate"], "padding rate"),
         inference_failure_rate=_rate_from_dict(data["inference_failure_rate"], "inference rate"),
         quarantine_rate=_rate_from_dict(data["quarantine_rate"], "quarantine rate"),
         replay_rate=_rate_from_dict(data["replay_rate"], "replay rate"),
@@ -1955,6 +2200,24 @@ def _profile_from_dict(payload: Any) -> PopulationProfileV1:
         interruption_count=data["interruption_count"],
         failure_count=data["failure_count"],
         slice_counts=_count_vector_from_dict(data["slice_counts"], "slice counts"),
+    )
+    result.validate()
+    return result
+
+
+def _slice_comparison_from_dict(payload: Any) -> SliceComparisonV1:
+    data = _strict_object(
+        payload,
+        ("bc_count", "bc_status", "coordinates", "slice_kind", "teacher_count", "teacher_status"),
+        "SliceComparisonV1",
+    )
+    result = SliceComparisonV1(
+        slice_kind=data["slice_kind"],
+        coordinates=tuple(data["coordinates"]),
+        teacher_status=data["teacher_status"],
+        teacher_count=data["teacher_count"],
+        bc_status=data["bc_status"],
+        bc_count=data["bc_count"],
     )
     result.validate()
     return result
@@ -1973,7 +2236,7 @@ def decode_distribution_shift_json(data: bytes) -> DistributionShiftV1:
         "bc_induced_population_identity", "bc_profile", "diagnostic_only_tokens",
         "distribution_shift_identity", "evaluation_contract_identity",
         "evaluation_identity", "identity_domain", "identity_schema", "schema_id", "teacher_profile",
-        "teacher_state_population_identity",
+        "teacher_state_population_identity", "slice_comparisons",
     )
     values = _strict_object(payload, fields, "DistributionShiftV1")
     result = DistributionShiftV1(
@@ -1983,6 +2246,9 @@ def decode_distribution_shift_json(data: bytes) -> DistributionShiftV1:
         bc_induced_population_identity=values["bc_induced_population_identity"],
         teacher_profile=_profile_from_dict(values["teacher_profile"]),
         bc_profile=_profile_from_dict(values["bc_profile"]),
+        slice_comparisons=tuple(
+            _slice_comparison_from_dict(item) for item in values["slice_comparisons"]
+        ),
         schema_id=values["schema_id"],
         diagnostic_only_tokens=tuple(values["diagnostic_only_tokens"]),
         declared_identity=values["distribution_shift_identity"],
@@ -2376,6 +2642,8 @@ __all__ = [
     "BCInducedPopulationV1",
     "encode_bc_induced_population_json",
     "RateV1",
+    "ComplianceEvidenceV1",
+    "SliceComparisonV1",
     "PopulationProfileV1",
     "DistributionShiftV1",
     "derive_distribution_shift",

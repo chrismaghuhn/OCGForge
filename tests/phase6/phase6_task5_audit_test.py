@@ -219,6 +219,45 @@ def _bc_population(
     )
 
 
+def _bc_population_with_model_input_failure(
+    context: task5.EvaluationContextV1,
+) -> audit.BCInducedPopulationV1:
+    population = _bc_population(context)
+    failure_job = _failure_job(population.ordered_job_identities[0], "model_input_validation")
+    failure_replay = audit.ReplayAdmissionSummaryReadModelV1(
+        evaluation_identity=task5.evaluation_identity(context.root),
+        evaluation_job_identity=population.ordered_job_identities[0],
+        replay_status="NOT_RUN",
+        admission_status="NOT_RUN",
+        failure_stage="model_input_validation",
+        failure_code="MODEL_INPUT_INVALID",
+    )
+    failure_result = audit.GameplayJobResultReadModelV1(
+        evaluation_identity=task5.evaluation_identity(context.root),
+        evaluation_job_identity=population.ordered_job_identities[0],
+        checkpoint_identity=context.root.checkpoint_identity,
+        status="FAILED",
+        started=True,
+        terminal_observed=False,
+        fallback_assisted=False,
+        replay_admission_summary_identity=failure_replay.identity,
+        failure_stage="model_input_validation",
+        failure_code="MODEL_INPUT_INVALID",
+    )
+    results = (failure_result,) + population.gameplay_job_results[1:]
+    replays = (failure_replay,) + population.replay_admission_summaries[1:]
+    return audit.BCInducedPopulationV1(
+        evaluation_corpus_identity=population.evaluation_corpus_identity,
+        checkpoint_identity=population.checkpoint_identity,
+        evaluation_contract_identity=population.evaluation_contract_identity,
+        ordered_job_identities=population.ordered_job_identities,
+        shared_jobs=(failure_job,) + population.shared_jobs[1:],
+        gameplay_job_results=results,
+        replay_admission_summaries=replays,
+        gameplay_summary=audit.derive_gameplay_summary(context, results, replays),
+    )
+
+
 def _read_model() -> audit.EvaluationReadModelV1:
     context = _context()
     population = _bc_population(context)
@@ -450,12 +489,9 @@ class Task5DAuditTests(unittest.TestCase):
         finally:
             locale.setlocale(locale.LC_ALL, original)
 
-    def test_private_world_difference_does_not_change_public_audit_outputs(self):
+    def test_identical_public_audit_inputs_are_deterministic(self):
         context = _context()
         job_id = task5.evaluation_job_identity(context.jobs[0])
-        hidden_a = {"hidden_code": 14821890}
-        hidden_b = {"hidden_code": 7654321}
-        self.assertNotEqual(hidden_a, hidden_b)
         record_a = audit.derive_first_divergence(
             _job_evidence(job_id, divergent_indices=(0,), terminal=False)
         )
@@ -486,6 +522,57 @@ class Task5DAuditTests(unittest.TestCase):
             audit.encode_evaluation_summary_json(model_b.summary),
         )
         self.assertEqual(audit.generate_report(model_a), audit.generate_report(model_b))
+
+    def test_unproven_bc_capacity_and_padding_never_become_pass(self):
+        context = _context()
+        population = _bc_population_with_model_input_failure(context)
+        profile = audit._bc_profile(population)
+        self.assertEqual(
+            profile.capacity_compliance_rate.status,
+            audit.COMPLIANCE_NOT_RUN_UNPROVEN,
+        )
+        self.assertEqual(
+            profile.padding_compliance_rate.status,
+            audit.COMPLIANCE_NOT_RUN_UNPROVEN,
+        )
+        self.assertNotEqual(profile.capacity_compliance_rate.status, audit.COMPLIANCE_PASS)
+        self.assertNotEqual(profile.padding_compliance_rate.status, audit.COMPLIANCE_PASS)
+
+    def test_distribution_shift_preserves_not_present_slice_pairs(self):
+        context = _context()
+        shift = audit.derive_distribution_shift(_offline_result(), _bc_population(context), context)
+        witness = next(
+            value
+            for value in shift.slice_comparisons
+            if value.slice_kind == "candidate_domain_witness"
+            and value.coordinates[1] == "129"
+        )
+        self.assertEqual(witness.teacher_status, audit.SLICE_NOT_PRESENT)
+        self.assertEqual(witness.teacher_count, 0)
+        self.assertEqual(witness.bc_status, audit.SLICE_NOT_PRESENT)
+        self.assertEqual(witness.bc_count, 0)
+        self.assertEqual(
+            audit.decode_distribution_shift_json(
+                audit.encode_distribution_shift_json(shift)
+            ).slice_comparisons,
+            shift.slice_comparisons,
+        )
+        omitted = dataclasses.replace(
+            shift, slice_comparisons=shift.slice_comparisons[1:]
+        )
+        with self.assertRaises(audit.AuditValidationError):
+            dataclasses.replace(_read_model(), distribution_shift=omitted).validate()
+
+    def test_compliance_status_denominator_combinations_fail_closed(self):
+        model = _read_model()
+        invalid = dataclasses.replace(
+            model.distribution_shift.bc_profile.capacity_compliance_rate,
+            status=audit.COMPLIANCE_PASS,
+            numerator=0,
+            denominator=0,
+        )
+        with self.assertRaises(audit.AuditCodecError):
+            invalid.validate()
 
     def test_jsonl_noncanonical_and_wrong_population_order_fail_closed(self):
         context = _context()
