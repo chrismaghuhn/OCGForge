@@ -11,6 +11,7 @@ from tools.phase6 import task5_offline
 
 
 TEST_COMMIT = "1" * 40
+SOURCE_DATASET = "a" * 64
 VOCABULARY = "model_card_vocabulary.v1." + "3" * 64
 
 
@@ -81,9 +82,7 @@ def _with_identity(sample: task4.CorpusSampleV1) -> task4.CorpusSampleV1:
 
 
 def _authority(samples: tuple[task4.CorpusSampleV1, ...], split: tuple[tuple[str, ...], ...]):
-    source_dataset = task5_offline.dataset_semantic_id(
-        tuple(sorted(sample.trajectory_record_id for sample in samples))
-    )
+    source_dataset = SOURCE_DATASET
     corpus = task4.DerivedCorpusV1(
         source_dataset_identity=source_dataset,
         split_identity=task4.split_identity(source_dataset, *split),
@@ -111,64 +110,8 @@ def _authority(samples: tuple[task4.CorpusSampleV1, ...], split: tuple[tuple[str
     return corpus, authority
 
 
-def _binding(sample: task4.CorpusSampleV1, receipt_id: str, **changes):
-    return task5_offline.AdmissionBindingV1(
-        trajectory_record_id=sample.trajectory_record_id,
-        admission_receipt_identity=receipt_id,
-        episode_semantic_id=sample.episode_semantic_id,
-        behavior_policy_kind="TEACHER",
-        behavior_policy_source_identity=task4.TEACHER_SOURCE_IDENTITIES[0],
-        teacher_policy_binding_identity=task5.SWORDSOUL_TEACHER_BINDING,
-        **changes,
-    )
-
-
 def _population(samples: tuple[task4.CorpusSampleV1, ...], split):
     corpus, authority = _authority(samples, split)
-    members = []
-    receipts = []
-    receipt_ids = {}
-    for index, sample in enumerate(samples):
-        gameplay_id = "public_gameplay_trajectory.v1." + f"{index + 301:064x}"
-        envelope = f"{index + 401:064x}"
-        shard = f"{index + 501:064x}"
-        receipt = task5_offline.AdmissionReceiptV1(
-            admission_contract_id=task5_offline.ADMISSION_RECEIPT_CONTRACT_ID,
-            candidate_shard_artifact_sha256=shard,
-            restricted_evidence_artifact_sha256=f"{index + 601:064x}",
-            entries=(
-                task5_offline.AdmissionReceiptEntryV1(
-                    trajectory_record_id=sample.trajectory_record_id,
-                    public_gameplay_trajectory_id=gameplay_id,
-                    environment_semantic_id=f"{index + 701:064x}",
-                    episode_semantic_id=sample.episode_semantic_id,
-                    episode_envelope_sha256=envelope,
-                    closure_kind=1,
-                ),
-            ),
-        )
-        verified = task5_offline.issue_verified_admission_receipt(receipt)
-        receipts.append(verified)
-        receipt_ids[sample.trajectory_record_id] = verified.receipt_identity
-        members.append(
-            task5_offline.DatasetManifestMemberV1(
-                trajectory_record_id=sample.trajectory_record_id,
-                public_gameplay_trajectory_id=gameplay_id,
-                admission_receipt_id=verified.receipt_identity,
-                candidate_shard_artifact_sha256=shard,
-                episode_envelope_sha256=envelope,
-            )
-        )
-    members = tuple(sorted(members, key=lambda member: member.trajectory_record_id))
-    manifest = task5_offline.DatasetManifestV1(
-        dataset_manifest_schema_id=task5_offline.DATASET_MANIFEST_SCHEMA_ID,
-        dataset_identity_schema_id=task5_offline.DATASET_IDENTITY_SCHEMA_ID,
-        trusted_trajectory_contract_id=task5_offline.TRUSTED_TRAJECTORY_CONTRACT_ID,
-        dataset_semantic_id=task5_offline.dataset_semantic_id(
-            tuple(member.trajectory_record_id for member in members)
-        ),
-        members=members,
-    )
     source = tuple(
         task5_offline.OfflineSourceSampleV1(
             sample=sample,
@@ -182,15 +125,6 @@ def _population(samples: tuple[task4.CorpusSampleV1, ...], split):
                 perspective_player=sample.perspective_player,
                 decision_index=sample.decision_index,
             ).numeric_input_identity,
-            public_context=task5_offline.PublicSampleContextV1(
-                decision_request_family="card_selection",
-                phase=3,
-                turn_index=sample.decision_index,
-                acting_participant=0,
-                locked_deck_role_id=task5.SWORDSOUL_DECK_ID,
-                starting_player=0,
-                continuation=False,
-            ),
         )
         for sample in samples
     )
@@ -201,11 +135,6 @@ def _population(samples: tuple[task4.CorpusSampleV1, ...], split):
         evaluation_contract_identity=task5.evaluation_contract_identity(),
         admitted_corpus=corpus,
         admission_authority=authority,
-        dataset_manifest=manifest,
-        verified_admission_receipts=tuple(receipts),
-        admission_bindings=tuple(
-            _binding(sample, receipt_ids[sample.trajectory_record_id]) for sample in samples
-        ),
         source_samples=source,
     )
 
@@ -229,9 +158,7 @@ def _scores(sample: task4.CorpusSampleV1, width: int) -> task5_offline.OfflineSc
     bits = tuple(task5.score_f32_bits(float(index)) for index in range(n))
     padding = tuple(task5.score_f32_bits(-1000.0) for _ in range(width - n))
     return task5_offline.OfflineScoreBatchV1(
-        checkpoint_identity=task5.SMOKE_CHECKPOINT_ID,
-        model_input_identity=sample.model_input_identity,
-        ordered_candidate_domain_identity=sample.ordered_candidate_domain_identity,
+        inference_response=_inference_response(sample),
         physical_candidate_width=width,
         score_f32_bits=bits + padding,
         real_candidate_mask=(1,) * n + (0,) * (width - n),
@@ -329,7 +256,7 @@ class Task5BOfflineTests(unittest.TestCase):
             self.assertEqual(first.sample_results[0].loss_f64_bits,
                              second.sample_results[0].loss_f64_bits)
 
-    def test_membership_split_teacher_label_and_failure_accounting_fail_closed(self):
+    def test_admitted_membership_split_and_teacher_label_inputs_are_fail_closed(self):
         population = _build_fixture()
         config = _config(population)
         original = population.source_samples[0].sample
@@ -344,31 +271,15 @@ class Task5BOfflineTests(unittest.TestCase):
                 "card_selection", reordered_keys
             ),
         )
-        mutated_numeric_identity = task4.make_numeric_model_input(
-            model_input_identity=mutated_sample.model_input_identity,
-            state_rows=mutated_sample.state_rows,
-            candidate_rows=mutated_sample.candidate_rows,
-            routing_keys=mutated_sample.routing_keys,
-            public_candidate_domain_digest=mutated_sample.public_candidate_domain_digest,
-            public_semantic_decision_id=mutated_sample.public_semantic_decision_id,
-            perspective_player=mutated_sample.perspective_player,
-            decision_index=mutated_sample.decision_index,
-        ).numeric_input_identity
         mutated = dataclasses.replace(
             population.source_samples[0],
             sample=mutated_sample,
-            numeric_input_identity=mutated_numeric_identity,
         )
         changed = dataclasses.replace(population, source_samples=(mutated,) + population.source_samples[1:])
-        result = task5_offline.evaluate_offline(
-            changed, config, lambda sample, width: _scores(sample, width)
-        )
-        self.assertEqual(result.metrics.rejected_count, 1)
-        self.assertEqual(result.metrics.scored_count, 1)
-        self.assertEqual(
-            result.sample_results[0].failure_reason,
-            task5_offline.FailureReason.LABEL_MISMATCH,
-        )
+        with self.assertRaises(task5_offline.OfflineEvaluationError):
+            task5_offline.evaluate_offline(
+                changed, config, lambda sample, width: _scores(sample, width)
+            )
 
         train = [item for item in population.source_samples if item.sample.partition == "train"][0]
         with self.assertRaises(task5_offline.OfflineEvaluationError):
@@ -378,7 +289,7 @@ class Task5BOfflineTests(unittest.TestCase):
                 lambda sample, width: _scores(sample, width),
             )
 
-    def test_wrong_receipt_quarantine_randomlegal_and_width_fail_without_scoring(self):
+    def test_untrusted_admission_context_and_width_fail_without_scoring(self):
         population = _build_fixture()
         config = _config(population)
         calls = []
@@ -387,159 +298,142 @@ class Task5BOfflineTests(unittest.TestCase):
             calls.append(sample.bc_sample_identity)
             return _scores(sample, width)
 
-        result = task5_offline.evaluate_offline(
-            dataclasses.replace(
-                population,
-                verified_admission_receipts=population.verified_admission_receipts[1:],
-            ),
-            config,
-            scorer,
+        bad_authority = dataclasses.replace(
+            population.admission_authority,
+            expected_artifact_identity="phase6_corpus.v1." + "f" * 64,
         )
-        self.assertEqual(result.sample_results[0].status, "REJECTED")
-        self.assertEqual(result.sample_results[0].failure_reason,
-                         task5_offline.FailureReason.MISSING_ADMISSION_RECEIPT)
-        self.assertEqual(calls, [population.source_samples[1].sample.bc_sample_identity])
+        with self.assertRaises(task5_offline.OfflineEvaluationError):
+            task5_offline.evaluate_offline(
+                dataclasses.replace(population, admission_authority=bad_authority),
+                config,
+                scorer,
+            )
+        self.assertEqual(calls, [])
 
         too_small = dataclasses.replace(config, physical_candidate_capacity=23)
         result = task5_offline.evaluate_offline(population, too_small, scorer)
         self.assertEqual(result.metrics.unscored_count, 2)
         self.assertTrue(all(item.status == "UNSCORED" for item in result.sample_results))
 
-        quarantined = dataclasses.replace(
-            population.admission_bindings[0], quarantined=True
-        )
-        result = task5_offline.evaluate_offline(
-            dataclasses.replace(
-                population,
-                admission_bindings=(quarantined,) + population.admission_bindings[1:],
-            ),
-            config,
-            scorer,
-        )
-        self.assertEqual(
-            result.sample_results[0].failure_reason,
-            task5_offline.FailureReason.QUARANTINED_TRAJECTORY,
-        )
+        self.assertNotIn("AdmissionBindingV1", dir(task5_offline))
+        self.assertNotIn("issue_verified_admission_receipt", dir(task5_offline))
 
-        random_legal = dataclasses.replace(
-            population.admission_bindings[0], behavior_policy_kind="RandomLegal"
-        )
-        result = task5_offline.evaluate_offline(
-            dataclasses.replace(
-                population,
-                admission_bindings=(random_legal,) + population.admission_bindings[1:],
-            ),
-            config,
-            scorer,
-        )
-        self.assertEqual(
-            result.sample_results[0].failure_reason,
-            task5_offline.FailureReason.INELIGIBLE_TEACHER_POLICY,
-        )
-
-    def test_receipt_and_manifest_commitments_are_recomputed(self):
+    def test_task4_authority_membership_is_the_only_admission_source(self):
         population = _build_fixture()
-        population.dataset_manifest.validate()
-        for receipt in population.verified_admission_receipts:
-            receipt.validate()
-        task5_offline.validate_dataset_manifest_membership(
-            population.dataset_manifest, population.verified_admission_receipts
+        config = _config(population)
+        incomplete_authority = dataclasses.replace(
+            population.admission_authority,
+            source_samples=population.admission_authority.source_samples[1:],
         )
-        member = population.dataset_manifest.members[0]
-        bad_member = dataclasses.replace(
-            member, candidate_shard_artifact_sha256="f" * 64
-        )
-        bad_manifest = dataclasses.replace(
-            population.dataset_manifest,
-            members=(bad_member,) + population.dataset_manifest.members[1:],
-        )
-        with self.assertRaises(task5_offline.OfflineCodecError):
-            task5_offline.validate_dataset_manifest_membership(
-                bad_manifest, population.verified_admission_receipts
+        with self.assertRaises(task5_offline.OfflineEvaluationError):
+            task5_offline.evaluate_offline(
+                dataclasses.replace(population, admission_authority=incomplete_authority),
+                config,
+                lambda sample, width: _scores(sample, width),
+            )
+        with self.assertRaises(task5_offline.OfflineEvaluationError):
+            task5_offline.evaluate_offline(
+                dataclasses.replace(population, dataset_manifest_identity="f" * 64),
+                config,
+                lambda sample, width: _scores(sample, width),
             )
 
-        bad_receipt = dataclasses.replace(
-            population.verified_admission_receipts[0].receipt,
-            candidate_shard_artifact_sha256="e" * 64,
+    def test_slice_coordinates_are_derived_from_accepted_sample_fields(self):
+        population = _build_fixture()
+        result = task5_offline.evaluate_offline(
+            population, _config(population), lambda sample, width: _scores(sample, width)
         )
-        bad_receipt_result = task5_offline.evaluate_offline(
-            dataclasses.replace(
-                population,
-                verified_admission_receipts=(
-                    dataclasses.replace(
-                        population.verified_admission_receipts[0],
-                        receipt=bad_receipt,
-                    ),
-                ) + population.verified_admission_receipts[1:],
-            ),
+        for item, source in zip(result.sample_results, population.source_samples[:2]):
+            self.assertIsNone(item.decision_request_family)
+            self.assertIsNone(item.phase)
+            self.assertEqual(item.turn_index, source.sample.decision_index)
+            self.assertEqual(item.acting_participant, source.sample.perspective_player)
+            self.assertIsNone(item.locked_deck_role_id)
+            self.assertIsNone(item.starting_player)
+            self.assertIsNone(item.continuation)
+            self.assertIsNone(item.rare_critical_slice)
+        with self.assertRaises(TypeError):
+            task5_offline.OfflineSourceSampleV1(
+                population.source_samples[0].sample,
+                public_context=object(),
+            )
+
+    def test_invalid_source_sample_is_not_admitted_as_a_second_population(self):
+        population = _build_fixture()
+        config = _config(population)
+        original = population.source_samples[0]
+        changed = dataclasses.replace(
+            original,
+            numeric_input_identity="phase6_numeric_model_input.v1." + "f" * 64,
+        )
+        with self.assertRaises(task5_offline.OfflineEvaluationError):
+            task5_offline.evaluate_offline(
+                dataclasses.replace(
+                    population,
+                    source_samples=(changed,) + population.source_samples[1:],
+                ),
+                config,
+                lambda sample, width: _scores(sample, width),
+            )
+
+    def test_score_provider_without_task4_response_is_not_authoritative(self):
+        population = _build_fixture()
+        result = task5_offline.evaluate_offline(
+            population,
             _config(population),
-            lambda sample, width: _scores(sample, width),
-        ).sample_results[0]
-        self.assertEqual(
-            bad_receipt_result.failure_reason,
-            task5_offline.FailureReason.INVALID_ADMISSION_RECEIPT,
+            lambda sample, width: task5_offline.OfflineScoreBatchV1(
+                inference_response=None,
+                physical_candidate_width=width,
+                score_f32_bits=tuple("00000000" for _ in range(width)),
+                real_candidate_mask=(1,) * width,
+            ),
         )
+        self.assertTrue(all(item.status == "UNSCORED" for item in result.sample_results))
+        self.assertTrue(all(item.failure_reason == task5_offline.FailureReason.INFERENCE_FAILURE
+                            for item in result.sample_results))
+
+    def test_t5b_has_no_caller_admission_or_teacher_annotation_surface(self):
+        module_source = (
+            Path(__file__).resolve().parents[2] / "tools/phase6/task5_offline.py"
+        ).read_text(encoding="utf-8")
+        for forbidden in (
+            "issue_verified_admission_receipt",
+            "VerifiedAdmissionReceiptV1",
+            "AdmissionBindingV1",
+            "behavior_policy_kind",
+            "PublicSampleContextV1",
+        ):
+            self.assertNotIn(forbidden, module_source)
 
     def test_invalid_public_domain_inputs_are_rejected_without_echoing_private_or_invalid_identity(self):
         population = _build_fixture()
-        config = _config(population)
         original = population.source_samples[0]
         bad_key_sample = dataclasses.replace(
             original.sample,
             routing_keys=("public_action.v1.00",) + original.sample.routing_keys[1:],
         )
-        bad_key_result = task5_offline.evaluate_offline(
-            dataclasses.replace(
-                population,
-                source_samples=(dataclasses.replace(original, sample=bad_key_sample),)
-                + population.source_samples[1:],
-            ),
-            config,
-            lambda sample, width: _scores(sample, width),
-        ).sample_results[0]
-        self.assertEqual(
-            bad_key_result.failure_reason,
-            task5_offline.FailureReason.CANDIDATE_DOMAIN_FAILURE,
-        )
-        self.assertIsNone(bad_key_result.candidate_public_action_keys)
-        self.assertIsNone(bad_key_result.ordered_candidate_domain_identity)
+        with self.assertRaises(task5_offline.OfflineEvaluationError):
+            task5_offline._candidate_domain_validation(
+                dataclasses.replace(original, sample=bad_key_sample)
+            )
 
         duplicate_sample = dataclasses.replace(
             original.sample,
             routing_keys=(original.sample.routing_keys[0],) + original.sample.routing_keys,
         )
-        duplicate_result = task5_offline.evaluate_offline(
-            dataclasses.replace(
-                population,
-                source_samples=(dataclasses.replace(original, sample=duplicate_sample),)
-                + population.source_samples[1:],
-            ),
-            config,
-            lambda sample, width: _scores(sample, width),
-        ).sample_results[0]
-        self.assertEqual(
-            duplicate_result.failure_reason,
-            task5_offline.FailureReason.CANDIDATE_DOMAIN_FAILURE,
-        )
-        self.assertIsNone(duplicate_result.ordered_candidate_domain_identity)
+        with self.assertRaises(task5_offline.OfflineEvaluationError):
+            task5_offline._candidate_domain_validation(
+                dataclasses.replace(original, sample=duplicate_sample)
+            )
 
         changed_identity_sample = dataclasses.replace(
             original.sample,
             model_input_identity="model_input.v1." + "f" * 64,
         )
-        changed_identity_result = task5_offline.evaluate_offline(
-            dataclasses.replace(
-                population,
-                source_samples=(dataclasses.replace(original, sample=changed_identity_sample),)
-                + population.source_samples[1:],
-            ),
-            config,
-            lambda sample, width: _scores(sample, width),
-        ).sample_results[0]
-        self.assertEqual(
-            changed_identity_result.failure_reason,
-            task5_offline.FailureReason.SAMPLE_IDENTITY_MISMATCH,
-        )
+        with self.assertRaises(task5_offline.OfflineEvaluationError):
+            task5_offline._candidate_domain_validation(
+                dataclasses.replace(original, sample=changed_identity_sample)
+            )
 
     def test_padding_mask_and_checkpoint_binding_fail_closed(self):
         population = _build_fixture()
@@ -559,9 +453,13 @@ class Task5BOfflineTests(unittest.TestCase):
         )
 
         def wrong_checkpoint(sample, width):
+            batch = _scores(sample, width)
             return dataclasses.replace(
-                _scores(sample, width),
-                checkpoint_identity="phase6_checkpoint.v1." + "f" * 64,
+                batch,
+                inference_response=dataclasses.replace(
+                    batch.inference_response,
+                    checkpoint_identity="phase6_checkpoint.v1." + "f" * 64,
+                ),
             )
 
         result = task5_offline.evaluate_offline(population, _config(population), wrong_checkpoint)
@@ -583,7 +481,9 @@ class Task5BOfflineTests(unittest.TestCase):
         self.assertTrue(all(item.status == "SCORED" for item in result.sample_results))
         self.assertTrue(all(item.score_vector_identity for item in result.sample_results))
 
-        module_source = Path("tools/phase6/task5_offline.py").read_text(encoding="utf-8")
+        module_source = (
+            Path(__file__).resolve().parents[2] / "tools/phase6/task5_offline.py"
+        ).read_text(encoding="utf-8")
         self.assertNotIn("import torch", module_source)
         self.assertNotIn("import jax", module_source)
 
@@ -596,8 +496,6 @@ class Task5BOfflineTests(unittest.TestCase):
         reversed_population = dataclasses.replace(
             population,
             source_samples=tuple(reversed(population.source_samples)),
-            admission_bindings=tuple(reversed(population.admission_bindings)),
-            verified_admission_receipts=tuple(reversed(population.verified_admission_receipts)),
         )
         second = task5_offline.evaluate_offline(
             reversed_population, config, lambda sample, width: _scores(sample, width)
@@ -693,45 +591,12 @@ class Task5BOfflineTests(unittest.TestCase):
                     "from tools.phase6 import task5_offline; print(task5_offline.loss_f64_bits(1.25))",
                 ],
                 text=True,
-                cwd="C:\\yogiohML",
+                cwd=Path(__file__).resolve().parents[2],
             )
             for _ in range(2)
         ]
         self.assertEqual(outputs[0], outputs[1])
         self.assertEqual(outputs[0].strip(), "3ff4000000000000")
-
-    def test_private_public_context_and_candidate_domain_mutations_fail_closed(self):
-        population = _build_fixture()
-        config = _config(population)
-        source = population.source_samples[0]
-        bad_context = dataclasses.replace(
-            source.public_context,
-            decision_request_family="pick",
-        )
-        result = task5_offline.evaluate_offline(
-            dataclasses.replace(
-                population,
-                source_samples=(dataclasses.replace(source, public_context=bad_context),)
-                + population.source_samples[1:],
-            ),
-            config,
-            lambda sample, width: _scores(sample, width),
-        )
-        self.assertEqual(result.sample_results[0].failure_reason,
-                         task5_offline.FailureReason.CANDIDATE_DOMAIN_FAILURE)
-
-        with self.assertRaises(task5_offline.OfflineCodecError):
-            task5_offline.PublicSampleContextV1.from_dict({
-                "decision_request_family": "card_selection",
-                "phase": 3,
-                "turn_index": 0,
-                "acting_participant": 0,
-                "locked_deck_role_id": task5.SWORDSOUL_DECK_ID,
-                "starting_player": 0,
-                "continuation": False,
-                "CoreHost": "private",
-            })
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -25,7 +25,7 @@ import math
 import re
 import struct
 from collections import Counter, defaultdict
-from typing import Any, Callable, Iterable, Mapping, Optional, Sequence
+from typing import Any, Callable, Iterable, Optional, Sequence
 
 from . import task4_codec as task4
 from . import task5_codec as task5
@@ -58,12 +58,6 @@ OFFLINE_SAMPLE_ID_PREFIX = "phase6_offline_sample.v1."
 OFFLINE_SLICE_ID_PREFIX = "phase6_offline_slice.v1."
 OFFLINE_METRICS_ID_PREFIX = "phase6_offline_metrics.v1."
 LOSS_F64_CODEC_ID = "ocgforge.phase6.numeric.f64_ieee754_be.v1"
-
-DATASET_MANIFEST_SCHEMA_ID = "ocgforge.dataset_manifest.v1"
-DATASET_IDENTITY_SCHEMA_ID = "ocgforge.dataset_identity.v1"
-TRUSTED_TRAJECTORY_CONTRACT_ID = "ocgforge.trusted_trajectory.v1"
-ADMISSION_RECEIPT_CONTRACT_ID = "ocgforge.admission_receipt.v1"
-ADMISSION_RECEIPT_ID_PREFIX = "admission_receipt.v1."
 
 SLICE_DIMENSION_CONTRACT_ID = "ocgforge.phase6.offline_slice_dimensions.v1"
 SLICE_COORDINATE_ABSENT = "ABSENT"
@@ -180,10 +174,6 @@ def _validate_bool(value: Any, field: str) -> None:
         raise OfflineCodecError(f"{field} is not a bool")
 
 
-def _validate_artifact_digest(value: Any, field: str) -> None:
-    _validate_digest(value, field)
-
-
 def _strict_object(payload: Any, fields: Sequence[str], label: str) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise OfflineCodecError(f"{label} is not an object")
@@ -210,27 +200,6 @@ def _validate_partitions(partitions: Sequence[str], field: str = "selected_parti
     return value
 
 
-def _validate_public_text(value: Optional[str], field: str) -> None:
-    if value is None:
-        return
-    _validate_string(value, field)
-    private_markers = (
-        "CoreHost",
-        "PlayerObservation",
-        "SubmissionToken",
-        "raw_engine",
-        "hidden_card",
-        "private_locator",
-        "object_id",
-        "pointer",
-        "PID",
-        "thread_id",
-        "filesystem_path",
-    )
-    if any(marker in value for marker in private_markers):
-        raise OfflineCodecError(f"{field} contains a private/internal marker")
-
-
 def _validate_lower_token(value: Optional[str], field: str, *, allow_empty: bool = False) -> None:
     if value is None:
         return
@@ -243,364 +212,10 @@ def _validate_lower_token(value: Optional[str], field: str, *, allow_empty: bool
 
 
 @dataclasses.dataclass(frozen=True)
-class PublicSampleContextV1:
-    """Optional public coordinates used only for deterministic slicing."""
-
-    decision_request_family: Optional[str] = None
-    phase: Optional[int] = None
-    turn_index: Optional[int] = None
-    acting_participant: Optional[int] = None
-    locked_deck_role_id: Optional[str] = None
-    starting_player: Optional[int] = None
-    continuation: Optional[bool] = None
-    rare_critical_slice: Optional[str] = None
-
-    def validate(self) -> None:
-        if self.decision_request_family is not None:
-            if self.decision_request_family not in task5.DECISION_KIND_TOKENS:
-                raise OfflineCodecError("decision_request_family is not an accepted decision kind")
-        _validate_u32(self.phase, "phase") if self.phase is not None else None
-        _validate_u64(self.turn_index, "turn_index") if self.turn_index is not None else None
-        if self.acting_participant is not None and self.acting_participant not in (0, 1):
-            raise OfflineCodecError("acting_participant is not 0 or 1")
-        if self.locked_deck_role_id is not None and self.locked_deck_role_id not in (
-            task5.SWORDSOUL_DECK_ID,
-            task5.SALAMANGREAT_DECK_ID,
-        ):
-            raise OfflineCodecError("locked_deck_role_id is not a fixed deck role")
-        if self.starting_player is not None and self.starting_player not in (0, 1):
-            raise OfflineCodecError("starting_player is not 0 or 1")
-        if self.continuation is not None:
-            _validate_bool(self.continuation, "continuation")
-        if self.rare_critical_slice is not None:
-            _validate_public_text(self.rare_critical_slice, "rare_critical_slice")
-            _validate_lower_token(self.rare_critical_slice, "rare_critical_slice")
-
-    def to_dict(self) -> dict[str, Any]:
-        self.validate()
-        return {
-            "acting_participant": self.acting_participant,
-            "continuation": self.continuation,
-            "decision_request_family": self.decision_request_family,
-            "locked_deck_role_id": self.locked_deck_role_id,
-            "phase": self.phase,
-            "rare_critical_slice": self.rare_critical_slice,
-            "starting_player": self.starting_player,
-            "turn_index": self.turn_index,
-        }
-
-    @classmethod
-    def from_dict(cls, payload: Any) -> "PublicSampleContextV1":
-        fields = (
-            "decision_request_family",
-            "phase",
-            "turn_index",
-            "acting_participant",
-            "locked_deck_role_id",
-            "starting_player",
-            "continuation",
-            "rare_critical_slice",
-        )
-        data = _strict_object(payload, fields, "PublicSampleContextV1")
-        value = cls(**{field: data[field] for field in fields})
-        value.validate()
-        return value
-
-
-@dataclasses.dataclass(frozen=True)
-class AdmissionReceiptEntryV1:
-    """The public commitment fields of the accepted AdmissionReceiptV1."""
-
-    trajectory_record_id: str
-    public_gameplay_trajectory_id: str
-    environment_semantic_id: str
-    episode_semantic_id: str
-    episode_envelope_sha256: str
-    closure_kind: int
-
-    def validate(self) -> None:
-        _validate_prefixed(self.trajectory_record_id, "trajectory_record.v1.", "receipt trajectory_record_id")
-        _validate_prefixed(
-            self.public_gameplay_trajectory_id,
-            "public_gameplay_trajectory.v1.",
-            "receipt public_gameplay_trajectory_id",
-        )
-        _validate_artifact_digest(self.environment_semantic_id, "receipt environment_semantic_id")
-        _validate_digest(self.episode_semantic_id, "receipt episode_semantic_id")
-        _validate_artifact_digest(self.episode_envelope_sha256, "receipt episode_envelope_sha256")
-        if isinstance(self.closure_kind, bool) or not isinstance(self.closure_kind, int) or self.closure_kind not in (0, 1):
-            raise OfflineCodecError("receipt closure_kind is not an accepted u8")
-
-
-@dataclasses.dataclass(frozen=True)
-class AdmissionReceiptV1:
-    admission_contract_id: str
-    candidate_shard_artifact_sha256: str
-    restricted_evidence_artifact_sha256: str
-    entries: tuple[AdmissionReceiptEntryV1, ...]
-
-    def validate(self) -> None:
-        if self.admission_contract_id != ADMISSION_RECEIPT_CONTRACT_ID:
-            raise OfflineCodecError("admission receipt contract is not accepted")
-        _validate_artifact_digest(self.candidate_shard_artifact_sha256, "candidate_shard_artifact_sha256")
-        _validate_artifact_digest(self.restricted_evidence_artifact_sha256, "restricted_evidence_artifact_sha256")
-        if not isinstance(self.entries, tuple):
-            raise OfflineCodecError("admission receipt entries are not ordered")
-        previous: Optional[str] = None
-        for entry in self.entries:
-            if not isinstance(entry, AdmissionReceiptEntryV1):
-                raise OfflineCodecError("admission receipt entry has the wrong DTO type")
-            entry.validate()
-            if previous is not None and entry.trajectory_record_id <= previous:
-                raise OfflineCodecError("admission receipt entries are not strictly sorted")
-            previous = entry.trajectory_record_id
-
-    @property
-    def receipt_identity(self) -> str:
-        return _identity(ADMISSION_RECEIPT_ID_PREFIX, canonical_admission_receipt_bytes(self))
-
-
-def canonical_admission_receipt_bytes(value: AdmissionReceiptV1) -> bytes:
-    value.validate()
-    out = [
-        task5.pack_string(ADMISSION_RECEIPT_CONTRACT_ID),
-        task5.pack_string(ADMISSION_RECEIPT_CONTRACT_ID),
-        task5.pack_string(value.admission_contract_id),
-        task5.pack_string(value.candidate_shard_artifact_sha256),
-        task5.pack_string(value.restricted_evidence_artifact_sha256),
-        task5.pack_u32(len(value.entries)),
-    ]
-    for entry in value.entries:
-        out.extend(
-            (
-                task5.pack_string(entry.trajectory_record_id),
-                task5.pack_string(entry.public_gameplay_trajectory_id),
-                task5.pack_string(entry.environment_semantic_id),
-                task5.pack_string(entry.episode_semantic_id),
-                task5.pack_string(entry.episode_envelope_sha256),
-                task5.pack_u8(entry.closure_kind),
-            )
-        )
-    return b"".join(out)
-
-
-_VERIFIED_ADMISSION_ATTESTATION = object()
-
-
-@dataclasses.dataclass(frozen=True)
-class VerifiedAdmissionReceiptV1:
-    """Value-owned receipt with an explicit issuance capability marker."""
-
-    receipt: AdmissionReceiptV1
-    declared_receipt_identity: str = ""
-    _attestation: object = dataclasses.field(default=None, repr=False, compare=False)
-
-    @property
-    def receipt_identity(self) -> str:
-        return self.declared_receipt_identity
-
-    def validate(self) -> None:
-        if self._attestation is not _VERIFIED_ADMISSION_ATTESTATION:
-            raise OfflineCodecError("admission receipt lacks the verified issuance attestation")
-        _validate_prefixed(self.declared_receipt_identity, ADMISSION_RECEIPT_ID_PREFIX, "declared admission receipt identity")
-        self.receipt.validate()
-        if self.receipt_identity != _identity(ADMISSION_RECEIPT_ID_PREFIX, canonical_admission_receipt_bytes(self.receipt)):
-            raise OfflineCodecError("admission receipt identity does not match its content")
-
-
-def issue_verified_admission_receipt(receipt: AdmissionReceiptV1) -> VerifiedAdmissionReceiptV1:
-    if not isinstance(receipt, AdmissionReceiptV1):
-        raise OfflineCodecError("admission receipt has the wrong DTO type")
-    receipt.validate()
-    identity = _identity(ADMISSION_RECEIPT_ID_PREFIX, canonical_admission_receipt_bytes(receipt))
-    return VerifiedAdmissionReceiptV1(receipt, identity, _VERIFIED_ADMISSION_ATTESTATION)
-
-
-@dataclasses.dataclass(frozen=True)
-class DatasetManifestMemberV1:
-    trajectory_record_id: str
-    public_gameplay_trajectory_id: str
-    admission_receipt_id: str
-    candidate_shard_artifact_sha256: str
-    episode_envelope_sha256: str
-
-    def validate(self) -> None:
-        _validate_prefixed(self.trajectory_record_id, "trajectory_record.v1.", "manifest trajectory_record_id")
-        _validate_prefixed(
-            self.public_gameplay_trajectory_id,
-            "public_gameplay_trajectory.v1.",
-            "manifest public_gameplay_trajectory_id",
-        )
-        _validate_prefixed(self.admission_receipt_id, ADMISSION_RECEIPT_ID_PREFIX, "manifest admission_receipt_id")
-        _validate_artifact_digest(self.candidate_shard_artifact_sha256, "manifest candidate_shard_artifact_sha256")
-        _validate_artifact_digest(self.episode_envelope_sha256, "manifest episode_envelope_sha256")
-
-
-@dataclasses.dataclass(frozen=True)
-class DatasetManifestV1:
-    dataset_manifest_schema_id: str
-    dataset_identity_schema_id: str
-    trusted_trajectory_contract_id: str
-    dataset_semantic_id: str
-    members: tuple[DatasetManifestMemberV1, ...]
-
-    def validate(self) -> None:
-        if self.dataset_manifest_schema_id != DATASET_MANIFEST_SCHEMA_ID or self.dataset_identity_schema_id != DATASET_IDENTITY_SCHEMA_ID or self.trusted_trajectory_contract_id != TRUSTED_TRAJECTORY_CONTRACT_ID:
-            raise OfflineCodecError("DatasetManifest contract is not accepted")
-        _validate_digest(self.dataset_semantic_id, "dataset_semantic_id")
-        if not isinstance(self.members, tuple):
-            raise OfflineCodecError("DatasetManifest members are not ordered")
-        previous: Optional[str] = None
-        record_ids: list[str] = []
-        for member in self.members:
-            if not isinstance(member, DatasetManifestMemberV1):
-                raise OfflineCodecError("DatasetManifest member has the wrong DTO type")
-            member.validate()
-            if previous is not None and member.trajectory_record_id <= previous:
-                raise OfflineCodecError("DatasetManifest members are not strictly sorted")
-            previous = member.trajectory_record_id
-            record_ids.append(member.trajectory_record_id)
-        if dataset_semantic_id(record_ids) != self.dataset_semantic_id:
-            raise OfflineCodecError("DatasetManifest semantic identity does not match membership")
-
-
-def canonical_dataset_identity_bytes(trajectory_record_ids: Sequence[str]) -> bytes:
-    ids = tuple(trajectory_record_ids)
-    previous: Optional[str] = None
-    for identity in ids:
-        _validate_prefixed(identity, "trajectory_record.v1.", "dataset trajectory_record_id")
-        if previous is not None and identity <= previous:
-            raise OfflineCodecError("dataset trajectory identities are not strictly sorted")
-        previous = identity
-    return b"".join(
-        (
-            task5.pack_string(DATASET_IDENTITY_SCHEMA_ID),
-            task5.pack_string(DATASET_IDENTITY_SCHEMA_ID),
-            task5.pack_string(TRUSTED_TRAJECTORY_CONTRACT_ID),
-            task5.pack_string_vector(ids),
-        )
-    )
-
-
-def dataset_semantic_id(trajectory_record_ids: Sequence[str]) -> str:
-    return hashlib.sha256(canonical_dataset_identity_bytes(trajectory_record_ids)).hexdigest()
-
-
-def canonical_dataset_manifest_bytes(value: DatasetManifestV1) -> bytes:
-    value.validate()
-    out = [
-        task5.pack_string(DATASET_MANIFEST_SCHEMA_ID),
-        task5.pack_string(DATASET_MANIFEST_SCHEMA_ID),
-        task5.pack_string(value.dataset_identity_schema_id),
-        task5.pack_string(value.trusted_trajectory_contract_id),
-        task5.pack_string(value.dataset_semantic_id),
-        task5.pack_u32(len(value.members)),
-    ]
-    for member in value.members:
-        out.extend(
-            (
-                task5.pack_string(member.trajectory_record_id),
-                task5.pack_string(member.public_gameplay_trajectory_id),
-                task5.pack_string(member.admission_receipt_id),
-                task5.pack_string(member.candidate_shard_artifact_sha256),
-                task5.pack_string(member.episode_envelope_sha256),
-            )
-        )
-    return b"".join(out)
-
-
-def validate_dataset_manifest_membership(
-    manifest: DatasetManifestV1,
-    verified_receipts: Sequence[VerifiedAdmissionReceiptV1],
-) -> None:
-    manifest.validate()
-    if not isinstance(verified_receipts, (tuple, list)):
-        raise OfflineCodecError("verified receipts are not an ordered vector")
-    receipts_by_id: dict[str, VerifiedAdmissionReceiptV1] = {}
-    for verified in verified_receipts:
-        if not isinstance(verified, VerifiedAdmissionReceiptV1):
-            raise OfflineCodecError("verified receipt has the wrong DTO type")
-        verified.validate()
-        if verified.receipt_identity in receipts_by_id:
-            raise OfflineCodecError("verified receipt identity is duplicated")
-        receipts_by_id[verified.receipt_identity] = verified
-    for member in manifest.members:
-        verified = receipts_by_id.get(member.admission_receipt_id)
-        if verified is None:
-            raise OfflineCodecError("DatasetManifest member is missing its admission receipt")
-        receipt = verified.receipt
-        if receipt.candidate_shard_artifact_sha256 != member.candidate_shard_artifact_sha256:
-            raise OfflineCodecError("DatasetManifest candidate shard disagrees with receipt")
-        entry = next((entry for entry in receipt.entries if entry.trajectory_record_id == member.trajectory_record_id), None)
-        if entry is None or entry.public_gameplay_trajectory_id != member.public_gameplay_trajectory_id or entry.episode_envelope_sha256 != member.episode_envelope_sha256:
-            raise OfflineCodecError("DatasetManifest member disagrees with receipt commitment")
-
-
-@dataclasses.dataclass(frozen=True)
-class AdmissionBindingV1:
-    """Public reference to an upstream verified receipt and Teacher source."""
-
-    trajectory_record_id: str
-    admission_receipt_identity: str
-    episode_semantic_id: str
-    behavior_policy_kind: str
-    behavior_policy_source_identity: str
-    teacher_policy_binding_identity: str
-    quarantined: bool = False
-
-    def validate(self) -> None:
-        _validate_prefixed(self.trajectory_record_id, "trajectory_record.v1.", "trajectory_record_id")
-        _validate_prefixed(self.admission_receipt_identity, "admission_receipt.v1.", "admission_receipt_identity")
-        _validate_digest(self.episode_semantic_id, "episode_semantic_id")
-        if self.behavior_policy_kind != "TEACHER":
-            raise OfflineCodecError("behavior policy is not the accepted Teacher source")
-        if self.behavior_policy_source_identity not in task4.TEACHER_SOURCE_IDENTITIES:
-            raise OfflineCodecError("behavior policy source is not an accepted Teacher artifact")
-        expected_binding = {
-            task5.SWORDSOUL_TEACHER_ARTIFACT: task5.SWORDSOUL_TEACHER_BINDING,
-            task5.SALAMANGREAT_TEACHER_ARTIFACT: task5.SALAMANGREAT_TEACHER_BINDING,
-        }[self.behavior_policy_source_identity]
-        if self.teacher_policy_binding_identity != expected_binding:
-            raise OfflineCodecError("Teacher artifact and binding do not agree")
-        _validate_bool(self.quarantined, "quarantined")
-
-    def to_dict(self) -> dict[str, Any]:
-        self.validate()
-        return {
-            "admission_receipt_identity": self.admission_receipt_identity,
-            "behavior_policy_kind": self.behavior_policy_kind,
-            "behavior_policy_source_identity": self.behavior_policy_source_identity,
-            "episode_semantic_id": self.episode_semantic_id,
-            "quarantined": self.quarantined,
-            "teacher_policy_binding_identity": self.teacher_policy_binding_identity,
-            "trajectory_record_id": self.trajectory_record_id,
-        }
-
-    @classmethod
-    def from_dict(cls, payload: Any) -> "AdmissionBindingV1":
-        fields = (
-            "trajectory_record_id",
-            "admission_receipt_identity",
-            "episode_semantic_id",
-            "behavior_policy_kind",
-            "behavior_policy_source_identity",
-            "teacher_policy_binding_identity",
-            "quarantined",
-        )
-        data = _strict_object(payload, fields, "AdmissionBindingV1")
-        value = cls(**{field: data[field] for field in fields})
-        value.validate()
-        return value
-
-
-@dataclasses.dataclass(frozen=True)
 class OfflineSourceSampleV1:
-    """A public Task-4 corpus sample plus only public slice coordinates."""
+    """An exact public sample read from the trusted Task-4 output."""
 
     sample: task4.CorpusSampleV1
-    public_context: PublicSampleContextV1 = dataclasses.field(
-        default_factory=PublicSampleContextV1
-    )
     numeric_input_identity: str = ""
 
 
@@ -609,21 +224,17 @@ class TrustedOfflinePopulationV1:
     """The only population input accepted by the offline evaluator.
 
     ``admitted_corpus`` and ``admission_authority`` are the existing Task-4
-    authority sidecar pair.  ``source_samples`` is a separately held public
-    read model; this separation lets T5B emit a rejected result for a member
-    whose public sample fields are inconsistent without ever admitting a new
-    trajectory or reading a path from disk.
+    authority sidecar pair.  ``source_samples`` must be an exact value-owned
+    read model of that pair; T5B never issues a receipt, adds Teacher
+    provenance, or reads a trajectory path from disk.
     """
 
     source_dataset_identity: str
     dataset_manifest_identity: str
     dataset_split_identity: str
     evaluation_contract_identity: str
-    dataset_manifest: DatasetManifestV1
-    verified_admission_receipts: tuple[VerifiedAdmissionReceiptV1, ...]
     admitted_corpus: task4.DerivedCorpusV1
     admission_authority: task4.CorpusAdmissionAuthorityV1
-    admission_bindings: tuple[AdmissionBindingV1, ...]
     source_samples: tuple[OfflineSourceSampleV1, ...]
 
     def validate(self) -> None:
@@ -640,29 +251,6 @@ class TrustedOfflinePopulationV1:
                 "WRONG_EVALUATION_CONTRACT",
                 "offline population uses an unaccepted evaluation contract",
             )
-        if not isinstance(self.dataset_manifest, DatasetManifestV1):
-            raise OfflineEvaluationError("INVALID_DATASET_MANIFEST", "DatasetManifest has the wrong DTO type")
-        if self.dataset_manifest.dataset_semantic_id != self.dataset_manifest_identity:
-            raise OfflineEvaluationError("INVALID_DATASET_MANIFEST", "DatasetManifest identity differs from population")
-        try:
-            self.dataset_manifest.validate()
-        except OfflineCodecError as error:
-            raise OfflineEvaluationError("INVALID_DATASET_MANIFEST", str(error)) from error
-        if not isinstance(self.verified_admission_receipts, tuple):
-            raise OfflineEvaluationError("INVALID_ADMISSION_RECEIPT", "verified receipts are not an ordered tuple")
-        if any(
-            not isinstance(receipt, VerifiedAdmissionReceiptV1)
-            for receipt in self.verified_admission_receipts
-        ):
-            raise OfflineEvaluationError("INVALID_ADMISSION_RECEIPT", "verified receipt has the wrong DTO type")
-        receipt_ids = [receipt.receipt_identity for receipt in self.verified_admission_receipts]
-        if len(set(receipt_ids)) != len(receipt_ids):
-            raise OfflineEvaluationError("INVALID_ADMISSION_RECEIPT", "verified receipt identity is duplicated")
-        manifest_receipt_ids = {
-            member.admission_receipt_id for member in self.dataset_manifest.members
-        }
-        if not set(receipt_ids).issubset(manifest_receipt_ids):
-            raise OfflineEvaluationError("ADMISSION_BINDING_FAILURE", "verified receipt is not referenced by DatasetManifest")
         if not isinstance(self.admitted_corpus, task4.DerivedCorpusV1):
             raise OfflineEvaluationError("INVALID_CORPUS", "admitted corpus has the wrong DTO type")
         if not isinstance(self.admission_authority, task4.CorpusAdmissionAuthorityV1):
@@ -675,14 +263,6 @@ class TrustedOfflinePopulationV1:
             raise OfflineEvaluationError("INVALID_DATASET_MANIFEST", "authority dataset identity differs")
         if self.admission_authority.split_identity != self.dataset_split_identity:
             raise OfflineEvaluationError("INVALID_SPLIT", "authority split identity differs")
-        manifest_record_ids = {
-            member.trajectory_record_id for member in self.dataset_manifest.members
-        }
-        authority_record_ids = {
-            sample.trajectory_record_id for sample in self.admission_authority.source_samples
-        }
-        if manifest_record_ids != authority_record_ids:
-            raise OfflineEvaluationError("ADMISSION_BINDING_FAILURE", "DatasetManifest membership differs from corpus authority")
         try:
             # This is an in-memory re-check of the accepted trusted sidecar;
             # no arbitrary file or path is consulted.
@@ -713,19 +293,40 @@ class TrustedOfflinePopulationV1:
         if set(source_ids) != set(expected_by_id):
             raise OfflineEvaluationError("ADMISSION_BINDING_FAILURE", "source sample membership is incomplete or unadmitted")
 
-        seen_trajectory_ids: set[str] = set()
-        expected_trajectory_ids = {
-            authority_sample.trajectory_record_id for authority_sample in expected_by_id.values()
+        admitted_samples = {
+            sample.bc_sample_identity: sample
+            for sample in self.admitted_corpus.samples
         }
-        for binding in self.admission_bindings:
-            if not isinstance(binding, AdmissionBindingV1):
-                raise OfflineEvaluationError("INVALID_ADMISSION_RECEIPT", "admission binding has the wrong DTO type")
-            _validate_prefixed(binding.trajectory_record_id, "trajectory_record.v1.", "binding trajectory_record_id")
-            if binding.trajectory_record_id not in expected_trajectory_ids:
-                raise OfflineEvaluationError("ADMISSION_BINDING_FAILURE", "binding references an unadmitted trajectory")
-            if binding.trajectory_record_id in seen_trajectory_ids:
-                raise OfflineEvaluationError("INVALID_ADMISSION_RECEIPT", "duplicate trajectory admission binding")
-            seen_trajectory_ids.add(binding.trajectory_record_id)
+        for source in self.source_samples:
+            admitted = admitted_samples.get(source.sample.bc_sample_identity)
+            if admitted is None or source.sample != admitted:
+                raise OfflineEvaluationError(
+                    "ADMISSION_BINDING_FAILURE",
+                    "source sample is not the exact admitted Task-4 materialization",
+                )
+            try:
+                numeric_input = task4.make_numeric_model_input(
+                    model_input_identity=source.sample.model_input_identity,
+                    state_rows=source.sample.state_rows,
+                    candidate_rows=source.sample.candidate_rows,
+                    routing_keys=source.sample.routing_keys,
+                    public_candidate_domain_digest=source.sample.public_candidate_domain_digest,
+                    public_semantic_decision_id=source.sample.public_semantic_decision_id,
+                    perspective_player=source.sample.perspective_player,
+                    decision_index=source.sample.decision_index,
+                )
+                _validate_prefixed(
+                    source.numeric_input_identity,
+                    task4.NUMERIC_MODEL_INPUT_ID_PREFIX,
+                    "numeric_input_identity",
+                )
+            except (task4.CodecError, TypeError, ValueError) as error:
+                raise OfflineEvaluationError("PUBLIC_INPUT_REJECTION", str(error)) from error
+            if source.numeric_input_identity != numeric_input.numeric_input_identity:
+                raise OfflineEvaluationError(
+                    "PUBLIC_INPUT_REJECTION",
+                    "source numeric-input identity does not match admitted rows",
+                )
 
 
 @dataclasses.dataclass(frozen=True)
@@ -757,11 +358,14 @@ class OfflineEvaluationConfigV1:
 
 @dataclasses.dataclass(frozen=True)
 class OfflineScoreBatchV1:
-    """Framework-neutral score output, including physical mask semantics."""
+    """Physical batch wrapper around an already accepted Task-4 response.
 
-    checkpoint_identity: str
-    model_input_identity: str
-    ordered_candidate_domain_identity: str
+    This is not a second inference response.  The embedded response must
+    validate first; the additional rows and mask only describe the physical
+    batch used by the accepted inference adapter.
+    """
+
+    inference_response: task4.InferenceResponseV1
     physical_candidate_width: int
     score_f32_bits: tuple[str, ...]
     real_candidate_mask: tuple[int, ...]
@@ -770,10 +374,8 @@ class OfflineScoreBatchV1:
     def validate(self) -> None:
         if self.schema_id != OFFLINE_SCORE_BATCH_SCHEMA_ID:
             raise OfflineCodecError("score batch schema is not accepted")
-        _validate_prefixed(self.checkpoint_identity, "phase6_checkpoint.v1.", "score checkpoint identity")
-        _validate_prefixed(self.model_input_identity, "model_input.v1.", "score model-input identity")
-        if not isinstance(self.ordered_candidate_domain_identity, str) or not self.ordered_candidate_domain_identity:
-            raise OfflineCodecError("score ordered domain identity is invalid")
+        if not isinstance(self.inference_response, task4.InferenceResponseV1):
+            raise OfflineCodecError("score batch does not contain a Task-4 inference response")
         if isinstance(self.physical_candidate_width, bool) or not isinstance(self.physical_candidate_width, int) or self.physical_candidate_width < 0:
             raise OfflineCodecError("score physical width is invalid")
         if not isinstance(self.score_f32_bits, tuple) or len(self.score_f32_bits) != self.physical_candidate_width:
@@ -792,9 +394,20 @@ class OfflineScoreBatchV1:
     def to_dict(self) -> dict[str, Any]:
         self.validate()
         return {
-            "checkpoint_identity": self.checkpoint_identity,
-            "model_input_identity": self.model_input_identity,
-            "ordered_candidate_domain_identity": self.ordered_candidate_domain_identity,
+            "inference_response": {
+                "request_identity": self.inference_response.request_identity,
+                "checkpoint_identity": self.inference_response.checkpoint_identity,
+                "model_input_identity": self.inference_response.model_input_identity,
+                "ordered_candidate_domain_identity": self.inference_response.ordered_candidate_domain_identity,
+                "score_f32_bits": [
+                    task5.score_f32_bits(value)
+                    for value in self.inference_response.scores
+                ],
+                "selected_candidate_ordinal": self.inference_response.selected_candidate_ordinal,
+                "selected_public_action_key": self.inference_response.selected_public_action_key,
+                "response_identity": self.inference_response.response_identity,
+                "schema_id": self.inference_response.schema_id,
+            },
             "physical_candidate_width": self.physical_candidate_width,
             "real_candidate_mask": list(self.real_candidate_mask),
             "schema_id": self.schema_id,
@@ -809,12 +422,11 @@ def _score_batch_from_provider_response(
     physical_width: int,
 ) -> OfflineScoreBatchV1:
     n = len(sample.routing_keys)
-    if isinstance(response, OfflineScoreBatchV1):
-        batch = response
-    elif isinstance(response, task4.InferenceResponseV1):
-        if response.schema_id != task4.INFERENCE_RESPONSE_SCHEMA_ID:
+
+    def validate_response(response_value: task4.InferenceResponseV1) -> tuple[str, ...]:
+        if response_value.schema_id != task4.INFERENCE_RESPONSE_SCHEMA_ID:
             raise OfflineEvaluationError(FailureReason.MODEL_BINDING_FAILURE, "inference response schema is not accepted")
-        if not isinstance(response.request_identity, str) or not response.request_identity.startswith("phase6_inference_request.v1.") or not _is_hex(response.request_identity[len("phase6_inference_request.v1."):]):
+        if not isinstance(response_value.request_identity, str) or not response_value.request_identity.startswith("phase6_inference_request.v1.") or not _is_hex(response_value.request_identity[len("phase6_inference_request.v1."):]):
             raise OfflineEvaluationError(FailureReason.MODEL_BINDING_FAILURE, "inference response request identity is invalid")
         try:
             domain_digest = sample.public_candidate_domain_digest
@@ -836,45 +448,64 @@ def _score_batch_from_provider_response(
             )
         except (task4.CodecError, TypeError, ValueError) as error:
             raise OfflineEvaluationError(FailureReason.MODEL_BINDING_FAILURE, "sample cannot reconstruct its accepted inference request") from error
-        if response.request_identity != expected_request.request_identity:
+        if response_value.request_identity != expected_request.request_identity:
             raise OfflineEvaluationError(FailureReason.MODEL_BINDING_FAILURE, "inference response request does not bind the exact sample input")
+        if response_value.checkpoint_identity != expected_checkpoint_identity or response_value.model_input_identity != sample.model_input_identity or response_value.ordered_candidate_domain_identity != sample.ordered_candidate_domain_identity:
+            raise OfflineEvaluationError(FailureReason.MODEL_BINDING_FAILURE, "inference response semantic binding differs from sample context")
         try:
-            score_bits = tuple(task5.score_f32_bits(value) for value in response.scores)
+            score_bits = tuple(task5.score_f32_bits(value) for value in response_value.scores)
         except task5.CodecError as error:
             raise OfflineEvaluationError(FailureReason.NONFINITE_SCORE, str(error)) from error
-        batch = OfflineScoreBatchV1(
-            checkpoint_identity=response.checkpoint_identity,
-            model_input_identity=response.model_input_identity,
-            ordered_candidate_domain_identity=response.ordered_candidate_domain_identity,
-            physical_candidate_width=len(score_bits),
-            score_f32_bits=score_bits,
-            real_candidate_mask=(1,) * len(score_bits),
-        )
+        if len(score_bits) != n:
+            raise OfflineEvaluationError(FailureReason.SCORE_COUNT_MISMATCH, "inference response score count is not the exact domain size")
         try:
-            expected_response_identity = task4.inference_response_selection_identity(response)
+            expected_response_identity = task4.inference_response_selection_identity(response_value)
         except (task4.CodecError, TypeError, ValueError) as error:
             raise OfflineEvaluationError(FailureReason.MODEL_BINDING_FAILURE, "inference response identity is invalid") from error
-        if response.response_identity != expected_response_identity:
+        if response_value.response_identity != expected_response_identity:
             raise OfflineEvaluationError(FailureReason.MODEL_BINDING_FAILURE, "inference response identity does not match its envelope")
+        score_vector = task5.ScoreVectorV1(
+            public_action_keys=tuple(sample.routing_keys),
+            score_f32_bits=score_bits,
+        )
+        selected = task5.select_score_vector(score_vector)
+        if (
+            response_value.selected_candidate_ordinal != selected
+            or response_value.selected_public_action_key != sample.routing_keys[selected]
+        ):
+            raise OfflineEvaluationError(
+                FailureReason.MODEL_BINDING_FAILURE,
+                "inference response selection does not use the accepted source-order tie rule",
+            )
+        return score_bits
+
+    if isinstance(response, OfflineScoreBatchV1):
+        try:
+            response.validate()
+        except OfflineCodecError as error:
+            message = str(error)
+            if "non-finite" in message:
+                raise OfflineEvaluationError(FailureReason.NONFINITE_SCORE, message) from error
+            if "score count" in message or "physical width" in message:
+                raise OfflineEvaluationError(FailureReason.SCORE_COUNT_MISMATCH, message) from error
+            raise OfflineEvaluationError(FailureReason.INFERENCE_FAILURE, message) from error
+        if not isinstance(response.inference_response, task4.InferenceResponseV1):
+            raise OfflineEvaluationError(FailureReason.MODEL_BINDING_FAILURE, "score batch has no accepted inference response")
+        response_bits = validate_response(response.inference_response)
+        if tuple(response.score_f32_bits[:n]) != response_bits:
+            raise OfflineEvaluationError(FailureReason.MODEL_BINDING_FAILURE, "physical batch changed accepted real score bits")
+        batch = response
+    elif isinstance(response, task4.InferenceResponseV1):
+        response_bits = validate_response(response)
+        batch = OfflineScoreBatchV1(
+            inference_response=response,
+            physical_candidate_width=n,
+            score_f32_bits=response_bits,
+            real_candidate_mask=(1,) * n,
+        )
     else:
         raise OfflineEvaluationError(FailureReason.INFERENCE_FAILURE, "score provider returned an unsupported response DTO")
-    try:
-        batch.validate()
-    except OfflineCodecError as error:
-        message = str(error)
-        if "non-finite" in message:
-            raise OfflineEvaluationError(FailureReason.NONFINITE_SCORE, message) from error
-        if "score count" in message or "physical width" in message:
-            raise OfflineEvaluationError(FailureReason.SCORE_COUNT_MISMATCH, message) from error
-        raise OfflineEvaluationError(FailureReason.INFERENCE_FAILURE, message) from error
-    except (task5.CodecError, TypeError, ValueError) as error:
-        raise OfflineEvaluationError(FailureReason.INFERENCE_FAILURE, str(error)) from error
-    if batch.checkpoint_identity != expected_checkpoint_identity:
-        raise OfflineEvaluationError(FailureReason.MODEL_BINDING_FAILURE, "score checkpoint binding differs from evaluation context")
-    if batch.model_input_identity != sample.model_input_identity:
-        raise OfflineEvaluationError(FailureReason.MODEL_BINDING_FAILURE, "score model-input binding differs from sample")
-    if batch.ordered_candidate_domain_identity != sample.ordered_candidate_domain_identity:
-        raise OfflineEvaluationError(FailureReason.MODEL_BINDING_FAILURE, "score candidate-domain binding differs from sample")
+
     if batch.physical_candidate_width < n:
         raise OfflineEvaluationError(FailureReason.CANDIDATE_CAPACITY_FAILURE, "physical width is smaller than semantic candidate count")
     if batch.physical_candidate_width != physical_width:
@@ -884,20 +515,6 @@ def _score_batch_from_provider_response(
         raise OfflineEvaluationError(FailureReason.PADDING_MASK_VIOLATION, "real/padding mask does not match exact semantic domain")
     if len(batch.score_f32_bits) != batch.physical_candidate_width:
         raise OfflineEvaluationError(FailureReason.SCORE_COUNT_MISMATCH, "score vector width is not exact")
-    if isinstance(response, task4.InferenceResponseV1):
-        score_vector = task5.ScoreVectorV1(
-            public_action_keys=tuple(sample.routing_keys),
-            score_f32_bits=tuple(batch.score_f32_bits[:n]),
-        )
-        selected = task5.select_score_vector(score_vector)
-        if (
-            response.selected_candidate_ordinal != selected
-            or response.selected_public_action_key != sample.routing_keys[selected]
-        ):
-            raise OfflineEvaluationError(
-                FailureReason.MODEL_BINDING_FAILURE,
-                "inference response selection does not use the accepted source-order tie rule",
-            )
     return batch
 
 
@@ -1057,23 +674,24 @@ def _candidate_domain_validation(
                 task4.f32_bytes(value)
             except task4.CodecError as error:
                 raise OfflineEvaluationError(FailureReason.PUBLIC_INPUT_REJECTION, "candidate row contains a non-finite value") from error
-    request_kind = source.public_context.decision_request_family
-    try:
-        task5.validate_ordered_candidate_domain_identity(
-            sample.ordered_candidate_domain_identity,
-            request_kind,
-            keys,
-        )
-    except task5.CodecError as error:
-        raise OfflineEvaluationError(FailureReason.CANDIDATE_DOMAIN_FAILURE, str(error)) from error
+    # The accepted Task-4 corpus already carries the validated Phase-5
+    # candidate-domain digest.  T5B has no DecisionRecord annotation input,
+    # so it never invents a request kind.  A fallback identity is validated
+    # by T5A only when the accepted source did not carry a Phase-5 digest.
     if sample.public_candidate_domain_digest is not None:
         if not _is_hex(sample.public_candidate_domain_digest):
             raise OfflineEvaluationError(FailureReason.CANDIDATE_DOMAIN_FAILURE, "Phase-5 domain digest is invalid")
-        if request_kind is None:
-            raise OfflineEvaluationError(FailureReason.CANDIDATE_DOMAIN_FAILURE, "raw Phase-5 domain digest has no request kind")
-        expected_digest = task5.public_candidate_domain_digest(request_kind, keys)
-        if sample.public_candidate_domain_digest != expected_digest:
-            raise OfflineEvaluationError(FailureReason.CANDIDATE_DOMAIN_FAILURE, "Phase-5 domain digest does not match keys")
+        if sample.ordered_candidate_domain_identity != sample.public_candidate_domain_digest:
+            raise OfflineEvaluationError(FailureReason.CANDIDATE_DOMAIN_FAILURE, "Phase-5 domain identity is not the accepted source digest")
+    else:
+        try:
+            task5.validate_ordered_candidate_domain_identity(
+                sample.ordered_candidate_domain_identity,
+                None,
+                keys,
+            )
+        except task5.CodecError as error:
+            raise OfflineEvaluationError(FailureReason.CANDIDATE_DOMAIN_FAILURE, str(error)) from error
     if not isinstance(sample.model_input_identity, str) or not sample.model_input_identity.startswith("model_input.v1."):
         raise OfflineEvaluationError(FailureReason.PUBLIC_INPUT_REJECTION, "model-input identity is invalid")
     if not _is_hex(sample.public_semantic_decision_id):
@@ -1092,11 +710,7 @@ def _candidate_domain_validation(
             state_rows=sample.state_rows,
             candidate_rows=sample.candidate_rows,
             routing_keys=sample.routing_keys,
-            public_candidate_domain_digest=(
-                sample.public_candidate_domain_digest
-                if source.public_context.decision_request_family is None
-                else sample.ordered_candidate_domain_identity
-            ),
+            public_candidate_domain_digest=sample.public_candidate_domain_digest,
             public_semantic_decision_id=sample.public_semantic_decision_id,
             perspective_player=sample.perspective_player,
             decision_index=sample.decision_index,
@@ -1132,112 +746,24 @@ def _label_validation(sample: task4.CorpusSampleV1, keys: Sequence[str]) -> int:
     return occurrences[0]
 
 
-def _binding_failure(
-    source: OfflineSourceSampleV1,
-    binding_by_trajectory: Mapping[str, AdmissionBindingV1],
-    manifest_by_trajectory: Mapping[str, DatasetManifestMemberV1],
-    receipts_by_identity: Mapping[str, VerifiedAdmissionReceiptV1],
-) -> Optional[str]:
-    trajectory = source.sample.trajectory_record_id
-    binding = binding_by_trajectory.get(trajectory)
-    if binding is None:
-        return FailureReason.MISSING_ADMISSION_RECEIPT
-    member = manifest_by_trajectory.get(binding.trajectory_record_id)
-    if member is None or binding.admission_receipt_identity != member.admission_receipt_id:
-        return FailureReason.INVALID_ADMISSION_RECEIPT
-    if binding.behavior_policy_kind != "TEACHER":
-        return FailureReason.INELIGIBLE_TEACHER_POLICY
-    if binding.behavior_policy_source_identity not in task4.TEACHER_SOURCE_IDENTITIES:
-        return FailureReason.INELIGIBLE_TEACHER_POLICY
-    if binding.behavior_policy_source_identity == task5.SWORDSOUL_TEACHER_ARTIFACT:
-        expected_binding = task5.SWORDSOUL_TEACHER_BINDING
-    else:
-        expected_binding = task5.SALAMANGREAT_TEACHER_BINDING
-    if binding.teacher_policy_binding_identity != expected_binding:
-        return FailureReason.INELIGIBLE_TEACHER_POLICY
-    if isinstance(source.public_context, PublicSampleContextV1):
-        expected_role_binding = {
-            task5.SWORDSOUL_DECK_ID: (
-                task5.SWORDSOUL_TEACHER_ARTIFACT,
-                task5.SWORDSOUL_TEACHER_BINDING,
-            ),
-            task5.SALAMANGREAT_DECK_ID: (
-                task5.SALAMANGREAT_TEACHER_ARTIFACT,
-                task5.SALAMANGREAT_TEACHER_BINDING,
-            ),
-        }.get(source.public_context.locked_deck_role_id)
-        if expected_role_binding is not None and (
-            binding.behavior_policy_source_identity,
-            binding.teacher_policy_binding_identity,
-        ) != expected_role_binding:
-            return FailureReason.INELIGIBLE_TEACHER_POLICY
-    try:
-        binding.validate()
-    except OfflineCodecError:
-        return FailureReason.INVALID_ADMISSION_RECEIPT
-    verified = receipts_by_identity.get(binding.admission_receipt_identity)
-    if verified is None:
-        return FailureReason.MISSING_ADMISSION_RECEIPT
-    try:
-        verified.validate()
-    except OfflineCodecError:
-        return FailureReason.INVALID_ADMISSION_RECEIPT
-    if binding.quarantined:
-        return FailureReason.QUARANTINED_TRAJECTORY
-    if binding.episode_semantic_id != source.sample.episode_semantic_id:
-        return FailureReason.INVALID_ADMISSION_RECEIPT
-    receipt = verified.receipt
-    if receipt.candidate_shard_artifact_sha256 != member.candidate_shard_artifact_sha256:
-        return FailureReason.INVALID_ADMISSION_RECEIPT
-    entry = next(
-        (entry for entry in receipt.entries if entry.trajectory_record_id == binding.trajectory_record_id),
-        None,
-    )
-    if entry is None:
-        return FailureReason.INVALID_ADMISSION_RECEIPT
-    if (
-        entry.public_gameplay_trajectory_id != member.public_gameplay_trajectory_id
-        or entry.episode_envelope_sha256 != member.episode_envelope_sha256
-        or entry.episode_semantic_id != source.sample.episode_semantic_id
-    ):
-        return FailureReason.INVALID_ADMISSION_RECEIPT
-    return None
+def _accepted_context_fields(sample: task4.CorpusSampleV1) -> dict[str, Any]:
+    """Project only coordinates present in the accepted Task-4 sample.
 
+    Task-4's Python corpus DTO does not expose phase, start-seat, deck-role,
+    continuation, or request-family fields.  T5B therefore records those
+    dimensions as explicit absence rather than accepting caller annotations.
+    Decision index and perspective player are carried by the accepted sample.
+    """
 
-def _context_fields(context: PublicSampleContextV1) -> dict[str, Any]:
-    if not isinstance(context, PublicSampleContextV1):
-        return {
-            "decision_request_family": None,
-            "phase": None,
-            "turn_index": None,
-            "acting_participant": None,
-            "locked_deck_role_id": None,
-            "starting_player": None,
-            "continuation": None,
-            "rare_critical_slice": None,
-        }
-    try:
-        context.validate()
-    except OfflineCodecError:
-        return {
-            "decision_request_family": None,
-            "phase": None,
-            "turn_index": None,
-            "acting_participant": None,
-            "locked_deck_role_id": None,
-            "starting_player": None,
-            "continuation": None,
-            "rare_critical_slice": None,
-        }
     return {
-        "decision_request_family": context.decision_request_family,
-        "phase": context.phase,
-        "turn_index": context.turn_index,
-        "acting_participant": context.acting_participant,
-        "locked_deck_role_id": context.locked_deck_role_id,
-        "starting_player": context.starting_player,
-        "continuation": context.continuation,
-        "rare_critical_slice": context.rare_critical_slice,
+        "decision_request_family": None,
+        "phase": None,
+        "turn_index": sample.decision_index,
+        "acting_participant": sample.perspective_player,
+        "locked_deck_role_id": None,
+        "starting_player": None,
+        "continuation": None,
+        "rare_critical_slice": None,
     }
 
 
@@ -1363,11 +889,19 @@ class OfflineSampleResultV1:
             if not isinstance(self.ordered_candidate_domain_identity, str):
                 raise OfflineCodecError("ordered candidate domain identity is not text")
             if self.candidate_public_action_keys is not None:
-                task5.validate_ordered_candidate_domain_identity(
-                    self.ordered_candidate_domain_identity,
-                    self.decision_request_family,
-                    self.candidate_public_action_keys,
-                )
+                if self.ordered_candidate_domain_identity.startswith(
+                    task5.ORDERED_CANDIDATE_DOMAIN_ID_PREFIX
+                ):
+                    task5.validate_ordered_candidate_domain_identity(
+                        self.ordered_candidate_domain_identity,
+                        None,
+                        self.candidate_public_action_keys,
+                    )
+                else:
+                    _validate_digest(
+                        self.ordered_candidate_domain_identity,
+                        "ordered_candidate_domain_identity",
+                    )
             if self.candidate_public_action_keys is None:
                 raise OfflineCodecError("ordered candidate domain exists without candidate keys")
         if self.teacher_selected_public_action_key is not None:
@@ -1622,7 +1156,7 @@ def _failure_result(
     teacher_key: Optional[str] = None,
     teacher_ordinal: Optional[int] = None,
 ) -> OfflineSampleResultV1:
-    context_fields = _context_fields(source.public_context)
+    context_fields = _accepted_context_fields(source.sample)
     candidate_count: Optional[int] = None
     domain_identity: Optional[str] = None
     keys: Optional[tuple[str, ...]] = None
@@ -1647,17 +1181,15 @@ def _failure_result(
         else:
             domain_identity = None
     if keys is not None:
-        request_kind = (
-            source.public_context.decision_request_family
-            if isinstance(source.public_context, PublicSampleContextV1)
-            else None
-        )
         try:
             if domain_identity is None:
                 raise OfflineCodecError("domain is absent")
-            task5.validate_ordered_candidate_domain_identity(
-                domain_identity, request_kind, keys
-            )
+            if domain_identity.startswith(task5.ORDERED_CANDIDATE_DOMAIN_ID_PREFIX):
+                task5.validate_ordered_candidate_domain_identity(
+                    domain_identity, None, keys
+                )
+            else:
+                _validate_digest(domain_identity, "ordered_candidate_domain_identity")
         except (task5.CodecError, OfflineCodecError, TypeError, ValueError):
             # An invalid domain must not be echoed as if it were an
             # authoritative identity.  The public key vector itself remains
@@ -2468,7 +2000,7 @@ def _make_scored_result(
             ),
         )
         top_k_agreement = teacher_ordinal in ordered[:top_k]
-    fields = _context_fields(source.public_context)
+    fields = _accepted_context_fields(source.sample)
     result = OfflineSampleResultV1(
         schema_id=OFFLINE_SAMPLE_SCHEMA_ID,
         evaluation_identity=evaluation_identity,
@@ -2536,43 +2068,10 @@ def evaluate_offline(
     population_identity = _build_teacher_population_identity(
         entries, population=population, selected_partitions=config.selected_partitions
     )
-    binding_by_trajectory = {
-        binding.trajectory_record_id: binding for binding in population.admission_bindings
-    }
-    manifest_by_trajectory = {
-        member.trajectory_record_id: member
-        for member in population.dataset_manifest.members
-    }
-    try:
-        receipts_by_identity = {
-            receipt.receipt_identity: receipt
-            for receipt in population.verified_admission_receipts
-        }
-    except (OfflineCodecError, TypeError, ValueError) as error:
-        raise OfflineEvaluationError("INVALID_ADMISSION_RECEIPT", str(error)) from error
     expected_checkpoint_identity = config.evaluation_context.root.checkpoint_identity
     results: list[OfflineSampleResultV1] = []
     for source, authority_sample, partition in entries:
         sample = source.sample
-        binding_reason = _binding_failure(
-            source,
-            binding_by_trajectory,
-            manifest_by_trajectory,
-            receipts_by_identity,
-        )
-        if binding_reason is not None:
-            result = _failure_result(
-                source=source,
-                expected_authority=authority_sample,
-                evaluation_identity=task5.evaluation_identity(config.evaluation_context.root),
-                evaluation_contract_identity=population.evaluation_contract_identity,
-                population_identity=population_identity,
-                expected_partition=partition,
-                reason=binding_reason,
-                status=STATUS_REJECTED,
-            )
-            results.append(result)
-            continue
         if sample.partition != partition:
             results.append(
                 _failure_result(
@@ -2583,59 +2082,6 @@ def evaluate_offline(
                     population_identity=population_identity,
                     expected_partition=partition,
                     reason=FailureReason.SPLIT_LEAKAGE,
-                    status=STATUS_REJECTED,
-                )
-            )
-            continue
-        if not isinstance(source.public_context, PublicSampleContextV1):
-            results.append(
-                _failure_result(
-                    source=source,
-                    expected_authority=authority_sample,
-                    evaluation_identity=task5.evaluation_identity(config.evaluation_context.root),
-                    evaluation_contract_identity=population.evaluation_contract_identity,
-                    population_identity=population_identity,
-                    expected_partition=partition,
-                    reason=FailureReason.PUBLIC_INPUT_REJECTION,
-                    status=STATUS_REJECTED,
-                )
-            )
-            continue
-        try:
-            source.public_context.validate()
-        except OfflineCodecError:
-            reason = (
-                FailureReason.CANDIDATE_DOMAIN_FAILURE
-                if source.public_context.decision_request_family is not None
-                and source.public_context.decision_request_family not in task5.DECISION_KIND_TOKENS
-                else FailureReason.PUBLIC_INPUT_REJECTION
-            )
-            results.append(
-                _failure_result(
-                    source=source,
-                    expected_authority=authority_sample,
-                    evaluation_identity=task5.evaluation_identity(config.evaluation_context.root),
-                    evaluation_contract_identity=population.evaluation_contract_identity,
-                    population_identity=population_identity,
-                    expected_partition=partition,
-                    reason=reason,
-                    status=STATUS_REJECTED,
-                )
-            )
-            continue
-        if (
-            source.public_context.acting_participant is not None
-            and source.public_context.acting_participant != sample.perspective_player
-        ):
-            results.append(
-                _failure_result(
-                    source=source,
-                    expected_authority=authority_sample,
-                    evaluation_identity=task5.evaluation_identity(config.evaluation_context.root),
-                    evaluation_contract_identity=population.evaluation_contract_identity,
-                    population_identity=population_identity,
-                    expected_partition=partition,
-                    reason=FailureReason.PUBLIC_INPUT_REJECTION,
                     status=STATUS_REJECTED,
                 )
             )
@@ -2900,17 +2346,9 @@ __all__ = [
     "OfflineEvaluationError",
     "FailureReason",
     "FAILURE_REASONS",
-    "PublicSampleContextV1",
-    "AdmissionReceiptEntryV1",
-    "AdmissionReceiptV1",
-    "VerifiedAdmissionReceiptV1",
-    "DatasetManifestMemberV1",
-    "DatasetManifestV1",
-    "AdmissionBindingV1",
     "OfflineSourceSampleV1",
     "TrustedOfflinePopulationV1",
     "OfflineEvaluationConfigV1",
-    "OfflineScoreBatchV1",
     "OfflineSampleResultV1",
     "OfflineSliceResultV1",
     "OfflineMetricsV1",
@@ -2919,11 +2357,6 @@ __all__ = [
     "OfflineSampleV1",
     "OfflineSliceV1",
     "OfflineMetrics",
-    "DATASET_MANIFEST_SCHEMA_ID",
-    "DATASET_IDENTITY_SCHEMA_ID",
-    "TRUSTED_TRAJECTORY_CONTRACT_ID",
-    "ADMISSION_RECEIPT_CONTRACT_ID",
-    "ADMISSION_RECEIPT_ID_PREFIX",
     "OFFLINE_SAMPLE_SCHEMA_ID",
     "OFFLINE_SLICE_SCHEMA_ID",
     "OFFLINE_METRICS_SCHEMA_ID",
@@ -2936,12 +2369,6 @@ __all__ = [
     "loss_f64_bytes",
     "loss_f64_value",
     "exact_domain_loss",
-    "canonical_admission_receipt_bytes",
-    "issue_verified_admission_receipt",
-    "canonical_dataset_identity_bytes",
-    "dataset_semantic_id",
-    "canonical_dataset_manifest_bytes",
-    "validate_dataset_manifest_membership",
     "canonical_teacher_state_population_identity_bytes",
     "teacher_state_population_identity",
     "aggregate_offline_metrics",
