@@ -18,6 +18,9 @@ domain and return an existing `public_action_key`.
 **Tech Stack:** Existing C++/Python OCGForge public and trajectory contracts,
 Python verification tooling, and framework-neutral Phase-5 model values. No
 training backend or ML dependency is selected by this plan's Task 1.
+The current roadmap direction favors PyTorch for the future Task-6
+decision/readiness slice; this does not select or authorize a production
+backend, and JAX remains a deferred candidate.
 
 ---
 
@@ -37,7 +40,7 @@ training backend or ML dependency is selected by this plan's Task 1.
 | T5D | public audit, first divergence, distribution shift, and derived report | FINAL / MERGED / ACCEPTED ON MAIN |
 | Task 5 tooling final pass | complete Task 5 tooling acceptance | FINAL PASS |
 | Task 5 | complete Task 5 tooling and evaluation scope | FINAL PASS |
-| Task 6 | controlled PyTorch/JAX backend bake-off and primary-backend ADR | NOT AUTHORIZED |
+| Task 6 | PyTorch primary-backend decision and Task7 readiness | NOT AUTHORIZED |
 | Task 7 | first accepted BC baseline run and canonical checkpoint evidence | NOT AUTHORIZED |
 
 The required order is:
@@ -55,6 +58,14 @@ curriculum, alter Phase-5 semantics, add a fallback, or treat a derived file
 as authority. The Phase-6 gate matrix in
 [P6_EVALUATION_PLAN.md](P6_EVALUATION_PLAN.md#8-frozen-future-acceptance-matrix)
 remains future evidence; this plan does not mark any gate `PASS`.
+
+The current roadmap sequence is:
+
+```text
+Task 5 tooling FINAL PASS
+    → Task 6 PyTorch primary-backend decision and Task7 readiness
+    → Task 7 first meaningful feed-forward BC baseline
+```
 
 ## 2. Task 1 — Contract freeze
 
@@ -221,6 +232,10 @@ The provisional backend is PyTorch only for the one explicitly authorized CUDA
 smoke. Task 4B does not choose PyTorch over JAX, JAX over PyTorch, or either as
 the primary Phase-6 backend.
 
+The later roadmap direction favors PyTorch for the Task-6 decision/readiness
+slice. This does not change the Task4B scope, select a production backend, or
+authorize Task 6.
+
 **Review checkpoint:** validate checkpoint/content/provenance identities, exact
 inference binding, no fallback, capacity witnesses, and public-only diagnostics
 before any result is used in evaluation.
@@ -269,58 +284,51 @@ and trusted trajectory/admission paths.
 fallback-assisted win, no aggregate-only claim, and reproducible first
 divergence. Run the P6-G08 through P6-G18 evidence applicable to the task.
 
-## 8. Task 6 — Controlled PyTorch/JAX backend bake-off
+## 8. Task 6 — PyTorch primary-backend decision and Task7 readiness
 
-**Status:** NOT AUTHORIZED. The Task 5 tooling prerequisite is complete, but
-explicit Task 6 authorization remains required before a real BC workload or
-backend bakeoff.
+**Status:** NOT AUTHORIZED / NOT STARTED. The Task 5 tooling prerequisite is
+complete, but explicit Task 6 authorization remains required.
 
-**Purpose:** Compare PyTorch and JAX only after both can be evaluated under one
-accepted semantic workload. This task produces evidence and a later primary
-backend decision; it does not retroactively alter the Phase-6 contracts.
+**Purpose:** Confirm that PyTorch is the Phase-6 execution backend for the
+first meaningful Task7 baseline and that the accepted Task4A/4B infrastructure
+is sufficient for that work. This is a readiness and decision slice, not a
+second framework implementation.
 
-Both implementations MUST use the same:
+The future Task6 review may verify and document:
 
-```text
-DatasetManifest and dataset semantic identity
-TrainingDatasetSplitV1
-Phase-5 logical/encoded inputs and CardVocabulary identity
-model architecture specification
-exact candidate-scoring objective and training budget
-evaluation corpus and fixed jobs
-canonical checkpoint export semantics
-```
+1. the accepted PyTorch Task4A/4B path and its dependency/version choice;
+2. Task7 learner and runtime ownership;
+3. deterministic execution requirements;
+4. the unchanged canonical checkpoint export/reload boundary;
+5. exact variable-size candidate-domain semantics and source-order binding;
+6. the absence of fallback and hidden-state shortcuts; and
+7. the continued separation between framework execution and OCGForge semantic
+   authority.
 
-Compare, at minimum:
+Task 6 will not implement JAX and will not repeat Task4B without a demonstrated
+need. JAX remains a deferred candidate and is not rejected. A future JAX
+comparison requires an accepted workload and a
+measured reason, such as a PyTorch bottleneck, multi-device or deployment
+requirement, world-model/planning pressure, or a JAX capability with measured
+expected value.
 
-```text
-contract correctness
-implementation complexity
-single-GPU throughput
-multi-device path
-variable candidate-domain ergonomics
-debuggability
-checkpoint export fidelity
-deployment compatibility
-tooling ecosystem
-```
+Hardware and dependency details remain execution provenance, not semantic
+identity. Task 6 may authorize later implementation changes only through an
+explicitly scoped follow-up slice; this roadmap refinement pre-authorizes none.
 
-Record hardware and framework details as provenance, not semantic identity.
-The primary backend decision belongs in its own accepted ADR before Phase 7;
-Task 1 intentionally selects neither backend.
-
-**Review checkpoint:** independently reproduce key contract gates for both
-implementations, compare canonical exports, audit the same evaluation corpus,
-and reject any winner that relies on truncation, fixed action authority,
-hidden-state shortcuts, or silent fallback.
+**Review checkpoint:** independently confirm the PyTorch readiness decision
+against the accepted semantic workload and verify that no Task6 work changes
+Environment/data/action authority, exact candidate handling, canonical export,
+privacy, replay, admission, or fallback behavior.
 
 ## 9. Task 7 — First accepted BC baseline
 
 **Status:** NOT AUTHORIZED. Requires an accepted Task 6 backend decision and
 explicit authorization after Tasks 2–6 are reviewed.
 
-**Purpose:** Run the first accepted BC baseline only after the data, model,
-runner, evaluation, and backend evidence is complete.
+**Purpose:** Run the first strategically meaningful accepted feed-forward,
+stateless candidate-scoring BC reference only after the data, model, runner,
+evaluation, and backend evidence is complete.
 
 **Required behavior:**
 
@@ -335,6 +343,13 @@ runner, evaluation, and backend evidence is complete.
 7. publish only evidence whose commands actually ran at the declared source
    head.
 
+Task 7 must remain causally simple. It must not add recurrent memory, a value
+head, hierarchy, a world model, MuZero/MCTS, RL, self-play, or Meta-8
+architecture changes. The initial Swordsoul Tenyi versus Salamangreat workload
+is an acceptance workload, not a permanent two-deck architecture limit; the
+data and evaluation infrastructure must remain capable of future
+multi-matchup expansion.
+
 This task may claim a BC baseline only for the frozen curriculum and evidence
 scope. It may not claim arbitrary-deck support, competitive general
 Yu-Gi-Oh!, optimal play, RL readiness, self-play, or Project Ignis/EDOPro
@@ -343,6 +358,37 @@ deployment.
 **Review checkpoint:** independent review of the entire P6 gate matrix,
 training/checkpoint provenance, evaluation identities, privacy evidence, and
 clean-worktree/source-head binding before any Phase-6 final status change.
+
+### Post-Task7 roadmap direction
+
+After the controlled Task7 reference, the project should characterize the
+baseline and its failure modes, review and lock a broader curriculum, and then
+move toward Meta-8 or other multi-matchup training. Exact Meta-8 decklists are
+not frozen by this plan, and no new-deck trajectory generation is authorized.
+
+The later architecture program remains roadmap-only:
+
+```text
+Task7 feed-forward reference
+    → recurrent memory (#51)
+    → value program (#51)
+    → controlled recurrent baseline
+    → hierarchy experiments (#51)
+    → world-model contract W0 (#52)
+    → exact-root one-step planning W1 (#52)
+    → later strategic latent planning
+    → controlled hybrid experiments
+```
+
+```text
+WORLD_MODEL=PREDICTION
+OCGFORGE=AUTHORITY
+```
+
+An imagined state is not an authoritative `PlayerObservation`. A future
+world model or planner may rank real OCGForge actions, but it may never invent
+authoritative legality. Issues #51 and #52 remain after Task7 and are not
+authorized by this plan.
 
 ## 10. Cross-task non-goals
 

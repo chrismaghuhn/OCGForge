@@ -11,8 +11,9 @@ explicit and reproducible before adding learner or training code.
 > Phase 5, and Phase 6 Tasks 1–4B are accepted final checkpoints for their
 > defined scopes. Task 5 evaluation tooling is implemented through T5D and
 > is final, merged, and accepted on main. P6-G15 and the Task 5 tooling final
-> pass are complete; P6-G14 remains baseline-dependent. Task 6 and Task 7
-> remain unauthorized. The
+> pass are complete; P6-G14 remains baseline-dependent. The Phase-6 roadmap
+> direction is PyTorch for the future Task-6 decision/readiness slice; JAX is
+> deferred, not rejected. Task 6 and Task 7 remain unauthorized. The
 > certified gameplay slice remains fixed-matchup and is not general all-deck
 > Yu-Gi-Oh! support.
 
@@ -104,9 +105,10 @@ labels, while `public_action_key` remains selection/routing identity.
 Phase 6 is active. Tasks 1–4B are accepted and merged. Task 5 evaluation
 tooling is implemented through T5D and merged at
 `c0156a3451a7f8cc4495d544f7a34cab925e3c5a`; T5D main acceptance and the Task
-5 tooling final pass are complete. Task 6 remains the PyTorch/JAX backend
-bakeoff, and Task 7 remains the first meaningful feed-forward BC baseline;
-neither task is authorized.
+5 tooling final pass are complete. Task 6 remains the PyTorch primary-backend
+decision/readiness slice, and Task 7 remains the first meaningful feed-forward
+BC baseline; neither task is authorized. JAX remains a deferred candidate and
+has not been rejected.
 
 The accepted Task4B checkpoint,
 `phase6_checkpoint.v1.62f4532a5e551886affbd65bc47f7645017dedf6c5ca3a0b7b87b4a978943327`,

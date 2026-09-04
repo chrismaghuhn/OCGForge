@@ -263,15 +263,34 @@ Accepted evidence: `H_exec=3c99e86c487361fc4e0f5f12678b4867e59232b7`,
 
 ## Phase 6 — Behavior Cloning baseline
 
-Status: **Task 5 tooling FINAL PASS; Task 6 dependency barrier cleared; Task 6
-not authorized**.
+Status: **Task 5 tooling FINAL PASS; PyTorch primary-backend direction recorded;
+Task 6 not authorized**.
 
 Phase 6 Tasks 1–4B are accepted and merged. Task 5 contract freeze and T5A–T5C
 are final and merged. T5D is final, merged, and accepted on main at
 `c0156a3451a7f8cc4495d544f7a34cab925e3c5a`, based on post-merge CI run
-`33892943953`. Task 5 tooling is FINAL PASS and P6-G15 is PASS. The accepted
-Task4B checkpoint is a real trained technical smoke artifact, not a meaningful
-BC baseline or strategic-strength claim.
+`33892943953`. Task 5 tooling is FINAL PASS and P6-G15 is PASS. The Phase-6
+primary-backend direction is PyTorch for the future Task-6 decision/readiness
+slice; JAX is a deferred candidate, not rejected. The accepted Task4B
+checkpoint is a real trained technical smoke artifact, not a meaningful BC
+baseline or strategic-strength claim.
+
+```text
+PHASE6_PRIMARY_BACKEND_DIRECTION=PYTORCH
+PYTORCH_REASON=accepted Task4B exercise; lower implementation/review risk;
+shortest path to the first meaningful BC baseline; user/developer familiarity
+JAX_STATUS=DEFERRED_CANDIDATE
+JAX_REJECTED=NO
+JAX_PHASE6_REQUIREMENT=NO
+JAX_IMPLEMENTATION_AUTHORIZED=NO
+PYTORCH_DOES_NOT_BECOME_SEMANTIC_AUTHORITY=YES
+```
+
+Public observations, complete ordered candidate domains, logical and encoded
+model inputs, batch layout, DatasetManifest, TrainingDatasetSplitV1,
+checkpoint identity, canonical export, Task5 evaluation, and
+`public_action_key` remain OCGForge-owned and framework-neutral. PyTorch owns
+only physical Phase-6 learner/execution implementation.
 
 | Phase-6 task | Status |
 | --- | --- |
@@ -287,7 +306,7 @@ BC baseline or strategic-strength claim.
 | T5D — public audit, first divergence, distribution shift, and derived report | **FINAL / MERGED / ACCEPTED ON MAIN** |
 | Task 5 tooling FINAL PASS | **FINAL PASS** |
 | Task 5 | **FINAL PASS** |
-| Task 6 — PyTorch/JAX backend bake-off | **NOT AUTHORIZED** |
+| Task 6 — PyTorch primary-backend decision and Task7 readiness | **NOT AUTHORIZED** |
 | Task 7 — first accepted BC baseline and checkpoint evidence | **NOT AUTHORIZED** |
 
 The current contract and implementation set is [P6_BC_CONTRACT.md](p6/P6_BC_CONTRACT.md),
@@ -307,19 +326,101 @@ and the architecture rationale in
 The Task-5 implementation is split into T5A schemas/codecs/identities/job
 manifests, T5B offline evaluation, T5C frozen gameplay evaluation, and T5D
 public audit, first divergence, distribution shift, and deterministic derived
-reporting. P6-G15 is **PASS**. P6-G14 remains **NOT_RUN/BLOCKED_BY_MEANINGFUL_BASELINE** and is not required
-for the Task 5 tooling final pass.
+reporting. P6-G15 is **PASS**. P6-G14 remains
+**NOT_RUN/BLOCKED_BY_MEANINGFUL_BASELINE** and is not required for the Task 5
+tooling final pass.
 
 The required sequence remains:
 
 ```text
 Task 5 tooling FINAL PASS
-    → Task 6 PyTorch/JAX backend bakeoff
+    → Task 6 PyTorch primary-backend decision and Task7 readiness
     → Task 7 first meaningful feed-forward BC baseline
 ```
 
-Task 6 requires Task 5 tooling FINAL PASS and explicit authorization. Task 7
-requires an accepted Task 6 backend decision and explicit authorization. Later
+### Phase-6 primary-backend direction
+
+The roadmap records PyTorch as the Phase-6 primary-backend direction for the
+future Task-6 decision/readiness slice. The rationale is its accepted Task4B
+exercise, lower implementation and review risk, shorter path to the first
+meaningful BC baseline, and existing user/developer familiarity. This is a
+roadmap decision, not a claim that PyTorch is objectively superior to JAX.
+
+JAX remains a deferred candidate. It is not rejected, is not a Phase-6
+requirement, and has no implementation authorization. A second framework
+implementation would add a second learner, runtime/debugging path,
+export/reload path, deterministic-execution review surface, and
+cross-framework equivalence work before a real workload shows that those costs
+are justified. The project will first establish a trustworthy baseline, then
+measure bottlenecks before revisiting backend optionality.
+
+Task 6 is **NOT AUTHORIZED** and **NOT STARTED**. Its future scope is limited
+to confirming the accepted PyTorch Task4A/4B path, the framework dependency and
+version decision, Task7 learner/runtime readiness, deterministic execution,
+and unchanged canonical export/reload, exact candidate-domain, no-fallback,
+and public-authority boundaries. Task 6 will not implement JAX or repeat
+Task4B without a demonstrated need.
+
+```text
+TASK6_DEPENDENCY_BARRIER_CLEARED=YES
+TASK6_AUTHORIZED=NO
+TASK6_STARTED=NO
+```
+
+Task 7 remains the first strategically meaningful accepted feed-forward,
+stateless candidate-scoring BC reference. Its initial two-deck Swordsoul
+Tenyi versus Salamangreat workload is an acceptance workload, not a permanent
+two-deck architecture limit. The data and evaluation infrastructure must
+remain capable of future multi-matchup expansion. Task 7 must not add
+recurrent memory, a value head, hierarchy, a world model, MuZero/MCTS, RL,
+self-play, or Meta-8 architecture changes.
+
+```text
+TWO_DECKS_IS_ACCEPTANCE_WORKLOAD=YES
+TWO_DECKS_IS_ARCHITECTURE_LIMIT=NO
+```
+
+After the controlled Task7 reference, the roadmap points toward baseline and
+failure-mode characterization, a reviewed broader curriculum, and later
+Meta-8/multi-matchup training. Exact Meta-8 decklists are not frozen here, and
+no new-deck trajectory generation is authorized.
+
+The deferred JAX implementation preserves engineering time for the later
+architecture program:
+
+```text
+Task7 feed-forward reference
+    → recurrent memory (#51)
+    → value program (#51)
+    → controlled recurrent baseline
+    → hierarchy experiments (#51)
+    → world-model contract W0 (#52)
+    → exact-root one-step planning W1 (#52)
+    → later strategic latent planning
+    → controlled hybrid experiments
+```
+
+Those programs remain after Task7 and unauthorized. Any world model remains a
+predictor while OCGForge remains the authority:
+
+```text
+WORLD_MODEL=PREDICTION
+OCGFORGE=AUTHORITY
+```
+
+An imagined state is not an authoritative `PlayerObservation`, and a planner
+may rank only real OCGForge actions.
+
+JAX may be reconsidered when a real Task7-or-later workload exposes a measured
+PyTorch bottleneck, a world-model/planning workload creates backend pressure,
+multi-device scaling or deployment requires it, or a specific JAX capability
+has measurable expected value.
+
+```text
+NO_BACKEND_BAKEOFF_WITHOUT_MEASURED_REASON=YES
+```
+
+Task 7 requires an accepted Task 6 decision and explicit authorization. Later
 tasks must not weaken determinism, privacy, candidate completeness, replay, or
 admission semantics. Phase 7 is **NOT STARTED**.
 

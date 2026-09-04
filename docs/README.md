@@ -12,8 +12,10 @@ Current repository status: M0–M4, Episodic V2, Phase 3A/3B,
 Phase 4A/4B/4C, Phase 5, and Phase 6 Tasks 1–4B are accepted for their
 defined scopes. Task 5 contract freeze, T5A–T5C, and T5D are **FINAL / MERGED
 / ACCEPTED ON MAIN** at `c0156a3451a7f8cc4495d544f7a34cab925e3c5a`.
-P6-G15 is **PASS** and Task 5 tooling is **FINAL PASS**. Task 6 and Task 7
-remain unauthorized; P6-G14 remains `NOT_RUN/BLOCKED_BY_MEANINGFUL_BASELINE`.
+P6-G15 is **PASS** and Task 5 tooling is **FINAL PASS**. The Phase-6 roadmap
+direction favors PyTorch for the future Task-6 decision/readiness slice; JAX
+is a deferred candidate, not rejected. Task 6 and Task 7 remain unauthorized;
+P6-G14 remains `NOT_RUN/BLOCKED_BY_MEANINGFUL_BASELINE`.
 
 ## Start here
 
@@ -128,7 +130,7 @@ this status index.
 | T5D public audit, first divergence, distribution shift, and derived report | **FINAL / MERGED / ACCEPTED ON MAIN** |
 | Task 5 tooling final pass | **FINAL PASS** |
 | Task 5 | **FINAL PASS** |
-| Task 6 | **NOT AUTHORIZED** |
+| Task 6 — PyTorch primary-backend decision and Task7 readiness | **NOT AUTHORIZED** |
 | Task 7 | **NOT AUTHORIZED** |
 
 Frozen Phase-6 authorities:
@@ -155,6 +157,11 @@ not a meaningful BC baseline, a playable policy, or evidence of strategic
 strength, convergence, Teacher parity, or backend selection. See
 [ADR-0007](adr/ADR-0007-phase6-behavior-cloning-boundary.md) for
 the ownership rationale.
+
+Task 6 will not implement JAX. It will verify the accepted PyTorch path and
+Task7 readiness without changing the framework-neutral OCGForge authorities.
+JAX may be reconsidered later when a measured workload or deployment need
+justifies the additional framework implementation.
 
 ## Decision-protocol evidence
 

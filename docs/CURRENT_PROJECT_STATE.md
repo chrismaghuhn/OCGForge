@@ -18,7 +18,9 @@ The repository also records final acceptance for Episodic V2, Phase 3A/3B,
 Phase 4A/4B/4C, and Phase 5. Phase 6 Tasks 1–4B are accepted and merged;
 Task 5 contract freeze and T5A–T5C are final and merged, and T5D is merged at
 `c0156a3451a7f8cc4495d544f7a34cab925e3c5a`. T5D main acceptance and the Task
-5 tooling final pass are complete.
+5 tooling final pass are complete. The Phase-6 roadmap direction favors
+PyTorch for the future Task-6 decision/readiness slice; JAX is deferred, not
+rejected, and Task 6 remains unauthorized.
 
 The project must **not** generalize that claim to arbitrary Yu-Gi-Oh! decks.
 
@@ -210,18 +212,30 @@ Fixture setup helpers are test infrastructure.
 
 Phase 5 defines logical and deterministic encoded model representations plus a
 lossless ragged/padded execution layout. Phase 6 adds provisional framework
-execution, inference, and evaluation tooling, but it does not select PyTorch or
-JAX as the primary backend and does not provide a meaningful BC baseline.
+execution, inference, and evaluation tooling. The roadmap direction favors
+PyTorch for the future Task-6 decision/readiness slice, but no production
+primary backend has been selected and no meaningful BC baseline exists; JAX
+remains a deferred candidate, not rejected.
 
-The accepted Task4B checkpoint is limited to technical smoke behavior. It does
-not establish strategic playability, convergence, Teacher parity, or gameplay
-strength.
+The accepted Task4B checkpoint is a real trained technical smoke artifact. It
+remains bounded and does not establish a meaningful BC baseline, strategic
+playability, convergence, Teacher parity, or gameplay strength.
 
 ### 6. No strategically meaningful accepted BC baseline
 
 No strategically meaningful accepted BC baseline exists yet. The repository
 does not claim a backend winner, a general Yu-Gi-Oh! policy, RL, self-play,
 league training, or a multi-deck trained policy.
+
+The first Task7 acceptance workload may remain the certified Swordsoul Tenyi
+versus Salamangreat matchup. That workload is an acceptance scope, not a
+permanent two-deck architecture limit; the data and evaluation path must
+remain extensible to future matchups.
+
+```text
+TWO_DECKS_IS_ACCEPTANCE_WORKLOAD=YES
+TWO_DECKS_IS_ARCHITECTURE_LIMIT=NO
+```
 
 ### 7. M4 parallel-simulation foundation is finalized
 
@@ -290,7 +304,8 @@ tracker status. It is not a repository invariant.
 ## Immediate documentation/maintenance priorities
 
 1. preserve the accepted Task 5 tooling and its evidence boundaries;
-2. require explicit Task 6 authorization before any PyTorch/JAX bakeoff;
+2. require explicit Task 6 authorization before PyTorch decision/readiness
+   work and a measured reason before any alternate-backend comparison;
 3. require an accepted Task 6 decision and explicit authorization before Task 7;
 4. create issues before broadening certified deck/card scope;
 5. preserve the distinction between global protocol coverage and deck-specific
