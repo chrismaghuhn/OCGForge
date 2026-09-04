@@ -816,7 +816,9 @@ namespace {
 
 bool validate_inference_response_binding(const InferenceRequestV1& request,
                                          const InferenceResponseV1& response,
-                                         std::string* error) noexcept {
+                                         std::string* error,
+                                         const std::optional<std::size_t>&
+                                             expected_candidate_count = std::nullopt) noexcept {
     try {
         if (request.request_identity != inference_request_identity(request) ||
             response.schema_id != kInferenceResponseSchemaId ||
@@ -826,7 +828,9 @@ bool validate_inference_response_binding(const InferenceRequestV1& request,
             response.ordered_candidate_domain_identity !=
                 request.ordered_candidate_domain_identity ||
             response.score_count != response.score_f32_bits.size() ||
-            response.score_count == 0 || response.score_f32_bits.empty()) {
+            response.score_count == 0 || response.score_f32_bits.empty() ||
+            (expected_candidate_count.has_value() &&
+             response.score_f32_bits.size() != *expected_candidate_count)) {
             fail("inference response does not bind the current request");
         }
         for (const auto& bits : response.score_f32_bits) (void)score_bits_value(bits);
@@ -1090,7 +1094,8 @@ policy::PolicySelection CheckpointBoundPolicyV1::select(
         }
         auto response = *provider_result.value;
         std::string response_error;
-        if (!validate_inference_response_binding(request, response, &response_error)) {
+        if (!validate_inference_response_binding(request, response, &response_error,
+                                                 keys.size())) {
             return fail_with_stage(
                 GameplayFailureStage::Inference, "INFERENCE_RESPONSE_INVALID",
                 policy::PolicyErrorCode::LifecycleFailure,
@@ -1493,6 +1498,15 @@ bool validate_gameplay_summary(const GameplaySummaryV1& summary,
         return false;
     }
 }
+
+namespace detail {
+
+bool counts_as_inference_failure(const GameplayJobResultV1& result) noexcept {
+    return result.failure_stage.has_value() &&
+           *result.failure_stage == GameplayFailureStage::Inference;
+}
+
+}  // namespace detail
 
 namespace {
 
@@ -2847,8 +2861,7 @@ GameplaySummaryV1 summarize(
         case GameplayJobStatus::Quarantined: ++summary.quarantined_job_count; break;
         }
         if (result.fallback_assisted) ++summary.fallback_assisted_job_count;
-        if (result.failure_stage.has_value() &&
-            *result.failure_stage == GameplayFailureStage::Inference) {
+        if (detail::counts_as_inference_failure(result)) {
             ++summary.inference_failure_count;
         }
     }

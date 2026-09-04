@@ -718,6 +718,19 @@ void test_checkpoint_policy_preserves_response_failure_precedence() {
     const auto frame = first_frame(2);
     const auto bad_ordinal = std::numeric_limits<std::uint32_t>::max();
 
+    auto wrong_exact_score_width = make_direct_policy(mutating_response_provider(
+        [bad_ordinal](InferenceResponseV1& response, const std::vector<std::string>& keys) {
+            require(keys.size() > 1, "wrong-exact-width fixture lacks a candidate domain");
+            response.score_f32_bits.pop_back();
+            response.score_count = static_cast<std::uint32_t>(response.score_f32_bits.size());
+            response.selected_candidate_ordinal = bad_ordinal;
+            response.selected_public_action_key = keys.front();
+            response.response_identity = inference_response_identity(response);
+        }));
+    require_policy_failure(wrong_exact_score_width, frame, GameplayFailureStage::Inference,
+                           "INFERENCE_RESPONSE_INVALID",
+                           "wrong exact score width response");
+
     auto wrong_score_count = make_direct_policy(mutating_response_provider(
         [bad_ordinal](InferenceResponseV1& response, const std::vector<std::string>& keys) {
             require(!keys.empty(), "wrong-score-count fixture lacks a candidate domain");
@@ -834,6 +847,50 @@ void test_opponent_policy_failure_is_not_neural_inference() {
     require(classification.stage == GameplayFailureStage::Environment &&
                 classification.code == "OPPONENT_POLICY_FAILURE",
             "opponent Teacher failure was classified as checkpoint inference");
+
+    const auto context = make_implementation_acceptance_context(
+        "434066289a14d0dae67222e0486f4df8538950bd");
+    const auto job_id = evaluation_job_identity(context.jobs.front());
+    ReplayAdmissionSummaryV1 replay;
+    replay.evaluation_identity = context.evaluation_identity;
+    replay.evaluation_job_identity = job_id;
+    replay.failure_stage = classification.stage;
+    replay.failure_code = classification.code;
+    GameplayJobResultV1 result;
+    result.evaluation_identity = context.evaluation_identity;
+    result.evaluation_job_identity = job_id;
+    result.checkpoint_identity = context.checkpoint_identity;
+    result.status = GameplayJobStatus::Failed;
+    result.failure_stage = classification.stage;
+    result.failure_code = classification.code;
+    result.fallback_assisted = false;
+    result.replay_admission_summary_identity = replay_admission_summary_identity(replay);
+    require(validate_gameplay_job_result(result),
+            "opponent Teacher failure result was not authoritative");
+    const auto roundtrip = decode_gameplay_job_result_json(
+        encode_gameplay_job_result_json(result));
+    require(roundtrip.failure_stage == GameplayFailureStage::Environment &&
+                roundtrip.failure_code == "OPPONENT_POLICY_FAILURE" &&
+                !roundtrip.fallback_assisted &&
+                !detail::counts_as_inference_failure(roundtrip),
+            "opponent Teacher failure was counted as inference or fallback-assisted");
+
+    GameplaySummaryV1 summary;
+    summary.evaluation_identity = context.evaluation_identity;
+    summary.evaluation_corpus_identity = context.evaluation_corpus_identity;
+    summary.evaluation_job_manifest_identity = context.evaluation_job_manifest_identity;
+    summary.checkpoint_identity = context.checkpoint_identity;
+    summary.gameplay_job_result_identities = {gameplay_job_result_identity(roundtrip)};
+    summary.scheduled_job_count = 1;
+    summary.started_job_count = 1;
+    summary.failed_job_count = 1;
+    summary.fallback_assisted_job_count = 0;
+    summary.inference_failure_count = 0;
+    require(validate_gameplay_summary(summary),
+            "opponent Teacher failure summary accounting was not valid");
+    require(summary.inference_failure_count == 0 &&
+                summary.fallback_assisted_job_count == 0,
+            "opponent Teacher failure changed authoritative summary accounting");
 }
 
 void test_wrong_checkpoint_is_rejected_before_gameplay() {

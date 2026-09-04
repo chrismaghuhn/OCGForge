@@ -413,6 +413,15 @@ std::string gameplay_job_result_identity(const GameplayJobResultV1& result);
 bool validate_gameplay_job_result(const GameplayJobResultV1& result,
                                   std::string* error = nullptr) noexcept;
 
+namespace detail {
+
+// The summary denominator counts only final authoritative inference-stage
+// failures.  Other policy, environment, replay, and admission failures are
+// deliberately excluded.
+bool counts_as_inference_failure(const GameplayJobResultV1& result) noexcept;
+
+}  // namespace detail
+
 struct GameplaySummaryV1 final {
     std::string schema_id = std::string(kGameplaySummarySchemaId);
     std::string evaluation_identity;
