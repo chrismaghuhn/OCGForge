@@ -9,10 +9,16 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "ygo/environment/public_action_identity.hpp"
 #include "ygo/policy/production.hpp"
+#include "episodic_environment_test_access.hpp"
+#include "ygo/observation/decision_integration.hpp"
+#include "ygo/observation/player_observation.hpp"
+#include "ygo/observation/serialization.hpp"
+#include "ygo/protocol/continuation.hpp"
 #include "ygo/trajectory/codec.hpp"
 
 namespace {
@@ -120,18 +126,19 @@ struct EvaluatorFixture final {
 };
 
 ygo::model::CardVocabularyV1 fixture_vocabulary() {
-#ifndef YGO_M0_CARD_DATA_TSV
-    throw std::runtime_error("T5C fixture lacks the generated card-data path");
+#if !defined(YGO_M3_DECK_A) || !defined(YGO_M3_DECK_B)
+    throw std::runtime_error("T5C fixture lacks the locked-deck paths");
 #else
-    std::ifstream input(YGO_M0_CARD_DATA_TSV);
-    require(static_cast<bool>(input), "T5C fixture could not open generated card data");
     std::vector<std::uint32_t> passcodes;
-    std::string line;
-    while (std::getline(input, line)) {
-        if (line.empty() || line.front() == '#') continue;
-        const auto delimiter = line.find('|');
-        require(delimiter != std::string::npos, "T5C card-data row is malformed");
-        passcodes.push_back(static_cast<std::uint32_t>(std::stoul(line.substr(0, delimiter))));
+    for (const auto* path : {YGO_M3_DECK_A, YGO_M3_DECK_B}) {
+        std::ifstream input(path);
+        require(static_cast<bool>(input), "T5C fixture could not open a locked deck");
+        std::string line;
+        while (std::getline(input, line)) {
+            if (line.empty() || line.front() == '#') continue;
+            if (line.front() == '!') break;
+            passcodes.push_back(static_cast<std::uint32_t>(std::stoul(line)));
+        }
     }
     std::sort(passcodes.begin(), passcodes.end());
     passcodes.erase(std::unique(passcodes.begin(), passcodes.end()), passcodes.end());
@@ -154,6 +161,9 @@ EvaluatorFixture make_fixture(
         "434066289a14d0dae67222e0486f4df8538950bd");
     const auto artifact = evaluated_artifact(context.checkpoint_identity);
     const auto vocabulary = fixture_vocabulary();
+    require(vocabulary.identity() == kSmokeCardVocabularyIdentity,
+            "T5C fixture vocabulary is not the accepted smoke vocabulary: " +
+                vocabulary.identity());
     ygo::environment::RunControl control;
     control.engine_process_budget = 512;
     control.semantic_action_budget = 1;
@@ -171,9 +181,10 @@ EvaluatorFixture make_fixture(
 }
 
 CheckpointBoundPolicyV1 make_direct_policy(
-    const CheckpointInferenceProviderV1& provider) {
+    const CheckpointInferenceProviderV1& provider,
+    const std::uint8_t participant = 0) {
     auto result = create_checkpoint_bound_policy(
-        std::string(kSmokeCheckpointIdentity), 0,
+        std::string(kSmokeCheckpointIdentity), participant,
         "participant_policy_assignment.v1." + std::string(64, 'a'),
         "policy_artifact.v1." + std::string(64, 'b'), fixture_vocabulary(), provider);
     require_result(result, "direct checkpoint-policy fixture construction failed");
@@ -282,6 +293,268 @@ void test_response_codec_rejects_wrong_selection_and_noncanonical_json() {
         rejected = true;
     }
     require(rejected, "unknown gameplay-result JSON fields were accepted");
+}
+
+void test_smoke_context_and_vocabulary_are_checkpoint_bound() {
+    const auto accepted_context = make_implementation_acceptance_context(
+        "434066289a14d0dae67222e0486f4df8538950bd");
+    auto alternate_job = accepted_context.jobs.front();
+    alternate_job.evaluated_policy_checkpoint_identity =
+        "phase6_checkpoint.v1." + std::string(64, 'e');
+    std::string job_error;
+    require(!validate_evaluation_job(alternate_job, &job_error),
+            "implementation acceptance accepted a job for an alternate checkpoint");
+
+    bool rejected = false;
+    try {
+        (void)make_implementation_acceptance_context(
+            "434066289a14d0dae67222e0486f4df8538950bd",
+            "phase6_checkpoint.v1." + std::string(64, 'e'));
+    } catch (const std::exception&) {
+        rejected = true;
+    }
+    require(rejected, "implementation acceptance minted an alternate checkpoint context");
+
+    auto fixture = make_fixture();
+    const auto wrong_vocabulary_result =
+        ygo::model::CardVocabularyV1::from_ascending_passcodes({123456});
+    require(static_cast<bool>(wrong_vocabulary_result),
+            "wrong vocabulary fixture construction failed");
+    fixture.config.card_vocabulary = *wrong_vocabulary_result.value;
+    auto created = create_frozen_gameplay_evaluator(std::move(fixture.config));
+    require(!created && created.error.has_value(),
+            "canonical but wrong CardVocabulary was accepted for the smoke checkpoint");
+}
+
+ygo::observation::PlayerObservation paired_private_observation(
+    const std::uint8_t perspective, const std::uint64_t engine_step_index) {
+    ygo::observation::PlayerObservation observation;
+    observation.schema_version = "ygo.player_observation.v1";
+    observation.perspective_player = perspective;
+    observation.engine_step_index = engine_step_index;
+    observation.globals.life_points = {8000, 8000};
+    observation.globals.terminal = false;
+    observation.match_context.perspective_player = perspective;
+    const auto hidden_controller = static_cast<std::uint8_t>(1 - perspective);
+    observation.zones.push_back({hidden_controller,
+                                 ygo::observation::SemanticZone::SpellTrapZone,
+                                 1, 0, 1, false});
+    ygo::observation::ObservedCard hidden;
+    hidden.locator = {"p" + std::to_string(hidden_controller) +
+                      ":SPELL_TRAP_ZONE:0"};
+    hidden.identity_known = false;
+    hidden.controller = hidden_controller;
+    hidden.zone = ygo::observation::SemanticZone::SpellTrapZone;
+    hidden.sequence = 0;
+    hidden.face_down = true;
+    observation.entities.push_back(std::move(hidden));
+    observation.observation_hash = ygo::observation::observation_hash(observation);
+    return observation;
+}
+
+ygo::protocol::DecisionRequest paired_private_request(const std::uint32_t hidden_code) {
+    ygo::protocol::DecisionRequest request;
+    request.kind = ygo::protocol::DecisionRequestKind::CardSelection;
+    request.decision_id = "private-decision.card." + std::to_string(hidden_code);
+    request.engine_step_index = 91;
+    request.player = 1;
+    request.engine_message_type = 15;
+    request.engine_message_name = "MSG_SELECT_CARD";
+    request.raw_message_hash = "private-raw." + std::to_string(hidden_code);
+    ygo::protocol::ActionCandidate candidate;
+    candidate.action_kind = ygo::protocol::ActionKind::CardSelection;
+    candidate.semantic_key = "card.0.3." + std::to_string(hidden_code) + ".0.8.0";
+    candidate.source_card = hidden_code;
+    candidate.source_controller = 0;
+    candidate.source_location = 8;
+    candidate.source_sequence = 0;
+    candidate.source_index = 3;
+    candidate.exact_response_bytes = {3, 0, 0, 0};
+    request.candidates.push_back(std::move(candidate));
+    return request;
+}
+
+void test_real_paired_hidden_worlds_have_equal_checkpoint_inputs_and_selection() {
+    auto factory = ygo::environment::EpisodicEnvironment::create(
+        ygo::environment::CertifiedEnvironmentConfig::canonical());
+    require(std::holds_alternative<std::unique_ptr<ygo::environment::EpisodicEnvironment>>(factory),
+            "T5C paired-hidden environment construction failed");
+    auto environment = std::move(
+        std::get<std::unique_ptr<ygo::environment::EpisodicEnvironment>>(factory));
+    const auto request_a = paired_private_request(14821890);
+    const auto request_b = paired_private_request(7654321);
+    auto observation_a = paired_private_observation(1, 91);
+    auto observation_b = paired_private_observation(1, 91);
+    ygo::observation::attach_decision_context(observation_a, request_a);
+    ygo::observation::attach_decision_context(observation_b, request_b);
+    require(request_a.candidates.front().semantic_key !=
+                request_b.candidates.front().semantic_key &&
+                request_a.raw_message_hash != request_b.raw_message_hash,
+            "paired hidden fixtures did not differ privately");
+    require(ygo::observation::canonical_serialize(observation_a) !=
+                ygo::observation::canonical_serialize(observation_b),
+            "paired hidden fixtures did not retain distinct private source data");
+    const auto frame_a = ygo::environment::detail::EpisodicEnvironmentTestAccess::project_frame_for_test(
+        *environment, request_a, observation_a, std::string(64, 'a'), 7);
+    const auto frame_b = ygo::environment::detail::EpisodicEnvironmentTestAccess::project_frame_for_test(
+        *environment, request_b, observation_b, std::string(64, 'a'), 7);
+    require(ygo::environment::canonical_public_environment_observation_bytes(
+                frame_a.public_observation) ==
+                ygo::environment::canonical_public_environment_observation_bytes(
+                    frame_b.public_observation) &&
+                frame_a.public_observation_digest == frame_b.public_observation_digest &&
+                frame_a.public_semantic_decision_id == frame_b.public_semantic_decision_id &&
+                frame_a.public_candidate_domain_digest == frame_b.public_candidate_domain_digest &&
+                frame_a.request.kind == frame_b.request.kind &&
+                frame_a.request.player == frame_b.request.player &&
+                frame_a.request.candidates.size() == frame_b.request.candidates.size(),
+            "paired hidden fixtures changed the accepted public frame or domain");
+    require(frame_a.request.candidates.front().public_action_key ==
+                frame_b.request.candidates.front().public_action_key &&
+                frame_a.request.candidates.front().public_action_key.find("14821890") ==
+                    std::string::npos &&
+                frame_a.request.candidates.front().public_action_key.find("7654321") ==
+                    std::string::npos,
+            "paired hidden fixture leaked a private value through the public key");
+    for (std::size_t index = 0; index < frame_a.request.candidates.size(); ++index) {
+        require(frame_a.request.candidates[index].public_action_key ==
+                    frame_b.request.candidates[index].public_action_key,
+                "paired hidden fixtures changed the complete public candidate vector");
+    }
+
+    struct Capture final {
+        std::vector<std::vector<std::uint8_t>> logical;
+        std::vector<std::vector<std::uint8_t>> encoded;
+        std::vector<InferenceRequestV1> requests;
+        std::vector<std::vector<std::string>> scores;
+        std::vector<std::string> selections;
+    } capture;
+    const CheckpointInferenceProviderV1 provider =
+        [&capture](const InferenceRequestV1& request,
+                   const ygo::model::LogicalModelInputV1& logical,
+                   const ygo::model::EncodedModelInputV1& encoded) {
+            capture.logical.push_back(ygo::model::canonical_logical_model_input_bytes(logical));
+            capture.encoded.push_back(ygo::model::canonical_encoded_model_input_bytes(encoded));
+            capture.requests.push_back(request);
+            const std::vector<std::string> scores(encoded.routing_keys.size(), "3f800000");
+            capture.scores.push_back(scores);
+            auto result = make_inference_response(request, scores, encoded.routing_keys);
+            require(result.value.has_value(), "paired hidden response construction failed");
+            capture.selections.push_back(result.value->selected_public_action_key);
+            return result;
+        };
+    auto policy_a = make_direct_policy(provider, 1);
+    auto policy_b = make_direct_policy(provider, 1);
+    const auto selected_a = policy_a.select(frame_a);
+    const auto selected_b = policy_b.select(frame_b);
+    require(selected_a && selected_b && capture.logical.size() == 2 &&
+                capture.encoded.size() == 2 && capture.requests.size() == 2 &&
+                capture.scores.size() == 2 && capture.selections.size() == 2,
+            "paired hidden policy execution did not produce two complete responses");
+    require(capture.logical[0] == capture.logical[1] &&
+                capture.encoded[0] == capture.encoded[1] &&
+                capture.requests[0].request_identity == capture.requests[1].request_identity &&
+                capture.requests[0].checkpoint_identity == capture.requests[1].checkpoint_identity &&
+                capture.requests[0].model_input_identity == capture.requests[1].model_input_identity &&
+                capture.requests[0].ordered_candidate_domain_identity ==
+                    capture.requests[1].ordered_candidate_domain_identity &&
+                capture.requests[0].public_semantic_decision_id ==
+                    capture.requests[1].public_semantic_decision_id &&
+                capture.requests[0].perspective_player == capture.requests[1].perspective_player &&
+                capture.requests[0].decision_index == capture.requests[1].decision_index &&
+                capture.scores[0] == capture.scores[1] &&
+                capture.selections[0] == capture.selections[1] &&
+                selected_a.value->public_action_key == selected_b.value->public_action_key,
+            "paired hidden worlds changed checkpoint model input, scores, or selection");
+}
+
+void test_checkpoint_policy_preserves_failure_stage_identity() {
+    const auto frame = first_frame(2);
+    auto public_frame_failure = frame;
+    public_frame_failure.public_observation_digest = std::string(64, 'e');
+    auto policy = make_direct_policy(
+        [](const InferenceRequestV1&, const ygo::model::LogicalModelInputV1&,
+           const ygo::model::EncodedModelInputV1&) {
+            return InferenceResponseCreateResult{std::nullopt, std::string("unused")};
+        });
+    require(!policy.select(public_frame_failure) && policy.last_failure().has_value() &&
+                policy.last_failure()->stage == GameplayFailureStage::PublicFrameValidation &&
+                policy.last_failure()->code == "PUBLIC_FRAME_INVALID",
+            "invalid public frame did not preserve its failure stage");
+
+    auto model_frame_failure = frame;
+    model_frame_failure.request.candidates.front().source_reference =
+        ygo::environment::PublicCardReference{
+            static_cast<ygo::environment::PublicCardReferenceKind>(99), "invalid"};
+    auto model_policy = make_direct_policy(
+        [](const InferenceRequestV1&, const ygo::model::LogicalModelInputV1&,
+           const ygo::model::EncodedModelInputV1&) {
+            return InferenceResponseCreateResult{std::nullopt, std::string("unused")};
+        });
+    require(!model_policy.select(model_frame_failure) && model_policy.last_failure().has_value() &&
+                model_policy.last_failure()->stage == GameplayFailureStage::ModelInputValidation &&
+                model_policy.last_failure()->code == "MODEL_INPUT_INVALID",
+            "model-input failure did not preserve its failure stage");
+
+    auto inference_policy = make_direct_policy(
+        [](const InferenceRequestV1&, const ygo::model::LogicalModelInputV1&,
+           const ygo::model::EncodedModelInputV1&) {
+            return InferenceResponseCreateResult{std::nullopt, std::string("provider failure")};
+        });
+    require(!inference_policy.select(frame) && inference_policy.last_failure().has_value() &&
+                inference_policy.last_failure()->stage == GameplayFailureStage::Inference &&
+                inference_policy.last_failure()->code == "INFERENCE_FAILURE",
+            "provider failure did not preserve the inference stage");
+
+    const CheckpointInferenceProviderV1 selection_provider =
+        [](const InferenceRequestV1& request, const ygo::model::LogicalModelInputV1&,
+           const ygo::model::EncodedModelInputV1& input) {
+            auto result = make_inference_response(
+                request, std::vector<std::string>(input.routing_keys.size(), "3f800000"),
+                input.routing_keys);
+            require(result.value.has_value() && input.routing_keys.size() > 1,
+                    "selection-stage fixture lacks a complete domain");
+            result.value->selected_candidate_ordinal =
+                (result.value->selected_candidate_ordinal + 1) %
+                static_cast<std::uint32_t>(input.routing_keys.size());
+            result.value->selected_public_action_key =
+                input.routing_keys[result.value->selected_candidate_ordinal];
+            result.value->response_identity = inference_response_identity(*result.value);
+            return result;
+        };
+    auto selection_policy = make_direct_policy(selection_provider);
+    require(!selection_policy.select(frame) && selection_policy.last_failure().has_value() &&
+                selection_policy.last_failure()->stage == GameplayFailureStage::Selection &&
+                selection_policy.last_failure()->code == "SELECTION_INVALID",
+            "invalid selection envelope did not preserve the selection stage");
+
+    const auto context = make_implementation_acceptance_context(
+        "434066289a14d0dae67222e0486f4df8538950bd");
+    const auto job_id = evaluation_job_identity(context.jobs.front());
+    const std::array<std::pair<GameplayFailureStage, std::string>, 4> stages = {
+        std::make_pair(GameplayFailureStage::PublicFrameValidation, "PUBLIC_FRAME_INVALID"),
+        std::make_pair(GameplayFailureStage::ModelInputValidation, "MODEL_INPUT_INVALID"),
+        std::make_pair(GameplayFailureStage::Inference, "INFERENCE_RESPONSE_INVALID"),
+        std::make_pair(GameplayFailureStage::Selection, "SELECTION_INVALID")};
+    for (const auto& [stage, code] : stages) {
+        ReplayAdmissionSummaryV1 replay;
+        replay.evaluation_identity = context.evaluation_identity;
+        replay.evaluation_job_identity = job_id;
+        replay.failure_stage = stage;
+        replay.failure_code = code;
+        GameplayJobResultV1 result;
+        result.evaluation_identity = context.evaluation_identity;
+        result.evaluation_job_identity = job_id;
+        result.checkpoint_identity = context.checkpoint_identity;
+        result.status = GameplayJobStatus::Failed;
+        result.failure_stage = stage;
+        result.failure_code = code;
+        result.replay_admission_summary_identity = replay_admission_summary_identity(replay);
+        const auto round_trip = decode_gameplay_job_result_json(
+            encode_gameplay_job_result_json(result));
+        require(round_trip.failure_stage == stage && round_trip.failure_code == code,
+                "canonical job-result transport changed a typed failure stage");
+    }
 }
 
 void test_failure_accounting_preserves_replay_and_admission_failures() {
@@ -708,6 +981,9 @@ int main(int argc, char** argv) {
         test_frozen_context_has_the_exact_eight_job_schedule();
         test_inference_response_identity_is_bound_to_request();
         test_response_codec_rejects_wrong_selection_and_noncanonical_json();
+        test_smoke_context_and_vocabulary_are_checkpoint_bound();
+        test_real_paired_hidden_worlds_have_equal_checkpoint_inputs_and_selection();
+        test_checkpoint_policy_preserves_failure_stage_identity();
         test_failure_accounting_preserves_replay_and_admission_failures();
         test_score_bits_are_exact_and_finite();
         test_checkpoint_policy_rejects_wrong_checkpoint_and_candidate_domain_response();

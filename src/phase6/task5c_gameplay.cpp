@@ -125,6 +125,10 @@ bool valid_commit(const std::string_view value) noexcept {
            });
 }
 
+bool is_smoke_checkpoint(const std::string_view value) noexcept {
+    return value == kSmokeCheckpointIdentity;
+}
+
 bool byte_less(const std::string_view left, const std::string_view right) noexcept {
     return std::lexicographical_compare(
         left.begin(), left.end(), right.begin(), right.end(),
@@ -298,6 +302,9 @@ void validate_job_impl(const EvaluationJobV1& job) {
     if (!valid_prefixed_digest(job.evaluated_policy_checkpoint_identity,
                                "phase6_checkpoint.v1.")) {
         fail("evaluation job checkpoint identity is invalid");
+    }
+    if (job.evaluated_policy_checkpoint_identity != kSmokeCheckpointIdentity) {
+        fail("implementation acceptance job is bound to the accepted smoke checkpoint");
     }
     if (job.phase5_logical_model_input_contract_id != "ocgforge.model_logical_input.v1" ||
         job.phase5_encoded_model_input_contract_id != "ocgforge.model_encoded_input.v1" ||
@@ -598,6 +605,7 @@ bool validate_evaluation_context(const EvaluationContextV1& context,
             context.corpus_profile_identity != kImplementationAcceptanceProfile ||
             context.corpus_kind != kImplementationAcceptanceKind ||
             !valid_prefixed_digest(context.checkpoint_identity, "phase6_checkpoint.v1.") ||
+            !is_smoke_checkpoint(context.checkpoint_identity) ||
             context.evaluator_semantic_version != kEvaluatorSemanticVersion ||
             !valid_commit(context.evaluator_semantic_source_commit) ||
             context.jobs.size() != 8) {
@@ -656,6 +664,9 @@ bool validate_evaluation_context(const EvaluationContextV1& context,
 EvaluationContextV1 make_implementation_acceptance_context(
     std::string evaluator_semantic_source_commit,
     std::string checkpoint_identity) {
+    if (!is_smoke_checkpoint(checkpoint_identity)) {
+        fail("implementation acceptance is bound to the accepted smoke checkpoint");
+    }
     EvaluationContextV1 context;
     context.evaluator_semantic_source_commit = std::move(evaluator_semantic_source_commit);
     context.checkpoint_identity = std::move(checkpoint_identity);
@@ -831,6 +842,8 @@ CheckpointBoundPolicyCreateResult create_checkpoint_bound_policy(
             !valid_prefixed_digest(participant_policy_assignment_id,
                                    "participant_policy_assignment.v1.") ||
             !valid_prefixed_digest(policy_artifact_id, "policy_artifact.v1.") ||
+            (is_smoke_checkpoint(checkpoint_identity) &&
+             vocabulary.identity() != kSmokeCardVocabularyIdentity) ||
             !provider) {
             fail("checkpoint-bound policy configuration is invalid");
         }
@@ -851,12 +864,22 @@ CheckpointBoundPolicyCreateResult create_checkpoint_bound_policy(
     }
 }
 
+policy::PolicySelection CheckpointBoundPolicyV1::fail_with_stage(
+    const GameplayFailureStage stage, std::string code,
+    const policy::PolicyErrorCode policy_code, std::string message) noexcept {
+    last_failure_ = CheckpointPolicyFailureV1{stage, std::move(code)};
+    return policy_failure(policy_code, std::move(message));
+}
+
 policy::PolicySelection CheckpointBoundPolicyV1::select(
     const environment::DecisionFrame& frame) noexcept {
     try {
+        last_failure_.reset();
         if (pending_.has_value()) {
-            return policy_failure(policy::PolicyErrorCode::LifecycleFailure,
-                                  "checkpoint policy has an unresolved inference response");
+            return fail_with_stage(
+                GameplayFailureStage::Inference, "INFERENCE_FAILURE",
+                policy::PolicyErrorCode::LifecycleFailure,
+                "checkpoint policy has an unresolved inference response");
         }
         if (frame.contract_id != environment::kEpisodicEnvironmentV2ContractId ||
             frame.acting_player != participant_ ||
@@ -864,11 +887,27 @@ policy::PolicySelection CheckpointBoundPolicyV1::select(
             frame.public_observation.decision_index != frame.decision_index ||
             frame.request.player != participant_ || !frame.submission_token.valid() ||
             !valid_public_digest(frame.public_observation_digest) ||
-            frame.public_observation_digest !=
-                environment::public_observation_digest(frame.public_observation) ||
             frame.request.candidates.empty()) {
-            return policy_failure(policy::PolicyErrorCode::InvalidCandidateDomain,
-                                  "checkpoint policy received an invalid public frame");
+            return fail_with_stage(
+                GameplayFailureStage::PublicFrameValidation, "PUBLIC_FRAME_INVALID",
+                policy::PolicyErrorCode::InvalidCandidateDomain,
+                "checkpoint policy received an invalid public frame");
+        }
+        std::string expected_observation_digest;
+        try {
+            expected_observation_digest =
+                environment::public_observation_digest(frame.public_observation);
+        } catch (...) {
+            return fail_with_stage(
+                GameplayFailureStage::PublicFrameValidation, "PUBLIC_FRAME_INVALID",
+                policy::PolicyErrorCode::InvalidCandidateDomain,
+                "checkpoint policy could not validate the public observation");
+        }
+        if (frame.public_observation_digest != expected_observation_digest) {
+            return fail_with_stage(
+                GameplayFailureStage::PublicFrameValidation, "PUBLIC_FRAME_INVALID",
+                policy::PolicyErrorCode::InvalidCandidateDomain,
+                "checkpoint policy received a mismatched public observation digest");
         }
         std::vector<std::string> keys;
         keys.reserve(frame.request.candidates.size());
@@ -876,18 +915,36 @@ policy::PolicySelection CheckpointBoundPolicyV1::select(
         for (const auto& candidate : frame.request.candidates) {
             if (!environment::is_public_action_key(candidate.public_action_key) ||
                 !unique_keys.insert(candidate.public_action_key).second) {
-                return policy_failure(policy::PolicyErrorCode::InvalidCandidateDomain,
-                                      "checkpoint policy received an invalid candidate domain");
+                return fail_with_stage(
+                    GameplayFailureStage::PublicFrameValidation, "PUBLIC_FRAME_INVALID",
+                    policy::PolicyErrorCode::InvalidCandidateDomain,
+                    "checkpoint policy received an invalid candidate domain");
             }
             keys.push_back(candidate.public_action_key);
         }
         const auto request_kind =
             std::string(environment::environment_decision_kind_name(frame.request.kind));
-        if (request_kind.empty() ||
-            frame.public_candidate_domain_digest !=
-                environment::public_candidate_domain_digest(request_kind, keys)) {
-            return policy_failure(policy::PolicyErrorCode::InvalidCandidateDomain,
-                                  "checkpoint policy received a mismatched candidate digest");
+        if (request_kind.empty()) {
+            return fail_with_stage(
+                GameplayFailureStage::PublicFrameValidation, "PUBLIC_FRAME_INVALID",
+                policy::PolicyErrorCode::InvalidCandidateDomain,
+                "checkpoint policy received an unsupported decision kind");
+        }
+        std::string expected_candidate_digest;
+        try {
+            expected_candidate_digest =
+                environment::public_candidate_domain_digest(request_kind, keys);
+        } catch (...) {
+            return fail_with_stage(
+                GameplayFailureStage::PublicFrameValidation, "PUBLIC_FRAME_INVALID",
+                policy::PolicyErrorCode::InvalidCandidateDomain,
+                "checkpoint policy could not validate the public candidate domain");
+        }
+        if (frame.public_candidate_domain_digest != expected_candidate_digest) {
+            return fail_with_stage(
+                GameplayFailureStage::PublicFrameValidation, "PUBLIC_FRAME_INVALID",
+                policy::PolicyErrorCode::InvalidCandidateDomain,
+                "checkpoint policy received a mismatched candidate digest");
         }
         environment::PublicSemanticDecisionIdentityInput decision_identity;
         decision_identity.episode_semantic_id = frame.episode_semantic_id;
@@ -896,60 +953,128 @@ policy::PolicySelection CheckpointBoundPolicyV1::select(
         decision_identity.request_kind = request_kind;
         decision_identity.public_observation_digest = frame.public_observation_digest;
         decision_identity.public_candidate_domain_digest = frame.public_candidate_domain_digest;
-        if (environment::public_semantic_decision_id(decision_identity) !=
-            frame.public_semantic_decision_id) {
-            return policy_failure(policy::PolicyErrorCode::InvalidCandidateDomain,
-                                  "checkpoint policy received a mismatched decision identity");
+        std::string expected_decision_id;
+        try {
+            expected_decision_id = environment::public_semantic_decision_id(decision_identity);
+        } catch (...) {
+            return fail_with_stage(
+                GameplayFailureStage::PublicFrameValidation, "PUBLIC_FRAME_INVALID",
+                policy::PolicyErrorCode::InvalidCandidateDomain,
+                "checkpoint policy could not validate the public decision identity");
+        }
+        if (expected_decision_id != frame.public_semantic_decision_id) {
+            return fail_with_stage(
+                GameplayFailureStage::PublicFrameValidation, "PUBLIC_FRAME_INVALID",
+                policy::PolicyErrorCode::InvalidCandidateDomain,
+                "checkpoint policy received a mismatched decision identity");
         }
 
-        const auto logical = model::project_logical_model_input_v1(
-            frame.public_observation, frame.request.candidates);
-        if (!logical || !logical.value.has_value()) {
-            return policy_failure(policy::PolicyErrorCode::InvalidConfiguration,
-                                  "public model-input projection failed");
+        model::LogicalModelProjectionResult logical;
+        try {
+            logical = model::project_logical_model_input_v1(
+                frame.public_observation, frame.request.candidates);
+        } catch (...) {
+            return fail_with_stage(
+                GameplayFailureStage::ModelInputValidation, "MODEL_INPUT_INVALID",
+                policy::PolicyErrorCode::InvalidConfiguration,
+                "public model-input projection threw");
         }
-        const auto encoded = model::encode_model_input_v1(*logical.value, vocabulary_);
+        if (!logical || !logical.value.has_value()) {
+            return fail_with_stage(
+                GameplayFailureStage::ModelInputValidation, "MODEL_INPUT_INVALID",
+                policy::PolicyErrorCode::InvalidConfiguration,
+                "public model-input projection failed");
+        }
+        model::EncodedModelInputResult encoded;
+        try {
+            encoded = model::encode_model_input_v1(*logical.value, vocabulary_);
+        } catch (...) {
+            return fail_with_stage(
+                GameplayFailureStage::ModelInputValidation, "MODEL_INPUT_INVALID",
+                policy::PolicyErrorCode::InvalidConfiguration,
+                "encoded model-input projection threw");
+        }
         if (!encoded || !encoded.value.has_value()) {
-            return policy_failure(policy::PolicyErrorCode::InvalidConfiguration,
-                                  "encoded model-input projection failed");
+            return fail_with_stage(
+                GameplayFailureStage::ModelInputValidation, "MODEL_INPUT_INVALID",
+                policy::PolicyErrorCode::InvalidConfiguration,
+                "encoded model-input projection failed");
         }
         if (encoded.value->routing_keys != keys ||
             encoded.value->public_candidate_domain_digest !=
                 std::optional<std::string>{frame.public_candidate_domain_digest}) {
-            return policy_failure(policy::PolicyErrorCode::InvalidCandidateDomain,
-                                  "encoded model input changed the current candidate domain");
+            return fail_with_stage(
+                GameplayFailureStage::ModelInputValidation, "MODEL_INPUT_INVALID",
+                policy::PolicyErrorCode::InvalidCandidateDomain,
+                "encoded model input changed the current candidate domain");
         }
         InferenceRequestV1 request;
         request.checkpoint_identity = checkpoint_identity_;
-        request.model_input_identity =
-            model::model_input_identity(*logical.value, *encoded.value);
+        try {
+            request.model_input_identity =
+                model::model_input_identity(*logical.value, *encoded.value);
+        } catch (...) {
+            return fail_with_stage(
+                GameplayFailureStage::ModelInputValidation, "MODEL_INPUT_INVALID",
+                policy::PolicyErrorCode::InvalidConfiguration,
+                "model-input identity could not be computed");
+        }
         request.ordered_candidate_domain_identity = frame.public_candidate_domain_digest;
         request.public_semantic_decision_id = frame.public_semantic_decision_id;
         request.perspective_player = frame.acting_player;
         request.decision_index = frame.decision_index;
-        request.request_identity = inference_request_identity(request);
+        try {
+            request.request_identity = inference_request_identity(request);
+        } catch (...) {
+            return fail_with_stage(
+                GameplayFailureStage::Inference, "INFERENCE_FAILURE",
+                policy::PolicyErrorCode::LifecycleFailure,
+                "inference request identity could not be computed");
+        }
 
-        const auto provider_result = provider_(request, *logical.value, *encoded.value);
+        InferenceResponseCreateResult provider_result;
+        try {
+            provider_result = provider_(request, *logical.value, *encoded.value);
+        } catch (...) {
+            return fail_with_stage(
+                GameplayFailureStage::Inference, "INFERENCE_FAILURE",
+                policy::PolicyErrorCode::LifecycleFailure,
+                "checkpoint inference failed");
+        }
         if (!provider_result || !provider_result.value.has_value()) {
-            return policy_failure(policy::PolicyErrorCode::LifecycleFailure,
-                                  provider_result.error.value_or("checkpoint inference failed"));
+            return fail_with_stage(
+                GameplayFailureStage::Inference, "INFERENCE_FAILURE",
+                policy::PolicyErrorCode::LifecycleFailure,
+                "checkpoint inference failed");
         }
         auto response = *provider_result.value;
         std::string response_error;
-        if (response.selected_public_action_key.empty()) {
-            return policy_failure(policy::PolicyErrorCode::InvalidCandidateDomain,
-                                  "checkpoint inference response did not select a public key");
+        if (environment::is_public_action_key(response.selected_public_action_key) &&
+            response.selected_candidate_ordinal < keys.size() &&
+            response.selected_candidate_ordinal < response.score_count) {
+            // These fields are evaluated again below after the response envelope has been
+            // checked.  The pre-check only reserves the selection-stage classification for
+            // an invalid selection coordinate/key rather than a transport/binding failure.
+        } else {
+            return fail_with_stage(
+                GameplayFailureStage::Selection, "SELECTION_INVALID",
+                policy::PolicyErrorCode::InvalidCandidateDomain,
+                "checkpoint inference response did not select a valid public key");
         }
         if (!validate_inference_response(request, response, &response_error)) {
-            return policy_failure(policy::PolicyErrorCode::LifecycleFailure,
-                                  "checkpoint inference response rejected: " + response_error);
+            return fail_with_stage(
+                GameplayFailureStage::Inference, "INFERENCE_RESPONSE_INVALID",
+                policy::PolicyErrorCode::LifecycleFailure,
+                "checkpoint inference response rejected: " + response_error);
         }
         if (response.selected_candidate_ordinal >= keys.size() ||
             keys[response.selected_candidate_ordinal] != response.selected_public_action_key ||
             selected_score_ordinal(response.score_f32_bits, keys) !=
                 response.selected_candidate_ordinal) {
-            return policy_failure(policy::PolicyErrorCode::InvalidCandidateDomain,
-                                  "checkpoint inference selected an invalid or non-deterministic key");
+            return fail_with_stage(
+                GameplayFailureStage::Selection, "SELECTION_INVALID",
+                policy::PolicyErrorCode::InvalidCandidateDomain,
+                "checkpoint inference selected an invalid or non-deterministic key");
         }
         pending_ = Pending{frame.episode_semantic_id, frame.public_semantic_decision_id,
                            response.selected_public_action_key};
@@ -958,11 +1083,14 @@ policy::PolicySelection CheckpointBoundPolicyV1::select(
                 policy::PolicySelectionResult{response.selected_public_action_key, std::nullopt}),
             std::nullopt};
     } catch (const std::exception& exception) {
-        return policy_failure(policy::PolicyErrorCode::LifecycleFailure,
-                              exception.what());
+        return fail_with_stage(
+            GameplayFailureStage::Inference, "INFERENCE_FAILURE",
+            policy::PolicyErrorCode::LifecycleFailure, exception.what());
     } catch (...) {
-        return policy_failure(policy::PolicyErrorCode::LifecycleFailure,
-                              "checkpoint policy selection threw");
+        return fail_with_stage(
+            GameplayFailureStage::Inference, "INFERENCE_FAILURE",
+            policy::PolicyErrorCode::LifecycleFailure,
+            "checkpoint policy selection threw");
     }
 }
 
@@ -1032,13 +1160,17 @@ void validate_failure_fields(const std::optional<GameplayFailureStage>& stage,
                              const std::optional<std::string>& code) {
     if (stage.has_value() && !valid_failure_stage(*stage)) fail("unknown gameplay failure stage");
     if (code.has_value()) {
-        constexpr std::array<std::string_view, 23> public_failure_codes = {
+        constexpr std::array<std::string_view, 27> public_failure_codes = {
             "INFERENCE_FAILURE",
+            "INFERENCE_RESPONSE_INVALID",
             "STEP_REJECTED",
             "STEP_REJECTION_RECORDING_FAILURE",
             "STEP_REJECTION_INTERRUPT_FAILURE",
             "POLICY_FAILURE_INTERRUPT_FAILURE",
             "INVALID_DECISION_FRAME",
+            "PUBLIC_FRAME_INVALID",
+            "MODEL_INPUT_INVALID",
+            "SELECTION_INVALID",
             "POLICY_COMMIT_FAILURE",
             "ENVIRONMENT_FACTORY_REJECTED",
             "RESET_REJECTED",
@@ -2529,7 +2661,7 @@ SingleRun run_one_job(const FrozenGameplayEvaluatorConfigV1& config,
                                     std::optional<std::string>{"INVALID_DECISION_FRAME"});
             }
             policy::PolicySelection selection;
-            const bool evaluated_turn = frame->acting_player == job.evaluated_policy_seat;
+        const bool evaluated_turn = frame->acting_player == job.evaluated_policy_seat;
             if (evaluated_turn) {
                 selection = runtime.evaluated.select(*frame);
             } else {
@@ -2537,6 +2669,12 @@ SingleRun run_one_job(const FrozenGameplayEvaluatorConfigV1& config,
                     policy::PolicyInput{frame->public_observation, frame->request.candidates});
             }
             if (!selection) {
+                auto failure_stage = GameplayFailureStage::Inference;
+                std::string failure_code = "INFERENCE_FAILURE";
+                if (evaluated_turn && runtime.evaluated.last_failure().has_value()) {
+                    failure_stage = runtime.evaluated.last_failure()->stage;
+                    failure_code = runtime.evaluated.last_failure()->code;
+                }
                 if (evaluated_turn) runtime.evaluated.reject_pending_proposal();
                 else runtime.opponent.policy.reject_pending_proposal();
                 const auto interrupted = environment->interrupt(environment::InterruptRequest{
@@ -2549,13 +2687,13 @@ SingleRun run_one_job(const FrozenGameplayEvaluatorConfigV1& config,
                         std::optional<environment::DecisionFrame>{*frame},
                         *accepted_interrupt, &recorder_error)) {
                     return no_envelope_failure(config.evaluation_context, job,
-                                               GameplayFailureStage::Inference,
+                                               GameplayFailureStage::Environment,
                                                "POLICY_FAILURE_INTERRUPT_FAILURE");
                 }
                 return finalize_run(
                     config, job, spec, recorder, *environment,
-                    accepted_interrupt->interruption, true, GameplayFailureStage::Inference,
-                    std::optional<std::string>{"INFERENCE_FAILURE"});
+                    accepted_interrupt->interruption, true, failure_stage,
+                    std::optional<std::string>{failure_code});
             }
 
             environment::ActionSelection action;
@@ -2716,6 +2854,10 @@ FrozenGameplayEvaluatorCreateResult create_frozen_gameplay_evaluator(
             fail("gameplay evaluator requires the current certified environment");
         }
         (void)config.card_vocabulary.canonical_bytes();
+        if (config.evaluation_context.checkpoint_identity == kSmokeCheckpointIdentity &&
+            config.card_vocabulary.identity() != kSmokeCardVocabularyIdentity) {
+            fail("checkpoint-bound CardVocabulary identity is not the accepted smoke vocabulary");
+        }
         if (!config.inference_provider ||
             config.evaluated_policy_artifact.policy_kind !=
                 trajectory::PolicyKind::NeuralCheckpoint ||

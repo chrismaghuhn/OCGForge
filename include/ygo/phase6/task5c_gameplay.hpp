@@ -88,6 +88,8 @@ inline constexpr std::string_view kSalamangreatDeckSha256 =
     "6041abe0a59463d0715ae1da9100090ad487de02a02794e8ec0686d4c0513188";
 inline constexpr std::string_view kSmokeCheckpointIdentity =
     "phase6_checkpoint.v1.62f4532a5e551886affbd65bc47f7645017dedf6c5ca3a0b7b87b4a978943327";
+inline constexpr std::string_view kSmokeCardVocabularyIdentity =
+    "model_card_vocabulary.v1.a565d2b411ae16dd1fc192ed11add10efb948979024f41a0419f9a7222044820";
 
 enum class GameplayJobStatus : std::uint8_t {
     TrustedWin = 0,
@@ -114,6 +116,11 @@ enum class GameplayFailureStage : std::uint8_t {
     Environment = 5,
     Replay = 6,
     Admission = 7,
+};
+
+struct CheckpointPolicyFailureV1 final {
+    GameplayFailureStage stage = GameplayFailureStage::Inference;
+    std::string code;
 };
 
 std::string_view gameplay_job_status_name(GameplayJobStatus status) noexcept;
@@ -278,6 +285,9 @@ public:
     bool commit(const environment::AcceptedActionTransition& transition) noexcept;
     void reject_pending_proposal() noexcept;
     policy::PolicyExecutionBinding execution_binding() const;
+    const std::optional<CheckpointPolicyFailureV1>& last_failure() const noexcept {
+        return last_failure_;
+    }
     const std::string& checkpoint_identity() const noexcept {
         return checkpoint_identity_;
     }
@@ -298,7 +308,11 @@ private:
           assignment_id_(std::move(assignment_id)),
           policy_artifact_id_(std::move(policy_artifact_id)),
           vocabulary_(std::move(vocabulary)),
-          provider_(std::move(provider)) {}
+        provider_(std::move(provider)) {}
+
+    policy::PolicySelection fail_with_stage(
+        GameplayFailureStage stage, std::string code,
+        policy::PolicyErrorCode policy_code, std::string message) noexcept;
 
     struct Pending final {
         std::string episode_semantic_id;
@@ -313,6 +327,7 @@ private:
     model::CardVocabularyV1 vocabulary_;
     CheckpointInferenceProviderV1 provider_;
     std::optional<Pending> pending_;
+    std::optional<CheckpointPolicyFailureV1> last_failure_;
 };
 
 struct CheckpointBoundPolicyCreateResult final {
