@@ -26,10 +26,16 @@ correctness
 ## 2. Current maturity
 
 The accepted repository baseline is M0–M4, Episodic V2, Phase 3A/3B,
-Phase 4A/4B/4C, and Phase 5 FINAL PASS for their defined scopes. Phase 5
-provides the framework-neutral `ygo::model` model-facing path and
-admission-backed supervision derivation. Phase 6 and ML training have not
-started.
+Phase 4A/4B/4C, Phase 5, and Phase 6 Tasks 1–4B for their defined scopes.
+Phase 5 provides the framework-neutral `ygo::model` model-facing path and
+admission-backed supervision derivation. Phase 6 infrastructure and
+evaluation implementation exists through merged T5D, while the first
+strategically meaningful accepted BC baseline does not exist yet. Task 6 and
+Task 7 remain unauthorized. T5D main acceptance and the Task 5 tooling final
+pass are complete; P6-G14 remains baseline-dependent. The current Phase-6
+roadmap direction favors PyTorch for the future Task-6 decision/readiness
+slice; this is not a selected production backend, and JAX remains deferred,
+not rejected.
 
 Do not silently upgrade this claim into:
 

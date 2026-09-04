@@ -1,8 +1,8 @@
 # OCGForge Current Project State
 
-**Snapshot date:** 2026-09-01
-**Repository baseline inspected:** `main` at `6c238addb353fc0bf7e68c6dfdc6f19b36c84bf4` (Phase-5 FINAL acceptance merge)
-**Latest project checkpoint described here:** Phase 5 FINAL PASS; execution head `3c99e86c487361fc4e0f5f12678b4867e59232b7`, evidence head `da3376fc2ab645377f9de2dd9fd6195c1aa8c081`
+**Snapshot date:** 2026-09-04
+**Repository baseline inspected:** `main` at `c0156a3451a7f8cc4495d544f7a34cab925e3c5a` (T5D accepted main checkpoint)
+**Latest project checkpoint described here:** T5D and Task 5 tooling FINAL PASS, accepted by post-merge CI run `33892943953`
 
 This document is a summary. Detailed acceptance evidence remains in the milestone files.
 
@@ -15,9 +15,12 @@ The current strongest claim is:
 > The locked Swordsoul Tenyi ML v1 vs. Salamangreat ML v1 matchup has repository-recorded M3/M3.5 acceptance evidence for rules-bundle identity, card/script/database resolution, required mechanics, decision handling, perspective-safe observations, deterministic execution, semantic-action replay, and complete fixed games.
 
 The repository also records final acceptance for Episodic V2, Phase 3A/3B,
-Phase 4A/4B/4C, and Phase 5. Phase 5 adds a framework-neutral model-facing
-representation and admission-backed supervision derivation; it does not start
-Phase 6 or select an ML framework.
+Phase 4A/4B/4C, and Phase 5. Phase 6 Tasks 1–4B are accepted and merged;
+Task 5 contract freeze and T5A–T5C are final and merged, and T5D is merged at
+`c0156a3451a7f8cc4495d544f7a34cab925e3c5a`. T5D main acceptance and the Task
+5 tooling final pass are complete. The Phase-6 roadmap direction favors
+PyTorch for the future Task-6 decision/readiness slice; JAX is deferred, not
+rejected, and Task 6 remains unauthorized.
 
 The project must **not** generalize that claim to arbitrary Yu-Gi-Oh! decks.
 
@@ -36,6 +39,9 @@ The project must **not** generalize that claim to arbitrary Yu-Gi-Oh! decks.
 | Phase 3A / 3B | **FINAL PASS** | trusted trajectory, provenance, persistence, replay admission, receipts, and dataset identity |
 | Phase 4A / 4B / 4C | **FINAL PASS** | public policy, Teacher, battle-sidecar, and frozen evaluation scope |
 | Phase 5 | **FINAL PASS** | framework-neutral logical/encoded/batch model input plus admission-backed supervision samples |
+| Phase 6 Tasks 1–4B | **FINAL / MERGED** | contract, data, model-input, provisional backend, and bounded smoke/recovery infrastructure |
+| Task 5 contract freeze; T5A–T5C | **FINAL / MERGED** | evaluation contracts, codecs, offline evaluator, and frozen gameplay evaluator |
+| T5D | **FINAL / MERGED / ACCEPTED ON MAIN** | public audit, first divergence, distribution shift, and derived report |
 
 ## M3/M3.5 recorded acceptance
 
@@ -138,6 +144,29 @@ The committed Phase-5 evidence records `H_exec`
 `da3376fc2ab645377f9de2dd9fd6195c1aa8c081`, and fresh `163/163` native CTest
 regression.
 
+### Phase 6 evaluation tooling
+
+Phase 6 now contains provisional framework execution and inference tooling,
+the bounded Task4B CUDA smoke/recovery path, and the Task 5 evaluation stack.
+Task 5 is implemented through T5D: T5A owns schemas/codecs/identities and job
+manifests, T5B owns offline evaluation and deterministic slicing, T5C owns
+the frozen gameplay evaluator, and T5D owns public audit, first divergence,
+distribution shift, and deterministic derived reporting.
+
+T5D branch review, PR review, PR CI, and post-merge CI passed. The post-merge
+CI run is `33892943953` on this `main` head. P6-G15 is **PASS** and Task 5
+tooling is **FINAL PASS**.
+
+P6-G14 remains `NOT_RUN/BLOCKED_BY_MEANINGFUL_BASELINE`. It is independent of
+Task 5 tooling FINAL PASS and remains blocked until Task 7 produces a
+meaningful baseline.
+
+The Task4B checkpoint
+`phase6_checkpoint.v1.62f4532a5e551886affbd65bc47f7645017dedf6c5ca3a0b7b87b4a978943327`
+is a real trained technical smoke artifact. It remains bounded and is not an
+accepted strategic baseline, a playable policy, a converged model, a
+Teacher-parity claim, or a backend decision.
+
 ## Important remaining limitations
 
 ### 1. General deck support is not certified
@@ -179,19 +208,34 @@ Unknown/deferred event families are omitted rather than guessed.
 
 Fixture setup helpers are test infrastructure.
 
-### 5. No framework-specific tensor backend
+### 5. No selected backend or meaningful BC baseline
 
 Phase 5 defines logical and deterministic encoded model representations plus a
-lossless ragged/padded execution layout. It does not select a tensor framework
-or define a fixed-size authoritative gameplay/action schema.
+lossless ragged/padded execution layout. Phase 6 adds provisional framework
+execution, inference, and evaluation tooling. The roadmap direction favors
+PyTorch for the future Task-6 decision/readiness slice, but no production
+primary backend has been selected and no meaningful BC baseline exists; JAX
+remains a deferred candidate, not rejected.
 
-A framework-specific tensor adapter remains Phase 6-or-later work.
+The accepted Task4B checkpoint is a real trained technical smoke artifact. It
+remains bounded and does not establish a meaningful BC baseline, strategic
+playability, convergence, Teacher parity, or gameplay strength.
 
-### 6. No ML implementation
+### 6. No strategically meaningful accepted BC baseline
 
-The repository describes itself as a game-AI research environment but contains
-no learner, neural network, loss/optimizer, or training stack. Phase 6 has not
-started.
+No strategically meaningful accepted BC baseline exists yet. The repository
+does not claim a backend winner, a general Yu-Gi-Oh! policy, RL, self-play,
+league training, or a multi-deck trained policy.
+
+The first Task7 acceptance workload may remain the certified Swordsoul Tenyi
+versus Salamangreat matchup. That workload is an acceptance scope, not a
+permanent two-deck architecture limit; the data and evaluation path must
+remain extensible to future matchups.
+
+```text
+TWO_DECKS_IS_ACCEPTANCE_WORKLOAD=YES
+TWO_DECKS_IS_ARCHITECTURE_LIMIT=NO
+```
 
 ### 7. M4 parallel-simulation foundation is finalized
 
@@ -259,11 +303,11 @@ tracker status. It is not a repository invariant.
 
 ## Immediate documentation/maintenance priorities
 
-1. begin Phase 6 only with an explicit scope, contract, and acceptance plan;
-2. create issues before broadening certified deck/card scope;
-3. add ADRs for future checkpoint/fork or other long-lived architecture rather
-   than encoding it implicitly in code;
-4. preserve the distinction between global protocol coverage and deck-specific
-   conformance;
-5. keep model-facing representations downstream of the public environment and
-   trusted trajectory boundaries.
+1. preserve the accepted Task 5 tooling and its evidence boundaries;
+2. require explicit Task 6 authorization before PyTorch decision/readiness
+   work and a measured reason before any alternate-backend comparison;
+3. require an accepted Task 6 decision and explicit authorization before Task 7;
+4. create issues before broadening certified deck/card scope;
+5. preserve the distinction between global protocol coverage and deck-specific
+   conformance and keep model-facing representations downstream of the public
+   environment and trusted trajectory boundaries.
