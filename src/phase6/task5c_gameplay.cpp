@@ -557,6 +557,21 @@ std::string_view gameplay_failure_stage_name(const GameplayFailureStage stage) n
     return "unknown";
 }
 
+detail::PolicyFailureClassificationV1 detail::classify_policy_selection_failure(
+    const bool evaluated_turn,
+    const std::optional<CheckpointPolicyFailureV1>& evaluated_failure) noexcept {
+    if (!evaluated_turn) {
+        return detail::PolicyFailureClassificationV1{
+            GameplayFailureStage::Environment, "OPPONENT_POLICY_FAILURE"};
+    }
+    if (evaluated_failure.has_value()) {
+        return detail::PolicyFailureClassificationV1{
+            evaluated_failure->stage, evaluated_failure->code};
+    }
+    return detail::PolicyFailureClassificationV1{
+        GameplayFailureStage::Inference, "INFERENCE_FAILURE"};
+}
+
 std::vector<std::uint8_t> canonical_evaluation_job_bytes(const EvaluationJobV1& job) {
     validate_job_impl(job);
     ByteWriter writer;
@@ -797,9 +812,11 @@ InferenceResponseCreateResult make_inference_response(
     }
 }
 
-bool validate_inference_response(const InferenceRequestV1& request,
-                                 const InferenceResponseV1& response,
-                                 std::string* error) noexcept {
+namespace {
+
+bool validate_inference_response_binding(const InferenceRequestV1& request,
+                                         const InferenceResponseV1& response,
+                                         std::string* error) noexcept {
     try {
         if (request.request_identity != inference_request_identity(request) ||
             response.schema_id != kInferenceResponseSchemaId ||
@@ -809,15 +826,39 @@ bool validate_inference_response(const InferenceRequestV1& request,
             response.ordered_candidate_domain_identity !=
                 request.ordered_candidate_domain_identity ||
             response.score_count != response.score_f32_bits.size() ||
-            response.score_count == 0 ||
-            response.selected_candidate_ordinal >= response.score_count ||
-            response.score_f32_bits.empty() ||
-            !environment::is_public_action_key(response.selected_public_action_key)) {
+            response.score_count == 0 || response.score_f32_bits.empty()) {
             fail("inference response does not bind the current request");
         }
         for (const auto& bits : response.score_f32_bits) (void)score_bits_value(bits);
-        if (response.response_identity != inference_response_identity(response)) {
+
+        // A canonical selection identity can be checked before selection
+        // attribution.  An invalid public key is deliberately deferred to
+        // the selection stage so a current response with a bad selection is
+        // not confused with a stale or wrongly bound response.
+        if (environment::is_public_action_key(response.selected_public_action_key) &&
+            response.response_identity != inference_response_identity(response)) {
             fail("inference response identity does not recompute");
+        }
+        return true;
+    } catch (const std::exception& exception) {
+        set_error(error, exception.what());
+        return false;
+    } catch (...) {
+        set_error(error, "inference response binding validation threw");
+        return false;
+    }
+}
+
+}  // namespace
+
+bool validate_inference_response(const InferenceRequestV1& request,
+                                 const InferenceResponseV1& response,
+                                 std::string* error) noexcept {
+    try {
+        if (!validate_inference_response_binding(request, response, error)) return false;
+        if (response.selected_candidate_ordinal >= response.score_count ||
+            !environment::is_public_action_key(response.selected_public_action_key)) {
+            fail("inference response selection is invalid");
         }
         return true;
     } catch (const std::exception& exception) {
@@ -1049,19 +1090,7 @@ policy::PolicySelection CheckpointBoundPolicyV1::select(
         }
         auto response = *provider_result.value;
         std::string response_error;
-        if (environment::is_public_action_key(response.selected_public_action_key) &&
-            response.selected_candidate_ordinal < keys.size() &&
-            response.selected_candidate_ordinal < response.score_count) {
-            // These fields are evaluated again below after the response envelope has been
-            // checked.  The pre-check only reserves the selection-stage classification for
-            // an invalid selection coordinate/key rather than a transport/binding failure.
-        } else {
-            return fail_with_stage(
-                GameplayFailureStage::Selection, "SELECTION_INVALID",
-                policy::PolicyErrorCode::InvalidCandidateDomain,
-                "checkpoint inference response did not select a valid public key");
-        }
-        if (!validate_inference_response(request, response, &response_error)) {
+        if (!validate_inference_response_binding(request, response, &response_error)) {
             return fail_with_stage(
                 GameplayFailureStage::Inference, "INFERENCE_RESPONSE_INVALID",
                 policy::PolicyErrorCode::LifecycleFailure,
@@ -1160,7 +1189,7 @@ void validate_failure_fields(const std::optional<GameplayFailureStage>& stage,
                              const std::optional<std::string>& code) {
     if (stage.has_value() && !valid_failure_stage(*stage)) fail("unknown gameplay failure stage");
     if (code.has_value()) {
-        constexpr std::array<std::string_view, 27> public_failure_codes = {
+        constexpr std::array<std::string_view, 28> public_failure_codes = {
             "INFERENCE_FAILURE",
             "INFERENCE_RESPONSE_INVALID",
             "STEP_REJECTED",
@@ -1187,6 +1216,7 @@ void validate_failure_fields(const std::optional<GameplayFailureStage>& stage,
             "GAMEPLAY_FINALIZATION_FAILURE",
             "GAMEPLAY_JOB_EXCEPTION",
             "EVALUATOR_ALREADY_RAN",
+            "OPPONENT_POLICY_FAILURE",
             "EVALUATOR_INTERNAL_FAILURE"};
         if (!valid_nonempty_string(*code) ||
             std::find(public_failure_codes.begin(), public_failure_codes.end(), *code) ==
@@ -2669,12 +2699,11 @@ SingleRun run_one_job(const FrozenGameplayEvaluatorConfigV1& config,
                     policy::PolicyInput{frame->public_observation, frame->request.candidates});
             }
             if (!selection) {
-                auto failure_stage = GameplayFailureStage::Inference;
-                std::string failure_code = "INFERENCE_FAILURE";
-                if (evaluated_turn && runtime.evaluated.last_failure().has_value()) {
-                    failure_stage = runtime.evaluated.last_failure()->stage;
-                    failure_code = runtime.evaluated.last_failure()->code;
-                }
+                const auto evaluated_failure = evaluated_turn
+                                                   ? runtime.evaluated.last_failure()
+                                                   : std::optional<CheckpointPolicyFailureV1>{};
+                const auto failure = detail::classify_policy_selection_failure(
+                    evaluated_turn, evaluated_failure);
                 if (evaluated_turn) runtime.evaluated.reject_pending_proposal();
                 else runtime.opponent.policy.reject_pending_proposal();
                 const auto interrupted = environment->interrupt(environment::InterruptRequest{
@@ -2692,8 +2721,8 @@ SingleRun run_one_job(const FrozenGameplayEvaluatorConfigV1& config,
                 }
                 return finalize_run(
                     config, job, spec, recorder, *environment,
-                    accepted_interrupt->interruption, true, failure_stage,
-                    std::optional<std::string>{failure_code});
+                    accepted_interrupt->interruption, true, failure.stage,
+                    std::optional<std::string>{failure.code});
             }
 
             environment::ActionSelection action;

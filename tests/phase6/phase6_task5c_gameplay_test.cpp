@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <fstream>
 #include <iostream>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <stdexcept>
@@ -189,6 +190,42 @@ CheckpointBoundPolicyV1 make_direct_policy(
         "policy_artifact.v1." + std::string(64, 'b'), fixture_vocabulary(), provider);
     require_result(result, "direct checkpoint-policy fixture construction failed");
     return std::move(*result.value);
+}
+
+using ResponseMutator = std::function<void(
+    InferenceResponseV1&, const std::vector<std::string>&)>;
+
+CheckpointInferenceProviderV1 mutating_response_provider(ResponseMutator mutator) {
+    return [mutator = std::move(mutator)](
+               const InferenceRequestV1& request,
+               const ygo::model::LogicalModelInputV1&,
+               const ygo::model::EncodedModelInputV1& input) {
+        auto result = make_inference_response(
+            request,
+            std::vector<std::string>(input.routing_keys.size(), "3f800000"),
+            input.routing_keys);
+        require(result.value.has_value(), "response mutation fixture construction failed");
+        mutator(*result.value, input.routing_keys);
+        return result;
+    };
+}
+
+void require_policy_failure(
+    CheckpointBoundPolicyV1& policy,
+    const ygo::environment::DecisionFrame& frame,
+    const GameplayFailureStage expected_stage,
+    const std::string_view expected_code,
+    const std::string_view label) {
+    require(!policy.select(frame), std::string(label) + " was accepted");
+    require(policy.last_failure().has_value(),
+            std::string(label) + " did not expose a typed failure");
+    require(policy.last_failure()->stage == expected_stage &&
+                policy.last_failure()->code == expected_code,
+            std::string(label) + " had the wrong failure stage/code: actual=" +
+                std::string(gameplay_failure_stage_name(policy.last_failure()->stage)) +
+                "/" + policy.last_failure()->code + " expected=" +
+                std::string(gameplay_failure_stage_name(expected_stage)) + "/" +
+                std::string(expected_code));
 }
 
 ygo::environment::DecisionFrame first_frame(const std::uint64_t seed,
@@ -648,11 +685,15 @@ void test_checkpoint_policy_rejects_wrong_checkpoint_and_candidate_domain_respon
             require(response.value.has_value(), "wrong-checkpoint response fixture failed");
             response.value->checkpoint_identity =
                 "phase6_checkpoint.v1." + std::string(64, 'e');
+            response.value->selected_candidate_ordinal =
+                std::numeric_limits<std::uint32_t>::max();
+            response.value->selected_public_action_key = input.routing_keys.front();
             response.value->response_identity = inference_response_identity(*response.value);
             return response;
         };
     auto policy = make_direct_policy(wrong_checkpoint);
-    require(!policy.select(frame), "wrong-checkpoint response was accepted by policy");
+    require_policy_failure(policy, frame, GameplayFailureStage::Inference,
+                           "INFERENCE_RESPONSE_INVALID", "wrong-checkpoint response");
 
     const CheckpointInferenceProviderV1 wrong_domain =
         [](const InferenceRequestV1& request, const ygo::model::LogicalModelInputV1&,
@@ -662,11 +703,65 @@ void test_checkpoint_policy_rejects_wrong_checkpoint_and_candidate_domain_respon
                 input.routing_keys);
             require(response.value.has_value(), "wrong-domain response fixture failed");
             response.value->ordered_candidate_domain_identity = std::string(64, 'e');
+            response.value->selected_candidate_ordinal =
+                std::numeric_limits<std::uint32_t>::max();
+            response.value->selected_public_action_key = input.routing_keys.front();
             response.value->response_identity = inference_response_identity(*response.value);
             return response;
         };
     auto second_policy = make_direct_policy(wrong_domain);
-    require(!second_policy.select(frame), "wrong-domain response was accepted by policy");
+    require_policy_failure(second_policy, frame, GameplayFailureStage::Inference,
+                           "INFERENCE_RESPONSE_INVALID", "wrong-domain response");
+}
+
+void test_checkpoint_policy_preserves_response_failure_precedence() {
+    const auto frame = first_frame(2);
+    const auto bad_ordinal = std::numeric_limits<std::uint32_t>::max();
+
+    auto wrong_score_count = make_direct_policy(mutating_response_provider(
+        [bad_ordinal](InferenceResponseV1& response, const std::vector<std::string>& keys) {
+            require(!keys.empty(), "wrong-score-count fixture lacks a candidate domain");
+            response.score_count = static_cast<std::uint32_t>(response.score_f32_bits.size() - 1);
+            response.selected_candidate_ordinal = bad_ordinal;
+            response.selected_public_action_key = keys.front();
+            response.response_identity = inference_response_identity(response);
+        }));
+    require_policy_failure(wrong_score_count, frame, GameplayFailureStage::Inference,
+                           "INFERENCE_RESPONSE_INVALID", "wrong-score-count response");
+
+    auto current_bad_ordinal = make_direct_policy(mutating_response_provider(
+        [bad_ordinal](InferenceResponseV1& response, const std::vector<std::string>& keys) {
+            require(!keys.empty(), "bad-ordinal fixture lacks a candidate domain");
+            response.selected_candidate_ordinal = bad_ordinal;
+            response.selected_public_action_key = keys.front();
+            response.response_identity = inference_response_identity(response);
+        }));
+    require_policy_failure(current_bad_ordinal, frame, GameplayFailureStage::Selection,
+                           "SELECTION_INVALID", "current bad-ordinal response");
+
+    auto current_key_ordinal_mismatch = make_direct_policy(mutating_response_provider(
+        [](InferenceResponseV1& response, const std::vector<std::string>& keys) {
+            require(keys.size() > 1, "key/ordinal mismatch fixture lacks two candidates");
+            response.selected_candidate_ordinal = 0;
+            response.selected_public_action_key = keys[1];
+            response.response_identity = inference_response_identity(response);
+        }));
+    require_policy_failure(current_key_ordinal_mismatch, frame,
+                           GameplayFailureStage::Selection, "SELECTION_INVALID",
+                           "current key/ordinal mismatch response");
+
+    auto current_tiebreak_mismatch = make_direct_policy(mutating_response_provider(
+        [](InferenceResponseV1& response, const std::vector<std::string>& keys) {
+            require(keys.size() > 1, "tie-break fixture lacks two candidates");
+            const auto accepted = response.selected_candidate_ordinal;
+            const auto alternate = accepted == 0 ? std::uint32_t{1} : std::uint32_t{0};
+            response.selected_candidate_ordinal = alternate;
+            response.selected_public_action_key = keys[alternate];
+            response.response_identity = inference_response_identity(response);
+        }));
+    require_policy_failure(current_tiebreak_mismatch, frame,
+                           GameplayFailureStage::Selection, "SELECTION_INVALID",
+                           "current tie-break mismatch response");
 }
 
 void test_checkpoint_policy_keeps_public_requests_equal_across_paired_public_worlds() {
@@ -694,24 +789,11 @@ void test_checkpoint_policy_keeps_public_requests_equal_across_paired_public_wor
 }
 
 void test_stale_response_is_rejected_without_a_second_selection() {
-    auto factory = ygo::environment::EpisodicEnvironment::create(
-        ygo::environment::CertifiedEnvironmentConfig::canonical());
-    require(std::holds_alternative<std::unique_ptr<ygo::environment::EpisodicEnvironment>>(factory),
-            "T5C stale-response environment construction failed");
-    auto environment = std::move(
-        std::get<std::unique_ptr<ygo::environment::EpisodicEnvironment>>(factory));
-    ygo::environment::EpisodeSpec spec;
-    spec.root_seed = 2;
-    ygo::environment::RunControl control;
-    control.engine_process_budget = 512;
-    control.semantic_action_budget = 3;
-    const auto reset = environment->reset(spec, control);
-    require(std::holds_alternative<ygo::environment::ResetAccepted>(reset),
-            "T5C stale-response reset failed");
-    const auto* initial_frame = std::get_if<ygo::environment::DecisionFrame>(
-        &std::get<ygo::environment::ResetAccepted>(reset).next);
-    require(initial_frame != nullptr, "T5C stale-response reset did not publish a frame");
-    const auto frame_a = *initial_frame;
+    const auto frame_a = first_frame(2);
+    const auto frame_b = first_frame(3);
+    require(frame_a.acting_player == 0 && frame_b.acting_player == 0 &&
+                frame_a.public_semantic_decision_id != frame_b.public_semantic_decision_id,
+            "T5C stale-response fixtures did not provide two distinct participant-0 requests");
     std::optional<InferenceResponseV1> first_response;
     const CheckpointInferenceProviderV1 provider =
         [&first_response](const InferenceRequestV1& request,
@@ -726,28 +808,32 @@ void test_stale_response_is_rejected_without_a_second_selection() {
                 first_response = *result.value;
                 return result;
             }
-            return InferenceResponseCreateResult{first_response, std::nullopt};
+            auto stale = *first_response;
+            stale.selected_candidate_ordinal = std::numeric_limits<std::uint32_t>::max();
+            stale.selected_public_action_key = first_response->selected_public_action_key;
+            stale.response_identity = inference_response_identity(stale);
+            return InferenceResponseCreateResult{std::optional<InferenceResponseV1>(stale),
+                                                 std::nullopt};
         };
     auto policy = make_direct_policy(provider);
     const auto first = policy.select(frame_a);
     require(static_cast<bool>(first), "stale-response first selection failed");
-    ygo::environment::ActionSelection action;
-    action.contract_id = frame_a.contract_id;
-    action.episode_semantic_id = frame_a.episode_semantic_id;
-    action.public_semantic_decision_id = frame_a.public_semantic_decision_id;
-    action.submission_token = frame_a.submission_token;
-    action.public_action_key = first.value->public_action_key;
-    const auto stepped = environment->step(action);
-    require(std::holds_alternative<ygo::environment::StepAccepted>(stepped),
-            "T5C stale-response first step failed");
-    require(policy.commit(std::get<ygo::environment::StepAccepted>(stepped).transition),
-            "T5C stale-response first commit failed");
-    const auto* next_frame = std::get_if<ygo::environment::DecisionFrame>(
-        &std::get<ygo::environment::StepAccepted>(stepped).next);
-    require(next_frame != nullptr, "T5C stale-response fixture did not reach a second frame");
-    const auto frame_b = *next_frame;
-    require(!policy.select(frame_b),
-            "a response bound to an earlier request was accepted");
+    ygo::environment::AcceptedActionTransition transition;
+    transition.episode_semantic_id = frame_a.episode_semantic_id;
+    transition.public_semantic_decision_id = frame_a.public_semantic_decision_id;
+    transition.decision_index = frame_a.decision_index;
+    transition.selected_public_action_key = first.value->public_action_key;
+    require(policy.commit(transition), "T5C stale-response first commit failed");
+    require_policy_failure(policy, frame_b, GameplayFailureStage::Inference,
+                           "INFERENCE_RESPONSE_INVALID",
+                           "a stale response with a bad ordinal");
+}
+
+void test_opponent_policy_failure_is_not_neural_inference() {
+    const auto classification = detail::classify_policy_selection_failure(false, std::nullopt);
+    require(classification.stage == GameplayFailureStage::Environment &&
+                classification.code == "OPPONENT_POLICY_FAILURE",
+            "opponent Teacher failure was classified as checkpoint inference");
 }
 
 void test_wrong_checkpoint_is_rejected_before_gameplay() {
@@ -987,8 +1073,10 @@ int main(int argc, char** argv) {
         test_failure_accounting_preserves_replay_and_admission_failures();
         test_score_bits_are_exact_and_finite();
         test_checkpoint_policy_rejects_wrong_checkpoint_and_candidate_domain_response();
+        test_checkpoint_policy_preserves_response_failure_precedence();
         test_checkpoint_policy_keeps_public_requests_equal_across_paired_public_worlds();
         test_stale_response_is_rejected_without_a_second_selection();
+        test_opponent_policy_failure_is_not_neural_inference();
         test_wrong_checkpoint_is_rejected_before_gameplay();
         test_frozen_evaluator_runs_all_jobs_without_fallback_and_admits_interruptions();
         test_inference_failure_quarantines_without_policy_fallback();

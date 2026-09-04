@@ -123,6 +123,22 @@ struct CheckpointPolicyFailureV1 final {
     std::string code;
 };
 
+namespace detail {
+
+struct PolicyFailureClassificationV1 final {
+    GameplayFailureStage stage = GameplayFailureStage::Inference;
+    std::string code = "INFERENCE_FAILURE";
+};
+
+// Narrow failure attribution shared by the gameplay loop and its focused
+// contract test.  A fixed opponent-policy failure is environment fixture
+// failure, never checkpoint inference failure.
+PolicyFailureClassificationV1 classify_policy_selection_failure(
+    bool evaluated_turn,
+    const std::optional<CheckpointPolicyFailureV1>& evaluated_failure) noexcept;
+
+}  // namespace detail
+
 std::string_view gameplay_job_status_name(GameplayJobStatus status) noexcept;
 std::string_view replay_admission_status_name(ReplayAdmissionStatus status) noexcept;
 std::string_view gameplay_failure_stage_name(GameplayFailureStage stage) noexcept;
