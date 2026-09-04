@@ -234,6 +234,33 @@ else()
     target_compile_options(ygo_phase6 PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
+add_library(ygo_task5c STATIC
+    src/phase6/task5c_gameplay.cpp
+)
+target_include_directories(ygo_task5c PUBLIC "${CMAKE_SOURCE_DIR}/include")
+target_link_libraries(ygo_task5c PUBLIC ygo_phase6 ygo_policy)
+if(MSVC)
+    target_compile_options(ygo_task5c PRIVATE /W4 /permissive- /EHsc)
+else()
+    target_compile_options(ygo_task5c PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+add_executable(phase6_task5c_gameplay_test
+               tests/phase6/phase6_task5c_gameplay_test.cpp)
+target_link_libraries(phase6_task5c_gameplay_test PRIVATE ygo_task5c)
+target_include_directories(phase6_task5c_gameplay_test PRIVATE
+                           "${CMAKE_SOURCE_DIR}/src/environment")
+if(MSVC)
+    target_compile_options(phase6_task5c_gameplay_test PRIVATE /W4 /permissive- /EHsc)
+else()
+    target_compile_options(phase6_task5c_gameplay_test PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+target_compile_definitions(phase6_task5c_gameplay_test PRIVATE
+    YGO_M3_DECK_A="${CMAKE_SOURCE_DIR}/fixtures/decks/swordsoul_tenyi_ml_v1.ydk"
+    YGO_M3_DECK_B="${CMAKE_SOURCE_DIR}/fixtures/decks/salamangreat_ml_v1.ydk")
+add_test(NAME phase6_task5c_gameplay_test
+         COMMAND phase6_task5c_gameplay_test)
+
 add_executable(phase6_bc_candidate_scorer_test
                tests/phase6/phase6_bc_candidate_scorer_test.cpp)
 target_link_libraries(phase6_bc_candidate_scorer_test PRIVATE ygo_phase6)
