@@ -343,11 +343,14 @@ class Task5BOfflineTests(unittest.TestCase):
         result = task5_offline.evaluate_offline(
             population, _config(population), lambda sample, width: _scores(sample, width)
         )
-        for item, source in zip(result.sample_results, population.source_samples[:2]):
+        for item in result.sample_results:
             self.assertIsNone(item.decision_request_family)
             self.assertIsNone(item.phase)
-            self.assertEqual(item.turn_index, source.sample.decision_index)
-            self.assertEqual(item.acting_participant, source.sample.perspective_player)
+            self.assertIsNone(item.turn_index)
+            self.assertEqual(
+                item.acting_participant,
+                population.source_samples[0].sample.perspective_player,
+            )
             self.assertIsNone(item.locked_deck_role_id)
             self.assertIsNone(item.starting_player)
             self.assertIsNone(item.continuation)

@@ -758,7 +758,7 @@ def _accepted_context_fields(sample: task4.CorpusSampleV1) -> dict[str, Any]:
     return {
         "decision_request_family": None,
         "phase": None,
-        "turn_index": sample.decision_index,
+        "turn_index": None,
         "acting_participant": sample.perspective_player,
         "locked_deck_role_id": None,
         "starting_player": None,
