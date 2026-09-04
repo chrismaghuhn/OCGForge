@@ -232,9 +232,12 @@ The configuration identity binds, in this exact conceptual order:
 5. every table identity and the table order in section 9;
 6. every column name, source primitive, limb width, presence rule, row order,
    child-offset rule, and padding value in section 9;
-7. candidate N-to-N/source-order and routing-sidecar rules;
-8. raw-locator and routing-key control-sidecar exclusion rules; and
-9. the ragged-first/padded-equivalence rules in section 11.
+7. the distinct `R`, `OR`, `CR`, and `HR` source-reference forms and their
+   owner-specific uses in section 9;
+8. the separate `globals.chain_length` and `chain_state.length` source fields;
+9. candidate N-to-N/source-order and routing-sidecar rules;
+10. raw-locator and routing-key control-sidecar exclusion rules; and
+11. the ragged-first/padded-equivalence rules in section 11.
 
 It MUST NOT bind GPU model, CUDA version, device index, PID, wall time,
 filesystem path, worker scheduling, batch composition, batch capacity, bucket
@@ -333,7 +336,8 @@ Before emitting any Task7 materialized table, a future implementation MUST:
    `model_input_identity` together through the existing Phase-5 identity path;
 4. verify the concrete immutable CardVocabulary identity for each sample;
 5. verify every ragged offset, flat-buffer length, row count, candidate count,
-   routing sidecar count, and Phase-5 optional-presence invariant;
+   routing sidecar count, Phase-5 optional-presence invariant, and the
+   independent `globals.chain_length` and `chain_state.length` source values;
 6. require nonempty, valid, unique routing keys in exact source order;
 7. validate all limb ranges, presence bits, row masks, and canonical-zero
    rules before exposing a tensor; and
@@ -352,19 +356,38 @@ source representation.
 Each named table is a family of named tensor columns, not one untyped dense
 row matrix. `U8`, `U16`, `U32`, `U64`, and `I32` use the exact limbs specified
 in section 7. `Bool` means a `torch.bool` column. `P<T>` means a separate
-`<field>_present:Bool` column followed by a `<field>_value:T` limb column. `CR`
-means a current public reference:
+`<field>_present:Bool` column followed by a `<field>_value:T` limb column.
+`R` is the exact Phase-5 `EncodedCurrentReference` form:
 
 ```text
-CR = present:Bool, kind:U8, public_locator_ordinal:U32,
-     current_entity_ordinal:P<U32>
+R = public_locator_ordinal:U32,
+    current_entity_ordinal:P<U32>
 ```
 
-`HR` means a historical public reference:
+`OR` is an optional `EncodedCurrentReference`, used only where Phase 5 makes
+the `R` value optional:
+
+```text
+OR = present:Bool, R
+```
+
+`CR` is an optional Phase-5 `EncodedCardReference`. It is the only reference
+form that carries a card-reference `kind_code`:
+
+```text
+CR = present:Bool, kind_code:U8, R
+```
+
+`HR` is the historical public-reference form:
 
 ```text
 HR = present:Bool, public_locator_ordinal:U32
 ```
+
+Relationships use `R`; a chain source uses `OR`; chain targets use `R`; and
+candidate source/target references use `CR`. A relationship or chain reference
+MUST NOT receive an invented card-reference `kind_code`. A candidate `CR` MUST
+retain the exact accepted `kind_code`.
 
 For a flat table with `R` rows, a `T` column with `k` limbs is an
 `torch.int64[R, k]` tensor and a `Bool` column is a `torch.bool[R]` tensor. Its
@@ -410,6 +433,16 @@ win_reason:P<U8>
 terminal:Bool
 ```
 
+`chain_state` has one real row per sample in the same order:
+
+```text
+length:U32
+```
+
+`globals.chain_length` and `chain_state.length` are distinct accepted Phase-5
+source fields. The materializer MUST preserve each in its named table and MUST
+NOT infer, replace, or merge either value from the other.
+
 `match_context` has one real row per sample in the same order:
 
 ```text
@@ -421,7 +454,7 @@ own_deck_known:Bool
 opponent_deck_known:Bool
 ```
 
-All three singleton tables have a sample row mask of all true. Their source
+All four singleton tables have a sample row mask of all true. Their source
 order is batch sample order, not a learned identity.
 
 ### 9.3 State collection tables
@@ -435,9 +468,9 @@ order is batch sample order, not a learned identity.
 | `entity_properties` | exactly two rows per entity: `printed`, then `current`; no row is omitted | `property_role:U8` (`printed=1`, `current=2`), `property_present:Bool`, `type:P<U32>`, `attribute:P<U32>`, `race:P<U64>`, `attack:P<I32>`, `defense:P<I32>`, `base_attack:P<I32>`, `base_defense:P<I32>`, `level:P<U32>`, `rank:P<U32>`, `link_rating:P<U32>`, `left_scale:P<U32>`, `right_scale:P<U32>`, `status_flags:P<U32>` |
 | `property_link_markers` | per-property accepted link-marker order | `link_marker_code:U8` |
 | `property_counters` | per-property accepted counter-pair order | `type:U32`, `count:U32` |
-| `relationships` | accepted canonical relationship order | `kind_code:U8`, `source:CR` (present must be true), `target:CR` (present must be true) |
-| `chain_links` | authoritative Phase-5 chain-link order | `index:U32`, `activating_player:P<U8>`, `source:CR`, `activation_zone_code:P<U8>`, `effect_description:P<U64>` |
-| `chain_targets` | authoritative target order inside each chain link | `target:CR` (present must be true) |
+| `relationships` | accepted canonical relationship order | `kind_code:U8`, `source:R`, `target:R` |
+| `chain_links` | authoritative Phase-5 chain-link order | `index:U32`, `activating_player:P<U8>`, `source:OR`, `activation_zone_code:P<U8>`, `effect_description:P<U64>` |
+| `chain_targets` | authoritative target order inside each chain link | `target:R` |
 | `visible_events` | canonical visible-event-index order | `event_index:U64`, `kind_code:U8`, `player:P<U8>`, `entity:HR`, `public_card_vocabulary_id:P<U32>`, `from_zone_code:P<U8>`, `to_zone_code:P<U8>`, `count:P<U32>`, `amount:P<I32>`, `counter_type:P<U32>`, `phase:P<U32>`, `winner:P<U8>`, `win_reason:P<U8>`, `effect_description:P<U64>` |
 | `visible_event_targets` | authoritative target order inside each visible event | `public_locator_ordinal:U32` |
 | `own_main_deck_ids` | public-safe own-main-deck order | `card_vocabulary_id:U32` |
@@ -624,7 +657,8 @@ The canonical sample order is:
 2. source `model_input_identity`, Phase-5 contract IDs, concrete
    CardVocabulary identity, public-observation digest, and optional
    public-candidate-domain digest;
-3. singleton tables in the order `sample_header`, `globals`, `match_context`;
+3. singleton tables in the order `sample_header`, `globals`, `chain_state`,
+   `match_context`;
 4. all ragged state tables in the exact order in section 9.3, including their
    offsets and real-row masks;
 5. exact public locator token control sidecar;
@@ -639,6 +673,16 @@ inputs. Batch-global `sample_offsets` select a sample from a physical batch and
 are not part of that sample's canonical bytes; each included variable-table
 offset is rebased to zero within the sample. A padded derivative is compared
 only after unpadding to this canonical form.
+
+Canonical reference bytes preserve the same type separation: `R` serializes
+only `public_locator_ordinal` and optional `current_entity_ordinal`; `OR` adds
+only its outer presence bit; `CR` adds `kind_code`; and `HR` has no current
+entity ordinal. No canonical materialization bytes invent a `kind_code` for an
+`R` or `OR` value.
+
+Canonical singleton bytes serialize `globals.chain_length` and
+`chain_state.length` under their separate table and column names. They are not
+aliased, replaced, or omitted even when their source values happen to be equal.
 
 The materialization is deterministic only when identical accepted Phase-5
 inputs and the same configuration identity yield byte-identical canonical
@@ -742,6 +786,8 @@ logical/encoded/model-input-identity mismatch
 ragged reconstruction or canonical encoded-byte mismatch
 invalid, nonmonotonic, overflowing, or unexecutable offsets
 candidate, routing, row-mask, presence-mask, or child-offset mismatch
+loss of candidate `CR.kind_code` or an invented `kind_code` on `R` or `OR`
+loss, aliasing, or source mismatch of `globals.chain_length` or `chain_state.length`
 limb outside 0..65535
 invalid boolean/presence value
 nonzero value limbs for an absent optional field
@@ -771,7 +817,9 @@ implementation acceptance requirement.
 | Primitive exactness | Round-trip `u8` and `u16` boundaries; `u32` values `0`, `1`, `2^24-1`, `2^24`, and `2^32-1`; `u64` values `0`, `1`, values above `2^24`, both `2^32` boundaries, and `2^64-1`; `i32` minimum, `-1`, `0`, `1`, and maximum. Compare decoded source integers, not approximate floats. |
 | Optional exactness | Prove `ABSENT` differs from `PRESENT(0)` for every optional primitive family, including optional references and optional `i32`. Verify absent limbs are canonical zero without treating that as a present zero. |
 | Task4 collision regression | Construct valid otherwise-equivalent public candidate descriptors with `source_index=0xFFFFFFFE` and `source_index=0xFFFFFFFF`. Prove the old Task4 learned float row collides while the new candidate `source_index` limbs differ and round-trip. Do not modify Task4 to make this pass. |
-| Full state coverage | Cover sample/header fields, globals, life points, zones, entities, printed/current properties, link markers, counters, relationships, chain links and targets, visible events and historical targets, match context, all four public deck passcode-ID vectors, context references, and locator ordinals. |
+| Full state coverage | Cover sample/header fields, globals including `globals.chain_length`, separate `chain_state.length`, life points, zones, entities, printed/current properties, link markers, counters, relationships, chain links and targets, visible events and historical targets, match context, all four public deck passcode-ID vectors, context references, and locator ordinals. |
+| Reference-type fidelity | Prove Candidate `EncodedCardReference.kind_code` is retained exactly. Prove Relationship `EncodedCurrentReference`, optional Chain source, and Chain targets never receive an invented `kind_code`; verify their `R`/`OR` round-trips separately from Candidate `CR`. |
+| Chain-state fidelity | Prove `globals.chain_length` and `chain_state.length` each materialize and round-trip through their separate named tables. The test must compare each result to its own Phase-5 source field and must not derive one from the other. |
 | Candidate completeness | For arbitrary `N`, including `24`, `25`, and `129`, prove public count = logical count = encoded count = materialized real rows = score slots = routing keys. `W<N` must fail closed. |
 | Ordering | Use distinct and duplicate-looking public descriptors with distinct valid keys. Prove exact source order is retained in candidate rows, score slots, and routing sidecars; no sort or deduplication occurs. |
 | Ragged/padded equivalence | Materialize ragged input, pad at `W=max` and `W>max`, unpad, and compare every real table row, field, presence bit, routing key, offset, and canonical sample byte. Change batch composition and capacity without changing per-sample semantic values or selection. |
