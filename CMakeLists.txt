@@ -234,6 +234,30 @@ else()
     target_compile_options(ygo_phase6 PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
+add_library(ygo_task5c STATIC
+    src/phase6/task5c_gameplay.cpp
+)
+target_include_directories(ygo_task5c PUBLIC "${CMAKE_SOURCE_DIR}/include")
+target_link_libraries(ygo_task5c PUBLIC ygo_phase6 ygo_policy)
+if(MSVC)
+    target_compile_options(ygo_task5c PRIVATE /W4 /permissive- /EHsc)
+else()
+    target_compile_options(ygo_task5c PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+add_executable(phase6_task5c_gameplay_test
+               tests/phase6/phase6_task5c_gameplay_test.cpp)
+target_link_libraries(phase6_task5c_gameplay_test PRIVATE ygo_task5c)
+if(MSVC)
+    target_compile_options(phase6_task5c_gameplay_test PRIVATE /W4 /permissive- /EHsc)
+else()
+    target_compile_options(phase6_task5c_gameplay_test PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+target_compile_definitions(phase6_task5c_gameplay_test PRIVATE
+    YGO_M0_CARD_DATA_TSV="${M0_CARD_DATA_TSV}")
+add_test(NAME phase6_task5c_gameplay_test
+         COMMAND phase6_task5c_gameplay_test)
+
 add_executable(phase6_bc_candidate_scorer_test
                tests/phase6/phase6_bc_candidate_scorer_test.cpp)
 target_link_libraries(phase6_bc_candidate_scorer_test PRIVATE ygo_phase6)
