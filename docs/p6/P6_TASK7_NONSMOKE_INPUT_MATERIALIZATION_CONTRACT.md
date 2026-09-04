@@ -261,8 +261,8 @@ semantic authority.
 This amendment freezes the executable byte grammar for the existing
 configuration identity. It does not change the accepted materialization table
 semantics, source types, row order, candidate behavior, privacy boundary, or
-Phase-5 ownership. The exact semantic design above remains accepted while this
-byte-level amendment awaits independent review.
+Phase-5 ownership. The exact semantic design above and this byte-level
+amendment are ACCEPTED / independent review PASS.
 
 ### 6.2 Canonical primitive grammar
 
