@@ -219,11 +219,15 @@ std::string evaluation_job_identity(const EvaluationJobV1& job);
 bool validate_evaluation_job(const EvaluationJobV1& job,
                              std::string* error = nullptr) noexcept;
 
+namespace detail {
+class MeaningfulCheckpointBindingStateV1;
+class Task7CheckpointBindingIssuerV1;
+}  // namespace detail
+
 // Loader-issued, immutable validation capability for the meaningful Task5C
-// path.  The public API intentionally has no default or fieldwise constructor:
-// only the accepted checkpoint/inference loader may issue an instance.  The
-// test-only friend is a consumer-side rejection seam and is not a checkpoint
-// loader or production attestation.
+// path.  The public API intentionally has no default or fieldwise constructor
+// and stores only a source-owned opaque state handle.  Only the library-owned
+// issuer can turn the source-only state into this capability.
 class MeaningfulCheckpointBindingV1 final {
 public:
     MeaningfulCheckpointBindingV1(const MeaningfulCheckpointBindingV1&) = default;
@@ -232,100 +236,45 @@ public:
     MeaningfulCheckpointBindingV1(MeaningfulCheckpointBindingV1&&) = default;
     MeaningfulCheckpointBindingV1& operator=(MeaningfulCheckpointBindingV1&&) = delete;
 
-    const std::string& checkpoint_identity() const noexcept { return checkpoint_identity_; }
-    bool manifest_validated() const noexcept { return manifest_validated_; }
-    const std::string& model_architecture_config_identity() const noexcept {
-        return model_architecture_config_identity_;
-    }
-    const std::string& phase5_logical_model_input_contract_identity() const noexcept {
-        return phase5_logical_model_input_contract_identity_;
-    }
-    const std::string& phase5_encoded_model_input_contract_identity() const noexcept {
-        return phase5_encoded_model_input_contract_identity_;
-    }
-    const std::string& phase5_batch_layout_contract_identity() const noexcept {
-        return phase5_batch_layout_contract_identity_;
-    }
-    const std::string& card_vocabulary_identity() const noexcept {
-        return card_vocabulary_identity_;
-    }
-    const std::string& dataset_identity() const noexcept { return dataset_identity_; }
-    const std::string& dataset_split_identity() const noexcept {
-        return dataset_split_identity_;
-    }
-    const std::string& training_contract_identity() const noexcept {
-        return training_contract_identity_;
-    }
-    const std::string& canonical_weight_export_codec_identity() const noexcept {
-        return canonical_weight_export_codec_identity_;
-    }
-    const std::string& canonical_weight_content_identity() const noexcept {
-        return canonical_weight_content_identity_;
-    }
-    const std::string& task7_materialization_schema_id() const noexcept {
-        return task7_materialization_schema_id_;
-    }
-    const std::string& task7_materialization_config_identity() const noexcept {
-        return task7_materialization_config_identity_;
-    }
+    const std::string& checkpoint_identity() const noexcept;
+    bool manifest_validated() const noexcept;
+    const std::string& model_architecture_config_identity() const noexcept;
+    const std::string& phase5_logical_model_input_contract_identity() const noexcept;
+    const std::string& phase5_encoded_model_input_contract_identity() const noexcept;
+    const std::string& phase5_batch_layout_contract_identity() const noexcept;
+    const std::string& card_vocabulary_identity() const noexcept;
+    const std::string& dataset_identity() const noexcept;
+    const std::string& dataset_split_identity() const noexcept;
+    const std::string& training_contract_identity() const noexcept;
+    const std::string& canonical_weight_export_codec_identity() const noexcept;
+    const std::string& canonical_weight_content_identity() const noexcept;
+    const std::string& task7_materialization_schema_id() const noexcept;
+    const std::string& task7_materialization_config_identity() const noexcept;
 
 private:
-    struct IssuerToken final {};
+    explicit MeaningfulCheckpointBindingV1(
+        std::shared_ptr<const detail::MeaningfulCheckpointBindingStateV1> state);
 
-    MeaningfulCheckpointBindingV1(
-        IssuerToken,
-        bool manifest_validated,
-        std::string checkpoint_identity,
-        std::string model_architecture_config_identity,
-        std::string phase5_logical_model_input_contract_identity,
-        std::string phase5_encoded_model_input_contract_identity,
-        std::string phase5_batch_layout_contract_identity,
-        std::string card_vocabulary_identity,
-        std::string dataset_identity,
-        std::string dataset_split_identity,
-        std::string training_contract_identity,
-        std::string canonical_weight_export_codec_identity,
-        std::string canonical_weight_content_identity,
-        std::string task7_materialization_schema_id,
-        std::string task7_materialization_config_identity)
-        : manifest_validated_(manifest_validated),
-          checkpoint_identity_(std::move(checkpoint_identity)),
-          model_architecture_config_identity_(std::move(model_architecture_config_identity)),
-          phase5_logical_model_input_contract_identity_(
-              std::move(phase5_logical_model_input_contract_identity)),
-          phase5_encoded_model_input_contract_identity_(
-              std::move(phase5_encoded_model_input_contract_identity)),
-          phase5_batch_layout_contract_identity_(
-              std::move(phase5_batch_layout_contract_identity)),
-          card_vocabulary_identity_(std::move(card_vocabulary_identity)),
-          dataset_identity_(std::move(dataset_identity)),
-          dataset_split_identity_(std::move(dataset_split_identity)),
-          training_contract_identity_(std::move(training_contract_identity)),
-          canonical_weight_export_codec_identity_(
-              std::move(canonical_weight_export_codec_identity)),
-          canonical_weight_content_identity_(std::move(canonical_weight_content_identity)),
-          task7_materialization_schema_id_(std::move(task7_materialization_schema_id)),
-          task7_materialization_config_identity_(
-              std::move(task7_materialization_config_identity)) {}
+    friend class detail::Task7CheckpointBindingIssuerV1;
 
-    friend class AcceptedTask7CheckpointInferenceLoader;
-    friend struct Task7CheckpointBindingTestAccess;
-
-    bool manifest_validated_ = false;
-    std::string checkpoint_identity_;
-    std::string model_architecture_config_identity_;
-    std::string phase5_logical_model_input_contract_identity_;
-    std::string phase5_encoded_model_input_contract_identity_;
-    std::string phase5_batch_layout_contract_identity_;
-    std::string card_vocabulary_identity_;
-    std::string dataset_identity_;
-    std::string dataset_split_identity_;
-    std::string training_contract_identity_;
-    std::string canonical_weight_export_codec_identity_;
-    std::string canonical_weight_content_identity_;
-    std::string task7_materialization_schema_id_;
-    std::string task7_materialization_config_identity_;
+    std::shared_ptr<const detail::MeaningfulCheckpointBindingStateV1> state_;
 };
+
+namespace detail {
+
+// Library-owned public façade for the source-only loader state.  Ordinary
+// consumers can name this façade but cannot construct the source-only state
+// required by issue().
+class Task7CheckpointBindingIssuerV1 final {
+public:
+    static MeaningfulCheckpointBindingV1 issue(
+        std::shared_ptr<const MeaningfulCheckpointBindingStateV1> state);
+
+private:
+    Task7CheckpointBindingIssuerV1() = delete;
+};
+
+}  // namespace detail
 
 struct EvaluationContextV1 final {
     std::string evaluation_identity;

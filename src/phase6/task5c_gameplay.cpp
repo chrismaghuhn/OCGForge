@@ -1,5 +1,7 @@
 #include "ygo/phase6/task5c_gameplay.hpp"
 
+#include "task7_checkpoint_binding_internal.hpp"
+
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -596,6 +598,84 @@ bool validate_meaningful_checkpoint_binding(
 }
 
 }  // namespace
+
+MeaningfulCheckpointBindingV1::MeaningfulCheckpointBindingV1(
+    std::shared_ptr<const detail::MeaningfulCheckpointBindingStateV1> state)
+    : state_(std::move(state)) {
+    if (!state_) fail("meaningful checkpoint binding issuer received no state");
+}
+
+const std::string& MeaningfulCheckpointBindingV1::checkpoint_identity() const noexcept {
+    return state_->checkpoint_identity();
+}
+
+bool MeaningfulCheckpointBindingV1::manifest_validated() const noexcept {
+    return state_->manifest_validated();
+}
+
+const std::string&
+MeaningfulCheckpointBindingV1::model_architecture_config_identity() const noexcept {
+    return state_->model_architecture_config_identity();
+}
+
+const std::string& MeaningfulCheckpointBindingV1::
+    phase5_logical_model_input_contract_identity() const noexcept {
+    return state_->phase5_logical_model_input_contract_identity();
+}
+
+const std::string& MeaningfulCheckpointBindingV1::
+    phase5_encoded_model_input_contract_identity() const noexcept {
+    return state_->phase5_encoded_model_input_contract_identity();
+}
+
+const std::string& MeaningfulCheckpointBindingV1::
+    phase5_batch_layout_contract_identity() const noexcept {
+    return state_->phase5_batch_layout_contract_identity();
+}
+
+const std::string& MeaningfulCheckpointBindingV1::card_vocabulary_identity() const noexcept {
+    return state_->card_vocabulary_identity();
+}
+
+const std::string& MeaningfulCheckpointBindingV1::dataset_identity() const noexcept {
+    return state_->dataset_identity();
+}
+
+const std::string& MeaningfulCheckpointBindingV1::dataset_split_identity() const noexcept {
+    return state_->dataset_split_identity();
+}
+
+const std::string& MeaningfulCheckpointBindingV1::training_contract_identity() const noexcept {
+    return state_->training_contract_identity();
+}
+
+const std::string&
+MeaningfulCheckpointBindingV1::canonical_weight_export_codec_identity() const noexcept {
+    return state_->canonical_weight_export_codec_identity();
+}
+
+const std::string&
+MeaningfulCheckpointBindingV1::canonical_weight_content_identity() const noexcept {
+    return state_->canonical_weight_content_identity();
+}
+
+const std::string& MeaningfulCheckpointBindingV1::task7_materialization_schema_id() const noexcept {
+    return state_->task7_materialization_schema_id();
+}
+
+const std::string&
+MeaningfulCheckpointBindingV1::task7_materialization_config_identity() const noexcept {
+    return state_->task7_materialization_config_identity();
+}
+
+namespace detail {
+
+MeaningfulCheckpointBindingV1 Task7CheckpointBindingIssuerV1::issue(
+    std::shared_ptr<const MeaningfulCheckpointBindingStateV1> state) {
+    return MeaningfulCheckpointBindingV1(std::move(state));
+}
+
+}  // namespace detail
 
 std::string_view gameplay_job_status_name(const GameplayJobStatus status) noexcept {
     switch (status) {

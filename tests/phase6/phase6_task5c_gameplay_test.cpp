@@ -1,5 +1,7 @@
 #include "ygo/phase6/task5c_gameplay.hpp"
 
+#include "../../src/phase6/task7_checkpoint_binding_internal.hpp"
+
 #include <cstdlib>
 #include <array>
 #include <algorithm>
@@ -23,9 +25,11 @@
 #include "ygo/protocol/continuation.hpp"
 #include "ygo/trajectory/codec.hpp"
 
-namespace ygo::phase6::task5c {
+namespace {
 
-struct Task7CheckpointBindingTestAccess final {
+using ygo::phase6::task5c::MeaningfulCheckpointBindingV1;
+
+struct TestBindingFixture final {
     static MeaningfulCheckpointBindingV1 make(
         bool manifest_validated,
         std::string checkpoint_identity,
@@ -42,19 +46,24 @@ struct Task7CheckpointBindingTestAccess final {
             "ocgforge.phase6.task7.input_materialization.v1",
         std::string materialization_config_identity =
             "phase6_task7_input_materialization_config.v1.20f394c888e959446fa263c3520f3dd3b1f48b3a23e58373da7153a691ab1e7a") {
-        return MeaningfulCheckpointBindingV1(
-            MeaningfulCheckpointBindingV1::IssuerToken{}, manifest_validated,
-            std::move(checkpoint_identity), std::move(architecture_config_identity),
-            "ocgforge.model_logical_input.v1", "ocgforge.model_encoded_input.v1",
-            "ocgforge.model_batch_layout.v1", std::move(card_vocabulary_identity),
-            std::move(dataset_identity), std::move(dataset_split_identity),
-            std::move(training_contract_identity), std::move(export_codec_identity),
-            std::move(weight_content_identity), std::move(materialization_schema_id),
-            std::move(materialization_config_identity));
+        // This source-only factory stands in for a loader-issued state in the
+        // consumer tests; it is not a real checkpoint/artifact attestation.
+        auto state = ygo::phase6::task5c::detail::
+            MeaningfulCheckpointBindingStateFactoryV1::from_loader_validated_artifact(
+                manifest_validated, std::move(checkpoint_identity),
+                std::move(architecture_config_identity),
+                "ocgforge.model_logical_input.v1", "ocgforge.model_encoded_input.v1",
+                "ocgforge.model_batch_layout.v1", std::move(card_vocabulary_identity),
+                std::move(dataset_identity), std::move(dataset_split_identity),
+                std::move(training_contract_identity), std::move(export_codec_identity),
+                std::move(weight_content_identity), std::move(materialization_schema_id),
+                std::move(materialization_config_identity));
+        return ygo::phase6::task5c::detail::Task7CheckpointBindingIssuerV1::issue(
+            std::move(state));
     }
 };
 
-}  // namespace ygo::phase6::task5c
+}  // namespace
 
 namespace {
 
@@ -240,7 +249,7 @@ MeaningfulEvaluatorFixture make_meaningful_fixture(
     // Task7 checkpoint-loader attestation.
     const auto vocabulary = meaningful_vocabulary();
     const auto checkpoint = "phase6_checkpoint.v1." + std::string(64, 'e');
-    auto binding = Task7CheckpointBindingTestAccess::make(
+    auto binding = TestBindingFixture::make(
         true, checkpoint, "phase6_architecture_config.v1." + std::string(64, 'a'),
         vocabulary.identity());
     auto context = make_meaningful_fixed_matchup_context(
@@ -1163,7 +1172,7 @@ void test_frozen_context_has_the_exact_eight_job_schedule() {
 void test_meaningful_context_has_exact_sixteen_job_schedule() {
     const auto vocabulary = meaningful_vocabulary();
     const auto checkpoint = "phase6_checkpoint.v1." + std::string(64, 'e');
-    auto binding = Task7CheckpointBindingTestAccess::make(
+    auto binding = TestBindingFixture::make(
         true, checkpoint, "phase6_architecture_config.v1." + std::string(64, 'a'),
         vocabulary.identity());
     const auto context = make_meaningful_fixed_matchup_context(
@@ -1219,6 +1228,21 @@ void test_meaningful_binding_is_opaque_and_smoke_path_stays_separate() {
     static_assert(!std::is_default_constructible_v<MeaningfulCheckpointBindingV1>);
     static_assert(!std::is_copy_assignable_v<MeaningfulCheckpointBindingV1>);
     static_assert(!std::is_move_assignable_v<MeaningfulCheckpointBindingV1>);
+    static_assert(!std::is_constructible_v<
+                  MeaningfulCheckpointBindingV1,
+                  std::shared_ptr<const ygo::phase6::task5c::detail::
+                                      MeaningfulCheckpointBindingStateV1>>);
+    static_assert(!std::is_default_constructible_v<
+                  ygo::phase6::task5c::detail::MeaningfulCheckpointBindingStateV1>);
+    static_assert(!std::is_copy_constructible_v<
+                  ygo::phase6::task5c::detail::MeaningfulCheckpointBindingStateV1>);
+    bool rejected = false;
+    try {
+        (void)ygo::phase6::task5c::detail::Task7CheckpointBindingIssuerV1::issue(nullptr);
+    } catch (const std::exception&) {
+        rejected = true;
+    }
+    require(rejected, "library-owned issuer accepted a null source-only state");
     const auto fixture = make_meaningful_fixture();
     require(fixture.context.checkpoint_binding.manifest_validated(),
             "test capability did not retain its private validation invariant");
@@ -1240,11 +1264,11 @@ void test_meaningful_binding_is_opaque_and_smoke_path_stays_separate() {
             "smoke evaluator accepted a meaningful context through the old path");
 
     const auto vocabulary = fixture.config.card_vocabulary;
-    auto not_validated = Task7CheckpointBindingTestAccess::make(
+    auto not_validated = TestBindingFixture::make(
         false, fixture.context.checkpoint_binding.checkpoint_identity(),
         fixture.context.checkpoint_binding.model_architecture_config_identity(),
         vocabulary.identity());
-    bool rejected = false;
+    rejected = false;
     try {
         (void)make_meaningful_fixed_matchup_context(
             std::move(not_validated), vocabulary,
@@ -1258,7 +1282,7 @@ void test_meaningful_binding_is_opaque_and_smoke_path_stays_separate() {
         ygo::model::CardVocabularyV1::from_ascending_passcodes({654321});
     require(static_cast<bool>(wrong_vocabulary_result),
             "wrong vocabulary fixture construction failed");
-    auto valid_binding = Task7CheckpointBindingTestAccess::make(
+    auto valid_binding = TestBindingFixture::make(
         true, fixture.context.checkpoint_binding.checkpoint_identity(),
         fixture.context.checkpoint_binding.model_architecture_config_identity(),
         vocabulary.identity());
@@ -1285,32 +1309,32 @@ void test_meaningful_binding_is_opaque_and_smoke_path_stays_separate() {
             require(failed, "meaningful binding accepted " + label);
         };
     require_binding_rejected(
-        Task7CheckpointBindingTestAccess::make(
+        TestBindingFixture::make(
             true, fixture.context.checkpoint_binding.checkpoint_identity(),
             "architecture.v1." + std::string(64, 'a'), vocabulary.identity()),
         "an invalid architecture identity");
     require_binding_rejected(
-        Task7CheckpointBindingTestAccess::make(
+        TestBindingFixture::make(
             true, fixture.context.checkpoint_binding.checkpoint_identity(),
             fixture.context.checkpoint_binding.model_architecture_config_identity(),
             vocabulary.identity(), std::string(64, '0')),
         "an all-zero dataset identity");
     require_binding_rejected(
-        Task7CheckpointBindingTestAccess::make(
+        TestBindingFixture::make(
             true, fixture.context.checkpoint_binding.checkpoint_identity(),
             fixture.context.checkpoint_binding.model_architecture_config_identity(),
             vocabulary.identity(), std::string(64, 'b'),
             "phase6_dataset_split.v1." + std::string(64, '0')),
         "an all-zero split identity");
     require_binding_rejected(
-        Task7CheckpointBindingTestAccess::make(
+        TestBindingFixture::make(
             true, fixture.context.checkpoint_binding.checkpoint_identity(),
             fixture.context.checkpoint_binding.model_architecture_config_identity(),
             vocabulary.identity(), std::string(64, 'b'),
             "phase6_dataset_split.v1." + std::string(64, 'c'), "wrong.contract.v1"),
         "the wrong training contract");
     require_binding_rejected(
-        Task7CheckpointBindingTestAccess::make(
+        TestBindingFixture::make(
             true, fixture.context.checkpoint_binding.checkpoint_identity(),
             fixture.context.checkpoint_binding.model_architecture_config_identity(),
             vocabulary.identity(), std::string(64, 'b'),
@@ -1318,7 +1342,7 @@ void test_meaningful_binding_is_opaque_and_smoke_path_stays_separate() {
             "ocgforge.phase6.bc_contract.v1", "wrong.export.v1"),
         "the wrong export codec");
     require_binding_rejected(
-        Task7CheckpointBindingTestAccess::make(
+        TestBindingFixture::make(
             true, fixture.context.checkpoint_binding.checkpoint_identity(),
             fixture.context.checkpoint_binding.model_architecture_config_identity(),
             vocabulary.identity(), std::string(64, 'b'),
@@ -1327,7 +1351,7 @@ void test_meaningful_binding_is_opaque_and_smoke_path_stays_separate() {
             "ocgforge.phase6.canonical_weight_export.v1", "wrong.weight.v1"),
         "the wrong weight-content identity");
     require_binding_rejected(
-        Task7CheckpointBindingTestAccess::make(
+        TestBindingFixture::make(
             true, fixture.context.checkpoint_binding.checkpoint_identity(),
             fixture.context.checkpoint_binding.model_architecture_config_identity(),
             vocabulary.identity(), std::string(64, 'b'),
@@ -1337,7 +1361,7 @@ void test_meaningful_binding_is_opaque_and_smoke_path_stays_separate() {
             "phase6_weight_content.v1." + std::string(64, 'd'), "wrong.task7.v1"),
         "the wrong Task7 materialization schema");
     require_binding_rejected(
-        Task7CheckpointBindingTestAccess::make(
+        TestBindingFixture::make(
             true, fixture.context.checkpoint_binding.checkpoint_identity(),
             fixture.context.checkpoint_binding.model_architecture_config_identity(),
             vocabulary.identity(), std::string(64, 'b'),
@@ -1368,7 +1392,7 @@ void test_meaningful_context_rejects_schedule_and_checkpoint_mutations() {
     require(!validate_evaluation_job(invalid_seed, &error),
             "meaningful job accepted a seed outside the frozen [1,2] vector");
 
-    auto smoke_binding = Task7CheckpointBindingTestAccess::make(
+    auto smoke_binding = TestBindingFixture::make(
         true, std::string(kSmokeCheckpointIdentity),
         fixture.context.checkpoint_binding.model_architecture_config_identity(),
         fixture.context.checkpoint_binding.card_vocabulary_identity());
