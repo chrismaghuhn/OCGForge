@@ -246,6 +246,44 @@ else()
     target_compile_options(ygo_task5c PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
+add_library(ygo_task7_dataset_authority STATIC
+    src/phase6/task7_dataset_authority_provisioning.cpp
+)
+target_include_directories(ygo_task7_dataset_authority PUBLIC
+                           "${CMAKE_SOURCE_DIR}/include")
+target_link_libraries(ygo_task7_dataset_authority PUBLIC ygo_phase6 ygo_policy)
+if(MSVC)
+    target_compile_options(ygo_task7_dataset_authority PRIVATE /W4 /permissive- /EHsc)
+else()
+    target_compile_options(ygo_task7_dataset_authority PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+add_executable(phase6_task7_dataset_authority_provisioning_test
+               tests/phase6/phase6_task7_dataset_authority_provisioning_test.cpp)
+target_link_libraries(phase6_task7_dataset_authority_provisioning_test PRIVATE
+                      ygo_task7_dataset_authority)
+if(MSVC)
+    target_compile_options(phase6_task7_dataset_authority_provisioning_test PRIVATE
+                           /W4 /permissive- /EHsc)
+else()
+    target_compile_options(phase6_task7_dataset_authority_provisioning_test PRIVATE
+                           -Wall -Wextra -Wpedantic)
+endif()
+add_test(NAME phase6_task7_dataset_authority_provisioning_test
+         COMMAND phase6_task7_dataset_authority_provisioning_test)
+
+add_executable(phase6_task7_dataset_authority_provision
+               tools/phase6_task7_dataset_authority_provision/main.cpp)
+target_link_libraries(phase6_task7_dataset_authority_provision PRIVATE
+                      ygo_task7_dataset_authority)
+if(MSVC)
+    target_compile_options(phase6_task7_dataset_authority_provision PRIVATE
+                           /W4 /permissive- /EHsc)
+else()
+    target_compile_options(phase6_task7_dataset_authority_provision PRIVATE
+                           -Wall -Wextra -Wpedantic)
+endif()
+
 add_executable(phase6_task5c_gameplay_test
                tests/phase6/phase6_task5c_gameplay_test.cpp)
 target_link_libraries(phase6_task5c_gameplay_test PRIVATE ygo_task5c)
