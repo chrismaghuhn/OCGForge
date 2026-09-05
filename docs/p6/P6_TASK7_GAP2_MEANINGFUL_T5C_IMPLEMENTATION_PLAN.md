@@ -303,8 +303,8 @@ These names and separation are part of the design. The loader-only issuer
 is outside the T5C consumer API; no public/default constructor or mutator may
 be exposed to a context caller. A test-only friend/access seam may create a
 capability-shaped value solely to exercise consumer-side rejection paths, but
-that seam cannot validate a real checkpoint or establish production
-`CHECKPOINT_BOUND=YES`. Private execution helpers may be shared, but the
+that seam cannot validate a real checkpoint or establish
+`REAL_TASK7_CHECKPOINT_BINDING=PASS`. Private execution helpers may be shared, but the
 public smoke validator may not become permissive. The existing
 `make_implementation_acceptance_context(...)` and
 `create_frozen_gameplay_evaluator(...)` retain their exact smoke checkpoint,
@@ -446,7 +446,8 @@ git diff --check
 
 The future implementation must report, from executed evidence,
 `MEANINGFUL_PROFILE_SUPPORTED=YES`, `IMPLEMENTATION_ACCEPTANCE_PROFILE_UNCHANGED=YES`,
-`CHECKPOINT_BOUND=YES`, `CARD_VOCABULARY_BOUND=YES`,
+`CHECKPOINT_CONSUMER_BINDING=PASS`, `REAL_TASK7_CHECKPOINT_BINDING=NOT_RUN`,
+`CARD_VOCABULARY_BOUND=YES`,
 `TASK7_MATERIALIZATION_BOUND=YES`, `CANDIDATE_N_TO_N=PASS`,
 `NO_FALLBACK=PASS`, `REPLAY_ADMISSION_REQUIRED=YES`,
 `PRIVACY_SEMANTICS_CHANGED=NO`, `GAMEPLAY_SEMANTICS_CHANGED=NO`,
