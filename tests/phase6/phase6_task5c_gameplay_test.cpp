@@ -10,6 +10,7 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -21,6 +22,39 @@
 #include "ygo/observation/serialization.hpp"
 #include "ygo/protocol/continuation.hpp"
 #include "ygo/trajectory/codec.hpp"
+
+namespace ygo::phase6::task5c {
+
+struct Task7CheckpointBindingTestAccess final {
+    static MeaningfulCheckpointBindingV1 make(
+        bool manifest_validated,
+        std::string checkpoint_identity,
+        std::string architecture_config_identity,
+        std::string card_vocabulary_identity,
+        std::string dataset_identity = std::string(64, 'b'),
+        std::string dataset_split_identity =
+            "phase6_dataset_split.v1." + std::string(64, 'c'),
+        std::string training_contract_identity = "ocgforge.phase6.bc_contract.v1",
+        std::string export_codec_identity = "ocgforge.phase6.canonical_weight_export.v1",
+        std::string weight_content_identity =
+            "phase6_weight_content.v1." + std::string(64, 'd'),
+        std::string materialization_schema_id =
+            "ocgforge.phase6.task7.input_materialization.v1",
+        std::string materialization_config_identity =
+            "phase6_task7_input_materialization_config.v1.20f394c888e959446fa263c3520f3dd3b1f48b3a23e58373da7153a691ab1e7a") {
+        return MeaningfulCheckpointBindingV1(
+            MeaningfulCheckpointBindingV1::IssuerToken{}, manifest_validated,
+            std::move(checkpoint_identity), std::move(architecture_config_identity),
+            "ocgforge.model_logical_input.v1", "ocgforge.model_encoded_input.v1",
+            "ocgforge.model_batch_layout.v1", std::move(card_vocabulary_identity),
+            std::move(dataset_identity), std::move(dataset_split_identity),
+            std::move(training_contract_identity), std::move(export_codec_identity),
+            std::move(weight_content_identity), std::move(materialization_schema_id),
+            std::move(materialization_config_identity));
+    }
+};
+
+}  // namespace ygo::phase6::task5c
 
 namespace {
 
@@ -126,6 +160,11 @@ struct EvaluatorFixture final {
     FrozenGameplayEvaluatorConfigV1 config;
 };
 
+struct MeaningfulEvaluatorFixture final {
+    MeaningfulFixedMatchupContextV1 context;
+    MeaningfulFixedMatchupEvaluatorConfigV1 config;
+};
+
 ygo::model::CardVocabularyV1 fixture_vocabulary() {
 #if !defined(YGO_M3_DECK_A) || !defined(YGO_M3_DECK_B)
     throw std::runtime_error("T5C fixture lacks the locked-deck paths");
@@ -147,6 +186,12 @@ ygo::model::CardVocabularyV1 fixture_vocabulary() {
     require(static_cast<bool>(result), "T5C fixture vocabulary was not canonical");
     return *result.value;
 #endif
+}
+
+ygo::model::CardVocabularyV1 meaningful_vocabulary() {
+    const auto result = ygo::model::CardVocabularyV1::from_ascending_passcodes({123456});
+    require(static_cast<bool>(result), "meaningful vocabulary fixture construction failed");
+    return *result.value;
 }
 
 EvaluatorFixture make_fixture(
@@ -179,6 +224,43 @@ EvaluatorFixture make_fixture(
         resolver_for(context.checkpoint_identity),
         control};
     return {context, std::move(config)};
+}
+
+MeaningfulEvaluatorFixture make_meaningful_fixture(
+    const CheckpointInferenceProviderV1& provider =
+        [](const InferenceRequestV1& request,
+           const ygo::model::LogicalModelInputV1&,
+           const ygo::model::EncodedModelInputV1& input) {
+            return make_inference_response(
+                request,
+                std::vector<std::string>(input.candidate_count(), "3f800000"),
+                input.routing_keys);
+        }) {
+    // This fixture exercises only the T5C consumer seam; it is not a real
+    // Task7 checkpoint-loader attestation.
+    const auto vocabulary = meaningful_vocabulary();
+    const auto checkpoint = "phase6_checkpoint.v1." + std::string(64, 'e');
+    auto binding = Task7CheckpointBindingTestAccess::make(
+        true, checkpoint, "phase6_architecture_config.v1." + std::string(64, 'a'),
+        vocabulary.identity());
+    auto context = make_meaningful_fixed_matchup_context(
+        std::move(binding), vocabulary,
+        "434066289a14d0dae67222e0486f4df8538950bd");
+    auto artifact = evaluated_artifact(checkpoint);
+    ygo::environment::RunControl control;
+    control.engine_process_budget = 512;
+    control.semantic_action_budget = 1;
+    control.cancellation.reason = "ADMINISTRATIVE_CANCEL";
+    control.cancellation.source = "phase6-task5c-test";
+    MeaningfulFixedMatchupEvaluatorConfigV1 config{
+        context,
+        ygo::environment::CertifiedEnvironmentConfig::canonical(),
+        artifact,
+        vocabulary,
+        provider,
+        resolver_for(checkpoint),
+        control};
+    return {std::move(context), std::move(config)};
 }
 
 CheckpointBoundPolicyV1 make_direct_policy(
@@ -1078,6 +1160,255 @@ void test_frozen_context_has_the_exact_eight_job_schedule() {
             "T5C aggregate identities diverged from the accepted T5A codecs");
 }
 
+void test_meaningful_context_has_exact_sixteen_job_schedule() {
+    const auto vocabulary = meaningful_vocabulary();
+    const auto checkpoint = "phase6_checkpoint.v1." + std::string(64, 'e');
+    auto binding = Task7CheckpointBindingTestAccess::make(
+        true, checkpoint, "phase6_architecture_config.v1." + std::string(64, 'a'),
+        vocabulary.identity());
+    const auto context = make_meaningful_fixed_matchup_context(
+        std::move(binding), vocabulary,
+        "434066289a14d0dae67222e0486f4df8538950bd");
+    require(context.evaluation_context.corpus_profile_identity ==
+                kMeaningfulFixedMatchupProfile &&
+                context.evaluation_context.corpus_kind == kMeaningfulFixedMatchupKind,
+            "meaningful context did not retain profile and kind");
+    require(context.evaluation_context.jobs.size() == 16,
+            "meaningful context did not contain sixteen jobs");
+    require(context.evaluation_context.jobs[0].evaluated_policy_seat == 0 &&
+                context.evaluation_context.jobs[2].evaluated_policy_seat == 1 &&
+                context.evaluation_context.jobs[4].seat_0_deck_role_id ==
+                    kSalamangreatDeckIdentity &&
+                context.evaluation_context.jobs[14].evaluated_policy_seat == 1,
+            "meaningful context did not preserve the frozen placement order");
+    const std::array<std::string_view, 16> expected_ids = {
+        "phase6_evaluation_job.v1.0c364679a3fd5f76595ecf6d8052a894f3d454cf35c796ff034cff9f278de28a",
+        "phase6_evaluation_job.v1.713f0e13069acfab5c0ed16c5e62c3764b4577096665e4c1fdc488dda26f1b32",
+        "phase6_evaluation_job.v1.853518cd53d469d46475123ac39a838dfbbf5b64e4bc54ad99bc9d6932ca7d4f",
+        "phase6_evaluation_job.v1.13bf2aec6224791c225cb40372c5cda96cda26d8aaea12699b3c276747e4afc1",
+        "phase6_evaluation_job.v1.d1b648daff17b1394761375966f59c1e1ba360a25b8128429e9e4a5f4e940a53",
+        "phase6_evaluation_job.v1.c2ea0f643db691360021a637ff2d157fb2b50f544f0754c9413addfec76654d6",
+        "phase6_evaluation_job.v1.925946a90b2110080f9ae39626d81a02b68dc2a0aab98e4afcce174c446d2361",
+        "phase6_evaluation_job.v1.e6f7391c07d6509156c447e75efba14b563317325a8b8f18e522f30db9d52a30",
+        "phase6_evaluation_job.v1.677275394478e5ee08064d8a0089d8b62f3f53eb5bed719b1bbc0b678b46ce6a",
+        "phase6_evaluation_job.v1.a1e2c22c563fa69db24475c5fae3f4e646f07af861a7c24c9a9f3eba93ffa763",
+        "phase6_evaluation_job.v1.fecdb06ec3270904e20e39fbffaa097c90186573f98c37dbb38e69ba4d9dbc88",
+        "phase6_evaluation_job.v1.9bdab373fbddbf09cc7cbe10de418736af57cc896953c8216ed1844f98052b45",
+        "phase6_evaluation_job.v1.7cd483569ba00f5273f6e513f6aa65c697c2c710d969adcf448bb1e4e3958fe0",
+        "phase6_evaluation_job.v1.65e7866ee1ff07a37c363e9bcd6fdf4f1bebb1388daeb7423909b065e04dffed",
+        "phase6_evaluation_job.v1.5741d6b9bdf6a42989165a3a6dce6c18974d8fc589f4fdc090ad3bce5cb96fbd",
+        "phase6_evaluation_job.v1.9839682f356701032e0b97d2392d8b1590c6653f45cd51aaa28b1df2ad787760"};
+    for (std::size_t index = 0; index < expected_ids.size(); ++index) {
+        require(evaluation_job_identity(context.evaluation_context.jobs[index]) == expected_ids[index],
+                "meaningful C++ job identity diverged from the T5A schedule codec");
+    }
+    require(
+        context.evaluation_context.evaluation_corpus_identity ==
+            "phase6_evaluation_corpus.v1.098712e348bf25a78c073fc3f20565ca3361453b548edaa1cd99d220b01469f1" &&
+            context.evaluation_context.evaluation_identity ==
+                "phase6_evaluation.v1.20c826d7689a27a0a26d8d9adec2e361b8a4cc66f9f3bd8217d22a134979ae87" &&
+            context.evaluation_context.evaluation_job_manifest_identity ==
+                "phase6_evaluation_job_manifest.v1.0f505338d00b72878b1b57c4ecefcfee067c0d1a51fe3bc8fa32a045771855f8",
+        "meaningful aggregate identities diverged from the T5A codecs");
+    std::string error;
+    require(validate_evaluation_context(context.evaluation_context, &error),
+            "meaningful context validation failed: " + error);
+}
+
+void test_meaningful_binding_is_opaque_and_smoke_path_stays_separate() {
+    static_assert(!std::is_default_constructible_v<MeaningfulCheckpointBindingV1>);
+    static_assert(!std::is_copy_assignable_v<MeaningfulCheckpointBindingV1>);
+    static_assert(!std::is_move_assignable_v<MeaningfulCheckpointBindingV1>);
+    const auto fixture = make_meaningful_fixture();
+    require(fixture.context.checkpoint_binding.manifest_validated(),
+            "test capability did not retain its private validation invariant");
+    const auto created = create_meaningful_frozen_gameplay_evaluator(fixture.config);
+    require(static_cast<bool>(created),
+            "test-seam capability consumer rejected a structurally valid meaningful context");
+
+    FrozenGameplayEvaluatorConfigV1 smoke_path_config{
+        fixture.context.evaluation_context,
+        fixture.config.environment_config,
+        fixture.config.evaluated_policy_artifact,
+        fixture.config.card_vocabulary,
+        fixture.config.inference_provider,
+        fixture.config.provenance_resolver,
+        fixture.config.run_control};
+    const auto smoke_path_result = create_frozen_gameplay_evaluator(
+        std::move(smoke_path_config));
+    require(!smoke_path_result && smoke_path_result.error.has_value(),
+            "smoke evaluator accepted a meaningful context through the old path");
+
+    const auto vocabulary = fixture.config.card_vocabulary;
+    auto not_validated = Task7CheckpointBindingTestAccess::make(
+        false, fixture.context.checkpoint_binding.checkpoint_identity(),
+        fixture.context.checkpoint_binding.model_architecture_config_identity(),
+        vocabulary.identity());
+    bool rejected = false;
+    try {
+        (void)make_meaningful_fixed_matchup_context(
+            std::move(not_validated), vocabulary,
+            "434066289a14d0dae67222e0486f4df8538950bd");
+    } catch (const std::exception&) {
+        rejected = true;
+    }
+    require(rejected, "a capability without the loader validation invariant was accepted");
+
+    const auto wrong_vocabulary_result =
+        ygo::model::CardVocabularyV1::from_ascending_passcodes({654321});
+    require(static_cast<bool>(wrong_vocabulary_result),
+            "wrong vocabulary fixture construction failed");
+    auto valid_binding = Task7CheckpointBindingTestAccess::make(
+        true, fixture.context.checkpoint_binding.checkpoint_identity(),
+        fixture.context.checkpoint_binding.model_architecture_config_identity(),
+        vocabulary.identity());
+    rejected = false;
+    try {
+        (void)make_meaningful_fixed_matchup_context(
+            std::move(valid_binding), *wrong_vocabulary_result.value,
+            "434066289a14d0dae67222e0486f4df8538950bd");
+    } catch (const std::exception&) {
+        rejected = true;
+    }
+    require(rejected, "meaningful context accepted a vocabulary detached from the capability");
+
+    const auto require_binding_rejected =
+        [&](MeaningfulCheckpointBindingV1 candidate, const std::string& label) {
+            bool failed = false;
+            try {
+                (void)make_meaningful_fixed_matchup_context(
+                    std::move(candidate), vocabulary,
+                    "434066289a14d0dae67222e0486f4df8538950bd");
+            } catch (const std::exception&) {
+                failed = true;
+            }
+            require(failed, "meaningful binding accepted " + label);
+        };
+    require_binding_rejected(
+        Task7CheckpointBindingTestAccess::make(
+            true, fixture.context.checkpoint_binding.checkpoint_identity(),
+            "architecture.v1." + std::string(64, 'a'), vocabulary.identity()),
+        "an invalid architecture identity");
+    require_binding_rejected(
+        Task7CheckpointBindingTestAccess::make(
+            true, fixture.context.checkpoint_binding.checkpoint_identity(),
+            fixture.context.checkpoint_binding.model_architecture_config_identity(),
+            vocabulary.identity(), std::string(64, '0')),
+        "an all-zero dataset identity");
+    require_binding_rejected(
+        Task7CheckpointBindingTestAccess::make(
+            true, fixture.context.checkpoint_binding.checkpoint_identity(),
+            fixture.context.checkpoint_binding.model_architecture_config_identity(),
+            vocabulary.identity(), std::string(64, 'b'),
+            "phase6_dataset_split.v1." + std::string(64, '0')),
+        "an all-zero split identity");
+    require_binding_rejected(
+        Task7CheckpointBindingTestAccess::make(
+            true, fixture.context.checkpoint_binding.checkpoint_identity(),
+            fixture.context.checkpoint_binding.model_architecture_config_identity(),
+            vocabulary.identity(), std::string(64, 'b'),
+            "phase6_dataset_split.v1." + std::string(64, 'c'), "wrong.contract.v1"),
+        "the wrong training contract");
+    require_binding_rejected(
+        Task7CheckpointBindingTestAccess::make(
+            true, fixture.context.checkpoint_binding.checkpoint_identity(),
+            fixture.context.checkpoint_binding.model_architecture_config_identity(),
+            vocabulary.identity(), std::string(64, 'b'),
+            "phase6_dataset_split.v1." + std::string(64, 'c'),
+            "ocgforge.phase6.bc_contract.v1", "wrong.export.v1"),
+        "the wrong export codec");
+    require_binding_rejected(
+        Task7CheckpointBindingTestAccess::make(
+            true, fixture.context.checkpoint_binding.checkpoint_identity(),
+            fixture.context.checkpoint_binding.model_architecture_config_identity(),
+            vocabulary.identity(), std::string(64, 'b'),
+            "phase6_dataset_split.v1." + std::string(64, 'c'),
+            "ocgforge.phase6.bc_contract.v1",
+            "ocgforge.phase6.canonical_weight_export.v1", "wrong.weight.v1"),
+        "the wrong weight-content identity");
+    require_binding_rejected(
+        Task7CheckpointBindingTestAccess::make(
+            true, fixture.context.checkpoint_binding.checkpoint_identity(),
+            fixture.context.checkpoint_binding.model_architecture_config_identity(),
+            vocabulary.identity(), std::string(64, 'b'),
+            "phase6_dataset_split.v1." + std::string(64, 'c'),
+            "ocgforge.phase6.bc_contract.v1",
+            "ocgforge.phase6.canonical_weight_export.v1",
+            "phase6_weight_content.v1." + std::string(64, 'd'), "wrong.task7.v1"),
+        "the wrong Task7 materialization schema");
+    require_binding_rejected(
+        Task7CheckpointBindingTestAccess::make(
+            true, fixture.context.checkpoint_binding.checkpoint_identity(),
+            fixture.context.checkpoint_binding.model_architecture_config_identity(),
+            vocabulary.identity(), std::string(64, 'b'),
+            "phase6_dataset_split.v1." + std::string(64, 'c'),
+            "ocgforge.phase6.bc_contract.v1",
+            "ocgforge.phase6.canonical_weight_export.v1",
+            "phase6_weight_content.v1." + std::string(64, 'd'),
+            "ocgforge.phase6.task7.input_materialization.v1", "wrong.config.v1"),
+        "the wrong Task7 materialization configuration");
+}
+
+void test_meaningful_context_rejects_schedule_and_checkpoint_mutations() {
+    const auto fixture = make_meaningful_fixture();
+    auto reordered = fixture.context.evaluation_context;
+    std::reverse(reordered.jobs.begin(), reordered.jobs.end());
+    std::string error;
+    require(!validate_evaluation_context(reordered, &error),
+            "meaningful context accepted a reordered job vector");
+
+    auto changed = fixture.context.evaluation_context;
+    changed.jobs[2].starting_player = static_cast<std::uint8_t>(
+        1 - changed.jobs[2].starting_player);
+    require(!validate_evaluation_context(changed, &error),
+            "meaningful context accepted a changed schedule field");
+
+    auto invalid_seed = fixture.context.evaluation_context.jobs.front();
+    invalid_seed.deterministic_seed = 3;
+    require(!validate_evaluation_job(invalid_seed, &error),
+            "meaningful job accepted a seed outside the frozen [1,2] vector");
+
+    auto smoke_binding = Task7CheckpointBindingTestAccess::make(
+        true, std::string(kSmokeCheckpointIdentity),
+        fixture.context.checkpoint_binding.model_architecture_config_identity(),
+        fixture.context.checkpoint_binding.card_vocabulary_identity());
+    bool rejected = false;
+    try {
+        (void)make_meaningful_fixed_matchup_context(
+            std::move(smoke_binding), fixture.config.card_vocabulary,
+            "434066289a14d0dae67222e0486f4df8538950bd");
+    } catch (const std::exception&) {
+        rejected = true;
+    }
+    require(rejected, "meaningful context accepted the Task4 smoke checkpoint");
+}
+
+void test_meaningful_evaluator_rejects_detached_runtime_bindings() {
+    const auto fixture = make_meaningful_fixture();
+    auto wrong_artifact = fixture.config;
+    wrong_artifact.evaluated_policy_artifact.model_checkpoint_identity =
+        "phase6_checkpoint.v1." + std::string(64, 'f');
+    auto wrong_artifact_result = create_meaningful_frozen_gameplay_evaluator(
+        std::move(wrong_artifact));
+    require(!wrong_artifact_result && wrong_artifact_result.error.has_value(),
+            "meaningful evaluator accepted an artifact detached from its context");
+
+    auto wrong_provenance = fixture.config;
+    wrong_provenance.provenance_resolver = resolver_for(
+        "phase6_checkpoint.v1." + std::string(64, 'f'));
+    auto wrong_provenance_result = create_meaningful_frozen_gameplay_evaluator(
+        std::move(wrong_provenance));
+    require(!wrong_provenance_result && wrong_provenance_result.error.has_value(),
+            "meaningful evaluator accepted detached checkpoint provenance");
+
+    auto missing_provider = fixture.config;
+    missing_provider.inference_provider = {};
+    auto missing_provider_result = create_meaningful_frozen_gameplay_evaluator(
+        std::move(missing_provider));
+    require(!missing_provider_result && missing_provider_result.error.has_value(),
+            "meaningful evaluator accepted a missing inference provider");
+}
+
 void test_inference_response_identity_is_bound_to_request() {
     InferenceRequestV1 request;
     request.checkpoint_identity =
@@ -1122,6 +1453,10 @@ int main(int argc, char** argv) {
             return EXIT_SUCCESS;
         }
         test_frozen_context_has_the_exact_eight_job_schedule();
+        test_meaningful_context_has_exact_sixteen_job_schedule();
+        test_meaningful_binding_is_opaque_and_smoke_path_stays_separate();
+        test_meaningful_context_rejects_schedule_and_checkpoint_mutations();
+        test_meaningful_evaluator_rejects_detached_runtime_bindings();
         test_inference_response_identity_is_bound_to_request();
         test_response_codec_rejects_wrong_selection_and_noncanonical_json();
         test_smoke_context_and_vocabulary_are_checkpoint_bound();
