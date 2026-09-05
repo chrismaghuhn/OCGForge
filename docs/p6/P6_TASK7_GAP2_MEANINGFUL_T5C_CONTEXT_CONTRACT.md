@@ -335,17 +335,29 @@ future evaluation_identity=UNISSUED
 ```
 
 The future factory accepts a concrete checkpoint binding only after the
-accepted checkpoint/inference loader has validated the exact manifest and
-canonical exported weight content.
+accepted future Task7 checkpoint/inference loader has validated the exact
+manifest, canonical exported weight content, and all transitive checkpoint
+bindings. The binding owner is that loader; T5C is a consumer only.
 
-### 6.2 Validated binding proof
+```text
+BINDING_OWNER=accepted future Task7 checkpoint/inference loader
+T5C_ROLE=consumer only
+```
 
-The future implementation MUST introduce a typed in-memory validation proof,
-named here `MeaningfulCheckpointBindingV1`, with at least:
+### 6.2 Opaque validated binding capability
+
+The future implementation MUST consume a typed in-memory capability named
+`MeaningfulCheckpointBindingV1`. It is deliberately **OPAQUE / NON-FORGEABLE**
+to callers of the meaningful context factory. It is not a freely constructible
+DTO and is not made authoritative by a caller-supplied boolean.
+
+The following are immutable facts carried by an issued capability (the
+`checkpoint_manifest_validated=true` condition is an internal issuance
+invariant, not a public field that a caller may set):
 
 ```text
 checkpoint_identity
-checkpoint_manifest_validated=true
+checkpoint_manifest_validated=true (internal capability invariant)
 model_architecture_config_identity
 phase5_logical_model_input_contract_identity
 phase5_encoded_model_input_contract_identity
@@ -360,11 +372,23 @@ task7_materialization_schema_id
 task7_materialization_config_identity
 ```
 
-The proof is not a new checkpoint identity or a second manifest codec. It is a
-validated view of the existing checkpoint manifest/content authority. The
-checkpoint identity itself is the content identity of the canonical manifest;
-the manifest fields above are checked from its accepted bytes and are not
-recanonicalized by T5C.
+Only the accepted future Task7 checkpoint/inference loader may issue this
+capability, and only after it has parsed the canonical checkpoint artifact,
+recomputed the manifest/content identities, validated the architecture,
+Phase-5 contracts, concrete vocabulary, DatasetManifest/split, training
+contract, export codec/content, and Task7 materialization configuration. The
+capability has no public/default constructor, no public mutation, and no
+identity-only conversion. T5C receives immutable accessors and cannot
+synthesize a capability from strings, digests, a checkpoint path, or a
+`validated=true` value. A test-only friend/access seam may exercise T5C's
+consumer-side rejection checks, but a test-built capability is never evidence
+that a real Task7 checkpoint was loaded.
+
+The capability is not a new checkpoint identity or a second manifest codec. It
+is an issued, validated view of the existing checkpoint manifest/content
+authority. The checkpoint identity itself is the content identity of the
+canonical manifest; the fields above are checked from accepted bytes and are
+not recanonicalized by T5C.
 
 The proof MUST enforce:
 
@@ -402,7 +426,8 @@ canonical weight content. Therefore:
 
 | Value | Existing owner and meaningful-path rule |
 | --- | --- |
-| checkpoint manifest/content | accepted checkpoint loader; represented transitively by `checkpoint_identity` |
+| checkpoint manifest/content | accepted future Task7 checkpoint/inference loader issues the opaque capability; represented transitively by `checkpoint_identity` |
+| `MeaningfulCheckpointBindingV1` | non-forgeable loader-issued validation capability; T5C consumes it and never issues it |
 | architecture/config identity | checkpoint manifest and accepted architecture contract; no second T5C hash |
 | concrete CardVocabulary identity | checkpoint manifest plus equality with the supplied `CardVocabularyV1.identity()` |
 | DatasetManifest identity | checkpoint manifest; gameplay jobs keep T5A dataset optionals absent |
@@ -418,7 +443,9 @@ needed to obtain that invalidation.
 
 ### 6.4 Context factory boundary
 
-The future API is a separate strict path, conceptually:
+The future API is a separate strict path, conceptually. The capability is
+opaque at this boundary; the notation below is an interface sketch, not a
+public aggregate initializer:
 
 ```text
 make_meaningful_fixed_matchup_context(
@@ -427,6 +454,20 @@ make_meaningful_fixed_matchup_context(
     evaluator_semantic_source_commit
 ) -> MeaningfulFixedMatchupContextV1
 ```
+
+Conceptually, the type has private construction/mutation and a loader-only
+issuer:
+
+```text
+MeaningfulCheckpointBindingV1
+  = opaque immutable capability
+  = issued only by accepted future Task7 checkpoint/inference loader
+  = consumed, never constructed, by T5C
+```
+
+The future test suite may use an explicitly test-only friend/access seam to
+exercise T5C consumer rejection paths. That seam is not a loader, cannot
+validate a real artifact, and cannot make `REAL_TASK7_CHECKPOINT_BINDING` pass.
 
 `MeaningfulFixedMatchupContextV1` contains the existing T5A-compatible
 `EvaluationContextV1` plus the validated binding proof needed by the future
@@ -680,7 +721,9 @@ nonempty gameplay source_dataset_identity or dataset_split_identity
 ```
 
 The factory performs no normalization or repair. It returns no partial context
-and does not start an environment when validation fails.
+and does not start an environment when validation fails. A factory call without
+a loader-issued capability is rejected even if all visible identity strings
+happen to match.
 
 ## 14. Future implementation acceptance matrix
 
@@ -691,7 +734,7 @@ none is evidence that implementation exists now.
 | --- | --- |
 | Profile/kind | Meaningful profile and `MEANINGFUL_FIXED_MATCHUP` accepted; smoke path remains exact and separate. |
 | Schedule | Exact seeds `[1,2]`, 4 placement rows, starting-player `[0,1]`, 16 jobs, and nested order reproduced. |
-| Checkpoint | Real non-smoke checkpoint manifest/content accepted only through the validated loader; smoke rejected. |
+| Checkpoint | Real non-smoke checkpoint manifest/content accepted only through the loader-issued opaque capability; smoke rejected. |
 | Checkpoint bindings | Architecture, Phase-5 contracts, concrete vocabulary, dataset/split, BC training, export/content, and Task7 materialization config all resolve and match. |
 | Fixed matchup | Rules, format, duel mode/flags, deck IDs, and deck hashes remain the exact values in section 4. |
 | Teacher | Role-specific artifact/binding/profile, deterministic sampling, and no-RNG identities match every placement. |
@@ -771,7 +814,9 @@ MEANINGFUL_KIND=RESOLVED
 MEANINGFUL_SEED_VECTOR=[1,2]
 MEANINGFUL_JOB_COUNT=16
 MEANINGFUL_JOB_ORDER=RESOLVED
-CHECKPOINT_BINDING=RESOLVED_AS_FUTURE_VALIDATED_INPUT
+CHECKPOINT_BINDING=RESOLVED_AS_LOADER_ISSUED_CAPABILITY
+MEANINGFUL_CHECKPOINT_BINDING_INTERFACE=PASS
+REAL_TASK7_CHECKPOINT_BINDING=NOT_RUN
 CARD_VOCABULARY_BINDING=RESOLVED
 TEACHER_BINDING=RESOLVED
 CORPUS_IDENTITY_DERIVATION=RESOLVED
