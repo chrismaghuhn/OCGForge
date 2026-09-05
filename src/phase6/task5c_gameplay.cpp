@@ -1,5 +1,7 @@
 #include "ygo/phase6/task5c_gameplay.hpp"
 
+#include "task7_checkpoint_binding_internal.hpp"
+
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -270,7 +272,8 @@ void validate_job_impl(const EvaluationJobV1& job) {
         job.evaluation_schema_id != "ocgforge.phase6.task5.evaluation_job.v1" ||
         job.evaluation_schema_version != "v1" ||
         job.evaluation_contract_identity != kAcceptedEvaluationContractIdentity ||
-        job.corpus_profile_identity != kImplementationAcceptanceProfile ||
+        (job.corpus_profile_identity != kImplementationAcceptanceProfile &&
+         job.corpus_profile_identity != kMeaningfulFixedMatchupProfile) ||
         job.job_kind != kGameplayJobKind || job.matchup_id != kMatchupIdentity ||
         job.rules_bundle_id != kRulesBundleIdentity || job.format_id != kFormatIdentity ||
         job.duel_mode_id != kDuelModeIdentity || job.duel_flags != kDuelFlags) {
@@ -303,8 +306,11 @@ void validate_job_impl(const EvaluationJobV1& job) {
                                "phase6_checkpoint.v1.")) {
         fail("evaluation job checkpoint identity is invalid");
     }
-    if (job.evaluated_policy_checkpoint_identity != kSmokeCheckpointIdentity) {
-        fail("implementation acceptance job is bound to the accepted smoke checkpoint");
+    if ((job.corpus_profile_identity == kImplementationAcceptanceProfile &&
+         job.evaluated_policy_checkpoint_identity != kSmokeCheckpointIdentity) ||
+        (job.corpus_profile_identity == kMeaningfulFixedMatchupProfile &&
+         job.evaluated_policy_checkpoint_identity == kSmokeCheckpointIdentity)) {
+        fail("evaluation job checkpoint/profile binding is not accepted");
     }
     if (job.phase5_logical_model_input_contract_id != "ocgforge.model_logical_input.v1" ||
         job.phase5_encoded_model_input_contract_id != "ocgforge.model_encoded_input.v1" ||
@@ -330,22 +336,35 @@ void validate_job_impl(const EvaluationJobV1& job) {
     }
 }
 
-EvaluationJobV1 make_job(const std::uint64_t seed,
-                         const std::string_view seat_zero_role,
-                         const std::uint8_t starting_player,
-                         const std::string& source_commit,
-                         const std::string& checkpoint_identity) {
+EvaluationJobV1 make_job_for_placement(
+    const std::uint64_t seed,
+    const std::string_view seat_zero_role,
+    const std::uint8_t evaluated_policy_seat,
+    const std::uint8_t starting_player,
+    const std::string& source_commit,
+    const std::string& checkpoint_identity,
+    const std::string_view profile) {
     const auto seat_one_role = seat_zero_role == kSwordsoulDeckIdentity
                                    ? kSalamangreatDeckIdentity
                                    : kSwordsoulDeckIdentity;
+    if (evaluated_policy_seat > 1) fail("evaluation policy seat is invalid");
+    const auto seat_role = [&](const std::uint8_t seat) -> std::string_view {
+        return seat == 0 ? seat_zero_role : seat_one_role;
+    };
+    const auto opponent_policy_seat = static_cast<std::uint8_t>(1 - evaluated_policy_seat);
+    const auto evaluated_role = seat_role(evaluated_policy_seat);
+    const auto opponent_role = seat_role(opponent_policy_seat);
     EvaluationJobV1 job;
     job.seat_0_deck_role_id = std::string(seat_zero_role);
     job.seat_0_deck_content_sha256 = std::string(teacher_values(seat_zero_role).deck_sha256);
     job.seat_1_deck_role_id = std::string(seat_one_role);
     job.seat_1_deck_content_sha256 = std::string(teacher_values(seat_one_role).deck_sha256);
+    job.corpus_profile_identity = std::string(profile);
     job.evaluated_policy_checkpoint_identity = checkpoint_identity;
-    job.evaluated_policy_deck_role_id = std::string(seat_zero_role);
-    job.opponent_policy_deck_role_id = std::string(seat_one_role);
+    job.evaluated_policy_seat = evaluated_policy_seat;
+    job.evaluated_policy_deck_role_id = std::string(evaluated_role);
+    job.opponent_policy_seat = opponent_policy_seat;
+    job.opponent_policy_deck_role_id = std::string(opponent_role);
     job.teacher_policy_artifact_role_0_id =
         std::string(teacher_values(seat_zero_role).artifact);
     job.teacher_policy_binding_role_0_id =
@@ -354,16 +373,24 @@ EvaluationJobV1 make_job(const std::uint64_t seed,
         std::string(teacher_values(seat_one_role).artifact);
     job.teacher_policy_binding_role_1_id =
         std::string(teacher_values(seat_one_role).binding);
-    job.opponent_policy_artifact_id =
-        std::string(teacher_values(seat_one_role).artifact);
-    job.opponent_policy_binding_id =
-        std::string(teacher_values(seat_one_role).binding);
-    job.opponent_policy_role_id = std::string(seat_one_role);
+    job.opponent_policy_artifact_id = std::string(teacher_values(opponent_role).artifact);
+    job.opponent_policy_binding_id = std::string(teacher_values(opponent_role).binding);
+    job.opponent_policy_role_id = std::string(opponent_role);
     job.deterministic_seed = seed;
     job.starting_player = starting_player;
     job.evaluator_semantic_source_commit = source_commit;
     validate_job_impl(job);
     return job;
+}
+
+EvaluationJobV1 make_job(const std::uint64_t seed,
+                         const std::string_view seat_zero_role,
+                         const std::uint8_t starting_player,
+                         const std::string& source_commit,
+                         const std::string& checkpoint_identity) {
+    return make_job_for_placement(
+        seed, seat_zero_role, 0, starting_player, source_commit, checkpoint_identity,
+        kImplementationAcceptanceProfile);
 }
 
 void write_job_fields(ByteWriter& writer, const EvaluationJobV1& job) {
@@ -519,7 +546,136 @@ bool valid_public_digest(const std::string_view value) noexcept {
     return lower_hex(value, 64);
 }
 
+bool validate_meaningful_checkpoint_binding(
+    const MeaningfulCheckpointBindingV1& binding,
+    const model::CardVocabularyV1& vocabulary,
+    std::string* error = nullptr) noexcept {
+    try {
+        if (!binding.manifest_validated()) {
+            fail("meaningful checkpoint binding was not issued by a validated loader");
+        }
+        if (!valid_prefixed_digest(binding.checkpoint_identity(), "phase6_checkpoint.v1.") ||
+            is_smoke_checkpoint(binding.checkpoint_identity())) {
+            fail("meaningful checkpoint binding is not a non-smoke checkpoint");
+        }
+        if (!valid_prefixed_digest(binding.model_architecture_config_identity(),
+                                   "phase6_architecture_config.v1.") ||
+            binding.phase5_logical_model_input_contract_identity() !=
+                "ocgforge.model_logical_input.v1" ||
+            binding.phase5_encoded_model_input_contract_identity() !=
+                "ocgforge.model_encoded_input.v1" ||
+            binding.phase5_batch_layout_contract_identity() !=
+                "ocgforge.model_batch_layout.v1") {
+            fail("meaningful checkpoint binding Phase-5 or architecture contract is invalid");
+        }
+        if (!valid_prefixed_digest(binding.card_vocabulary_identity(),
+                                   "model_card_vocabulary.v1.") ||
+            binding.card_vocabulary_identity() != vocabulary.identity()) {
+            fail("meaningful checkpoint binding vocabulary is invalid");
+        }
+        (void)vocabulary.canonical_bytes();
+        if (!nonzero_lower_hex(binding.dataset_identity(), 64) ||
+            !valid_prefixed_digest(binding.dataset_split_identity(),
+                                   "phase6_dataset_split.v1.") ||
+            binding.training_contract_identity() != "ocgforge.phase6.bc_contract.v1" ||
+            binding.canonical_weight_export_codec_identity() !=
+                "ocgforge.phase6.canonical_weight_export.v1" ||
+            !valid_prefixed_digest(binding.canonical_weight_content_identity(),
+                                   "phase6_weight_content.v1.") ||
+            binding.task7_materialization_schema_id() != kTask7MaterializationSchemaId ||
+            binding.task7_materialization_config_identity() !=
+                kTask7MaterializationConfigIdentity) {
+            fail("meaningful checkpoint binding content is invalid");
+        }
+        return true;
+    } catch (const std::exception& exception) {
+        set_error(error, exception.what());
+        return false;
+    } catch (...) {
+        set_error(error, "meaningful checkpoint binding validation threw");
+        return false;
+    }
+}
+
 }  // namespace
+
+MeaningfulCheckpointBindingV1::MeaningfulCheckpointBindingV1(
+    std::shared_ptr<const detail::MeaningfulCheckpointBindingStateV1> state)
+    : state_(std::move(state)) {
+    if (!state_) fail("meaningful checkpoint binding issuer received no state");
+}
+
+const std::string& MeaningfulCheckpointBindingV1::checkpoint_identity() const noexcept {
+    return state_->checkpoint_identity();
+}
+
+bool MeaningfulCheckpointBindingV1::manifest_validated() const noexcept {
+    return state_->manifest_validated();
+}
+
+const std::string&
+MeaningfulCheckpointBindingV1::model_architecture_config_identity() const noexcept {
+    return state_->model_architecture_config_identity();
+}
+
+const std::string& MeaningfulCheckpointBindingV1::
+    phase5_logical_model_input_contract_identity() const noexcept {
+    return state_->phase5_logical_model_input_contract_identity();
+}
+
+const std::string& MeaningfulCheckpointBindingV1::
+    phase5_encoded_model_input_contract_identity() const noexcept {
+    return state_->phase5_encoded_model_input_contract_identity();
+}
+
+const std::string& MeaningfulCheckpointBindingV1::
+    phase5_batch_layout_contract_identity() const noexcept {
+    return state_->phase5_batch_layout_contract_identity();
+}
+
+const std::string& MeaningfulCheckpointBindingV1::card_vocabulary_identity() const noexcept {
+    return state_->card_vocabulary_identity();
+}
+
+const std::string& MeaningfulCheckpointBindingV1::dataset_identity() const noexcept {
+    return state_->dataset_identity();
+}
+
+const std::string& MeaningfulCheckpointBindingV1::dataset_split_identity() const noexcept {
+    return state_->dataset_split_identity();
+}
+
+const std::string& MeaningfulCheckpointBindingV1::training_contract_identity() const noexcept {
+    return state_->training_contract_identity();
+}
+
+const std::string&
+MeaningfulCheckpointBindingV1::canonical_weight_export_codec_identity() const noexcept {
+    return state_->canonical_weight_export_codec_identity();
+}
+
+const std::string&
+MeaningfulCheckpointBindingV1::canonical_weight_content_identity() const noexcept {
+    return state_->canonical_weight_content_identity();
+}
+
+const std::string& MeaningfulCheckpointBindingV1::task7_materialization_schema_id() const noexcept {
+    return state_->task7_materialization_schema_id();
+}
+
+const std::string&
+MeaningfulCheckpointBindingV1::task7_materialization_config_identity() const noexcept {
+    return state_->task7_materialization_config_identity();
+}
+
+namespace detail {
+
+MeaningfulCheckpointBindingV1 Task7CheckpointBindingIssuerV1::issue(
+    std::shared_ptr<const MeaningfulCheckpointBindingStateV1> state) {
+    return MeaningfulCheckpointBindingV1(std::move(state));
+}
+
+}  // namespace detail
 
 std::string_view gameplay_job_status_name(const GameplayJobStatus status) noexcept {
     switch (status) {
@@ -616,41 +772,74 @@ std::string evaluation_job_manifest_identity(const EvaluationContextV1& context)
 bool validate_evaluation_context(const EvaluationContextV1& context,
                                 std::string* error) noexcept {
     try {
+        const bool implementation_context =
+            context.corpus_profile_identity == kImplementationAcceptanceProfile;
+        const bool meaningful_context =
+            context.corpus_profile_identity == kMeaningfulFixedMatchupProfile;
         if (context.evaluation_contract_identity != kAcceptedEvaluationContractIdentity ||
-            context.corpus_profile_identity != kImplementationAcceptanceProfile ||
-            context.corpus_kind != kImplementationAcceptanceKind ||
+            (!implementation_context && !meaningful_context) ||
+            context.corpus_kind !=
+                (meaningful_context ? kMeaningfulFixedMatchupKind
+                                    : kImplementationAcceptanceKind) ||
             !valid_prefixed_digest(context.checkpoint_identity, "phase6_checkpoint.v1.") ||
-            !is_smoke_checkpoint(context.checkpoint_identity) ||
+            (implementation_context && !is_smoke_checkpoint(context.checkpoint_identity)) ||
+            (meaningful_context && is_smoke_checkpoint(context.checkpoint_identity)) ||
             context.evaluator_semantic_version != kEvaluatorSemanticVersion ||
             !valid_commit(context.evaluator_semantic_source_commit) ||
-            context.jobs.size() != 8) {
+            context.jobs.size() != (meaningful_context ? 16u : 8u)) {
             fail("evaluation context fixed binding is not accepted");
         }
         for (const auto& job : context.jobs) {
             validate_job_impl(job);
-            if (job.evaluated_policy_checkpoint_identity != context.checkpoint_identity ||
+            if (job.corpus_profile_identity != context.corpus_profile_identity ||
+                job.evaluated_policy_checkpoint_identity != context.checkpoint_identity ||
                 job.evaluator_semantic_source_commit != context.evaluator_semantic_source_commit ||
                 job.evaluator_semantic_version != context.evaluator_semantic_version) {
                 fail("evaluation context job binding differs from the root context");
             }
         }
-        const std::array<std::tuple<std::uint64_t, std::string_view, std::uint8_t>, 8> coords = {
-            std::make_tuple(std::uint64_t{1}, kSwordsoulDeckIdentity, std::uint8_t{0}),
-            std::make_tuple(std::uint64_t{1}, kSwordsoulDeckIdentity, std::uint8_t{1}),
-            std::make_tuple(std::uint64_t{1}, kSalamangreatDeckIdentity, std::uint8_t{0}),
-            std::make_tuple(std::uint64_t{1}, kSalamangreatDeckIdentity, std::uint8_t{1}),
-            std::make_tuple(std::uint64_t{2}, kSwordsoulDeckIdentity, std::uint8_t{0}),
-            std::make_tuple(std::uint64_t{2}, kSwordsoulDeckIdentity, std::uint8_t{1}),
-            std::make_tuple(std::uint64_t{2}, kSalamangreatDeckIdentity, std::uint8_t{0}),
-            std::make_tuple(std::uint64_t{2}, kSalamangreatDeckIdentity, std::uint8_t{1})};
-        for (std::size_t index = 0; index < coords.size(); ++index) {
-            const auto& [seed, role, starting_player] = coords[index];
-            const auto expected = make_job(seed, role, starting_player,
-                                           context.evaluator_semantic_source_commit,
-                                           context.checkpoint_identity);
-            if (canonical_evaluation_job_bytes(context.jobs[index]) !=
-                canonical_evaluation_job_bytes(expected)) {
-                fail("evaluation context is not the exact frozen eight-job schedule");
+        if (implementation_context) {
+            const std::array<std::tuple<std::uint64_t, std::string_view, std::uint8_t>, 8>
+                coords = {
+                    std::make_tuple(std::uint64_t{1}, kSwordsoulDeckIdentity, std::uint8_t{0}),
+                    std::make_tuple(std::uint64_t{1}, kSwordsoulDeckIdentity, std::uint8_t{1}),
+                    std::make_tuple(std::uint64_t{1}, kSalamangreatDeckIdentity, std::uint8_t{0}),
+                    std::make_tuple(std::uint64_t{1}, kSalamangreatDeckIdentity, std::uint8_t{1}),
+                    std::make_tuple(std::uint64_t{2}, kSwordsoulDeckIdentity, std::uint8_t{0}),
+                    std::make_tuple(std::uint64_t{2}, kSwordsoulDeckIdentity, std::uint8_t{1}),
+                    std::make_tuple(std::uint64_t{2}, kSalamangreatDeckIdentity, std::uint8_t{0}),
+                    std::make_tuple(std::uint64_t{2}, kSalamangreatDeckIdentity, std::uint8_t{1})};
+            for (std::size_t index = 0; index < coords.size(); ++index) {
+                const auto& [seed, role, starting_player] = coords[index];
+                const auto expected = make_job(seed, role, starting_player,
+                                               context.evaluator_semantic_source_commit,
+                                               context.checkpoint_identity);
+                if (canonical_evaluation_job_bytes(context.jobs[index]) !=
+                    canonical_evaluation_job_bytes(expected)) {
+                    fail("evaluation context is not the exact frozen eight-job schedule");
+                }
+            }
+        } else {
+            const std::array<std::pair<std::string_view, std::uint8_t>, 4> placements = {
+                std::make_pair(kSwordsoulDeckIdentity, std::uint8_t{0}),
+                std::make_pair(kSwordsoulDeckIdentity, std::uint8_t{1}),
+                std::make_pair(kSalamangreatDeckIdentity, std::uint8_t{0}),
+                std::make_pair(kSalamangreatDeckIdentity, std::uint8_t{1})};
+            std::size_t index = 0;
+            for (const auto seed : {std::uint64_t{1}, std::uint64_t{2}}) {
+                for (const auto& [role, evaluated_policy_seat] : placements) {
+                    for (const auto starting_player : {std::uint8_t{0}, std::uint8_t{1}}) {
+                        const auto expected = make_job_for_placement(
+                            seed, role, evaluated_policy_seat, starting_player,
+                            context.evaluator_semantic_source_commit,
+                            context.checkpoint_identity, kMeaningfulFixedMatchupProfile);
+                        if (canonical_evaluation_job_bytes(context.jobs[index]) !=
+                            canonical_evaluation_job_bytes(expected)) {
+                            fail("evaluation context is not the exact frozen sixteen-job schedule");
+                        }
+                        ++index;
+                    }
+                }
             }
         }
         const auto ids = context_job_ids(context);
@@ -711,6 +900,55 @@ EvaluationContextV1 make_implementation_acceptance_context(
     std::string error;
     if (!validate_evaluation_context(context, &error)) fail(error);
     return context;
+}
+
+MeaningfulFixedMatchupContextV1 make_meaningful_fixed_matchup_context(
+    MeaningfulCheckpointBindingV1 checkpoint_binding,
+    const model::CardVocabularyV1& concrete_vocabulary,
+    std::string evaluator_semantic_source_commit) {
+    std::string binding_error;
+    if (!validate_meaningful_checkpoint_binding(
+            checkpoint_binding, concrete_vocabulary, &binding_error)) {
+        fail(binding_error);
+    }
+    if (!valid_commit(evaluator_semantic_source_commit)) {
+        fail("meaningful evaluator source commit is not immutable");
+    }
+
+    EvaluationContextV1 context;
+    context.corpus_profile_identity = std::string(kMeaningfulFixedMatchupProfile);
+    context.corpus_kind = std::string(kMeaningfulFixedMatchupKind);
+    context.checkpoint_identity = checkpoint_binding.checkpoint_identity();
+    context.evaluator_semantic_source_commit = std::move(evaluator_semantic_source_commit);
+
+    const std::array<std::pair<std::string_view, std::uint8_t>, 4> placements = {
+        std::make_pair(kSwordsoulDeckIdentity, std::uint8_t{0}),
+        std::make_pair(kSwordsoulDeckIdentity, std::uint8_t{1}),
+        std::make_pair(kSalamangreatDeckIdentity, std::uint8_t{0}),
+        std::make_pair(kSalamangreatDeckIdentity, std::uint8_t{1})};
+    for (const auto seed : {std::uint64_t{1}, std::uint64_t{2}}) {
+        for (const auto& [role, evaluated_policy_seat] : placements) {
+            for (const auto starting_player : {std::uint8_t{0}, std::uint8_t{1}}) {
+                context.jobs.push_back(make_job_for_placement(
+                    seed, role, evaluated_policy_seat, starting_player,
+                    context.evaluator_semantic_source_commit,
+                    context.checkpoint_identity, kMeaningfulFixedMatchupProfile));
+            }
+        }
+    }
+    const auto ids = context_job_ids(context);
+    context.evaluation_corpus_identity =
+        digest_identity(kEvaluationCorpusIdentityPrefix,
+                        canonical_context_corpus_bytes(context, ids));
+    context.evaluation_identity =
+        digest_identity(kEvaluationIdentityPrefix, canonical_context_root_bytes(context));
+    context.evaluation_job_manifest_identity =
+        digest_identity(kEvaluationJobManifestIdentityPrefix,
+                        canonical_context_job_manifest_bytes(context, ids));
+    std::string error;
+    if (!validate_evaluation_context(context, &error)) fail(error);
+    return MeaningfulFixedMatchupContextV1{
+        std::move(context), std::move(checkpoint_binding)};
 }
 
 std::vector<std::uint8_t> canonical_inference_request_bytes(
@@ -2892,6 +3130,10 @@ FrozenGameplayEvaluatorCreateResult create_frozen_gameplay_evaluator(
         if (!validate_evaluation_context(config.evaluation_context, &error)) {
             fail("evaluation context rejected: " + error);
         }
+        if (config.evaluation_context.corpus_profile_identity !=
+            kImplementationAcceptanceProfile) {
+            fail("meaningful contexts require the separate meaningful evaluator constructor");
+        }
         if (!trajectory::is_current_certified_environment(config.environment_config)) {
             fail("gameplay evaluator requires the current certified environment");
         }
@@ -2926,6 +3168,70 @@ FrozenGameplayEvaluatorCreateResult create_frozen_gameplay_evaluator(
         return {std::nullopt,
                 policy::PolicyError{policy::PolicyErrorCode::InvalidConfiguration,
                                     "frozen gameplay evaluator construction threw"}};
+    }
+}
+
+FrozenGameplayEvaluatorCreateResult create_meaningful_frozen_gameplay_evaluator(
+    MeaningfulFixedMatchupEvaluatorConfigV1 config) noexcept {
+    try {
+        std::string binding_error;
+        if (!validate_meaningful_checkpoint_binding(
+                config.evaluation_context.checkpoint_binding,
+                config.card_vocabulary, &binding_error)) {
+            fail("meaningful checkpoint binding rejected: " + binding_error);
+        }
+        std::string context_error;
+        if (!validate_evaluation_context(
+                config.evaluation_context.evaluation_context, &context_error)) {
+            fail("meaningful evaluation context rejected: " + context_error);
+        }
+        if (config.evaluation_context.evaluation_context.corpus_profile_identity !=
+                kMeaningfulFixedMatchupProfile ||
+            config.evaluation_context.evaluation_context.corpus_kind !=
+                kMeaningfulFixedMatchupKind ||
+            config.evaluation_context.checkpoint_binding.checkpoint_identity() !=
+                config.evaluation_context.evaluation_context.checkpoint_identity) {
+            fail("meaningful checkpoint/context binding is inconsistent");
+        }
+        if (!trajectory::is_current_certified_environment(config.environment_config)) {
+            fail("meaningful gameplay evaluator requires the current certified environment");
+        }
+        (void)config.card_vocabulary.canonical_bytes();
+        if (!config.inference_provider ||
+            config.evaluated_policy_artifact.policy_kind !=
+                trajectory::PolicyKind::NeuralCheckpoint ||
+            !config.evaluated_policy_artifact.model_checkpoint_identity.has_value() ||
+            *config.evaluated_policy_artifact.model_checkpoint_identity !=
+                config.evaluation_context.evaluation_context.checkpoint_identity ||
+            config.evaluated_policy_artifact.policy_artifact_id !=
+                trajectory::compute_policy_artifact_id(config.evaluated_policy_artifact) ||
+            !config.provenance_resolver.can_resolve(
+                trajectory::ProvenanceKind::ModelCheckpointArtifact,
+                config.evaluation_context.evaluation_context.checkpoint_identity) ||
+            config.run_control.engine_process_budget == 0 ||
+            config.run_control.semantic_action_budget == 0) {
+            fail("meaningful checkpoint-bound gameplay evaluator configuration is invalid");
+        }
+
+        FrozenGameplayEvaluatorConfigV1 base_config{
+            config.evaluation_context.evaluation_context,
+            std::move(config.environment_config),
+            std::move(config.evaluated_policy_artifact),
+            std::move(config.card_vocabulary),
+            std::move(config.inference_provider),
+            std::move(config.provenance_resolver),
+            std::move(config.run_control)};
+        return {std::optional<FrozenGameplayEvaluator>(
+                    FrozenGameplayEvaluator(std::move(base_config))),
+                std::nullopt};
+    } catch (const std::exception& exception) {
+        return {std::nullopt,
+                policy::PolicyError{policy::PolicyErrorCode::InvalidConfiguration,
+                                    exception.what()}};
+    } catch (...) {
+        return {std::nullopt,
+                policy::PolicyError{policy::PolicyErrorCode::InvalidConfiguration,
+                                    "meaningful frozen gameplay evaluator construction threw"}};
     }
 }
 

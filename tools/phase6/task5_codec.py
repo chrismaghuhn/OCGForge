@@ -1842,6 +1842,16 @@ class EvaluationJobV1:
             self.evaluated_policy_checkpoint_identity,
             "evaluated_policy_checkpoint_identity",
         )
+        if (
+            self.corpus_profile_identity == IMPLEMENTATION_ACCEPTANCE_PROFILE
+            and self.evaluated_policy_checkpoint_identity != SMOKE_CHECKPOINT_ID
+        ):
+            raise CodecError("implementation acceptance job is bound to the accepted smoke checkpoint")
+        if (
+            self.corpus_profile_identity == MEANINGFUL_FIXED_MATCHUP_PROFILE
+            and self.evaluated_policy_checkpoint_identity == SMOKE_CHECKPOINT_ID
+        ):
+            raise CodecError("meaningful fixed-matchup job requires a non-smoke checkpoint")
         if self.evaluated_policy_seat not in (0, 1) or self.opponent_policy_seat not in (0, 1):
             raise CodecError("policy seat is not accepted")
         if self.evaluated_policy_seat == self.opponent_policy_seat:
@@ -1880,8 +1890,14 @@ class EvaluationJobV1:
             raise CodecError("opponent policy binding is not accepted")
         if self.source_dataset_identity is not None or self.dataset_split_identity is not None:
             raise CodecError("gameplay job cannot carry offline dataset membership")
-        if self.corpus_profile_identity == IMPLEMENTATION_ACCEPTANCE_PROFILE and self.deterministic_seed not in (1, 2):
-            raise CodecError("implementation acceptance seed is not accepted")
+        if (
+            self.corpus_profile_identity in (
+                IMPLEMENTATION_ACCEPTANCE_PROFILE,
+                MEANINGFUL_FIXED_MATCHUP_PROFILE,
+            )
+            and self.deterministic_seed not in (1, 2)
+        ):
+            raise CodecError("evaluation profile seed is not accepted")
         if self.starting_player not in (0, 1):
             raise CodecError("starting player is not accepted")
         _validate_string(self.evaluator_semantic_version, "evaluator_semantic_version")
@@ -1930,10 +1946,37 @@ def _job_for_roles(
     starting_player: int,
     evaluator_semantic_source_commit: str,
 ) -> EvaluationJobV1:
+    return _job_for_placement(
+        seed=seed,
+        seat_0_role=seat_0_role,
+        evaluated_policy_seat=0,
+        starting_player=starting_player,
+        evaluator_semantic_source_commit=evaluator_semantic_source_commit,
+        corpus_profile_identity=IMPLEMENTATION_ACCEPTANCE_PROFILE,
+        checkpoint_identity=SMOKE_CHECKPOINT_ID,
+    )
+
+
+def _job_for_placement(
+    *,
+    seed: int,
+    seat_0_role: str,
+    evaluated_policy_seat: int,
+    starting_player: int,
+    evaluator_semantic_source_commit: str,
+    corpus_profile_identity: str,
+    checkpoint_identity: str,
+) -> EvaluationJobV1:
     seat_1_role = SALAMANGREAT_DECK_ID if seat_0_role == SWORDSOUL_DECK_ID else SWORDSOUL_DECK_ID
     _, seat_0_sha = _deck_values(seat_0_role)
     _, seat_1_sha = _deck_values(seat_1_role)
-    opponent_artifact, opponent_binding, _ = _teacher_values(seat_1_role)
+    seat_roles = (seat_0_role, seat_1_role)
+    if evaluated_policy_seat not in (0, 1):
+        raise CodecError("evaluated policy seat is not accepted")
+    opponent_policy_seat = 1 - evaluated_policy_seat
+    evaluated_policy_deck_role = seat_roles[evaluated_policy_seat]
+    opponent_policy_deck_role = seat_roles[opponent_policy_seat]
+    opponent_artifact, opponent_binding, _ = _teacher_values(opponent_policy_deck_role)
     role0_artifact, role0_binding, _ = _teacher_values(seat_0_role)
     role1_artifact, role1_binding, _ = _teacher_values(seat_1_role)
     return EvaluationJobV1(
@@ -1941,15 +1984,19 @@ def _job_for_roles(
         seat_0_deck_content_sha256=seat_0_sha,
         seat_1_deck_role_id=seat_1_role,
         seat_1_deck_content_sha256=seat_1_sha,
-        evaluated_policy_deck_role_id=seat_0_role,
-        opponent_policy_deck_role_id=seat_1_role,
+        corpus_profile_identity=corpus_profile_identity,
+        evaluated_policy_checkpoint_identity=checkpoint_identity,
+        evaluated_policy_seat=evaluated_policy_seat,
+        evaluated_policy_deck_role_id=evaluated_policy_deck_role,
+        opponent_policy_seat=opponent_policy_seat,
+        opponent_policy_deck_role_id=opponent_policy_deck_role,
+        opponent_policy_role_id=opponent_policy_deck_role,
         teacher_policy_artifact_role_0_id=role0_artifact,
         teacher_policy_binding_role_0_id=role0_binding,
         teacher_policy_artifact_role_1_id=role1_artifact,
         teacher_policy_binding_role_1_id=role1_binding,
         opponent_policy_artifact_id=opponent_artifact,
         opponent_policy_binding_id=opponent_binding,
-        opponent_policy_role_id=seat_1_role,
         deterministic_seed=seed,
         starting_player=starting_player,
         evaluator_semantic_source_commit=evaluator_semantic_source_commit,
@@ -1974,6 +2021,48 @@ def implementation_acceptance_jobs(
         job.validate()
     if len({evaluation_job_identity(job) for job in jobs}) != 8:
         raise CodecError("implementation acceptance jobs are not unique")
+    return jobs
+
+
+def meaningful_fixed_matchup_jobs(
+    *,
+    checkpoint_identity: str,
+    evaluator_semantic_source_commit: str,
+) -> tuple[EvaluationJobV1, ...]:
+    """Build the exact bounded meaningful fixed-matchup schedule.
+
+    This helper owns schedule construction only.  Job/corpus/aggregate identity
+    bytes continue to be produced by the existing T5A codecs below.  A real
+    checkpoint loader must supply the immutable non-smoke checkpoint identity;
+    this function does not load or attest a checkpoint artifact.
+    """
+
+    _validate_checkpoint_identity(checkpoint_identity, "checkpoint_identity")
+    if checkpoint_identity == SMOKE_CHECKPOINT_ID:
+        raise CodecError("meaningful fixed-matchup schedule cannot use the smoke checkpoint")
+    jobs = tuple(
+        _job_for_placement(
+            seed=seed,
+            seat_0_role=seat_0_role,
+            evaluated_policy_seat=evaluated_policy_seat,
+            starting_player=starting_player,
+            evaluator_semantic_source_commit=evaluator_semantic_source_commit,
+            corpus_profile_identity=MEANINGFUL_FIXED_MATCHUP_PROFILE,
+            checkpoint_identity=checkpoint_identity,
+        )
+        for seed in (1, 2)
+        for seat_0_role, evaluated_policy_seat in (
+            (SWORDSOUL_DECK_ID, 0),
+            (SWORDSOUL_DECK_ID, 1),
+            (SALAMANGREAT_DECK_ID, 0),
+            (SALAMANGREAT_DECK_ID, 1),
+        )
+        for starting_player in (0, 1)
+    )
+    for job in jobs:
+        job.validate()
+    if len(jobs) != 16 or len({evaluation_job_identity(job) for job in jobs}) != 16:
+        raise CodecError("meaningful fixed-matchup jobs are not the exact unique 16-job schedule")
     return jobs
 
 
@@ -2079,10 +2168,22 @@ class EvaluationCorpusV1:
         ):
             raise CodecError("evaluation corpus fixed binding is not accepted")
         _validate_checkpoint_identity(self.checkpoint_identity, "checkpoint_identity")
+        if (
+            self.corpus_profile_identity == IMPLEMENTATION_ACCEPTANCE_PROFILE
+            and self.checkpoint_identity != SMOKE_CHECKPOINT_ID
+        ):
+            raise CodecError("implementation acceptance corpus is bound to the accepted smoke checkpoint")
+        if (
+            self.corpus_profile_identity == MEANINGFUL_FIXED_MATCHUP_PROFILE
+            and self.checkpoint_identity == SMOKE_CHECKPOINT_ID
+        ):
+            raise CodecError("meaningful fixed-matchup corpus requires a non-smoke checkpoint")
         if (self.source_dataset_identity is None) != (self.dataset_split_identity is None):
             raise CodecError("evaluation corpus dataset and split optionals are not paired")
         if self.corpus_profile_identity == IMPLEMENTATION_ACCEPTANCE_PROFILE and len(self.evaluation_job_identities) != 8:
             raise CodecError("implementation acceptance corpus must contain eight jobs")
+        if self.corpus_profile_identity == MEANINGFUL_FIXED_MATCHUP_PROFILE and len(self.evaluation_job_identities) != 16:
+            raise CodecError("meaningful fixed-matchup corpus must contain sixteen jobs")
 
     def to_dict(self, *, context: EvaluationContextV1) -> dict[str, Any]:
         self.validate()
@@ -2622,6 +2723,13 @@ def validate_evaluation_context(
         )
         if ordered_jobs != expected_jobs:
             raise CodecError("implementation acceptance context is not the exact frozen eight-job schedule")
+    elif corpus.corpus_profile_identity == MEANINGFUL_FIXED_MATCHUP_PROFILE:
+        expected_jobs = meaningful_fixed_matchup_jobs(
+            checkpoint_identity=corpus.checkpoint_identity,
+            evaluator_semantic_source_commit=root.evaluator_semantic_source_commit,
+        )
+        if ordered_jobs != expected_jobs:
+            raise CodecError("meaningful fixed-matchup context is not the exact frozen sixteen-job schedule")
 
 
 @dataclasses.dataclass(frozen=True)
@@ -3220,6 +3328,7 @@ __all__ = [
     "default_evaluation_manifest",
     "default_evaluation_context",
     "implementation_acceptance_jobs",
+    "meaningful_fixed_matchup_jobs",
     "encode_score_vector_json",
     "decode_score_vector_json",
     "encode_evaluation_corpus_json",

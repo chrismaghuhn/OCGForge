@@ -1,5 +1,9 @@
 import copy
 import dataclasses
+import os
+from pathlib import Path
+import subprocess
+import sys
 import unittest
 
 from tools.phase6 import task5_codec as codec
@@ -48,6 +52,47 @@ def _context() -> codec.EvaluationContextV1:
     return codec.default_evaluation_context(
         evaluator_semantic_source_commit=TEST_EVALUATOR_SOURCE_COMMIT
     )
+
+
+def _meaningful_context(
+    checkpoint_identity: str = "phase6_checkpoint.v1." + "e" * 64,
+) -> codec.EvaluationContextV1:
+    jobs = codec.meaningful_fixed_matchup_jobs(
+        checkpoint_identity=checkpoint_identity,
+        evaluator_semantic_source_commit=TEST_EVALUATOR_SOURCE_COMMIT,
+    )
+    job_ids = tuple(codec.evaluation_job_identity(job) for job in jobs)
+    corpus = codec.EvaluationCorpusV1(
+        corpus_profile_identity=codec.MEANINGFUL_FIXED_MATCHUP_PROFILE,
+        corpus_kind=codec.MEANINGFUL_FIXED_MATCHUP_KIND,
+        checkpoint_identity=checkpoint_identity,
+        evaluation_job_identities=job_ids,
+    )
+    corpus_id = codec.evaluation_corpus_identity(corpus)
+    root = codec.EvaluationIdentityV1(
+        evaluation_corpus_identity=corpus_id,
+        checkpoint_identity=checkpoint_identity,
+        evaluator_semantic_source_commit=TEST_EVALUATOR_SOURCE_COMMIT,
+    )
+    root_id = codec.evaluation_identity(root)
+    job_manifest = codec.EvaluationJobManifestV1(
+        evaluation_identity=root_id,
+        evaluation_contract_identity=codec.evaluation_contract_identity(),
+        evaluation_corpus_identity=corpus_id,
+        evaluation_job_identities=job_ids,
+    )
+    job_manifest_id = codec.evaluation_job_manifest_identity(job_manifest)
+    manifest = codec.EvaluationManifestV1(
+        evaluation_identity=root_id,
+        evaluation_contract_identity=codec.evaluation_contract_identity(),
+        evaluation_corpus_identity=corpus_id,
+        evaluation_job_manifest_identity=job_manifest_id,
+        checkpoint_identity=checkpoint_identity,
+        evaluator_semantic_source_commit=TEST_EVALUATOR_SOURCE_COMMIT,
+    )
+    context = codec.EvaluationContextV1(root, manifest, corpus, job_manifest, jobs)
+    context.validate()
+    return context
 
 
 def _key(index: int) -> str:
@@ -378,6 +423,140 @@ class Task5PrimitiveAndIdentityTests(unittest.TestCase):
 
 
 class Task5JobTests(unittest.TestCase):
+    def test_meaningful_fixed_matchup_schedule_is_exact_and_non_smoke(self):
+        checkpoint = "phase6_checkpoint.v1." + "e" * 64
+        jobs = codec.meaningful_fixed_matchup_jobs(
+            checkpoint_identity=checkpoint,
+            evaluator_semantic_source_commit=TEST_EVALUATOR_SOURCE_COMMIT,
+        )
+        self.assertEqual(len(jobs), 16)
+        self.assertEqual(
+            [job.deterministic_seed for job in jobs],
+            [1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2],
+        )
+        self.assertEqual(
+            [job.starting_player for job in jobs],
+            [0, 1, 0, 1] * 4,
+        )
+        self.assertEqual(
+            [(job.seat_0_deck_role_id, job.evaluated_policy_seat) for job in jobs],
+            [
+                (codec.SWORDSOUL_DECK_ID, 0),
+                (codec.SWORDSOUL_DECK_ID, 0),
+                (codec.SWORDSOUL_DECK_ID, 1),
+                (codec.SWORDSOUL_DECK_ID, 1),
+                (codec.SALAMANGREAT_DECK_ID, 0),
+                (codec.SALAMANGREAT_DECK_ID, 0),
+                (codec.SALAMANGREAT_DECK_ID, 1),
+                (codec.SALAMANGREAT_DECK_ID, 1),
+            ] * 2,
+        )
+        self.assertEqual(
+            {job.corpus_profile_identity for job in jobs},
+            {codec.MEANINGFUL_FIXED_MATCHUP_PROFILE},
+        )
+        self.assertEqual(
+            {job.evaluated_policy_checkpoint_identity for job in jobs},
+            {checkpoint},
+        )
+        self.assertEqual(len({codec.evaluation_job_identity(job) for job in jobs}), 16)
+
+    def test_meaningful_schedule_rejects_smoke_checkpoint(self):
+        with self.assertRaises(codec.CodecError):
+            codec.meaningful_fixed_matchup_jobs(
+                checkpoint_identity=codec.SMOKE_CHECKPOINT_ID,
+                evaluator_semantic_source_commit=TEST_EVALUATOR_SOURCE_COMMIT,
+            )
+
+    def test_meaningful_context_reuses_t5a_identity_graph_and_exact_order(self):
+        context = _meaningful_context()
+        self.assertEqual(
+            context.corpus.corpus_profile_identity,
+            codec.MEANINGFUL_FIXED_MATCHUP_PROFILE,
+        )
+        self.assertEqual(context.corpus.corpus_kind, codec.MEANINGFUL_FIXED_MATCHUP_KIND)
+        self.assertEqual(len(context.jobs), 16)
+        self.assertEqual(
+            context.corpus.evaluation_job_identities,
+            tuple(codec.evaluation_job_identity(job) for job in context.jobs),
+        )
+        self.assertEqual(
+            context.job_manifest.evaluation_job_identities,
+            context.corpus.evaluation_job_identities,
+        )
+        self.assertEqual(
+            context.jobs[0].evaluated_policy_seat,
+            0,
+        )
+        self.assertEqual(context.jobs[2].evaluated_policy_seat, 1)
+        self.assertEqual(context.jobs[4].seat_0_deck_role_id, codec.SALAMANGREAT_DECK_ID)
+        self.assertEqual(context.jobs[14].evaluated_policy_seat, 1)
+
+    def test_meaningful_context_rejects_schedule_and_binding_mutations(self):
+        context = _meaningful_context()
+        with self.assertRaises(codec.CodecError):
+            codec.validate_evaluation_context(
+                context.root,
+                context.manifest,
+                context.corpus,
+                context.job_manifest,
+                tuple(reversed(context.jobs)),
+            )
+        changed_job = dataclasses.replace(
+            context.jobs[2],
+            starting_player=1 - context.jobs[2].starting_player,
+        )
+        changed_jobs = context.jobs[:2] + (changed_job,) + context.jobs[3:]
+        with self.assertRaises(codec.CodecError):
+            codec.validate_evaluation_context(
+                context.root,
+                context.manifest,
+                context.corpus,
+                context.job_manifest,
+                changed_jobs,
+            )
+        with self.assertRaises(codec.CodecError):
+            codec.canonical_evaluation_job_bytes(
+                dataclasses.replace(
+                    context.jobs[0],
+                    evaluated_policy_checkpoint_identity=codec.SMOKE_CHECKPOINT_ID,
+                )
+            )
+        with self.assertRaises(codec.CodecError):
+            codec.canonical_evaluation_job_bytes(
+                dataclasses.replace(
+                    context.jobs[0],
+                    corpus_profile_identity=codec.IMPLEMENTATION_ACCEPTANCE_PROFILE,
+                    evaluated_policy_checkpoint_identity="phase6_checkpoint.v1." + "f" * 64,
+                )
+            )
+        with self.assertRaises(codec.CodecError):
+            codec.canonical_evaluation_job_bytes(
+                dataclasses.replace(context.jobs[0], deterministic_seed=3)
+            )
+
+    def test_meaningful_schedule_is_fresh_process_deterministic(self):
+        script = (
+            "from tools.phase6 import task5_codec as c; "
+            "jobs=c.meaningful_fixed_matchup_jobs("
+            "checkpoint_identity='phase6_checkpoint.v1.'+'e'*64,"
+            "evaluator_semantic_source_commit='" + TEST_EVALUATOR_SOURCE_COMMIT + "'); "
+            "print('|'.join(c.evaluation_job_identity(job) for job in jobs))"
+        )
+        env = dict(os.environ)
+        env["PYTHONPATH"] = str(Path(__file__).resolve().parents[2])
+        outputs = [
+            subprocess.check_output(
+                [sys.executable, "-c", script],
+                cwd=Path(__file__).resolve().parents[2],
+                env=env,
+                text=True,
+            )
+            for _ in range(2)
+        ]
+        self.assertEqual(outputs[0], outputs[1])
+        self.assertEqual(len(outputs[0].strip().split("|")), 16)
+
     def test_fixed_implementation_acceptance_matrix_has_eight_ordered_jobs(self):
         jobs = _jobs()
         self.assertEqual(len(jobs), 8)

@@ -7,6 +7,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "ygo/environment/episodic_environment.hpp"
@@ -90,6 +91,14 @@ inline constexpr std::string_view kSmokeCheckpointIdentity =
     "phase6_checkpoint.v1.62f4532a5e551886affbd65bc47f7645017dedf6c5ca3a0b7b87b4a978943327";
 inline constexpr std::string_view kSmokeCardVocabularyIdentity =
     "model_card_vocabulary.v1.a565d2b411ae16dd1fc192ed11add10efb948979024f41a0419f9a7222044820";
+inline constexpr std::string_view kMeaningfulFixedMatchupProfile =
+    "ocgforge.phase6.task5.evaluation_corpus.meaningful_fixed_matchup.v1";
+inline constexpr std::string_view kMeaningfulFixedMatchupKind =
+    "MEANINGFUL_FIXED_MATCHUP";
+inline constexpr std::string_view kTask7MaterializationSchemaId =
+    "ocgforge.phase6.task7.input_materialization.v1";
+inline constexpr std::string_view kTask7MaterializationConfigIdentity =
+    "phase6_task7_input_materialization_config.v1.20f394c888e959446fa263c3520f3dd3b1f48b3a23e58373da7153a691ab1e7a";
 
 enum class GameplayJobStatus : std::uint8_t {
     TrustedWin = 0,
@@ -210,6 +219,63 @@ std::string evaluation_job_identity(const EvaluationJobV1& job);
 bool validate_evaluation_job(const EvaluationJobV1& job,
                              std::string* error = nullptr) noexcept;
 
+namespace detail {
+class MeaningfulCheckpointBindingStateV1;
+class Task7CheckpointBindingIssuerV1;
+}  // namespace detail
+
+// Loader-issued, immutable validation capability for the meaningful Task5C
+// path.  The public API intentionally has no default or fieldwise constructor
+// and stores only a source-owned opaque state handle.  Only the library-owned
+// issuer can turn the source-only state into this capability.
+class MeaningfulCheckpointBindingV1 final {
+public:
+    MeaningfulCheckpointBindingV1(const MeaningfulCheckpointBindingV1&) = default;
+    MeaningfulCheckpointBindingV1& operator=(
+        const MeaningfulCheckpointBindingV1&) = delete;
+    MeaningfulCheckpointBindingV1(MeaningfulCheckpointBindingV1&&) = default;
+    MeaningfulCheckpointBindingV1& operator=(MeaningfulCheckpointBindingV1&&) = delete;
+
+    const std::string& checkpoint_identity() const noexcept;
+    bool manifest_validated() const noexcept;
+    const std::string& model_architecture_config_identity() const noexcept;
+    const std::string& phase5_logical_model_input_contract_identity() const noexcept;
+    const std::string& phase5_encoded_model_input_contract_identity() const noexcept;
+    const std::string& phase5_batch_layout_contract_identity() const noexcept;
+    const std::string& card_vocabulary_identity() const noexcept;
+    const std::string& dataset_identity() const noexcept;
+    const std::string& dataset_split_identity() const noexcept;
+    const std::string& training_contract_identity() const noexcept;
+    const std::string& canonical_weight_export_codec_identity() const noexcept;
+    const std::string& canonical_weight_content_identity() const noexcept;
+    const std::string& task7_materialization_schema_id() const noexcept;
+    const std::string& task7_materialization_config_identity() const noexcept;
+
+private:
+    explicit MeaningfulCheckpointBindingV1(
+        std::shared_ptr<const detail::MeaningfulCheckpointBindingStateV1> state);
+
+    friend class detail::Task7CheckpointBindingIssuerV1;
+
+    std::shared_ptr<const detail::MeaningfulCheckpointBindingStateV1> state_;
+};
+
+namespace detail {
+
+// Library-owned public façade for the source-only loader state.  Ordinary
+// consumers can name this façade but cannot construct the source-only state
+// required by issue().
+class Task7CheckpointBindingIssuerV1 final {
+public:
+    static MeaningfulCheckpointBindingV1 issue(
+        std::shared_ptr<const MeaningfulCheckpointBindingStateV1> state);
+
+private:
+    Task7CheckpointBindingIssuerV1() = delete;
+};
+
+}  // namespace detail
+
 struct EvaluationContextV1 final {
     std::string evaluation_identity;
     std::string evaluation_contract_identity =
@@ -223,6 +289,11 @@ struct EvaluationContextV1 final {
         std::string(kImplementationAcceptanceProfile);
     std::string corpus_kind = std::string(kImplementationAcceptanceKind);
     std::vector<EvaluationJobV1> jobs;
+};
+
+struct MeaningfulFixedMatchupContextV1 final {
+    EvaluationContextV1 evaluation_context;
+    MeaningfulCheckpointBindingV1 checkpoint_binding;
 };
 
 std::string evaluation_corpus_identity(const EvaluationContextV1& context);
@@ -487,6 +558,16 @@ struct FrozenGameplayEvaluatorConfigV1 final {
     environment::RunControl run_control;
 };
 
+struct MeaningfulFixedMatchupEvaluatorConfigV1 final {
+    MeaningfulFixedMatchupContextV1 evaluation_context;
+    environment::CertifiedEnvironmentConfig environment_config;
+    trajectory::PolicyArtifact evaluated_policy_artifact;
+    model::CardVocabularyV1 card_vocabulary;
+    CheckpointInferenceProviderV1 inference_provider;
+    trajectory::ProvenanceResolver provenance_resolver;
+    environment::RunControl run_control;
+};
+
 struct FrozenGameplayEvaluatorCreateResult;
 
 class FrozenGameplayEvaluator final {
@@ -502,6 +583,8 @@ private:
     friend struct FrozenGameplayEvaluatorCreateResult;
     friend FrozenGameplayEvaluatorCreateResult create_frozen_gameplay_evaluator(
         FrozenGameplayEvaluatorConfigV1) noexcept;
+    friend FrozenGameplayEvaluatorCreateResult create_meaningful_frozen_gameplay_evaluator(
+        MeaningfulFixedMatchupEvaluatorConfigV1) noexcept;
     explicit FrozenGameplayEvaluator(FrozenGameplayEvaluatorConfigV1 config)
         : config_(std::move(config)) {}
 
@@ -520,5 +603,13 @@ struct FrozenGameplayEvaluatorCreateResult final {
 
 FrozenGameplayEvaluatorCreateResult create_frozen_gameplay_evaluator(
     FrozenGameplayEvaluatorConfigV1 config) noexcept;
+
+MeaningfulFixedMatchupContextV1 make_meaningful_fixed_matchup_context(
+    MeaningfulCheckpointBindingV1 checkpoint_binding,
+    const model::CardVocabularyV1& concrete_vocabulary,
+    std::string evaluator_semantic_source_commit);
+
+FrozenGameplayEvaluatorCreateResult create_meaningful_frozen_gameplay_evaluator(
+    MeaningfulFixedMatchupEvaluatorConfigV1 config) noexcept;
 
 }  // namespace ygo::phase6::task5c
