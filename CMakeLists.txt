@@ -314,6 +314,13 @@ target_link_libraries(phase6_task7_input_materialization_test PRIVATE ygo_phase6
 add_test(NAME phase6_task7_input_materialization_test
          COMMAND phase6_task7_input_materialization_test)
 
+add_executable(phase6_task7_live_progress_diagnostic_test
+               tests/phase6/phase6_task7_live_progress_diagnostic_test.cpp)
+target_link_libraries(phase6_task7_live_progress_diagnostic_test PRIVATE ygo_m4)
+target_link_libraries(phase6_task7_live_progress_diagnostic_test PRIVATE ygo_policy ygo_teacher)
+add_test(NAME phase6_task7_live_progress_diagnostic_test
+         COMMAND phase6_task7_live_progress_diagnostic_test)
+
 add_executable(phase6_task7_materialization_probe
                tools/phase6_task7_materialization_probe/main.cpp)
 target_link_libraries(phase6_task7_materialization_probe PRIVATE ygo_phase6)

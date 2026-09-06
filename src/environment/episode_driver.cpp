@@ -44,6 +44,54 @@ void add_timing(std::uint64_t& bucket, const Clock::time_point start, const Cloc
     }
 }
 
+struct DiagnosticTimingScope final {
+    std::uint64_t* bucket = nullptr;
+    Clock::time_point start = Clock::now();
+    bool enabled = false;
+
+    ~DiagnosticTimingScope() {
+        if (enabled && bucket != nullptr) {
+            *bucket += elapsed_us(start, Clock::now());
+        }
+    }
+};
+
+std::string_view decision_family_name(const protocol::DecisionRequestKind kind) noexcept {
+    switch (kind) {
+    case protocol::DecisionRequestKind::IdleCommand:
+        return "IDLE_COMMAND";
+    case protocol::DecisionRequestKind::BattleCommand:
+        return "BATTLE_COMMAND";
+    case protocol::DecisionRequestKind::Chain:
+        return "CHAIN";
+    case protocol::DecisionRequestKind::Option:
+        return "OPTION";
+    case protocol::DecisionRequestKind::CardSelection:
+        return "CARD_SELECTION";
+    case protocol::DecisionRequestKind::Tribute:
+        return "TRIBUTE";
+    case protocol::DecisionRequestKind::Sum:
+        return "SUM";
+    case protocol::DecisionRequestKind::Place:
+        return "PLACE";
+    case protocol::DecisionRequestKind::Counter:
+        return "COUNTER";
+    case protocol::DecisionRequestKind::Ordering:
+        return "ORDERING";
+    case protocol::DecisionRequestKind::Announcement:
+        return "ANNOUNCEMENT";
+    case protocol::DecisionRequestKind::UnselectCard:
+        return "UNSELECT_CARD";
+    case protocol::DecisionRequestKind::Position:
+        return "POSITION";
+    case protocol::DecisionRequestKind::YesNo:
+        return "YES_NO";
+    case protocol::DecisionRequestKind::Unsupported:
+        return "UNSUPPORTED";
+    }
+    return "UNKNOWN";
+}
+
 std::string json_escape(const std::string& value) {
     std::ostringstream result;
     result << '"';
@@ -236,9 +284,84 @@ struct EpisodeDriver::Impl final {
     std::optional<observation::PlayerObservation> current_observation;
     trace::EngineTrace trace_state;
     DriverMetrics driver_metrics;
+    DriverDiagnosticTiming diagnostic_timing;
     Lifecycle lifecycle = Lifecycle::Advancing;
     std::uint64_t next_process_index = 0;
     std::uint32_t trace_decision_index = 0;
+    std::string last_completed_diagnostic_phase;
+    Clock::time_point last_diagnostic_time{};
+    bool has_diagnostic_time = false;
+
+    bool diagnostic_enabled() const noexcept {
+        return config.instrumentation && static_cast<bool>(config.diagnostic_observer);
+    }
+
+    EpisodeDiagnosticSnapshot make_diagnostic_snapshot(
+        const std::string_view phase,
+        const std::uint64_t phase_elapsed_us = 0) const {
+        EpisodeDiagnosticSnapshot snapshot;
+        snapshot.current_phase = std::string(phase);
+        snapshot.last_completed_phase = last_completed_diagnostic_phase;
+        snapshot.engine_process_count = host == nullptr
+                                            ? driver_metrics.process_call_count
+                                            : host->process_call_count();
+        snapshot.engine_process_budget = config.engine_process_budget;
+        snapshot.semantic_action_count = driver_metrics.semantic_action_count;
+        snapshot.semantic_action_budget = config.semantic_action_budget;
+        snapshot.decision_index = trace_decision_index;
+        snapshot.engine_step_index =
+            next_process_index == 0 ? 0 : next_process_index - 1;
+        snapshot.decision_family = "UNKNOWN";
+        snapshot.candidate_count = 0;
+        if (current_request.has_value()) {
+            snapshot.engine_step_index = current_request->engine_step_index;
+            snapshot.decision_family = std::string(decision_family_name(current_request->kind));
+            snapshot.acting_player = current_request->player;
+            snapshot.candidate_count = current_request->candidates.size();
+        }
+        if (current_observation.has_value()) {
+            snapshot.decision_index = current_observation->decision_index;
+            snapshot.turn_player = current_observation->globals.turn_player;
+            snapshot.turn_count = current_observation->globals.turn_count;
+            snapshot.phase = current_observation->globals.phase;
+        }
+        snapshot.current_phase_elapsed_us = phase_elapsed_us;
+        snapshot.timing = diagnostic_timing;
+        return snapshot;
+    }
+
+    void emit_diagnostic(const std::string_view phase,
+                         const bool completed = false,
+                         const std::uint64_t phase_elapsed_us = 0) noexcept {
+        if (!diagnostic_enabled()) {
+            return;
+        }
+        try {
+            const auto now = Clock::now();
+            const auto elapsed = has_diagnostic_time
+                                     ? elapsed_us(last_diagnostic_time, now)
+                                     : 0;
+            if (completed) {
+                last_completed_diagnostic_phase = std::string(phase);
+            }
+            auto snapshot = make_diagnostic_snapshot(
+                phase, phase_elapsed_us);
+            snapshot.time_since_previous_progress_record_us = elapsed;
+            last_diagnostic_time = now;
+            has_diagnostic_time = true;
+            config.diagnostic_observer(snapshot);
+        } catch (...) {
+            config.diagnostic_observer = nullptr;
+        }
+    }
+
+    void add_diagnostic_timing(std::uint64_t& bucket,
+                               const Clock::time_point start,
+                               const Clock::time_point end) noexcept {
+        if (diagnostic_enabled()) {
+            bucket += elapsed_us(start, end);
+        }
+    }
 
     void refresh_derived_metrics() noexcept {
         driver_metrics.turns = 0;
@@ -351,6 +474,7 @@ struct EpisodeDriver::Impl final {
         current_observation.reset();
         if (config.build_full_observation) {
             const auto observation_start = Clock::now();
+            emit_diagnostic("OBSERVATION_BUILD_BEGIN");
 #ifdef YGO_M4_PERFORMANCE_AUDIT
             auto observation_scope = observation::PerformanceAuditCollector::ObservationScope(
                 config.performance_audit);
@@ -369,8 +493,17 @@ struct EpisodeDriver::Impl final {
 #ifdef YGO_M4_PERFORMANCE_AUDIT
             observation_config.performance_audit = config.performance_audit;
 #endif
+            emit_diagnostic("PUBLIC_SAFE_STATE_BEGIN");
+            const auto public_safe_state_start = Clock::now();
             current_observation = observation::build_player_observation(
                 *host, current_request->player, observation_config);
+            const auto public_safe_state_end = Clock::now();
+            add_diagnostic_timing(diagnostic_timing.public_safe_state_us,
+                                  public_safe_state_start, public_safe_state_end);
+            emit_diagnostic("PUBLIC_SAFE_STATE", true,
+                            elapsed_us(public_safe_state_start, public_safe_state_end));
+            emit_diagnostic("CANDIDATE_BUILD_BEGIN");
+            const auto candidate_build_start = Clock::now();
             observation::attach_decision_context(*current_observation, *current_request
 #ifdef YGO_M4_PERFORMANCE_AUDIT
                                                  , config.performance_audit
@@ -401,7 +534,19 @@ struct EpisodeDriver::Impl final {
                         current_request->engine_message_type, current_request->player);
                 }
             }
-            add_timing(driver_metrics.timing.observation_us, observation_start, Clock::now(), config.instrumentation);
+            const auto candidate_build_end = Clock::now();
+            const auto candidate_build_elapsed =
+                elapsed_us(candidate_build_start, candidate_build_end);
+            add_diagnostic_timing(diagnostic_timing.candidate_build_us,
+                                  candidate_build_start, candidate_build_end);
+            emit_diagnostic("CANDIDATE_BUILD", true, candidate_build_elapsed);
+            const auto observation_end = Clock::now();
+            const auto observation_elapsed = elapsed_us(observation_start, observation_end);
+            add_timing(driver_metrics.timing.observation_us, observation_start,
+                       observation_end, config.instrumentation);
+            add_diagnostic_timing(diagnostic_timing.observation_us,
+                                  observation_start, observation_end);
+            emit_diagnostic("OBSERVATION_BUILD", true, observation_elapsed);
         }
         lifecycle = Lifecycle::AwaitingDecision;
     }
@@ -480,6 +625,9 @@ struct EpisodeDriver::Impl final {
         if (lifecycle != Lifecycle::Advancing) {
             throw std::logic_error("EpisodeDriver advance called outside advancing state");
         }
+        DiagnosticTimingScope core_advance_scope{
+            &diagnostic_timing.core_advance_us, Clock::now(), diagnostic_enabled()};
+        emit_diagnostic("CORE_ADVANCE");
         if (config.force_unsupported_for_test) {
             const std::vector<std::uint8_t> raw_message = {3, 0, 0, 0, MSG_SELECT_OPTION, 0, 0};
             current_raw_message = raw_message;
@@ -499,6 +647,12 @@ struct EpisodeDriver::Impl final {
                                           "engine process index cannot be represented by EngineTrace v2",
                                           false, "advance");
             }
+            const bool emit_process_begin =
+                diagnostic_enabled() && config.diagnostic_process_interval != 0 &&
+                next_process_index % config.diagnostic_process_interval == 0;
+            if (emit_process_begin) {
+                emit_diagnostic("CORE_PROCESS_BEGIN");
+            }
             const auto process_start = Clock::now();
             core::ProcessResult process_result;
             try {
@@ -511,13 +665,32 @@ struct EpisodeDriver::Impl final {
             }
             const auto engine_step = next_process_index++;
             current_raw_message = process_result.message;
-            add_timing(driver_metrics.timing.core_process_us, process_start, Clock::now(), config.instrumentation);
+            const auto process_end = Clock::now();
+            const auto process_elapsed = elapsed_us(process_start, process_end);
+            add_timing(driver_metrics.timing.core_process_us, process_start, process_end,
+                       config.instrumentation);
+            add_diagnostic_timing(diagnostic_timing.core_process_us,
+                                  process_start, process_end);
+            const bool emit_process_complete =
+                diagnostic_enabled() && config.diagnostic_process_interval != 0 &&
+                next_process_index % config.diagnostic_process_interval == 0;
+            if (emit_process_complete) {
+                refresh_host_metrics();
+                emit_diagnostic("CORE_PROCESS", true, process_elapsed);
+            }
             try {
+                emit_diagnostic("PROTOCOL_DECODE_BEGIN");
                 const auto protocol_start = Clock::now();
                 observation_sessions[0]->ingest(current_raw_message, engine_step);
                 observation_sessions[1]->ingest(current_raw_message, engine_step);
                 const auto decoded = protocol::decode_messages(current_raw_message, engine_step);
-                add_timing(driver_metrics.timing.protocol_candidate_us, protocol_start, Clock::now(), config.instrumentation);
+                const auto protocol_end = Clock::now();
+                const auto protocol_elapsed = elapsed_us(protocol_start, protocol_end);
+                add_timing(driver_metrics.timing.protocol_candidate_us, protocol_start,
+                           protocol_end, config.instrumentation);
+                add_diagnostic_timing(diagnostic_timing.protocol_decode_us,
+                                      protocol_start, protocol_end);
+                emit_diagnostic("PROTOCOL_DECODE", true, protocol_elapsed);
                 if (decoded.retry) {
                     ++driver_metrics.errors.retries;
                     return close_with_failure("retry", "pinned core emitted MSG_RETRY after a submitted response");
@@ -593,6 +766,7 @@ struct EpisodeDriver::Impl final {
             Clock::time_point continuation_response_start{};
             Clock::time_point continuation_response_end{};
             if (current_request->continuation.has_value()) {
+                emit_diagnostic("CONTINUATION_BEGIN");
                 continuation_response_start = Clock::now();
                 continuation_transition =
                     protocol::apply_continuation_action(*current_request, selected->semantic_key);
@@ -641,6 +815,10 @@ struct EpisodeDriver::Impl final {
                     ++driver_metrics.continuation_intermediate_steps;
                     trace_state.steps.push_back(std::move(step));
                     add_timing(driver_metrics.timing.trace_hash_us, trace_suffix_start, Clock::now(), config.instrumentation);
+                    add_diagnostic_timing(diagnostic_timing.continuation_us,
+                                          continuation_response_start,
+                                          continuation_response_end);
+                    emit_diagnostic("CONTINUATION", true, continuation_response_time);
                     current_observation.reset();
                     if (driver_metrics.semantic_action_count >= config.semantic_action_budget) {
                         current_request.reset();
@@ -664,6 +842,10 @@ struct EpisodeDriver::Impl final {
                 step.selected_response_sha256 = final_response_hash;
                 trace_state.steps.push_back(std::move(step));
                 add_timing(driver_metrics.timing.trace_hash_us, trace_suffix_start, Clock::now(), config.instrumentation);
+                add_diagnostic_timing(diagnostic_timing.continuation_us,
+                                      continuation_response_start,
+                                      continuation_response_end);
+                emit_diagnostic("CONTINUATION", true, continuation_response_time);
                 current_request.reset();
                 current_observation.reset();
                 lifecycle = Lifecycle::Advancing;
@@ -760,5 +942,10 @@ DriverBoundary EpisodeDriver::administrative_interrupt() {
 const trace::EngineTrace& EpisodeDriver::trace() const noexcept { return impl_->trace_state; }
 
 const DriverMetrics& EpisodeDriver::metrics() const noexcept { return impl_->driver_metrics; }
+
+EpisodeDiagnosticSnapshot EpisodeDriver::diagnostic_snapshot(
+    const std::string_view phase) const {
+    return impl_->make_diagnostic_snapshot(phase);
+}
 
 }  // namespace ygo::environment

@@ -3,10 +3,12 @@
 #include <array>
 #include <cstdint>
 #include <filesystem>
+#include <functional>
 #include <limits>
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <variant>
 #include <vector>
 
@@ -19,6 +21,10 @@
 #endif
 
 namespace ygo::environment {
+
+struct EpisodeDiagnosticSnapshot;
+using EpisodeDiagnosticObserver =
+    std::function<void(const EpisodeDiagnosticSnapshot&)>;
 
 struct EpisodeDriverConfig final {
     core::RulesBundlePaths rules;
@@ -35,6 +41,8 @@ struct EpisodeDriverConfig final {
     std::vector<std::uint32_t> required_script_codes;
     std::filesystem::path fixture_setup_script;
     bool instrumentation = false;
+    EpisodeDiagnosticObserver diagnostic_observer;
+    std::uint64_t diagnostic_process_interval = 0;
     bool force_unsupported_for_test = false;
 #ifdef YGO_M4_PERFORMANCE_AUDIT
     observation::PerformanceAuditCollector* performance_audit = nullptr;
@@ -129,6 +137,40 @@ struct DriverMetrics final {
     std::uint64_t response_build_time_us_max = 0;
 };
 
+struct DriverDiagnosticTiming final {
+    std::uint64_t core_advance_us = 0;
+    std::uint64_t core_process_us = 0;
+    std::uint64_t protocol_decode_us = 0;
+    std::uint64_t public_safe_state_us = 0;
+    std::uint64_t candidate_build_us = 0;
+    std::uint64_t continuation_us = 0;
+    std::uint64_t observation_us = 0;
+    std::uint64_t teacher_select_us = 0;
+    std::uint64_t environment_step_total_us = 0;
+    std::uint64_t recorder_us = 0;
+};
+
+struct EpisodeDiagnosticSnapshot final {
+    std::string current_phase;
+    std::string last_completed_phase;
+    std::uint64_t engine_process_count = 0;
+    std::uint64_t engine_process_budget = 0;
+    std::uint64_t semantic_action_count = 0;
+    std::uint64_t semantic_action_budget = 0;
+    std::uint64_t decision_index = 0;
+    std::uint64_t engine_step_index = 0;
+    std::string decision_family;
+    std::uint8_t acting_player = 0;
+    std::uint64_t candidate_count = 0;
+    std::optional<std::uint8_t> turn_player;
+    std::optional<std::uint32_t> turn_count;
+    std::optional<std::uint32_t> phase;
+    std::string last_public_action_key;
+    std::uint64_t time_since_previous_progress_record_us = 0;
+    std::uint64_t current_phase_elapsed_us = 0;
+    DriverDiagnosticTiming timing;
+};
+
 using DriverBoundary = std::variant<DriverDecisionBoundary, DriverGameTerminal,
                                     DriverProcessBudgetExceeded, DriverSemanticActionBudgetExceeded,
                                     DriverAdministrativeInterrupt, DriverFailure>;
@@ -160,6 +202,7 @@ public:
 
     const trace::EngineTrace& trace() const noexcept;
     const DriverMetrics& metrics() const noexcept;
+    EpisodeDiagnosticSnapshot diagnostic_snapshot(std::string_view phase) const;
 
 private:
     struct Impl;
