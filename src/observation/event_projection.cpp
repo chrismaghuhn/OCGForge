@@ -208,16 +208,51 @@ std::vector<VisibleGameEvent> project_visible_events(const std::vector<std::uint
             if (type == MSG_SHUFFLE_DECK || type == MSG_SHUFFLE_HAND || type == MSG_SHUFFLE_EXTRA) {
                 event.player = reader.u8();
             } else if (type == MSG_SHUFFLE_SET_CARD) {
-                // The pinned core writes LOCATION, count, then one 10-byte
-                // card location per set card. No player field is present.
-                (void)reader.u8();
+                // The pinned core writes LOCATION, count, then matching
+                // Previous and Current location vectors. The vectors are
+                // source facts for validation only; neither is public event
+                // data because this message crosses a knowledge boundary.
+                const auto shuffle_location = reader.u8();
                 const auto count = reader.u8();
+                if (shuffle_location != LOCATION_MZONE && shuffle_location != LOCATION_SZONE) {
+                    throw EventDecodeError("invalid shuffle location");
+                }
+                if (count == 0) {
+                    throw EventDecodeError("shuffle count must be positive");
+                }
+                std::optional<std::uint8_t> shuffle_player;
                 for (std::uint32_t index = 0; index < count; ++index) {
-                    const auto location = read_location(reader);
-                    if (!event.player.has_value() && location.controller <= 1) {
-                        event.player = location.controller;
+                    const auto previous = read_location(reader);
+                    if (previous.controller > 1) {
+                        throw EventDecodeError("invalid shuffle controller");
+                    }
+                    if (previous.location != shuffle_location) {
+                        throw EventDecodeError("shuffle location does not match header");
+                    }
+                    if (!shuffle_player.has_value()) {
+                        shuffle_player = previous.controller;
+                    } else if (shuffle_player.value() != previous.controller) {
+                        throw EventDecodeError("inconsistent shuffle controller");
                     }
                 }
+                for (std::uint32_t index = 0; index < count; ++index) {
+                    const auto current = read_location(reader);
+                    const bool is_zero = current.controller == 0 &&
+                                         current.location == 0 &&
+                                         current.sequence == 0 &&
+                                         current.position == 0;
+                    if (is_zero) {
+                        continue;
+                    }
+                    if (current.controller > 1) {
+                        throw EventDecodeError("invalid shuffle current controller");
+                    }
+                    if (current.controller != shuffle_player.value() ||
+                        current.location != shuffle_location) {
+                        throw EventDecodeError("shuffle current location is inconsistent");
+                    }
+                }
+                event.player = shuffle_player.value();
             }
             // Hand/Extra shuffle packets carry codes. Their identities are
             // intentionally discarded here; the boundary event is enough to
