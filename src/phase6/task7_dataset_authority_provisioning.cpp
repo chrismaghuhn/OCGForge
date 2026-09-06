@@ -122,6 +122,94 @@ std::string_view placement_deck(const std::string_view placement,
     fail("Task7 collection placement is invalid");
 }
 
+std::string_view disposition_name(const policy::PolicyRunnerDisposition disposition) {
+    switch (disposition) {
+    case policy::PolicyRunnerDisposition::CleanAdmitted:
+        return "clean_admitted";
+    case policy::PolicyRunnerDisposition::Quarantined:
+        return "quarantined";
+    case policy::PolicyRunnerDisposition::Failed:
+        return "failed";
+    }
+    return "unknown";
+}
+
+std::string diagnostic_context(
+    const std::size_t job_index,
+    const Task7CollectionJobV1& job,
+    const policy::PolicyRunnerResult& result,
+    const std::string_view failure_reason) {
+    std::ostringstream output;
+    output << failure_reason << "\n"
+           << "job_index=" << job_index << "\n"
+           << "seed=" << job.root_seed << "\n"
+           << "orientation=" << job.placement << "\n"
+           << "starting_player=" << static_cast<unsigned>(job.starting_player) << "\n"
+           << "runner_disposition=" << disposition_name(result.disposition) << "\n";
+    if (!result.diagnostic.empty()) output << "runner_diagnostic=" << result.diagnostic << "\n";
+    if (result.policy_error.has_value()) {
+        output << "policy_error=" << result.policy_error->message << "\n";
+    }
+    if (!result.envelope.has_value()) {
+        output << "episode_index=0\n"
+               << "closure=absent\n"
+               << "decision_ordinal=unknown\n"
+               << "decision_family=unknown\n"
+               << "last_public_action_key=unknown\n";
+        return output.str();
+    }
+
+    const auto& envelope = *result.envelope;
+    output << "episode_index=0\n"
+           << "record_count=" << envelope.records.size() << "\n";
+    if (!envelope.records.empty()) {
+        const auto& last = envelope.records.back();
+        output << "decision_ordinal=" << last.frame.decision_index << "\n"
+               << "decision_family="
+               << environment::environment_decision_kind_name(last.frame.request.kind) << "\n"
+               << "last_public_action_key=" << last.selected_public_action_key << "\n"
+               << "last_public_semantic_decision_id="
+               << last.frame.public_semantic_decision_id << "\n";
+    } else {
+        output << "decision_ordinal=unknown\n"
+               << "decision_family=unknown\n"
+               << "last_public_action_key=unknown\n";
+    }
+    if (const auto* terminal = std::get_if<trajectory::TerminalClosure>(&envelope.closure)) {
+        output << "closure=terminal\n"
+               << "termination_reason=terminal\n"
+               << "semantic_action_count=" << terminal->semantic_action_count << "\n"
+               << "last_decision_index="
+               << (terminal->last_decision_index.has_value()
+                       ? std::to_string(*terminal->last_decision_index)
+                       : "absent")
+               << "\n";
+    } else if (const auto* interrupted =
+                   std::get_if<trajectory::InterruptedClosure>(&envelope.closure)) {
+        output << "closure=interrupted\n"
+               << "termination_reason=interrupted\n"
+               << "record_count=" << interrupted->record_count << "\n";
+        if (interrupted->pending_unacted_frame.has_value()) {
+            const auto& pending = *interrupted->pending_unacted_frame;
+            output << "pending_decision_ordinal=" << pending.decision_index << "\n"
+                   << "pending_decision_family="
+                   << environment::environment_decision_kind_name(pending.request.kind) << "\n"
+                   << "pending_public_semantic_decision_id="
+                   << pending.public_semantic_decision_id << "\n";
+        }
+    } else if (const auto* failed = std::get_if<trajectory::FailedClosure>(&envelope.closure)) {
+        output << "closure=failed\n"
+               << "termination_reason=failed\n"
+               << "failure_code="
+               << environment::failure_code_name(failed->failure_code) << "\n"
+               << "failure_stage="
+               << environment::failure_stage_name(failed->failure_stage) << "\n"
+               << "mutation_may_have_occurred="
+               << (failed->mutation_may_have_occurred ? "true" : "false") << "\n";
+    }
+    return output.str();
+}
+
 std::string_view deck_sha(const std::string_view deck) {
     if (deck == kSwordsoulDeck) return kSwordsoulDeckSha;
     if (deck == kSalamangreatDeck) return kSalamangreatDeckSha;
@@ -221,20 +309,24 @@ policy::TeacherRunnerConfig teacher_runner_config(
 }
 
 void validate_terminal_job_result(
+    const std::size_t job_index,
     const Task7CollectionJobV1& job,
     const policy::PolicyRunnerResult& result) {
     if (result.disposition != policy::PolicyRunnerDisposition::CleanAdmitted ||
         !result.envelope.has_value() || !result.candidate_shard.has_value() ||
         !result.restricted_evidence.has_value() || !result.admission_receipt.has_value()) {
-        fail("Task7 collection job did not produce a clean admitted artifact set");
+        fail(diagnostic_context(job_index, job, result,
+                                "Task7 collection job did not produce a clean admitted artifact set"));
     }
     if (!std::holds_alternative<trajectory::TerminalClosure>(result.envelope->closure) ||
         result.envelope->manifest.collection_disposition.kind !=
             trajectory::CollectionDispositionKind::Clean) {
-        fail("Task7 collection job is not a clean terminal episode");
+        fail(diagnostic_context(job_index, job, result,
+                                "Task7 collection job is not a clean terminal episode"));
     }
     if (result.envelope->records.empty()) {
-        fail("Task7 collection job produced no decision records");
+        fail(diagnostic_context(job_index, job, result,
+                                "Task7 collection job produced no decision records"));
     }
     const auto envelope_bytes = trajectory::canonical_episode_envelope_bytes(*result.envelope);
     const auto envelope_digest = ygo::trace::sha256_bytes(envelope_bytes);
@@ -243,11 +335,13 @@ void validate_terminal_job_result(
         shard.entries.front().envelope_bytes != envelope_bytes ||
         trajectory::candidate_shard_artifact_sha256(shard) !=
             result.admission_receipt->receipt().candidate_shard_artifact_sha256) {
-        fail("Task7 collection shard is detached from its episode envelope");
+        fail(diagnostic_context(job_index, job, result,
+                                "Task7 collection shard is detached from its episode envelope"));
     }
     const auto& receipt = result.admission_receipt->receipt();
     if (receipt.entries.size() != 1) {
-        fail("Task7 collection job must produce exactly one admitted episode member");
+        fail(diagnostic_context(job_index, job, result,
+                                "Task7 collection job must produce exactly one admitted episode member"));
     }
     const auto record_id = trajectory::trajectory_record_id(*result.envelope);
     const auto public_id = trajectory::public_gameplay_trajectory_id(*result.envelope);
@@ -255,23 +349,27 @@ void validate_terminal_job_result(
     if (entry.trajectory_record_id != record_id ||
         entry.public_gameplay_trajectory_id != public_id ||
         entry.episode_envelope_sha256 != envelope_digest || entry.closure_kind != 0) {
-        fail("Task7 collection receipt is detached from its terminal episode");
+        fail(diagnostic_context(job_index, job, result,
+                                "Task7 collection receipt is detached from its terminal episode"));
     }
     if (trajectory::admission_receipt_id(receipt).empty() ||
         trajectory::canonical_admission_receipt_bytes(receipt).empty()) {
-        fail("Task7 collection receipt is not canonical");
+        fail(diagnostic_context(job_index, job, result,
+                                "Task7 collection receipt is not canonical"));
     }
     std::string restricted_error;
     if (!trajectory::validate_restricted_collection_evidence_bundle(
             *result.restricted_evidence, shard,
             result.restricted_evidence->candidate_shard_artifact_sha256,
             &restricted_error)) {
-        fail("Task7 restricted collection evidence is invalid: " + restricted_error);
+        fail(diagnostic_context(job_index, job, result,
+                                "Task7 restricted collection evidence is invalid: " + restricted_error));
     }
-    (void)job;
 }
 
-Task7CollectionJobArtifactsV1 collect_one_job(const Task7CollectionJobV1& job) {
+Task7CollectionJobArtifactsV1 collect_one_job(
+    const std::size_t job_index,
+    const Task7CollectionJobV1& job) {
     validate_job_or_fail(job);
     auto created = policy::TeacherRunner::create(teacher_runner_config(job));
     if (!created || !created.value.has_value()) {
@@ -279,7 +377,7 @@ Task7CollectionJobArtifactsV1 collect_one_job(const Task7CollectionJobV1& job) {
                                        : "Task7 TeacherRunner construction failed");
     }
     auto result = created.value->run();
-    validate_terminal_job_result(job, result);
+    validate_terminal_job_result(job_index, job, result);
     Task7CollectionJobArtifactsV1 artifacts;
     artifacts.job = job;
     artifacts.episode_envelope = std::move(*result.envelope);
@@ -502,7 +600,9 @@ Task7DatasetAuthorityResult provision_task7_dataset_authority(
             std::move(collector_semantic_source_commit));
         std::vector<Task7CollectionJobArtifactsV1> jobs;
         jobs.reserve(schedule.jobs.size());
-        for (const auto& job : schedule.jobs) jobs.push_back(collect_one_job(job));
+        for (std::size_t job_index = 0; job_index < schedule.jobs.size(); ++job_index) {
+            jobs.push_back(collect_one_job(job_index, schedule.jobs[job_index]));
+        }
 
         std::vector<trajectory::VerifiedAdmissionReceipt> receipts;
         std::vector<trajectory::EpisodeEnvelope> envelopes;
@@ -534,6 +634,45 @@ Task7DatasetAuthorityResult provision_task7_dataset_authority(
     } catch (...) {
         return failure(Task7DatasetAuthorityErrorCode::InternalFailure,
                        "Task7 dataset authority provisioning failed");
+    }
+}
+
+Task7CollectionJobDiagnosticResult diagnose_task7_collection_job(
+    std::string collector_semantic_source_commit,
+    const std::size_t job_index) noexcept {
+    Task7CollectionJobDiagnosticResult result;
+    try {
+        if (!valid_commit(collector_semantic_source_commit)) {
+            result.diagnostic = "invalid source commit";
+            return result;
+        }
+        const auto schedule = make_task7_collection_schedule(
+            std::move(collector_semantic_source_commit));
+        if (job_index >= schedule.jobs.size()) {
+            std::ostringstream output;
+            output << "job_index=" << job_index << "\n"
+                   << "job_count=" << schedule.jobs.size() << "\n"
+                   << "diagnostic=job index is outside the frozen schedule";
+            result.diagnostic = output.str();
+            return result;
+        }
+        (void)collect_one_job(job_index, schedule.jobs[job_index]);
+        result.clean_terminal = true;
+        std::ostringstream output;
+        output << "job_index=" << job_index << "\n"
+               << "seed=" << schedule.jobs[job_index].root_seed << "\n"
+               << "orientation=" << schedule.jobs[job_index].placement << "\n"
+               << "starting_player="
+               << static_cast<unsigned>(schedule.jobs[job_index].starting_player) << "\n"
+               << "result=clean_terminal";
+        result.diagnostic = output.str();
+        return result;
+    } catch (const std::exception& error) {
+        result.diagnostic = error.what();
+        return result;
+    } catch (...) {
+        result.diagnostic = "Task7 single-job diagnostic failed";
+        return result;
     }
 }
 

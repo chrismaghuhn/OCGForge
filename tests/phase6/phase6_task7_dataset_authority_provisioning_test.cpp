@@ -91,6 +91,19 @@ void test_schedule_rejects_mutation_and_invalid_source() {
     require(rejected, "malformed Task7 source commit was accepted");
 }
 
+void test_single_job_diagnostic_rejects_invalid_selection_without_running_collection() {
+    const auto invalid_source = diagnose_task7_collection_job("not-a-git-commit", 0);
+    require(!invalid_source.clean_terminal && invalid_source.diagnostic == "invalid source commit",
+            "single-job diagnostic accepted an invalid source commit");
+
+    const auto out_of_range = diagnose_task7_collection_job(
+        "05ba7c28f52389bbf84aec8d49d4e2b853ec9b93", 16);
+    require(!out_of_range.clean_terminal &&
+                out_of_range.diagnostic.find("job index is outside the frozen schedule") !=
+                    std::string::npos,
+            "single-job diagnostic did not reject an out-of-range job");
+}
+
 }  // namespace
 
 int main() {
@@ -98,6 +111,7 @@ int main() {
         test_exact_frozen_schedule();
         test_schedule_identity_is_canonical_and_source_bound();
         test_schedule_rejects_mutation_and_invalid_source();
+        test_single_job_diagnostic_rejects_invalid_selection_without_running_collection();
     } catch (const std::exception& error) {
         return (void)error.what(), 1;
     }

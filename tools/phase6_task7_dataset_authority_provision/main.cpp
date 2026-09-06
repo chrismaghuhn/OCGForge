@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <cstdlib>
 #include <iostream>
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -12,11 +13,24 @@ namespace {
 struct Arguments final {
     std::filesystem::path output;
     std::string source_commit;
+    std::optional<std::size_t> diagnostic_job_index;
 };
 
 void usage() {
     std::cerr << "usage: phase6_task7_dataset_authority_provision"
-                 " --output <directory> --source-commit <40-lowercase-hex>\n";
+                 " --output <directory> --source-commit <40-lowercase-hex>\n"
+                 "   or: phase6_task7_dataset_authority_provision"
+                 " --source-commit <40-lowercase-hex>"
+                 " --diagnostic-job-index <0..15>\n";
+}
+
+std::size_t parse_job_index(const std::string_view value) {
+    std::size_t consumed = 0;
+    const auto parsed = std::stoull(std::string(value), &consumed, 10);
+    if (consumed != value.size() || parsed > std::numeric_limits<std::size_t>::max()) {
+        throw std::invalid_argument("diagnostic job index is invalid");
+    }
+    return static_cast<std::size_t>(parsed);
 }
 
 Arguments parse_arguments(const int argc, char** argv) {
@@ -27,6 +41,8 @@ Arguments parse_arguments(const int argc, char** argv) {
             result.output = argv[++index];
         } else if (argument == "--source-commit" && index + 1 < argc) {
             result.source_commit = argv[++index];
+        } else if (argument == "--diagnostic-job-index" && index + 1 < argc) {
+            result.diagnostic_job_index = parse_job_index(argv[++index]);
         } else if (argument == "--help") {
             usage();
             std::exit(0);
@@ -34,7 +50,14 @@ Arguments parse_arguments(const int argc, char** argv) {
             throw std::invalid_argument("unknown or incomplete argument");
         }
     }
-    if (result.output.empty() || result.source_commit.empty()) {
+    if (result.source_commit.empty()) {
+        throw std::invalid_argument("source commit is required");
+    }
+    if (result.diagnostic_job_index.has_value()) {
+        if (!result.output.empty()) {
+            throw std::invalid_argument("diagnostic mode does not accept an output directory");
+        }
+    } else if (result.output.empty()) {
         throw std::invalid_argument("output and source commit are required");
     }
     return result;
@@ -45,6 +68,15 @@ Arguments parse_arguments(const int argc, char** argv) {
 int main(const int argc, char** argv) {
     try {
         const auto arguments = parse_arguments(argc, argv);
+        if (arguments.diagnostic_job_index.has_value()) {
+            const auto diagnostic = ygo::phase6::task7::diagnose_task7_collection_job(
+                arguments.source_commit, *arguments.diagnostic_job_index);
+            std::cout << "TASK7_COLLECTION_DIAGNOSTIC=YES\n"
+                      << "CLEAN_TERMINAL=" << (diagnostic.clean_terminal ? "YES" : "NO")
+                      << "\n"
+                      << diagnostic.diagnostic << '\n';
+            return diagnostic.clean_terminal ? 0 : 2;
+        }
         const auto result = ygo::phase6::task7::provision_task7_dataset_authority(
             arguments.source_commit);
         if (!result || !result.value.has_value()) {

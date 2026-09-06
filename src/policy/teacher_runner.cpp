@@ -6,6 +6,7 @@
 #include <exception>
 #include <memory>
 #include <optional>
+#include <sstream>
 #include <string>
 #include <utility>
 #include <variant>
@@ -71,6 +72,32 @@ bool add_teacher_rng_evidence(
     return true;
 }
 
+std::string interruption_diagnostic(const environment::EpisodeInterrupted& interruption) {
+    std::ostringstream output;
+    output << "interruption_reason="
+           << environment::interruption_reason_name(interruption.reason) << "\n"
+           << "semantic_action_count=" << interruption.semantic_action_count << "\n"
+           << "last_decision_index="
+           << (interruption.last_decision_index.has_value()
+                   ? std::to_string(*interruption.last_decision_index)
+                   : "absent")
+           << "\n"
+           << "final_engine_step_index=" << interruption.final_engine_step_index << "\n"
+           << "run_control_engine_process_budget="
+           << interruption.run_control_evidence.engine_process_budget << "\n"
+           << "run_control_engine_process_count="
+           << interruption.run_control_evidence.engine_process_count << "\n"
+           << "run_control_semantic_action_budget="
+           << interruption.run_control_evidence.semantic_action_budget << "\n"
+           << "run_control_semantic_action_count="
+           << interruption.run_control_evidence.semantic_action_count << "\n";
+    if (interruption.last_public_semantic_decision_id.has_value()) {
+        output << "last_public_semantic_decision_id="
+               << *interruption.last_public_semantic_decision_id << "\n";
+    }
+    return output.str();
+}
+
 bool build_dataset_manifest(const trajectory::VerifiedAdmissionReceipt& receipt,
                             trajectory::DatasetManifest& output,
                             std::string& error) {
@@ -120,6 +147,9 @@ PolicyRunnerResult finalize_teacher_run(
         }
         PolicyRunnerResult result;
         result.envelope = *sealed;
+        if (interruption.has_value()) {
+            result.diagnostic = interruption_diagnostic(*interruption);
+        }
         const auto envelope_bytes = trajectory::canonical_episode_envelope_bytes(*result.envelope);
         trajectory::CandidateTrajectoryShard shard;
         shard.entries.push_back({ygo::trace::sha256_bytes(envelope_bytes), envelope_bytes});
