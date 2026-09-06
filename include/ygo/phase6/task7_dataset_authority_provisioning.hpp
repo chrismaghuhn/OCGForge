@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <optional>
@@ -142,6 +143,14 @@ struct Task7DatasetAuthorityResult final {
     }
 };
 
+// Diagnostic-only single-job execution. This consumes the exact frozen
+// schedule and collection path but never writes authority artifacts or
+// changes the default 16-job provisioning behavior.
+struct Task7CollectionJobDiagnosticResult final {
+    bool clean_terminal = false;
+    std::string diagnostic;
+};
+
 Task7CollectionScheduleV1 make_task7_collection_schedule(
     std::string collector_semantic_source_commit);
 
@@ -161,6 +170,10 @@ bool validate_task7_collection_schedule(
 
 Task7DatasetAuthorityResult provision_task7_dataset_authority(
     std::string collector_semantic_source_commit) noexcept;
+
+Task7CollectionJobDiagnosticResult diagnose_task7_collection_job(
+    std::string collector_semantic_source_commit,
+    std::size_t job_index) noexcept;
 
 bool write_task7_dataset_authority(
     const Task7DatasetAuthorityV1& authority,
