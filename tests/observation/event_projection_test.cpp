@@ -123,6 +123,56 @@ int run() {
     require(truncated_set_shuffle_session.visible_events().empty(),
             "truncated set-card shuffle published a partial event batch");
 
+    std::vector<std::uint8_t> szone_shuffle;
+    szone_shuffle.push_back(MSG_SHUFFLE_SET_CARD);
+    append_u8(szone_shuffle, LOCATION_SZONE);
+    append_u8(szone_shuffle, 2);
+    append_location(szone_shuffle, 1, LOCATION_SZONE, 0, POS_FACEDOWN_DEFENSE);
+    append_location(szone_shuffle, 1, LOCATION_SZONE, 2, POS_FACEDOWN_DEFENSE);
+    append_location(szone_shuffle, 0, 0, 0, 0);
+    append_location(szone_shuffle, 0, 0, 0, 0);
+    std::vector<std::uint8_t> szone_shuffle_stream;
+    append_frame(szone_shuffle_stream, szone_shuffle);
+    ygo::observation::ObservationSession szone_shuffle_session(0);
+    szone_shuffle_session.ingest(szone_shuffle_stream, 10);
+    const auto& szone_shuffle_events = szone_shuffle_session.visible_events();
+    require(szone_shuffle_events.size() == 2,
+            "SZONE set-card shuffle did not emit exactly two semantic events");
+    require(szone_shuffle_events[0].kind == ygo::observation::VisibleEventKind::Shuffle &&
+                szone_shuffle_events[1].kind == ygo::observation::VisibleEventKind::RandomizationBoundary,
+            "SZONE set-card shuffle event order was not preserved");
+    require(szone_shuffle_events[0].player == 1 && szone_shuffle_events[1].player == 1,
+            "SZONE set-card shuffle player was not derived from Previous");
+    require(!szone_shuffle_events[0].public_passcode.has_value() &&
+                !szone_shuffle_events[1].public_passcode.has_value() &&
+                !szone_shuffle_events[0].entity.has_value() &&
+                !szone_shuffle_events[1].entity.has_value(),
+            "SZONE set-card shuffle exposed private card identity");
+
+    std::vector<std::uint8_t> current_controller_mismatch;
+    current_controller_mismatch.push_back(MSG_SHUFFLE_SET_CARD);
+    append_u8(current_controller_mismatch, LOCATION_MZONE);
+    append_u8(current_controller_mismatch, 2);
+    append_location(current_controller_mismatch, 0, LOCATION_MZONE, 0, POS_FACEDOWN_DEFENSE);
+    append_location(current_controller_mismatch, 0, LOCATION_MZONE, 1, POS_FACEDOWN_DEFENSE);
+    append_location(current_controller_mismatch, 1, LOCATION_MZONE, 1, POS_FACEDOWN_DEFENSE);
+    append_location(current_controller_mismatch, 0, 0, 0, 0);
+    std::vector<std::uint8_t> current_controller_mismatch_stream;
+    append_frame(current_controller_mismatch_stream, current_controller_mismatch);
+    ygo::observation::ObservationSession current_controller_mismatch_session(0);
+    bool current_controller_mismatch_rejected = false;
+    try {
+        current_controller_mismatch_session.ingest(
+            current_controller_mismatch_stream,
+            11);
+    } catch (const ygo::observation::detail::EventDecodeError& error) {
+        current_controller_mismatch_rejected = std::string(error.what()).find("current") != std::string::npos;
+    }
+    require(current_controller_mismatch_rejected,
+            "nonzero Current controller mismatch was not rejected");
+    require(current_controller_mismatch_session.visible_events().empty(),
+            "Current controller mismatch published a partial event batch");
+
     std::vector<std::uint8_t> messages;
     append_frame(messages, {MSG_NEW_TURN, 1});
     std::vector<std::uint8_t> phase{MSG_NEW_PHASE};
