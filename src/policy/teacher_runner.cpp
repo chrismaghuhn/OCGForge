@@ -2,12 +2,14 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cstddef>
 #include <exception>
 #include <memory>
 #include <optional>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -20,7 +22,31 @@
 #include "ygo/trajectory/shard.hpp"
 
 namespace ygo::policy {
+
+namespace detail {
+
+struct TeacherRunnerDiagnosticState final {
+    std::uint64_t teacher_select_us = 0;
+    std::uint64_t environment_step_total_us = 0;
+    std::uint64_t recorder_us = 0;
+    std::string last_public_action_key;
+    std::chrono::steady_clock::time_point last_progress_time{};
+    bool has_progress_time = false;
+    environment::EpisodeDiagnosticSnapshot last_snapshot;
+    bool has_snapshot = false;
+    bool disabled = false;
+};
+
+}  // namespace detail
+
 namespace {
+
+using Clock = std::chrono::steady_clock;
+
+std::uint64_t elapsed_us(const Clock::time_point start, const Clock::time_point end) {
+    return static_cast<std::uint64_t>(
+        std::chrono::duration_cast<std::chrono::microseconds>(end - start).count());
+}
 
 using Boundary = std::variant<environment::DecisionFrame, environment::EpisodeTerminal,
                               environment::EpisodeInterrupted, environment::EpisodeFailure>;
@@ -297,10 +323,43 @@ TeacherRunnerCreateResult TeacherRunner::create(TeacherRunnerConfig config) noex
                     PolicyError{PolicyErrorCode::LifecycleFailure,
                                 "V2 environment factory returned no environment"}};
         }
+        std::shared_ptr<detail::TeacherRunnerDiagnosticState> diagnostic_state;
+        if (config.diagnostic_observer) {
+            diagnostic_state = std::make_shared<detail::TeacherRunnerDiagnosticState>();
+            const auto observer = config.diagnostic_observer;
+            const auto state = diagnostic_state;
+            environment->set_diagnostic_observer(
+                [observer, state](const ygo::environment::EpisodeDiagnosticSnapshot& input) {
+                    if (state->disabled) {
+                        return;
+                    }
+                    auto snapshot = input;
+                    snapshot.timing.teacher_select_us = state->teacher_select_us;
+                    snapshot.timing.environment_step_total_us =
+                        state->environment_step_total_us;
+                    snapshot.timing.recorder_us = state->recorder_us;
+                    snapshot.last_public_action_key = state->last_public_action_key;
+                    const auto now = Clock::now();
+                    snapshot.time_since_previous_progress_record_us =
+                        state->has_progress_time
+                            ? elapsed_us(state->last_progress_time, now)
+                            : 0;
+                    state->last_progress_time = now;
+                    state->has_progress_time = true;
+                    state->last_snapshot = snapshot;
+                    state->has_snapshot = true;
+                    try {
+                        observer(snapshot);
+                    } catch (...) {
+                        state->disabled = true;
+                    }
+                });
+        }
         auto recorder = std::make_unique<trajectory::TrajectoryRecorder>(
             config.environment_config, config.episode_spec, config.policy_provenance, resolver);
         return {std::optional<TeacherRunner>(TeacherRunner(
-                    std::move(config), std::move(environment), std::move(recorder), resolver)),
+                    std::move(config), std::move(environment), std::move(recorder), resolver,
+                    std::move(diagnostic_state))),
                 std::nullopt};
     } catch (const std::exception& exception) {
         return {std::nullopt,
@@ -319,6 +378,55 @@ PolicyRunnerResult TeacherRunner::run_impl(
     }
     has_run_ = true;
     try {
+        const auto emit_diagnostic =
+            [this](const std::string_view phase, const std::uint64_t phase_elapsed_us = 0) {
+                if (!config_.diagnostic_observer || diagnostic_state_ == nullptr ||
+                    diagnostic_state_->disabled) {
+                    return;
+                }
+                auto snapshot = environment_->diagnostic_snapshot(phase);
+                if (!snapshot.has_value() && diagnostic_state_->has_snapshot) {
+                    snapshot = diagnostic_state_->last_snapshot;
+                    snapshot->current_phase = std::string(phase);
+                }
+                if (!snapshot.has_value()) {
+                    return;
+                }
+                auto enriched = *snapshot;
+                enriched.timing.teacher_select_us = diagnostic_state_->teacher_select_us;
+                enriched.timing.environment_step_total_us =
+                    diagnostic_state_->environment_step_total_us;
+                enriched.timing.recorder_us = diagnostic_state_->recorder_us;
+                enriched.last_public_action_key = diagnostic_state_->last_public_action_key;
+                enriched.current_phase_elapsed_us = phase_elapsed_us;
+                const auto now = Clock::now();
+                enriched.time_since_previous_progress_record_us =
+                    diagnostic_state_->has_progress_time
+                        ? elapsed_us(diagnostic_state_->last_progress_time, now)
+                        : 0;
+                diagnostic_state_->last_progress_time = now;
+                diagnostic_state_->has_progress_time = true;
+                diagnostic_state_->last_snapshot = enriched;
+                diagnostic_state_->has_snapshot = true;
+                try {
+                    config_.diagnostic_observer(enriched);
+                } catch (...) {
+                    diagnostic_state_->disabled = true;
+                }
+            };
+        const auto record_with_diagnostic =
+            [this, &emit_diagnostic](const auto& operation) {
+                if (diagnostic_state_ == nullptr || diagnostic_state_->disabled) {
+                    return operation();
+                }
+                emit_diagnostic("RECORDER_BEGIN");
+                const auto start = Clock::now();
+                const auto result = operation();
+                const auto elapsed = elapsed_us(start, Clock::now());
+                diagnostic_state_->recorder_us += elapsed;
+                emit_diagnostic("RECORDER", elapsed);
+                return result;
+            };
         const auto reset = environment_->reset(config_.episode_spec, config_.run_control);
         const auto* reset_accepted = std::get_if<environment::ResetAccepted>(&reset);
         if (reset_accepted == nullptr) {
@@ -337,7 +445,9 @@ PolicyRunnerResult TeacherRunner::run_impl(
             terminal_views = detail::terminal_views_for_environment(*environment_);
         }
         std::string recorder_error;
-        if (!recorder_->on_reset_accepted(*reset_accepted, terminal_views, &recorder_error)) {
+        if (!record_with_diagnostic([&] {
+                return recorder_->on_reset_accepted(*reset_accepted, terminal_views, &recorder_error);
+            })) {
             return failed_result("Teacher recorder rejected V2 reset: " + recorder_error);
         }
         if (const auto* reset_interrupted =
@@ -377,7 +487,14 @@ PolicyRunnerResult TeacherRunner::run_impl(
                     break;
                 }
             } else {
+                emit_diagnostic("TEACHER_SELECT_BEGIN");
+                const auto select_start = Clock::now();
                 selection = session.policy.select(input);
+                const auto select_elapsed = elapsed_us(select_start, Clock::now());
+                if (diagnostic_state_ != nullptr) {
+                    diagnostic_state_->teacher_select_us += select_elapsed;
+                }
+                emit_diagnostic("TEACHER_SELECT", select_elapsed);
             }
             if (!selection) {
                 return failed_result(
@@ -398,11 +515,24 @@ PolicyRunnerResult TeacherRunner::run_impl(
             action.public_semantic_decision_id = frame->public_semantic_decision_id;
             action.submission_token = frame->submission_token;
             action.public_action_key = selection.value->public_action_key;
+            if (diagnostic_state_ != nullptr) {
+                diagnostic_state_->last_public_action_key = action.public_action_key;
+            }
             const auto pre_rejection_frame = *frame;
+            emit_diagnostic("ENVIRONMENT_STEP_TOTAL_BEGIN");
+            const auto environment_step_start = Clock::now();
             const auto stepped = environment_->step(action);
+            const auto environment_step_elapsed = elapsed_us(
+                environment_step_start, Clock::now());
+            if (diagnostic_state_ != nullptr) {
+                diagnostic_state_->environment_step_total_us += environment_step_elapsed;
+            }
+            emit_diagnostic("ENVIRONMENT_STEP_TOTAL", environment_step_elapsed);
             if (const auto* rejected = std::get_if<environment::StepRejected>(&stepped)) {
                 session.policy.reject_pending_proposal();
-                if (!recorder_->on_step_rejected(*rejected, true, &recorder_error)) {
+                if (!record_with_diagnostic([&] {
+                        return recorder_->on_step_rejected(*rejected, true, &recorder_error);
+                    })) {
                     return failed_result("Teacher recorder rejected policy-origin StepRejected: " +
                                          recorder_error);
                 }
@@ -411,9 +541,11 @@ PolicyRunnerResult TeacherRunner::run_impl(
                     environment::InterruptionReason::AdministrativeCancel});
                 if (const auto* accepted_interrupt =
                         std::get_if<environment::InterruptAccepted>(&interrupted)) {
-                    if (!recorder_->on_interrupt_accepted(
-                            std::optional<environment::DecisionFrame>{pre_rejection_frame},
-                            *accepted_interrupt, &recorder_error)) {
+                    if (!record_with_diagnostic([&] {
+                            return recorder_->on_interrupt_accepted(
+                                std::optional<environment::DecisionFrame>{pre_rejection_frame},
+                                *accepted_interrupt, &recorder_error);
+                        })) {
                         return failed_result("Teacher recorder rejected quarantine: " +
                                              recorder_error);
                     }
@@ -439,8 +571,10 @@ PolicyRunnerResult TeacherRunner::run_impl(
             if (std::holds_alternative<environment::EpisodeTerminal>(accepted->next)) {
                 terminal_views = detail::terminal_views_for_environment(*environment_);
             }
-            if (!recorder_->on_step_accepted(*accepted, attribution, terminal_views,
-                                             &recorder_error)) {
+            if (!record_with_diagnostic([&] {
+                    return recorder_->on_step_accepted(*accepted, attribution, terminal_views,
+                                                       &recorder_error);
+                })) {
                 return failed_result("Teacher recorder rejected accepted V2 step: " +
                                      recorder_error);
             }

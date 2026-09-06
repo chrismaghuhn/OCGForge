@@ -216,7 +216,8 @@ bool certified_resources_match(const CertifiedEnvironmentConfig& config) {
 }
 
 EpisodeDriverConfig make_driver_config(const CertifiedEnvironmentConfig& config,
-                                       const EpisodeSpec& spec, const RunControl& control) {
+                                       const EpisodeSpec& spec, const RunControl& control,
+                                       const EpisodeDiagnosticObserver& diagnostic_observer) {
     const auto decks = load_certified_decks();
     if (config.locked_decks.size() != 2 || decks.size() != 2 ||
         decks[0].sha256 != config.locked_decks[0].sha256 ||
@@ -247,7 +248,9 @@ EpisodeDriverConfig make_driver_config(const CertifiedEnvironmentConfig& config,
     driver.build_full_observation = true;
     driver.required_script_codes = core::canonical_required_script_codes(seat_decks[0], seat_decks[1]);
     driver.fixture_setup_script.clear();
-    driver.instrumentation = false;
+    driver.instrumentation = static_cast<bool>(diagnostic_observer);
+    driver.diagnostic_observer = diagnostic_observer;
+    driver.diagnostic_process_interval = diagnostic_observer == nullptr ? 0 : 100;
     return driver;
 }
 
@@ -1080,6 +1083,7 @@ struct EpisodicEnvironment::Impl final {
     std::optional<EpisodeFailure> failure;
     std::array<std::optional<PublicEnvironmentObservation>, 2> terminal_views;
     std::vector<detail::PublicActionBinding> current_bindings;
+    EpisodeDiagnosticObserver diagnostic_observer;
     bool force_next_reset_failure_for_test = false;
 
     StepRejected rejected(const ActionSelection& selection, const RejectionCode code) const {
@@ -1497,7 +1501,7 @@ struct EpisodicEnvironment::Impl final {
         std::string next_episode_id;
         try {
             next_episode_id = episode_semantic_id(config, spec);
-            driver_config = make_driver_config(config, spec, control);
+            driver_config = make_driver_config(config, spec, control, diagnostic_observer);
         } catch (const BoundaryError&) {
             return ResetRejected{ResetRejectionCode::ResourceIdentityMismatch, lifecycle_state};
         } catch (const std::invalid_argument&) {
@@ -1699,6 +1703,23 @@ StepResult EpisodicEnvironment::step(const ActionSelection& selection) {
 
 InterruptResult EpisodicEnvironment::interrupt(const InterruptRequest& request) {
     return impl_->interrupt(request);
+}
+
+void EpisodicEnvironment::set_diagnostic_observer(
+    EpisodeDiagnosticObserver observer) noexcept {
+    impl_->diagnostic_observer = std::move(observer);
+}
+
+std::optional<EpisodeDiagnosticSnapshot> EpisodicEnvironment::diagnostic_snapshot(
+    const std::string_view phase) const noexcept {
+    if (impl_->driver == nullptr) {
+        return std::nullopt;
+    }
+    try {
+        return impl_->driver->diagnostic_snapshot(phase);
+    } catch (...) {
+        return std::nullopt;
+    }
 }
 
 std::optional<PublicEnvironmentObservation> EpisodicEnvironment::perspective_terminal_view(

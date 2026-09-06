@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "ygo/environment/candidate_domain_evidence.hpp"
+#include "ygo/environment/episode_driver.hpp"
 #include "ygo/environment/identity_contract.hpp"
 #include "ygo/environment/public_decision.hpp"
 #include "ygo/environment/public_action_identity.hpp"
@@ -328,6 +329,9 @@ public:
     ResetResult reset(const EpisodeSpec& spec, const RunControl& control);
     StepResult step(const ActionSelection& selection);
     InterruptResult interrupt(const InterruptRequest& request);
+    void set_diagnostic_observer(EpisodeDiagnosticObserver observer) noexcept;
+    std::optional<EpisodeDiagnosticSnapshot> diagnostic_snapshot(
+        std::string_view phase) const noexcept;
     std::optional<PublicEnvironmentObservation> perspective_terminal_view(
         std::uint8_t player) const;
 

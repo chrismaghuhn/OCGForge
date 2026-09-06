@@ -25,6 +25,7 @@ struct TeacherRunnerTestOverride final {
     std::shared_ptr<std::size_t> selection_calls;
 };
 
+struct TeacherRunnerDiagnosticState;
 struct TeacherRunnerTestAccess;
 }  // namespace detail
 
@@ -34,6 +35,7 @@ struct TeacherRunnerConfig final {
     environment::RunControl run_control;
     trajectory::PolicyProvenanceEnvelope policy_provenance;
     std::array<std::optional<TeacherPolicySession>, 2> sessions;
+    environment::EpisodeDiagnosticObserver diagnostic_observer;
 };
 
 struct TeacherRunnerCreateResult;
@@ -57,16 +59,19 @@ private:
     TeacherRunner(TeacherRunnerConfig config,
                   std::unique_ptr<environment::EpisodicEnvironment> environment,
                   std::unique_ptr<trajectory::TrajectoryRecorder> recorder,
-                  trajectory::ProvenanceResolver resolver)
+                  trajectory::ProvenanceResolver resolver,
+                  std::shared_ptr<detail::TeacherRunnerDiagnosticState> diagnostic_state)
         : config_(std::move(config)),
           environment_(std::move(environment)),
           recorder_(std::move(recorder)),
-          resolver_(std::move(resolver)) {}
+          resolver_(std::move(resolver)),
+          diagnostic_state_(std::move(diagnostic_state)) {}
 
     TeacherRunnerConfig config_;
     std::unique_ptr<environment::EpisodicEnvironment> environment_;
     std::unique_ptr<trajectory::TrajectoryRecorder> recorder_;
     trajectory::ProvenanceResolver resolver_;
+    std::shared_ptr<detail::TeacherRunnerDiagnosticState> diagnostic_state_;
     bool has_run_ = false;
 };
 

@@ -8,6 +8,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
+#include <iostream>
 #include <limits>
 #include <numeric>
 #include <optional>
@@ -210,6 +211,61 @@ std::string diagnostic_context(
     return output.str();
 }
 
+std::string optional_u8(const std::optional<std::uint8_t>& value) {
+    return value.has_value() ? std::to_string(static_cast<unsigned>(*value)) : "absent";
+}
+
+std::string optional_u32(const std::optional<std::uint32_t>& value) {
+    return value.has_value() ? std::to_string(*value) : "absent";
+}
+
+environment::EpisodeDiagnosticObserver diagnostic_observer_for(
+    const std::size_t job_index,
+    const Task7CollectionJobV1& job) {
+    return [job_index, job](const environment::EpisodeDiagnosticSnapshot& snapshot) {
+        std::cerr << "TASK7_PROGRESS"
+                  << " job_index=" << job_index
+                  << " seed=" << job.root_seed
+                  << " orientation=" << job.placement
+                  << " starting_player=" << static_cast<unsigned>(job.starting_player)
+                  << " current_phase=" << snapshot.current_phase
+                  << " last_completed_phase="
+                  << (snapshot.last_completed_phase.empty() ? "absent"
+                                                             : snapshot.last_completed_phase)
+                  << " engine_process_count=" << snapshot.engine_process_count
+                  << '/' << snapshot.engine_process_budget
+                  << " semantic_action_count=" << snapshot.semantic_action_count
+                  << '/' << snapshot.semantic_action_budget
+                  << " decision_index=" << snapshot.decision_index
+                  << " engine_step_index=" << snapshot.engine_step_index
+                  << " decision_family=" << snapshot.decision_family
+                  << " acting_player=" << static_cast<unsigned>(snapshot.acting_player)
+                  << " candidate_count=" << snapshot.candidate_count
+                  << " turn_player=" << optional_u8(snapshot.turn_player)
+                  << " turn_count=" << optional_u32(snapshot.turn_count)
+                  << " phase=" << optional_u32(snapshot.phase)
+                  << " last_public_action_key="
+                  << (snapshot.last_public_action_key.empty() ? "absent"
+                                                                : snapshot.last_public_action_key)
+                  << " time_since_previous_progress_record_us="
+                  << snapshot.time_since_previous_progress_record_us
+                  << " current_phase_elapsed_us=" << snapshot.current_phase_elapsed_us
+                  << " timing_core_advance_us=" << snapshot.timing.core_advance_us
+                  << " timing_core_process_us=" << snapshot.timing.core_process_us
+                  << " timing_protocol_decode_us=" << snapshot.timing.protocol_decode_us
+                  << " timing_public_safe_state_us="
+                  << snapshot.timing.public_safe_state_us
+                  << " timing_candidate_build_us=" << snapshot.timing.candidate_build_us
+                  << " timing_continuation_us=" << snapshot.timing.continuation_us
+                  << " timing_observation_us=" << snapshot.timing.observation_us
+                  << " timing_teacher_select_us=" << snapshot.timing.teacher_select_us
+                  << " timing_environment_step_total_us="
+                  << snapshot.timing.environment_step_total_us
+                  << " timing_recorder_us=" << snapshot.timing.recorder_us << '\n';
+        std::cerr.flush();
+    };
+}
+
 std::string_view deck_sha(const std::string_view deck) {
     if (deck == kSwordsoulDeck) return kSwordsoulDeckSha;
     if (deck == kSalamangreatDeck) return kSalamangreatDeckSha;
@@ -248,8 +304,10 @@ const trajectory::PolicyArtifact& teacher_artifact_for(
 }
 
 policy::TeacherRunnerConfig teacher_runner_config(
-    const Task7CollectionJobV1& job) {
+    const Task7CollectionJobV1& job,
+    environment::EpisodeDiagnosticObserver diagnostic_observer = {}) {
     policy::TeacherRunnerConfig config;
+    config.diagnostic_observer = std::move(diagnostic_observer);
     config.environment_config = environment::CertifiedEnvironmentConfig::canonical();
     config.episode_spec.contract_id = std::string(kTask7CollectionEnvironmentContractId);
     config.episode_spec.root_seed = job.root_seed;
@@ -369,9 +427,11 @@ void validate_terminal_job_result(
 
 Task7CollectionJobArtifactsV1 collect_one_job(
     const std::size_t job_index,
-    const Task7CollectionJobV1& job) {
+    const Task7CollectionJobV1& job,
+    environment::EpisodeDiagnosticObserver diagnostic_observer = {}) {
     validate_job_or_fail(job);
-    auto created = policy::TeacherRunner::create(teacher_runner_config(job));
+    auto created = policy::TeacherRunner::create(
+        teacher_runner_config(job, std::move(diagnostic_observer)));
     if (!created || !created.value.has_value()) {
         fail(created.error.has_value() ? created.error->message
                                        : "Task7 TeacherRunner construction failed");
@@ -656,7 +716,9 @@ Task7CollectionJobDiagnosticResult diagnose_task7_collection_job(
             result.diagnostic = output.str();
             return result;
         }
-        (void)collect_one_job(job_index, schedule.jobs[job_index]);
+        (void)collect_one_job(
+            job_index, schedule.jobs[job_index],
+            diagnostic_observer_for(job_index, schedule.jobs[job_index]));
         result.clean_terminal = true;
         std::ostringstream output;
         output << "job_index=" << job_index << "\n"
