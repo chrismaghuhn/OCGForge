@@ -525,9 +525,35 @@ PredicateEvaluationStatus match_candidate_intent_set(
         if (!facts.valid) {
             return PredicateEvaluationStatus::Invalid;
         }
-        return detail::match_candidate_intent_set_with_snapshot(
-            profile, intent_ids, candidate, observation, facts.snapshot,
-            owning_participant, matched_ids);
+        bool saw_unsupported = false;
+        bool saw_invalid = false;
+        for (const auto& intent_id : intent_ids) {
+            const auto* intent = find_intent(profile, intent_id);
+            if (intent == nullptr) {
+                saw_invalid = true;
+                continue;
+            }
+            const auto status = evaluate_candidate_conjunction(
+                intent->public_predicates, facts.snapshot, candidate, observation,
+                owning_participant, profile);
+            if (status == PredicateEvaluationStatus::True) {
+                matched_ids.push_back(intent_id);
+            } else if (status == PredicateEvaluationStatus::Unsupported) {
+                saw_unsupported = true;
+            } else if (status == PredicateEvaluationStatus::Invalid) {
+                saw_invalid = true;
+            }
+        }
+        if (!matched_ids.empty()) {
+            return PredicateEvaluationStatus::True;
+        }
+        if (saw_invalid) {
+            return PredicateEvaluationStatus::Invalid;
+        }
+        if (saw_unsupported) {
+            return PredicateEvaluationStatus::Unsupported;
+        }
+        return PredicateEvaluationStatus::False;
     } catch (...) {
         matched_ids.clear();
         return PredicateEvaluationStatus::Invalid;
@@ -829,21 +855,116 @@ PublicEvaluatorOutcome evaluate_goal_line_progress(
             outcome.status = CandidateEvaluationStatus::Invalid;
             return outcome;
         }
-        const bool active_applicable = selection.status == PredicateEvaluationStatus::True &&
-                                       selection.line_id.has_value();
-        const bool recovery_applicable = recovery.status == PredicateEvaluationStatus::True;
+
+        bool active_applicable = selection.status == PredicateEvaluationStatus::True &&
+                                 selection.line_id.has_value();
+        bool recovery_applicable = recovery.status == PredicateEvaluationStatus::True;
+        bool active_match = false;
+        bool recovery_match = false;
+        bool saw_unsupported = false;
+        bool saw_invalid = false;
+
+        if (active_applicable) {
+            const auto* line = find_line(profile, *selection.line_id);
+            if (line == nullptr || !selection.goal_id.has_value() ||
+                line->goal_id != *selection.goal_id) {
+                outcome.status = CandidateEvaluationStatus::Invalid;
+                return outcome;
+            }
+            for (const auto& node_id : selection.ready_node_ids) {
+                const auto node = std::find_if(
+                    line->nodes.begin(), line->nodes.end(), [&](const auto& value) {
+                        return value.node_id == node_id;
+                    });
+                if (node == line->nodes.end()) {
+                    saw_invalid = true;
+                    continue;
+                }
+                std::vector<std::string> matched;
+                const auto status = match_candidate_intent_set(
+                    profile, node->candidate_intent_ids, candidate, observation,
+                    owning_participant, matched);
+                if (status == PredicateEvaluationStatus::True) {
+                    active_match = true;
+                    outcome.matched_intent_ids.insert(outcome.matched_intent_ids.end(),
+                                                      matched.begin(), matched.end());
+                    append_sorted_unique(outcome.matched_goal_ids, *selection.goal_id);
+                    append_sorted_unique(outcome.matched_line_ids, *selection.line_id);
+                } else if (status == PredicateEvaluationStatus::Unsupported) {
+                    saw_unsupported = true;
+                } else if (status == PredicateEvaluationStatus::Invalid) {
+                    saw_invalid = true;
+                }
+            }
+        }
+
+        if (recovery_applicable) {
+            if (!recovery.recovery_edge_id.has_value()) {
+                outcome.status = CandidateEvaluationStatus::Invalid;
+                return outcome;
+            }
+            const auto edge = std::find_if(
+                profile.recovery_edges.begin(), profile.recovery_edges.end(),
+                [&](const auto& value) {
+                    return value.recovery_edge_id == *recovery.recovery_edge_id;
+                });
+            if (edge == profile.recovery_edges.end()) {
+                outcome.status = CandidateEvaluationStatus::Invalid;
+                return outcome;
+            }
+            if (recovery.target_goal_id != std::optional<std::string>(edge->target_goal_id) ||
+                recovery.target_line_id != edge->target_line_id) {
+                outcome.status = CandidateEvaluationStatus::Invalid;
+                return outcome;
+            }
+            std::vector<std::string> matched;
+            const auto status = match_candidate_intent_set(
+                profile, edge->candidate_intent_ids, candidate, observation, owning_participant,
+                matched);
+            if (status == PredicateEvaluationStatus::True) {
+                recovery_match = true;
+                outcome.matched_intent_ids.insert(outcome.matched_intent_ids.end(), matched.begin(),
+                                                  matched.end());
+                append_sorted_unique(outcome.matched_goal_ids, edge->target_goal_id);
+                if (edge->target_line_id.has_value()) {
+                    append_sorted_unique(outcome.matched_line_ids, *edge->target_line_id);
+                }
+            } else if (status == PredicateEvaluationStatus::Unsupported) {
+                saw_unsupported = true;
+            } else if (status == PredicateEvaluationStatus::Invalid) {
+                saw_invalid = true;
+            }
+        }
+
+        sort_evidence(outcome);
+        if (saw_invalid) {
+            outcome.status = CandidateEvaluationStatus::Invalid;
+            outcome.contributions.clear();
+            return outcome;
+        }
+        if (saw_unsupported) {
+            outcome.status = CandidateEvaluationStatus::Unsupported;
+            outcome.contributions.clear();
+            return outcome;
+        }
         if (!active_applicable && !recovery_applicable) {
             outcome.status = CandidateEvaluationStatus::NotApplicable;
             return outcome;
         }
-        const auto facts = extract_public_fact_snapshot(observation);
-        if (!facts.valid) {
+
+        outcome.status = CandidateEvaluationStatus::Supported;
+        const auto contribution = active_match ? 3 : (recovery_match ? 2 : 0);
+        ScoreVector checked_score;
+        if (!add_score_contribution(
+                checked_score, ScoreDimension::ActiveGoalLineOrValidatedRecoveryProgress,
+                contribution)) {
             outcome.status = CandidateEvaluationStatus::Invalid;
+            outcome.contributions.clear();
             return outcome;
         }
-        return detail::evaluate_goal_line_progress_with_snapshot(
-            profile, selection, recovery, candidate, observation, facts.snapshot,
-            owning_participant);
+        outcome.contributions.push_back(
+            {ScoreDimension::ActiveGoalLineOrValidatedRecoveryProgress, contribution});
+        return outcome;
     } catch (...) {
         outcome.status = CandidateEvaluationStatus::Invalid;
         outcome.contributions.clear();

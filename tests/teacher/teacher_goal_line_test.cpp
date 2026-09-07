@@ -797,6 +797,17 @@ void test_public_wrappers_preserve_pre_extraction_fast_paths() {
         profile, not_applicable, recovery, value, invalid_observation, 0);
     require(not_applicable_result.status == CandidateEvaluationStatus::NotApplicable,
             "not-applicable goal-line selection no longer short-circuits before extraction");
+
+    GoalLineSelection active_empty;
+    active_empty.status = PredicateEvaluationStatus::True;
+    active_empty.goal_id = "goal.alpha";
+    active_empty.line_id = "line.alpha";
+    const auto active_empty_result = evaluate_goal_line_progress(
+        profile, active_empty, recovery, value, invalid_observation, 0);
+    require(active_empty_result.status == CandidateEvaluationStatus::Supported &&
+                active_empty_result.contributions.size() == 1 &&
+                active_empty_result.contributions.front().value == 0,
+            "active empty-intent line no longer preserves supported zero progress");
 }
 
 }  // namespace
