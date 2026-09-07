@@ -32,6 +32,31 @@ struct GoalLineSelection final {
     }
 };
 
+namespace detail {
+
+// These seams require a snapshot produced by a successful
+// extract_public_fact_snapshot(observation) call for the same observation.
+// They are decision-local helpers and do not cache facts across proposals.
+PredicateEvaluationStatus match_candidate_intent_set_with_snapshot(
+    const StrategyProfileV1& profile,
+    const std::vector<std::string>& intent_ids,
+    const environment::EnvironmentActionCandidate& candidate,
+    const environment::PublicEnvironmentObservation& observation,
+    const PublicFactSnapshot& public_facts,
+    std::uint8_t owning_participant,
+    std::vector<std::string>& matched_ids) noexcept;
+
+PublicEvaluatorOutcome evaluate_goal_line_progress_with_snapshot(
+    const StrategyProfileV1& profile,
+    const GoalLineSelection& selection,
+    const RecoverySelection& recovery,
+    const environment::EnvironmentActionCandidate& candidate,
+    const environment::PublicEnvironmentObservation& observation,
+    const PublicFactSnapshot& public_facts,
+    std::uint8_t owning_participant) noexcept;
+
+}  // namespace detail
+
 PredicateEvaluationStatus evaluate_public_predicate_conjunction(
     const std::vector<PredicateRef>& predicates,
     const PublicFactSnapshot& public_facts,

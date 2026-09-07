@@ -330,22 +330,22 @@ TeacherRankingResult TeacherCore::propose(
                 bool has_active_outcome = false;
                 bool has_f1_outcome = false;
                 if (retained_active_line) {
-                    active_outcome = evaluate_goal_line_progress(
+                    active_outcome = detail::evaluate_goal_line_progress_with_snapshot(
                         profile, selection, RecoverySelection{}, candidate,
-                        input.observation, owner);
+                        input.observation, facts_result.snapshot, owner);
                     append_stage_value(f0_evidence, candidate, active_outcome);
                     has_active_outcome = true;
                 }
                 if (f1_applicable) {
                     const GoalLineSelection no_active_line;
                     if (has_line_selection) {
-                        f1_outcome = evaluate_goal_line_progress(
+                        f1_outcome = detail::evaluate_goal_line_progress_with_snapshot(
                             profile, selection, proven_recovery, candidate,
-                            input.observation, owner);
+                            input.observation, facts_result.snapshot, owner);
                     } else {
-                        f1_outcome = evaluate_goal_line_progress(
+                        f1_outcome = detail::evaluate_goal_line_progress_with_snapshot(
                             profile, no_active_line, proven_recovery, candidate,
-                            input.observation, owner);
+                            input.observation, facts_result.snapshot, owner);
                     }
                     append_stage_value(f1_evidence, candidate, f1_outcome);
                     has_f1_outcome = true;

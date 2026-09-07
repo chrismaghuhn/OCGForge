@@ -743,6 +743,35 @@ void test_goal_line_selection_and_progress() {
             "missing active line/recovery was not NOT_APPLICABLE");
 }
 
+void test_validated_public_facts_reuse_matches_observation_path() {
+    const auto profile = valid_profile();
+    const auto observation = public_observation();
+    const auto facts = public_facts(observation);
+    const auto selection = select_goal_and_line(profile, reset_state(profile), facts);
+    RecoverySelection recovery;
+    const auto value = candidate(EnvironmentActionKind::YesNo, std::nullopt,
+                                 std::nullopt, true);
+
+    std::vector<std::string> observation_matched;
+    std::vector<std::string> snapshot_matched;
+    const auto observation_status = match_candidate_intent_set(
+        profile, {"intent.advance", "intent.recover"}, value, observation, 0,
+        observation_matched);
+    const auto snapshot_status = detail::match_candidate_intent_set_with_snapshot(
+        profile, {"intent.advance", "intent.recover"}, value, observation, facts, 0,
+        snapshot_matched);
+    require(observation_status == snapshot_status &&
+                observation_matched == snapshot_matched,
+            "validated public-fact reuse changed candidate intent results");
+
+    const auto observation_outcome = evaluate_goal_line_progress(
+        profile, selection, recovery, value, observation, 0);
+    const auto snapshot_outcome = detail::evaluate_goal_line_progress_with_snapshot(
+        profile, selection, recovery, value, observation, facts, 0);
+    require(observation_outcome == snapshot_outcome,
+            "validated public-fact reuse changed goal-line evaluation");
+}
+
 }  // namespace
 
 int main() {
@@ -750,6 +779,7 @@ int main() {
         test_predicate_registry_and_runtime_statuses();
         test_resource_binding_and_runtime_statuses();
         test_goal_line_selection_and_progress();
+        test_validated_public_facts_reuse_matches_observation_path();
         std::cout << "teacher_goal_line_test: PASS\n";
         return 0;
     } catch (const std::exception& error) {
