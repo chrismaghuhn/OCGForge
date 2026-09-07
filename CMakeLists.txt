@@ -889,6 +889,16 @@ target_compile_definitions(observation_builder_test PRIVATE
 )
 add_test(NAME observation_builder_test COMMAND observation_builder_test)
 
+add_executable(i6c6_native_oracle_test
+    tests/observation/i6c6_native_oracle_test.cpp
+)
+target_link_libraries(i6c6_native_oracle_test PRIVATE ygo_m0)
+target_compile_definitions(i6c6_native_oracle_test PRIVATE
+    YGO_I6C6_PLAYER_A="${CMAKE_SOURCE_DIR}/fixtures/decks/player_a.deck"
+    YGO_I6C6_PLAYER_B="${CMAKE_SOURCE_DIR}/fixtures/decks/player_b.deck"
+)
+add_test(NAME i6c6_native_oracle_test COMMAND i6c6_native_oracle_test)
+
 add_executable(m4_3_5_serialization_fixture_test
     tests/observation/m4_3_5_serialization_fixture_test.cpp
 )
