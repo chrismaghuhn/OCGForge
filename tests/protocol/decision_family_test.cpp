@@ -293,6 +293,34 @@ int run() {
         std::cerr << "select-unselect-card cancel operation metadata was not cleared\n";
         return 1;
     }
+
+    auto invalid_unselect = unselect_request;
+    invalid_unselect.candidates.front().card_selection_operation =
+        ygo::protocol::CardSelectionOperation::None;
+    try {
+        ygo::protocol::validate_candidate_set(invalid_unselect);
+        std::cerr << "unselect-card validation accepted missing operation metadata\n";
+        return 1;
+    } catch (const ygo::protocol::ProtocolError& error) {
+        if (error.code() != ygo::protocol::ProtocolErrorCode::IncompleteCandidates) {
+            std::cerr << "unselect-card validation reported the wrong error\n";
+            return 1;
+        }
+    }
+
+    auto invalid_option = option_request;
+    invalid_option.candidates.front().card_selection_operation =
+        ygo::protocol::CardSelectionOperation::Select;
+    try {
+        ygo::protocol::validate_candidate_set(invalid_option);
+        std::cerr << "non-unselect validation accepted operation metadata\n";
+        return 1;
+    } catch (const ygo::protocol::ProtocolError& error) {
+        if (error.code() != ygo::protocol::ProtocolErrorCode::IncompleteCandidates) {
+            std::cerr << "non-unselect validation reported the wrong error\n";
+            return 1;
+        }
+    }
     return 0;
 }
 

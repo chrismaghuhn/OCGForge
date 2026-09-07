@@ -838,6 +838,7 @@ DecisionRequest decode_unselect(const std::vector<std::uint8_t>& frame) {
         const auto item = read_card_item(reader, index, true, false, false);
         ActionCandidate candidate;
         candidate.action_kind = ActionKind::CardSelection;
+        candidate.card_selection_operation = CardSelectionOperation::Unselect;
         candidate.semantic_key = "unselect.selected." + std::to_string(item.source_index) + "." +
                                  std::to_string(item.card.code) + "." + std::to_string(item.card.controller) + "." +
                                  std::to_string(item.card.location) + "." + std::to_string(item.card.sequence);
@@ -859,6 +860,7 @@ DecisionRequest decode_unselect(const std::vector<std::uint8_t>& frame) {
         const auto item = read_card_item(reader, index, true, false, false);
         ActionCandidate candidate;
         candidate.action_kind = ActionKind::CardSelection;
+        candidate.card_selection_operation = CardSelectionOperation::Select;
         candidate.semantic_key = "unselect.unselected." + std::to_string(item.source_index) + "." +
                                  std::to_string(item.card.code) + "." + std::to_string(item.card.controller) + "." +
                                  std::to_string(item.card.location) + "." + std::to_string(item.card.sequence);
@@ -1300,6 +1302,16 @@ void validate_candidate_set(const DecisionRequest& request) {
         if (candidate.semantic_key.empty()) {
             throw ProtocolError(ProtocolErrorCode::IncompleteCandidates,
                                 "interactive candidate is missing a semantic key");
+        }
+        if (request.kind == DecisionRequestKind::UnselectCard &&
+            candidate.action_kind == ActionKind::CardSelection) {
+            if (candidate.card_selection_operation == CardSelectionOperation::None) {
+                throw ProtocolError(ProtocolErrorCode::IncompleteCandidates,
+                                    "unselect-card candidate is missing its selection operation");
+            }
+        } else if (candidate.card_selection_operation != CardSelectionOperation::None) {
+            throw ProtocolError(ProtocolErrorCode::IncompleteCandidates,
+                                "card selection operation is invalid for this candidate");
         }
         if (candidate.submits_engine_response && candidate.exact_response_bytes.empty()) {
             throw ProtocolError(ProtocolErrorCode::IncompleteCandidates,

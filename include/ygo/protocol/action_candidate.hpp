@@ -23,6 +23,12 @@ enum class ActionKind {
     AssignAmount,
 };
 
+enum class CardSelectionOperation : std::uint8_t {
+    None = 0,
+    Select = 1,
+    Unselect = 2,
+};
+
 // Auxiliary metadata owned by the continuation protocol. This classifies the
 // operation independently of the internal semantic key so public projection
 // never has to infer policy-facing identity from that key.
@@ -37,6 +43,7 @@ enum class ContinuationOperation {
 
 struct ActionCandidate {
     ActionKind action_kind = ActionKind::IdleCommand;
+    CardSelectionOperation card_selection_operation = CardSelectionOperation::None;
     std::string semantic_key;
     std::uint32_t source_card = 0;
     std::uint8_t source_controller = 0;
