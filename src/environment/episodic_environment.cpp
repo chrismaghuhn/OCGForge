@@ -151,6 +151,21 @@ bool equal_deck_identity(const CertifiedDeckIdentity& left, const CertifiedDeckI
     return left.id == right.id && left.sha256 == right.sha256;
 }
 
+bool is_v3_contract(const std::string_view contract_id) noexcept {
+    return contract_id == kEpisodicEnvironmentV3ContractId;
+}
+
+std::string_view environment_identity_schema_for(
+    const CertifiedEnvironmentConfig& config) {
+    if (config.contract_id == kEpisodicEnvironmentV2ContractId) {
+        return kEnvironmentIdentityV2SchemaId;
+    }
+    if (config.contract_id == kEpisodicEnvironmentV3ContractId) {
+        return kEnvironmentIdentityV3SchemaId;
+    }
+    throw std::invalid_argument("unknown episodic environment contract");
+}
+
 bool equal_config(const CertifiedEnvironmentConfig& left, const CertifiedEnvironmentConfig& right) {
     if (left.contract_id != right.contract_id || left.environment_semantic_id != right.environment_semantic_id ||
         left.decision_contract_id != right.decision_contract_id ||
@@ -603,12 +618,27 @@ CertifiedEnvironmentConfig CertifiedEnvironmentConfig::canonical() {
     return config;
 }
 
+CertifiedEnvironmentConfig CertifiedEnvironmentConfig::canonical_v3() {
+    auto config = CertifiedEnvironmentConfig::canonical();
+    config.contract_id = std::string(kEpisodicEnvironmentV3ContractId);
+    config.public_action_identity_schema_id =
+        std::string(kPublicActionIdentityV2SchemaId);
+    config.public_candidate_digest_schema_id =
+        std::string(kPublicCandidateDomainV2SchemaId);
+    config.public_decision_identity_schema_id =
+        std::string(kPublicSemanticDecisionIdentityV2SchemaId);
+    config.environment_semantic_id =
+        ::ygo::environment::environment_semantic_id(config);
+    return config;
+}
+
 std::vector<std::uint8_t> canonical_environment_identity_bytes(
     const CertifiedEnvironmentConfig& config) {
     std::vector<std::uint8_t> bytes;
     bytes.reserve(1400);
-    append_string(bytes, kEnvironmentIdentitySchemaId);
-    append_string(bytes, kEnvironmentIdentitySchemaId);
+    const auto identity_schema = environment_identity_schema_for(config);
+    append_string(bytes, identity_schema);
+    append_string(bytes, identity_schema);
     append_string(bytes, config.contract_id);
     append_string(bytes, config.decision_contract_id);
     append_string(bytes, config.observation_contract_id);
@@ -928,6 +958,38 @@ std::string project_continuation_operation(const protocol::ActionCandidate& cand
     return std::string(operation);
 }
 
+PublicCardSelectionOperation project_card_selection_operation(
+    const bool v3, const protocol::DecisionRequest& request,
+    const protocol::ActionCandidate& candidate) {
+    const auto internal_operation = candidate.card_selection_operation;
+    const auto is_unselect_card_candidate =
+        request.kind == protocol::DecisionRequestKind::UnselectCard &&
+        candidate.action_kind == protocol::ActionKind::CardSelection;
+    if (!v3) {
+        // The historical V2 public contract has no operation field. Keep its
+        // public DTO/key bytes unchanged; only V3 projects this new metadata.
+        return PublicCardSelectionOperation::None;
+    }
+    if (!is_unselect_card_candidate) {
+        if (internal_operation != protocol::CardSelectionOperation::None) {
+            throw BoundaryError(
+                FailureCode::PublicFrameInvariant, FailureStage::Projection,
+                "card selection operation metadata is invalid for this public request");
+        }
+        return PublicCardSelectionOperation::None;
+    }
+    switch (internal_operation) {
+    case protocol::CardSelectionOperation::Select:
+        return PublicCardSelectionOperation::Select;
+    case protocol::CardSelectionOperation::Unselect:
+        return PublicCardSelectionOperation::Unselect;
+    case protocol::CardSelectionOperation::None:
+        break;
+    }
+    throw BoundaryError(FailureCode::PublicFrameInvariant, FailureStage::Projection,
+                        "UNSELECT_CARD candidate has no valid public operation metadata");
+}
+
 struct ProjectedCandidate final {
     EnvironmentActionCandidate public_candidate;
     detail::PublicActionBinding binding;
@@ -935,7 +997,8 @@ struct ProjectedCandidate final {
 
 ProjectedCandidate project_candidate(const protocol::DecisionRequest& request,
                                      const protocol::ActionCandidate& candidate,
-                                     const observation::PlayerObservation& current) {
+                                     const observation::PlayerObservation& current,
+                                     const bool v3) {
     if (!safe_key_shape(request, candidate)) {
         throw BoundaryError(FailureCode::PublicFrameInvariant, FailureStage::Projection,
                             "internal semantic action key is not coupled to its request family");
@@ -947,6 +1010,8 @@ ProjectedCandidate project_candidate(const protocol::DecisionRequest& request,
         throw BoundaryError(FailureCode::UnsupportedProtocol, FailureStage::Projection,
                             "internal action kind has no public representation");
     }
+    result.public_candidate.card_selection_operation =
+        project_card_selection_operation(v3, request, candidate);
 
     if (candidate.source_card != 0) {
         result.public_candidate.source_reference = project_card_reference(
@@ -971,6 +1036,7 @@ ProjectedCandidate project_candidate(const protocol::DecisionRequest& request,
 
     PublicActionKeyInput key;
     key.action_kind = std::string(environment_action_kind_name(result.public_candidate.action_kind));
+    key.card_selection_operation = result.public_candidate.card_selection_operation;
     key.choice = choice;
     key.source_reference = result.public_candidate.source_reference;
     key.target_reference = result.public_candidate.target_reference;
@@ -1014,7 +1080,8 @@ ProjectedCandidate project_candidate(const protocol::DecisionRequest& request,
     result.public_candidate.continuation_operation = continuation_operation;
     result.public_candidate.submits_engine_response = candidate.submits_engine_response;
     try {
-        result.public_candidate.public_action_key = public_action_key(key);
+        result.public_candidate.public_action_key =
+            v3 ? public_action_key_v2(key) : public_action_key(key);
     } catch (const std::exception&) {
         throw BoundaryError(FailureCode::PublicFrameInvariant, FailureStage::Projection,
                             "candidate cannot be encoded as a canonical public action key");
@@ -1088,7 +1155,7 @@ struct EpisodicEnvironment::Impl final {
 
     StepRejected rejected(const ActionSelection& selection, const RejectionCode code) const {
         StepRejected result;
-        result.contract_id = std::string(kEpisodicEnvironmentContractId);
+        result.contract_id = config.contract_id;
         result.rejection_code = code;
         result.submitted_episode_semantic_id = selection.episode_semantic_id;
         result.submitted_public_semantic_decision_id = selection.public_semantic_decision_id;
@@ -1108,7 +1175,7 @@ struct EpisodicEnvironment::Impl final {
                                 const bool mutation_may_have_occurred,
                                 const bool include_diagnostic_reference = true) const {
         EpisodeFailure result;
-        result.contract_id = std::string(kEpisodicEnvironmentContractId);
+        result.contract_id = config.contract_id;
         if (!current_episode_id.empty()) {
             result.episode_semantic_id = current_episode_id;
         }
@@ -1175,7 +1242,7 @@ struct EpisodicEnvironment::Impl final {
                                 "terminal boundary has no live driver evidence");
         }
         EpisodeTerminal result;
-        result.contract_id = std::string(kEpisodicEnvironmentContractId);
+        result.contract_id = config.contract_id;
         result.episode_semantic_id = current_episode_id;
         result.winner = driver_terminal.winner;
         result.win_reason = driver_terminal.win_reason;
@@ -1189,7 +1256,7 @@ struct EpisodicEnvironment::Impl final {
 
     EpisodeInterrupted make_interrupted(const InterruptionReason reason) const {
         EpisodeInterrupted result;
-        result.contract_id = std::string(kEpisodicEnvironmentContractId);
+        result.contract_id = config.contract_id;
         result.episode_semantic_id = current_episode_id;
         result.reason = reason;
         if (driver != nullptr) {
@@ -1292,8 +1359,9 @@ struct EpisodicEnvironment::Impl final {
         public_request.candidates.reserve(request.candidates.size());
         std::vector<detail::PublicActionBinding> bindings;
         bindings.reserve(request.candidates.size());
+        const auto v3 = is_v3_contract(config.contract_id);
         for (const auto& candidate : request.candidates) {
-            auto projected = project_candidate(request, candidate, current);
+            auto projected = project_candidate(request, candidate, current, v3);
             keys.push_back(projected.public_candidate.public_action_key);
             bindings.push_back(std::move(projected.binding));
             public_request.candidates.push_back(std::move(projected.public_candidate));
@@ -1305,8 +1373,11 @@ struct EpisodicEnvironment::Impl final {
 
         std::string public_candidate_digest;
         try {
-            public_candidate_digest = public_candidate_domain_digest(
-                environment_decision_kind_name(public_kind), keys);
+            public_candidate_digest =
+                v3 ? public_candidate_domain_digest_v2(
+                         environment_decision_kind_name(public_kind), keys)
+                    : public_candidate_domain_digest(
+                          environment_decision_kind_name(public_kind), keys);
         } catch (const std::exception&) {
             throw BoundaryError(FailureCode::PublicFrameInvariant, FailureStage::Projection,
                                 "public candidate domain is not canonical or unique");
@@ -1321,7 +1392,7 @@ struct EpisodicEnvironment::Impl final {
         public_identity.public_candidate_domain_digest = public_candidate_digest;
 
         ProjectedFrame result;
-        result.frame.contract_id = std::string(kEpisodicEnvironmentContractId);
+        result.frame.contract_id = config.contract_id;
         result.frame.episode_semantic_id = current_episode_id;
         result.frame.decision_index = decision_index;
         result.frame.engine_step_index = request.engine_step_index;
@@ -1331,7 +1402,9 @@ struct EpisodicEnvironment::Impl final {
         result.frame.public_observation_digest = public_observation_hash;
         result.frame.public_candidate_domain_digest = public_candidate_digest;
         try {
-            result.frame.public_semantic_decision_id = public_semantic_decision_id(public_identity);
+            result.frame.public_semantic_decision_id =
+                v3 ? public_semantic_decision_id_v2(public_identity)
+                    : public_semantic_decision_id(public_identity);
         } catch (const std::exception&) {
             throw BoundaryError(FailureCode::PublicFrameInvariant, FailureStage::Projection,
                                 "public semantic decision identity is not canonical");
@@ -1472,9 +1545,9 @@ struct EpisodicEnvironment::Impl final {
         if (lifecycle_state == Lifecycle::AwaitingAction) {
             return ResetRejected{ResetRejectionCode::ResetWhileAwaitingAction, lifecycle_state};
         }
-        if (spec.contract_id != kEpisodicEnvironmentContractId ||
+        if (spec.contract_id != config.contract_id ||
             control.cancellation.reason != "ADMINISTRATIVE_CANCEL") {
-            return ResetRejected{spec.contract_id != kEpisodicEnvironmentContractId
+            return ResetRejected{spec.contract_id != config.contract_id
                                      ? ResetRejectionCode::InvalidContract
                                      : ResetRejectionCode::UnsupportedResetConfiguration,
                                  lifecycle_state};
@@ -1541,7 +1614,7 @@ struct EpisodicEnvironment::Impl final {
     }
 
     StepResult step(const ActionSelection& selection) {
-        if (selection.contract_id != kEpisodicEnvironmentContractId) {
+        if (selection.contract_id != config.contract_id) {
             return rejected(selection, RejectionCode::IncompatibleContract);
         }
         if (lifecycle_state != Lifecycle::AwaitingAction || !current_frame.has_value() || driver == nullptr) {
@@ -1567,8 +1640,12 @@ struct EpisodicEnvironment::Impl final {
         if (current_bindings.size() != current_frame->request.candidates.size()) {
             return rejected(selection, RejectionCode::PublicActionDomainDivergence);
         }
-        const auto internal_key = detail::resolve_public_action_key(
-            current_bindings, selection.public_action_key);
+        const auto internal_key =
+            is_v3_contract(config.contract_id)
+                ? detail::resolve_public_action_key_v2(
+                      current_bindings, selection.public_action_key)
+                : detail::resolve_public_action_key(
+                      current_bindings, selection.public_action_key);
         if (!internal_key.has_value()) {
             return rejected(selection, RejectionCode::PublicActionDomainDivergence);
         }
@@ -1615,7 +1692,7 @@ struct EpisodicEnvironment::Impl final {
     }
 
     InterruptResult interrupt(const InterruptRequest& request) {
-        if (request.contract_id != kEpisodicEnvironmentContractId) {
+        if (request.contract_id != config.contract_id) {
             return InterruptRejected{RejectionCode::IncompatibleContract, lifecycle_state};
         }
         if (lifecycle_state != Lifecycle::AwaitingAction || !current_frame.has_value() || driver == nullptr) {
@@ -1675,8 +1752,10 @@ void detail::EpisodicEnvironmentTestAccess::force_next_reset_failure(
 
 EnvironmentFactoryResult EpisodicEnvironment::create(CertifiedEnvironmentConfig config) {
     try {
-        const auto canonical = CertifiedEnvironmentConfig::canonical();
-        if (!equal_config(config, canonical)) {
+        const auto canonical_v2 = CertifiedEnvironmentConfig::canonical();
+        const auto canonical_v3 = CertifiedEnvironmentConfig::canonical_v3();
+        if (!equal_config(config, canonical_v2) &&
+            !equal_config(config, canonical_v3)) {
             return EnvironmentFactoryRejected{ResetRejectionCode::InvalidEnvironmentId};
         }
         if (!certified_resources_match(config)) {

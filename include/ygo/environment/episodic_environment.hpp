@@ -19,8 +19,12 @@ namespace ygo::environment {
 
 inline constexpr std::string_view kEpisodicEnvironmentContractId =
     kEpisodicEnvironmentV2ContractId;
+inline constexpr std::string_view kEpisodicEnvironmentV3ContractId =
+    "ocgforge.episodic_environment.v3";
 inline constexpr std::string_view kEnvironmentIdentitySchemaId =
     kEnvironmentIdentityV2SchemaId;
+inline constexpr std::string_view kEnvironmentIdentityV3SchemaId =
+    "ocgforge.environment_identity.v3";
 inline constexpr std::string_view kEpisodeIdentitySchemaId =
     "ocgforge.episode_identity.v1";
 inline constexpr std::string_view kSemanticDecisionIdentitySchemaId =
@@ -69,6 +73,7 @@ struct CertifiedEnvironmentConfig final {
     std::string required_script_closure_identity;
 
     static CertifiedEnvironmentConfig canonical();
+    static CertifiedEnvironmentConfig canonical_v3();
 };
 
 enum class SeatAssignment : std::uint8_t {
