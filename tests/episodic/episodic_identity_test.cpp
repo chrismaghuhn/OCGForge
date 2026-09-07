@@ -44,6 +44,30 @@ void test_environment_vector() {
             "canonical environment config did not retain its computed identity");
 }
 
+void test_v3_identity_api() {
+    static_assert(ygo::environment::kEpisodicEnvironmentV3ContractId ==
+                  "ocgforge.episodic_environment.v3");
+    static_assert(ygo::environment::kEnvironmentIdentityV3SchemaId ==
+                  "ocgforge.environment_identity.v3");
+
+    const auto v2 = ygo::environment::CertifiedEnvironmentConfig::canonical();
+    const auto v3 = ygo::environment::CertifiedEnvironmentConfig::canonical_v3();
+    require(v3.contract_id == ygo::environment::kEpisodicEnvironmentV3ContractId,
+            "canonical V3 config has the wrong contract ID");
+    require(v3.public_action_identity_schema_id ==
+                ygo::environment::kPublicActionIdentityV2SchemaId &&
+                v3.public_candidate_digest_schema_id ==
+                    ygo::environment::kPublicCandidateDomainV2SchemaId &&
+                v3.public_decision_identity_schema_id ==
+                    ygo::environment::kPublicSemanticDecisionIdentityV2SchemaId,
+            "canonical V3 config did not bind public identity V2");
+    require(v2.environment_semantic_id != v3.environment_semantic_id,
+            "V2 and V3 environment identities unexpectedly matched");
+    require(v3.environment_semantic_id ==
+                ygo::environment::environment_semantic_id(v3),
+            "canonical V3 config did not retain its computed identity");
+}
+
 void test_episode_vector() {
     const auto config = ygo::environment::CertifiedEnvironmentConfig::canonical();
     ygo::environment::EpisodeSpec spec;
@@ -79,6 +103,7 @@ void test_decision_vector() {
 int main() {
     try {
         test_environment_vector();
+        test_v3_identity_api();
         test_episode_vector();
         test_decision_vector();
         std::cout << "episodic_identity_tests=passed\n";
