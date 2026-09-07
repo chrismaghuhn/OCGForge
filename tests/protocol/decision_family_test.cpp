@@ -308,6 +308,20 @@ int run() {
         }
     }
 
+    auto invalid_operation = unselect_request;
+    invalid_operation.candidates.front().card_selection_operation =
+        static_cast<ygo::protocol::CardSelectionOperation>(0xff);
+    try {
+        ygo::protocol::validate_candidate_set(invalid_operation);
+        std::cerr << "unselect-card validation accepted an unknown operation\n";
+        return 1;
+    } catch (const ygo::protocol::ProtocolError& error) {
+        if (error.code() != ygo::protocol::ProtocolErrorCode::IncompleteCandidates) {
+            std::cerr << "unknown operation validation reported the wrong error\n";
+            return 1;
+        }
+    }
+
     auto invalid_option = option_request;
     invalid_option.candidates.front().card_selection_operation =
         ygo::protocol::CardSelectionOperation::Select;

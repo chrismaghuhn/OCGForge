@@ -1305,9 +1305,10 @@ void validate_candidate_set(const DecisionRequest& request) {
         }
         if (request.kind == DecisionRequestKind::UnselectCard &&
             candidate.action_kind == ActionKind::CardSelection) {
-            if (candidate.card_selection_operation == CardSelectionOperation::None) {
+            if (candidate.card_selection_operation != CardSelectionOperation::Select &&
+                candidate.card_selection_operation != CardSelectionOperation::Unselect) {
                 throw ProtocolError(ProtocolErrorCode::IncompleteCandidates,
-                                    "unselect-card candidate is missing its selection operation");
+                                    "unselect-card candidate has an invalid selection operation");
             }
         } else if (candidate.card_selection_operation != CardSelectionOperation::None) {
             throw ProtocolError(ProtocolErrorCode::IncompleteCandidates,
