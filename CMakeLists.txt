@@ -479,6 +479,12 @@ add_executable(teacher_fallback_test tests/teacher/teacher_fallback_test.cpp)
 target_link_libraries(teacher_fallback_test PRIVATE ygo_teacher)
 add_test(NAME teacher_fallback_test COMMAND teacher_fallback_test)
 
+add_executable(teacher_v3_hiita_commitment_red_test
+               tests/teacher/teacher_v3_hiita_commitment_red_test.cpp)
+target_link_libraries(teacher_v3_hiita_commitment_red_test PRIVATE ygo_teacher)
+add_test(NAME teacher_v3_hiita_commitment_red_test
+         COMMAND teacher_v3_hiita_commitment_red_test)
+
 add_executable(teacher_explanation_test tests/teacher/teacher_explanation_test.cpp)
 target_link_libraries(teacher_explanation_test PRIVATE ygo_teacher)
 add_test(NAME teacher_explanation_test COMMAND teacher_explanation_test)
