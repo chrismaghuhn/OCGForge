@@ -109,7 +109,7 @@ PlayerObservation observation_for(const DecisionRequest& request) {
 }
 
 std::unique_ptr<EpisodicEnvironment> make_v3_environment() {
-    const auto factory = EpisodicEnvironment::create(
+    auto factory = EpisodicEnvironment::create(
         CertifiedEnvironmentConfig::canonical_v3());
     require(std::holds_alternative<std::unique_ptr<EpisodicEnvironment>>(factory),
             "canonical V3 environment was rejected");
@@ -196,12 +196,50 @@ void test_v3_projection_rejects_inconsistent_operations() {
                                  "non-card action accepted a selection operation");
 }
 
+void test_v3_live_contract_ids() {
+    auto environment = make_v3_environment();
+    ygo::environment::EpisodeSpec spec;
+    spec.contract_id = ygo::environment::kEpisodicEnvironmentV3ContractId;
+    spec.root_seed = 2;
+    ygo::environment::RunControl control;
+    control.engine_process_budget = 64;
+    control.semantic_action_budget = 64;
+    control.cancellation.source = "v3-contract-id-test";
+
+    const auto reset = environment->reset(spec, control);
+    require(std::holds_alternative<ygo::environment::ResetAccepted>(reset),
+            "V3 reset was rejected");
+    const auto& next = std::get<ygo::environment::ResetAccepted>(reset).next;
+    const auto* frame = std::get_if<ygo::environment::DecisionFrame>(&next);
+    require(frame != nullptr &&
+                frame->contract_id == ygo::environment::kEpisodicEnvironmentV3ContractId,
+            "V3 reset did not publish a V3 decision frame");
+
+    const auto wrong_contract = environment->step(ygo::environment::ActionSelection{
+        std::string(ygo::environment::kEpisodicEnvironmentV2ContractId),
+        frame->episode_semantic_id, frame->public_semantic_decision_id,
+        frame->submission_token, frame->request.candidates.front().public_action_key});
+    require(std::holds_alternative<ygo::environment::StepRejected>(wrong_contract) &&
+                std::get<ygo::environment::StepRejected>(wrong_contract).contract_id ==
+                    ygo::environment::kEpisodicEnvironmentV3ContractId,
+            "V3 rejected step did not retain the active V3 contract ID");
+
+    const auto interrupted = environment->interrupt(ygo::environment::InterruptRequest{
+        std::string(ygo::environment::kEpisodicEnvironmentV3ContractId),
+        ygo::environment::InterruptionReason::AdministrativeCancel});
+    require(std::holds_alternative<ygo::environment::InterruptAccepted>(interrupted) &&
+                std::get<ygo::environment::InterruptAccepted>(interrupted).interruption.contract_id ==
+                    ygo::environment::kEpisodicEnvironmentV3ContractId,
+            "V3 interruption did not retain the active V3 contract ID");
+}
+
 }  // namespace
 
 int main() {
     try {
         test_v3_projection();
         test_v3_projection_rejects_inconsistent_operations();
+        test_v3_live_contract_ids();
         std::cout << "episodic_environment_v3_public_operation_tests=passed\n";
         return 0;
     } catch (const std::exception& error) {
