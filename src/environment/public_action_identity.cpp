@@ -90,6 +90,19 @@ void validate_choice(const PublicChoice& choice) {
     }
 }
 
+bool is_valid_card_selection_operation(const PublicCardSelectionOperation operation) noexcept {
+    return static_cast<std::uint8_t>(operation) <=
+           static_cast<std::uint8_t>(PublicCardSelectionOperation::Unselect);
+}
+
+bool is_valid_card_selection_operation_for_action(
+    const std::string_view action_kind,
+    const PublicCardSelectionOperation operation) noexcept {
+    return is_valid_card_selection_operation(operation) &&
+           (action_kind == "card_selection" ||
+            operation == PublicCardSelectionOperation::None);
+}
+
 bool is_lower_token(const std::string_view value) noexcept {
     if (value.empty()) {
         return false;
@@ -285,6 +298,59 @@ bool is_canonical_public_action_bytes(const std::vector<std::uint8_t>& bytes) no
     return offset == bytes.size();
 }
 
+bool is_canonical_public_action_bytes_v2(
+    const std::vector<std::uint8_t>& bytes) noexcept {
+    std::size_t offset = 0;
+    std::string_view value;
+    if (!read_string(bytes, offset, value) || value != kPublicActionIdentityV2SchemaId ||
+        !read_string(bytes, offset, value) || value != kPublicActionIdentityV2SchemaId ||
+        !read_string(bytes, offset, value) || !is_lower_token(value)) {
+        return false;
+    }
+
+    const auto action_kind = value;
+    std::uint8_t operation_code = 0;
+    if (!read_u8(bytes, offset, operation_code)) {
+        return false;
+    }
+    const auto operation = static_cast<PublicCardSelectionOperation>(operation_code);
+    if (!is_valid_card_selection_operation_for_action(action_kind, operation)) {
+        return false;
+    }
+
+    if (!read_optional_choice(bytes, offset)) {
+        return false;
+    }
+
+    for (int reference_index = 0; reference_index < 2; ++reference_index) {
+        std::uint8_t present = 0;
+        if (!read_u8(bytes, offset, present) || present > 1) {
+            return false;
+        }
+        if (present == 0) {
+            continue;
+        }
+        std::uint8_t kind = 0;
+        if (!read_u8(bytes, offset, kind) || kind > 1 ||
+            !read_string(bytes, offset, value) || !is_observation_locator(value)) {
+            return false;
+        }
+    }
+
+    if (!read_optional_u32(bytes, offset) ||
+        !read_optional_u8(bytes, offset) ||
+        !read_optional_u32(bytes, offset) ||
+        !read_optional_u32(bytes, offset)) {
+        return false;
+    }
+    std::string_view continuation_operation;
+    if (!read_string(bytes, offset, continuation_operation) ||
+        (!continuation_operation.empty() && !is_lower_token(continuation_operation))) {
+        return false;
+    }
+    return offset == bytes.size();
+}
+
 void validate_reference(const PublicCardReference& reference) {
     if (reference.kind != PublicCardReferenceKind::VisibleCard &&
         reference.kind != PublicCardReferenceKind::RedactedSlot) {
@@ -342,6 +408,10 @@ std::string lower_hex(const std::vector<std::uint8_t>& bytes) {
 
 std::vector<std::uint8_t> canonical_public_action_key_bytes(
     const PublicActionKeyInput& input) {
+    if (input.card_selection_operation != PublicCardSelectionOperation::None) {
+        throw std::invalid_argument(
+            "V1 public action identity cannot encode a card selection operation");
+    }
     if (!is_lower_token(input.action_kind)) {
         throw std::invalid_argument("public action kind is not a canonical token");
     }
@@ -386,6 +456,60 @@ bool is_public_action_key(const std::string_view key) noexcept {
     return decode_lower_hex(encoded, bytes) && is_canonical_public_action_bytes(bytes);
 }
 
+std::vector<std::uint8_t> canonical_public_action_key_bytes_v2(
+    const PublicActionKeyInput& input) {
+    if (!is_lower_token(input.action_kind)) {
+        throw std::invalid_argument("public action kind is not a canonical token");
+    }
+    if (!is_valid_card_selection_operation_for_action(
+            input.action_kind, input.card_selection_operation)) {
+        throw std::invalid_argument(
+            "V2 public action selection operation is invalid for the action kind");
+    }
+    if (!input.continuation_operation.empty() &&
+        !is_lower_token(input.continuation_operation)) {
+        throw std::invalid_argument("public continuation operation is not a canonical token");
+    }
+    if (input.source_reference.has_value()) {
+        validate_reference(*input.source_reference);
+    }
+    if (input.target_reference.has_value()) {
+        validate_reference(*input.target_reference);
+    }
+
+    std::vector<std::uint8_t> bytes;
+    bytes.reserve(240);
+    append_string(bytes, kPublicActionIdentityV2SchemaId);
+    append_string(bytes, kPublicActionIdentityV2SchemaId);
+    append_string(bytes, input.action_kind);
+    append_u8(bytes, static_cast<std::uint8_t>(input.card_selection_operation));
+    append_choice(bytes, input.choice);
+    append_reference(bytes, input.source_reference);
+    append_reference(bytes, input.target_reference);
+    append_optional_u32(bytes, input.phase);
+    append_optional_u8(bytes, input.position);
+    append_optional_u32(bytes, input.source_index);
+    append_optional_i32(bytes, input.amount);
+    append_string(bytes, input.continuation_operation);
+    return bytes;
+}
+
+std::string public_action_key_v2(const PublicActionKeyInput& input) {
+    return std::string(kPublicActionKeyV2Prefix) +
+           lower_hex(canonical_public_action_key_bytes_v2(input));
+}
+
+bool is_public_action_key_v2(const std::string_view key) noexcept {
+    if (key.size() <= kPublicActionKeyV2Prefix.size() ||
+        key.substr(0, kPublicActionKeyV2Prefix.size()) != kPublicActionKeyV2Prefix) {
+        return false;
+    }
+    const auto encoded = key.substr(kPublicActionKeyV2Prefix.size());
+    std::vector<std::uint8_t> bytes;
+    return decode_lower_hex(encoded, bytes) &&
+           is_canonical_public_action_bytes_v2(bytes);
+}
+
 std::vector<std::uint8_t> canonical_public_candidate_domain_bytes(
     const std::string_view request_kind, const std::vector<std::string>& public_action_keys) {
     if (!is_lower_token(request_kind)) {
@@ -423,6 +547,45 @@ std::string public_candidate_domain_digest(
         canonical_public_candidate_domain_bytes(request_kind, public_action_keys));
 }
 
+std::vector<std::uint8_t> canonical_public_candidate_domain_bytes_v2(
+    const std::string_view request_kind,
+    const std::vector<std::string>& public_action_keys) {
+    if (!is_lower_token(request_kind)) {
+        throw std::invalid_argument("public request kind is not a canonical token");
+    }
+    if (public_action_keys.empty()) {
+        throw std::invalid_argument("public candidate domain is empty");
+    }
+
+    for (std::size_t index = 0; index < public_action_keys.size(); ++index) {
+        if (!is_public_action_key_v2(public_action_keys[index])) {
+            throw std::invalid_argument("public candidate domain contains an invalid V2 key");
+        }
+        for (std::size_t previous = 0; previous < index; ++previous) {
+            if (public_action_keys[index] == public_action_keys[previous]) {
+                throw std::invalid_argument("public candidate domain contains an ambiguous key");
+            }
+        }
+    }
+
+    std::vector<std::uint8_t> bytes;
+    bytes.reserve(64 + public_action_keys.size() * 112);
+    append_string(bytes, kPublicCandidateDomainV2SchemaId);
+    append_string(bytes, request_kind);
+    append_count(bytes, public_action_keys.size());
+    for (const auto& key : public_action_keys) {
+        append_string(bytes, key);
+    }
+    return bytes;
+}
+
+std::string public_candidate_domain_digest_v2(
+    const std::string_view request_kind,
+    const std::vector<std::string>& public_action_keys) {
+    return trace::sha256_bytes(
+        canonical_public_candidate_domain_bytes_v2(request_kind, public_action_keys));
+}
+
 std::vector<std::uint8_t> canonical_public_semantic_decision_identity_bytes(
     const PublicSemanticDecisionIdentityInput& input) {
     if (!is_lower_hex_digest(input.episode_semantic_id) || input.acting_player > 1 ||
@@ -449,6 +612,34 @@ std::string public_semantic_decision_id(const PublicSemanticDecisionIdentityInpu
     return trace::sha256_bytes(canonical_public_semantic_decision_identity_bytes(input));
 }
 
+std::vector<std::uint8_t> canonical_public_semantic_decision_identity_bytes_v2(
+    const PublicSemanticDecisionIdentityInput& input) {
+    if (!is_lower_hex_digest(input.episode_semantic_id) || input.acting_player > 1 ||
+        !is_lower_token(input.request_kind) ||
+        !is_lower_hex_digest(input.public_observation_digest) ||
+        !is_lower_hex_digest(input.public_candidate_domain_digest)) {
+        throw std::invalid_argument("public semantic decision identity contains an invalid field");
+    }
+
+    std::vector<std::uint8_t> bytes;
+    bytes.reserve(320);
+    append_string(bytes, kPublicSemanticDecisionIdentityV2SchemaId);
+    append_string(bytes, kPublicSemanticDecisionIdentityV2SchemaId);
+    append_string(bytes, input.episode_semantic_id);
+    append_u64be(bytes, input.decision_index);
+    append_u8(bytes, input.acting_player);
+    append_string(bytes, input.request_kind);
+    append_string(bytes, input.public_observation_digest);
+    append_string(bytes, input.public_candidate_domain_digest);
+    return bytes;
+}
+
+std::string public_semantic_decision_id_v2(
+    const PublicSemanticDecisionIdentityInput& input) {
+    return trace::sha256_bytes(
+        canonical_public_semantic_decision_identity_bytes_v2(input));
+}
+
 namespace detail {
 
 std::optional<std::string> resolve_public_action_key(
@@ -461,6 +652,33 @@ std::optional<std::string> resolve_public_action_key(
     for (std::size_t index = 0; index < bindings.size(); ++index) {
         const auto& binding = bindings[index];
         if (!is_public_action_key(binding.public_action_key) ||
+            binding.internal_semantic_key.empty()) {
+            return std::nullopt;
+        }
+        for (std::size_t previous = 0; previous < index; ++previous) {
+            if (binding.public_action_key == bindings[previous].public_action_key) {
+                return std::nullopt;
+            }
+        }
+        if (binding.public_action_key != public_key) {
+            continue;
+        }
+        resolved = binding.internal_semantic_key;
+    }
+    return resolved;
+}
+
+std::optional<std::string> resolve_public_action_key_v2(
+    const std::vector<PublicActionBinding>& bindings,
+    const std::string_view public_key) {
+    if (!is_public_action_key_v2(public_key)) {
+        return std::nullopt;
+    }
+
+    std::optional<std::string> resolved;
+    for (std::size_t index = 0; index < bindings.size(); ++index) {
+        const auto& binding = bindings[index];
+        if (!is_public_action_key_v2(binding.public_action_key) ||
             binding.internal_semantic_key.empty()) {
             return std::nullopt;
         }
