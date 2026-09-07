@@ -2,7 +2,9 @@
 
 ## Status
 
-Design draft for review. The design text is authorized; implementation is not.
+Design remediation draft for review. Core public-operation and identity
+decisions are approved; the downstream closure is now made explicit here.
+Implementation is not authorized.
 
 This document defines the public semantic contract and migration closure for
 the native `MSG_SELECT_UNSELECT_CARD` operation. It does not authorize changes
@@ -333,6 +335,7 @@ new candidate field. The new logical trajectory chain is:
 ocgforge.trusted_trajectory.v2
 ocgforge.trajectory_shard.v2
 ocgforge.restricted_replay_evidence.v2
+ocgforge.restricted_collection_evidence_bundle.v2
 ocgforge.public_gameplay_trajectory_identity.v2
 ocgforge.trajectory_record_identity.v2
 ocgforge.admission_receipt.v2
@@ -370,10 +373,17 @@ semantic keys only inside the trusted replay boundary.
 Replay must reject all cross-version combinations before mutation:
 
 ```text
-v2 environment + v2 trajectory -> accepted under historical rules
-v3 environment + v2 trajectory -> rejected
-v2 environment + v3 trajectory -> rejected
-v3 environment + v3 trajectory -> eligible after all v3 checks
+episodic_environment.v2 + trusted_trajectory.v1
+    -> historical accepted
+
+episodic_environment.v3 + trusted_trajectory.v1
+    -> rejected
+
+episodic_environment.v2 + trusted_trajectory.v2
+    -> rejected
+
+episodic_environment.v3 + trusted_trajectory.v2
+    -> eligible after all v2/v3 gates
 ```
 
 No v1/v2 artifact is relabeled as v3. A migration, if ever authorized, must
@@ -397,10 +407,271 @@ Dataset manifest v2 is required because the current manifest explicitly pins
 `trusted_trajectory.v1`. Dataset identity v2 binds the v2 manifest contract
 and its member closure.
 
+The restricted collection evidence bundle has its own canonical container and
+must be versioned independently:
+
+```text
+ocgforge.restricted_collection_evidence_bundle.v1 -> v2
+```
+
+Bundle v2 retains the exact v1 field order:
+
+```text
+bundle domain:string = ocgforge.restricted_collection_evidence_bundle.v2
+bundle schema:string = ocgforge.restricted_collection_evidence_bundle.v2
+candidate_shard_artifact_sha256:string
+interrupted_entry_count:u32be
+interrupted_entries[]:
+    episode_envelope_sha256:string
+    canonical RestrictedReplayEvidenceV2 bytes
+rng_initialization_entry_count:u32be
+rng_initialization_entries[]:
+    policy_rng_initialization_identity:string
+    initialization_material:bytes
+```
+
+The bundle validator must decode `RestrictedReplayEvidenceV2`, validate the
+v3 environment binding, preserve the existing strict digest/order rules, and
+reject a v1 bundle containing v2 nested evidence. The old v1 bundle reader
+retains its old nested v1 meaning.
+
 Policy provenance, policy-artifact, participant-assignment, and policy-RNG
 codecs retain their own v1 encodings when their field layouts do not change.
 New policy-artifact values may carry a new action-adapter identity, producing
 new content IDs without silently changing the old codec's meaning.
+
+The Task7 collection authority also needs a distinct policy/collection
+closure. The current policy action adapter identity is v1, and the current
+Task7 job/schedule bind the v2 environment and old Teacher artifact values:
+
+```text
+ocgforge.policy.public_action_key.v1
+    -> ocgforge.policy.public_action_key.v2
+
+phase6_task7_dataset_collection_job.v1
+    -> phase6_task7_dataset_collection_job.v2
+
+phase6_task7_dataset_collection_schedule.v1
+    -> phase6_task7_dataset_collection_schedule.v2
+```
+
+The policy-artifact and participant-assignment codecs may retain their own
+codec versions if their field layouts are unchanged. Their content IDs must
+be recomputed from the v2 action-adapter identity, so new PolicyArtifact and
+ParticipantPolicyAssignment IDs are required. The v2 job binds
+`episodic_environment.v3`, the new policy artifact/binding IDs, and the same
+ordered 16 seed/placement/starting-player coordinates. It does not alter the
+coordinates or silently replace a job.
+
+## 9.5 Exact trajectory and evidence byte deltas
+
+Every successor below retains the existing primitive encodings, vector order,
+strict sorting, and fail-closed validation unless a delta is listed
+explicitly. This prevents an implementer from choosing a new field position
+or silently changing an old v1 meaning.
+
+### Trusted trajectory v2 candidate
+
+The v2 public candidate record is:
+
+```text
+0  candidate schema:string = ocgforge.trusted_trajectory.v2
+1  action kind:string
+2  card_selection_operation:u8 (0=None, 1=Select, 2=Unselect)
+3  public_action_key:string = public_action.v2 key
+4  typed choice:optional {kind:u8, value:u64be, response_index:optional u32be}
+5  source reference:optional {kind:u8, observation_locator:string}
+6  target reference:optional {kind:u8, observation_locator:string}
+7  phase:optional u32be
+8  position:optional u8
+9  source index:optional u32be
+10 amount:optional signed i32 as u32be bits
+11 continuation operation:string
+12 submits engine response:boolean
+```
+
+The v2 request codec retains the v1 order:
+
+```text
+0  request schema:string = ocgforge.trusted_trajectory.v2
+1  request kind:string
+2  player:u8
+3  candidates:vector of TrustedTrajectoryV2 candidate bytes
+4  continuation:optional existing public continuation bytes
+```
+
+The v2 frame snapshot retains the v1 order, with the renamed field
+`environment_contract_id` at the former `v2_contract_id` position:
+
+```text
+0  frame schema:string = ocgforge.trusted_trajectory.v2
+1  environment_contract_id:string = ocgforge.episodic_environment.v3
+2  episode semantic ID:string
+3  public semantic decision ID:string
+4  decision index:u64be
+5  acting player:u8
+6  public observation:existing canonical public-observation bytes
+7  public observation digest:string
+8  public decision request:TrustedTrajectoryV2 request bytes
+9  public candidate-domain digest:string
+```
+
+The v2 decision-record and envelope codecs retain their v1 field order after
+replacing their trusted-trajectory schema/domain and nested v3 frame/request
+values. Transition classes, successor tags, policy attribution, and closure
+semantics are unchanged.
+
+The v2 episode manifest retains the current manifest order. The former
+misleading `v2_contract_id` source/API field is named
+`environment_contract_id` and carries the v3 value:
+
+```text
+0  manifest schema/domain:string = ocgforge.trusted_trajectory.v2
+1  environment_contract_id:string = ocgforge.episodic_environment.v3
+2  environment semantic ID:string
+3  environment identity input:bytes
+4  episode identity schema:string = ocgforge.episode_identity.v1
+5  episode semantic ID:string
+6  episode identity input:bytes
+7  policy provenance envelope:existing canonical bytes
+8  collection disposition:existing canonical bytes
+```
+
+The v2 public frame snapshot and decision-record structures use the same
+renaming at their former `v2_contract_id` position. No v2 type may expose a
+field named `v2_contract_id` whose value is actually a v3 contract.
+
+### Restricted replay evidence v2
+
+The exact v2 evidence bytes retain the existing field order:
+
+```text
+0  evidence schema:string = ocgforge.restricted_replay_evidence.v2
+1  environment_contract_id:string = ocgforge.episodic_environment.v3
+2  episode semantic ID:string
+3  closure kind:u8 = 1 (INTERRUPTED)
+4  interruption reason:u8
+5  engine-process budget:u64be
+6  semantic-action budget:u64be
+7  observed engine-process count:u64be
+8  observed semantic-action count:u64be
+9  final engine-step index:u64be
+```
+
+### Shard, gameplay, record, receipt, and dataset successors
+
+The exact deltas for the remaining persisted identities are:
+
+| Successor | Canonical order | Explicit delta |
+| --- | --- | --- |
+| `trajectory_shard.v2` | v1 shard order retained | domain/schema v2; envelope decoder is trajectory v2 |
+| `public_gameplay_trajectory_identity.v2` | v1 identity order retained | domain/schema v2; trusted trajectory v2; environment contract v3 |
+| `trajectory_record_identity.v2` | v1 identity order retained | domain/schema v2; trusted trajectory v2; nested v2 public-gameplay ID |
+| `admission_receipt.v2` | v1 receipt order retained | domain/schema/admission ID v2; candidate shard and restricted bundle are v2 |
+| `dataset_identity.v2` | v1 identity order retained | domain/schema v2; trusted trajectory contract v2; same sorted record-ID vector |
+| `dataset_manifest.v2` | v1 manifest order retained | domain/schema v2; dataset-identity schema v2; trusted trajectory v2; member fields/order unchanged |
+| `ocgforge.phase6.bc_sample_identity.v1` | `ocgforge.phase6.bc_sample_identity.v2` | derived sample binds trajectory/model v2 identities |
+
+For `admission_receipt.v2`, the entry fields remain:
+
+```text
+trajectory_record_id:string
+public_gameplay_trajectory_id:string
+environment_semantic_id:string
+episode_semantic_id:string
+episode_envelope_sha256:string
+closure_kind:u8
+```
+
+Only their accepted successor identity prefixes and the enclosing contract
+closure change. Receipt v1 remains bound to v1 records and v1 shard/evidence
+artifacts.
+
+For the two collection-evidence layers, the v2 bundle embeds the exact v2
+restricted-evidence bytes shown above; it does not flatten or duplicate their
+fields. Interrupted entries and RNG initialization entries retain their v1
+ordering and atomic validation rules.
+
+The exact identity byte orders for the remaining successors are:
+
+```text
+TrajectoryShardV2:
+0  shard domain:string = ocgforge.trajectory_shard.v2
+1  shard schema:string = ocgforge.trajectory_shard.v2
+2  entry count:u32be
+3..n entries in existing ascending envelope-digest order:
+       episode-envelope SHA-256:string
+       envelope length:u32be
+       canonical TrustedTrajectoryV2 envelope bytes
+
+PublicGameplayTrajectoryIdentityV2:
+0  identity domain:string = ocgforge.public_gameplay_trajectory_identity.v2
+1  identity schema:string = ocgforge.public_gameplay_trajectory_identity.v2
+2  trajectory contract:string = ocgforge.trusted_trajectory.v2
+3  environment contract:string = ocgforge.episodic_environment.v3
+4  environment semantic ID:string
+5  episode identity schema:string = ocgforge.episode_identity.v1
+6  episode semantic ID:string
+7  public record count:u32be
+8..n canonical public decision-record bytes in decision-index order
+n+1 canonical public closure bytes
+
+TrajectoryRecordIdentityV2:
+0  identity domain:string = ocgforge.trajectory_record_identity.v2
+1  identity schema:string = ocgforge.trajectory_record_identity.v2
+2  trajectory contract:string = ocgforge.trusted_trajectory.v2
+3  public gameplay trajectory ID:string
+4  canonical policy-provenance envelope bytes
+5  policy decision-attribution count:u32be
+6..n policy decision-attribution bytes in decision-index order
+n+1 collection disposition bytes
+
+DatasetIdentityV2:
+0  identity domain:string = ocgforge.dataset_identity.v2
+1  identity schema:string = ocgforge.dataset_identity.v2
+2  trusted trajectory contract:string = ocgforge.trusted_trajectory.v2
+3  member count:u32be
+4..n sorted unique trajectory-record IDs
+
+DatasetManifestV2:
+0  manifest domain:string = ocgforge.dataset_manifest.v2
+1  manifest schema:string = ocgforge.dataset_manifest.v2
+2  dataset identity schema:string = ocgforge.dataset_identity.v2
+3  trusted trajectory contract:string = ocgforge.trusted_trajectory.v2
+4  dataset semantic ID:string
+5  member count:u32be
+6..n member fields in existing order:
+       trajectory-record ID
+       public-gameplay trajectory ID
+       admission-receipt ID
+       candidate-shard artifact SHA-256
+       episode-envelope SHA-256
+
+AdmissionReceiptV2:
+0  admission domain:string = ocgforge.admission_receipt.v2
+1  admission schema:string = ocgforge.admission_receipt.v2
+2  admission contract ID:string = ocgforge.admission_receipt.v2
+3  candidate-shard artifact SHA-256:string
+4  restricted-bundle artifact SHA-256:string
+5  entry count:u32be
+6..n entry fields in existing order:
+       trajectory-record ID
+       public-gameplay trajectory ID
+       environment semantic ID
+       episode semantic ID
+       episode-envelope SHA-256
+       closure kind:u8
+```
+
+The lexical identity prefixes also change with these successor domains:
+
+```text
+public_gameplay_trajectory.v2.<digest>
+trajectory_record.v2.<digest>
+admission_receipt.v2.<digest>
+dataset_manifest.v2 / dataset identity v2 as specified by their contracts
+bc_sample.v2.<digest>
+```
 
 ## 10. Phase-5 model closure
 
@@ -443,6 +714,47 @@ optional in v2; `None` is the explicit category. Candidate count, source
 order, routing-key separation, locator-token rules, redaction, and all
 card-vocabulary rules remain unchanged.
 
+The exact logical candidate bytes retain the current logical-v1 candidate
+order, with the new field inserted after the action-kind token:
+
+```text
+0  action_kind:string
+1  card_selection_operation:u8 (0=None, 1=Select, 2=Unselect)
+2  public_action_key:string (routing value, not a learned feature)
+3  choice:optional {kind:u8, value:u64be, response_index:optional u32be}
+4  source_reference:optional {kind:u8, locator:string, current ordinal:optional u32be}
+5  target_reference:optional {kind:u8, locator:string, current ordinal:optional u32be}
+6  phase:optional u32be
+7  position:optional u8
+8  source_index:optional u32be
+9  amount:optional signed i32 as u32be bits
+10 continuation_operation:string
+11 submits_engine_response:boolean
+```
+
+The exact encoded candidate row retains the current encoded-v1 order, with
+the new `u8` immediately after the `action_kind_code`:
+
+```text
+0  action_kind_code:u16be
+1  card_selection_operation_code:u8 (0=None, 1=Select, 2=Unselect)
+2  choice:optional {kind:u8, value:u64be, response_index:optional u32be}
+3  source_reference:optional encoded public reference
+4  target_reference:optional encoded public reference
+5  phase:optional u32be
+6  position:optional u8
+7  source_index:optional u32be
+8  amount:optional signed i32 as u32be bits
+9  continuation_operation_code:u8
+10 submits_engine_response:boolean
+```
+
+`public_action_key` remains the parallel routing entry in
+`LogicalCandidateRouting`/`routing_keys`; it is not duplicated as a learned
+candidate feature. The logical and encoded v2 top-level codecs retain their
+v1 field order except for their successor schema IDs and this candidate-field
+insertion.
+
 ### 10.2 Batch and supervision
 
 Model batch layout v2 is required because the encoded candidate row and its
@@ -453,6 +765,22 @@ Model supervision sample v2 is required because it binds a v2 model-input
 identity and a v2 trajectory source. Its selected-key/ordinal relationship
 remains unchanged; candidate ordinal remains local label metadata and never
 becomes action identity.
+
+The Phase-5 model-input identity v2 retains the current identity order:
+
+```text
+0  identity domain:string = ocgforge.model_input_identity.v2
+1  identity schema:string = ocgforge.model_input_identity.v2
+2  logical input schema:string = ocgforge.model_logical_input.v2
+3  encoded input schema:string = ocgforge.model_encoded_input.v2
+4  card vocabulary identity:string
+5  canonical LogicalModelInputV2 bytes
+6  canonical EncodedModelInputV2 bytes
+```
+
+The batch and supervision successor codecs retain their respective v1 field
+orders and change only their successor schema/child-contract values plus the
+encoded candidate-row bytes where those rows are embedded.
 
 The model-input inspector, BC scorer, and inference request/response layers
 must reject v1 model inputs when configured for v2 and must not accept v2
@@ -480,23 +808,139 @@ collection can be admitted:
 
 | Current contract | Successor | Reason |
 | --- | --- | --- |
-| `phase6.model_input_inspection.v1` | `phase6.model_input_inspection.v2` | validates model-input-v2 values |
-| `phase6.bc_contract.v1` | `phase6.bc_contract.v2` | prerequisite closure changes |
-| `phase6.bc_candidate_scorer.v1` | `phase6.bc_candidate_scorer.v2` | encoded candidate row changes |
-| `phase6.inference_request.v1` | `phase6.inference_request.v2` | model/domain child identities change |
-| `phase6.inference_response.v1` | `phase6.inference_response.v2` | request/response binding changes |
-| `phase6.ordered_candidate_domain.v1` | `phase6.ordered_candidate_domain.v2` | public action keys are v2 |
-| `phase6.task4.numeric_projection.v1` | `phase6.task4.numeric_projection.v2` | candidate numeric schema gains operation code |
-| `phase6.task4.corpus_authority.v1` | `phase6.task4.corpus_authority.v2` | authority binds v2 model inputs |
-| `phase6.dataset_membership.v1` | `phase6.dataset_membership.v2` | membership source chain changes |
+| `ocgforge.phase6.model_input_inspection.v1` | `ocgforge.phase6.model_input_inspection.v2` | validates model-input-v2 values |
+| `ocgforge.phase6.bc_contract.v1` | `ocgforge.phase6.bc_contract.v2` | prerequisite closure changes |
+| `ocgforge.phase6.bc_candidate_scorer.v1` | `ocgforge.phase6.bc_candidate_scorer.v2` | encoded candidate row changes |
+| `ocgforge.phase6.inference_request.v1` | `ocgforge.phase6.inference_request.v2` | model/domain child identities change |
+| `ocgforge.phase6.inference_response.v1` | `ocgforge.phase6.inference_response.v2` | request/response binding changes |
+| `ocgforge.phase6.ordered_candidate_domain.v1` | `ocgforge.phase6.ordered_candidate_domain.v2` | public action keys are v2 |
+| `ocgforge.phase6.task4.numeric_projection.v1` | `ocgforge.phase6.task4.numeric_projection.v2` | candidate numeric schema gains operation code |
+| `ocgforge.phase6.task4.corpus_authority.v1` | `ocgforge.phase6.task4.corpus_authority.v2` | authority binds v2 model inputs |
+| `ocgforge.phase6.dataset_membership.v1` | `ocgforge.phase6.dataset_membership.v2` | membership source chain changes |
+| `ocgforge.phase6.bc_architecture_config.v1` | `ocgforge.phase6.bc_architecture_config.v2` | canonical candidate width changes from 28 to 29 |
+| `ocgforge.phase6.task7.input_materialization.v1` | `ocgforge.phase6.task7.input_materialization.v2` | materialized candidate table gains operation code |
+| `ocgforge.phase6.task7.input_materialization_config.v1` | `ocgforge.phase6.task7.input_materialization_config.v2` | KAT/config child-contract vector changes |
+| `ocgforge.phase6.task7.dataset_collection_job.v1` | `ocgforge.phase6.task7.dataset_collection_job.v2` | environment/policy provenance bindings change |
+| `ocgforge.phase6.task7.dataset_collection_schedule.v1` | `ocgforge.phase6.task7.dataset_collection_schedule.v2` | ordered v2 job-identity vector changes |
+| `ocgforge.policy.public_action_key.v1` | `ocgforge.policy.public_action_key.v2` | policy action-adapter semantics change |
+| `ocgforge.phase6.task5.evaluation_execution.v1` | `ocgforge.phase6.task5.evaluation_execution.v2` | prerequisite contract vector changes |
+| `ocgforge.phase6.task4.smoke_corpus.v2` | `ocgforge.phase6.task4.smoke_corpus.v3` | future reissued corpus would bind model/public v2 values |
+| `ocgforge.phase6.bc_sample_identity.v1` | `ocgforge.phase6.bc_sample_identity.v2` | sample source and model identities change |
 
-The current `phase6.task4.smoke_corpus.v2` and its smoke/acceptance evidence
+The Phase-6 architecture identity is also directly affected. The current
+architecture fixes the candidate row width at 28 and includes that width in
+its canonical identity. Its successor is:
+
+```text
+ocgforge.phase6.bc_architecture_config.v1
+    -> ocgforge.phase6.bc_architecture_config.v2
+
+phase6_architecture_config.v1.<digest>
+    -> phase6_architecture_config.v2.<digest>
+```
+
+Architecture v2 retains the exact current field order and values except for
+the successor identity values, the successor numeric projection identity, and:
+
+```text
+candidate row width:u32 = 29
+```
+
+The additional row position is the fixed `card_selection_operation_code`.
+`canonical_weight_export.v1` does not require a version bump merely because
+the architecture identity changes: its generic tensor/weight codec remains
+the same. A future weight manifest must nevertheless bind the v2 architecture
+identity and cannot reuse a v1 weight-content claim for a v2 shape.
+
+The Task7 non-smoke materializer has its own direct successor closure:
+
+```text
+ocgforge.phase6.task7.input_materialization.v1
+    -> ocgforge.phase6.task7.input_materialization.v2
+
+ocgforge.phase6.task7.input_materialization_config.v1
+    -> ocgforge.phase6.task7.input_materialization_config.v2
+```
+
+Materialization v2 retains the current table, column, row, offset, padding,
+and routing rules. Its Phase-5 contract vector changes to the v2 logical,
+encoded, input-identity, and batch contracts, while `model_card_vocabulary.v1`
+remains present. The candidate table adds one exact categorical column:
+
+```text
+card_selection_operation_code:u8
+    0=None
+    1=Select
+    2=Unselect
+```
+
+That column is immediately after the existing action-kind code. The v2
+materialization configuration bytes retain the current top-level field order,
+but bind the successor materialization/schema IDs, Phase-5 contract vector,
+candidate table descriptor, column order, and the new operation-code rule.
+Its configuration identity and KAT are new values; the v1 materialization
+identity and KAT remain historical.
+
+The v2 configuration identity has this lexical form:
+
+```text
+phase6_task7_input_materialization_config.v2.<lowercase SHA-256 digest>
+```
+
+The exact top-level v2 materialization configuration order is:
+
+```text
+0  configuration schema:string = ocgforge.phase6.task7.input_materialization_config.v2
+1  materialization schema:string = ocgforge.phase6.task7.input_materialization.v2
+2  Phase-5 contract vector:
+       model_logical_input.v2
+       model_encoded_input.v2
+       model_card_vocabulary.v1
+       model_input_identity.v2
+       model_batch_layout.v2
+3  limb-order token:string = u16_most_significant_first
+4  integer tensor type:string = torch.int64
+5  boolean tensor type:string = torch.bool
+6  reference descriptor vector:existing order
+7  table descriptor vector:existing order plus candidate operation column
+8  rule descriptor vector:existing order plus operation-code rule
+```
+
+The v2 KAT is the SHA-256 of these exact bytes under the v2 configuration
+identity prefix. No KAT value is invented in this design; implementation must
+generate and independently verify it.
+
+Task7 collection authority also requires successor orchestration identities:
+
+```text
+ocgforge.phase6.task7.dataset_collection_job.v1
+    -> ocgforge.phase6.task7.dataset_collection_job.v2
+
+ocgforge.phase6.task7.dataset_collection_schedule.v1
+    -> ocgforge.phase6.task7.dataset_collection_schedule.v2
+```
+
+Job v2 retains the current canonical field order and the exact 16-coordinate
+schedule. It changes the environment contract to
+`ocgforge.episodic_environment.v3`, binds the v2 public-action adapter and new
+Teacher artifact/binding identities, and uses new job/schedule identity
+prefixes. The seed, placement, starting-player, budget, and collection
+coordinates are not changed.
+
+The current `ocgforge.phase6.task4.smoke_corpus.v2` and its smoke/acceptance evidence
 remain historical. If a future smoke corpus is ever authorized for the new
 closure, it requires a new derivation version rather than relabeling the
 existing v2 corpus. The same rule applies to Phase-6 Task5 evaluation,
 first-divergence, and report contracts whose canonical prerequisite vectors
 currently contain the old environment, trajectory, admission, dataset, or
 model contract IDs.
+
+In particular, a future Task5 execution contract must use
+`ocgforge.phase6.task5.evaluation_execution.v2` with a successor prerequisite
+vector. Its existing v1 contract, report, evaluation job, first-divergence,
+and replay/admission values remain historical until a separately authorized
+Task5 migration specifies their exact child-identity closure. No Task5
+execution is part of this design.
 
 The following are not automatically versioned solely because a downstream
 identity changed:
@@ -520,11 +964,23 @@ No current Phase-6 artifact is rewritten or reissued by this design.
 Existing Phase-6 contracts and artifacts remain historical:
 
 ```text
-episodic_environment.v2
-trusted_trajectory.v1
-admission_receipt.v1
-dataset_manifest.v1
-model_*_v1
+ocgforge.episodic_environment.v2
+ocgforge.trusted_trajectory.v1
+ocgforge.trajectory_shard.v1
+ocgforge.restricted_replay_evidence.v1
+ocgforge.restricted_collection_evidence_bundle.v1
+ocgforge.admission_receipt.v1
+ocgforge.dataset_manifest.v1
+ocgforge.dataset_identity.v1
+ocgforge.public_gameplay_trajectory_identity.v1
+ocgforge.trajectory_record_identity.v1
+ocgforge.model_logical_input.v1
+ocgforge.model_encoded_input.v1
+ocgforge.model_input_identity.v1
+ocgforge.model_batch_layout.v1
+ocgforge.model_supervision_sample.v1
+ocgforge.phase6.task7.input_materialization.v1
+ocgforge.phase6.bc_sample_identity.v1
 ```
 
 They remain readable only under their original contract closure. They must
@@ -610,11 +1066,15 @@ internal semantic key and response bytes never cross the public boundary
 trusted trajectory v2 round trip
 trajectory shard v2 round trip
 restricted replay v2 round trip
+restricted collection evidence bundle v2 round trip
 admission v2 cross-version rejection
 dataset manifest v2 binding
 logical/encoded model v2 round trip
 model batch v2 lossless reconstruction
 model supervision v2 identity binding
+Task7 materialization/config v2 round trip and new KAT
+Task7 collection job/schedule v2 identity closure
+policy action-adapter v2 and new Teacher provenance IDs
 old Phase-6 artifacts remain historical and unmodified
 ```
 
@@ -634,16 +1094,35 @@ The authorized order is:
 ```text
 design review
     -> explicit implementation authorization
-    -> internal decoder auxiliary field
-    -> public DTO and v2 identity codecs
-    -> episodic v3 / environment v3 closure
-    -> trajectory/replay/admission/model successors
-    -> focused cross-version/privacy/determinism tests
-    -> Teacher retention fix
-    -> exact Job0 regression
-    -> independent review
-    -> only then consider RUN_A
+
+A. public semantic prerequisite
+    -> internal decoder auxiliary metadata
+    -> public DTO and public action/domain/decision v2
+    -> episodic environment v3 / environment identity v3
+    -> public privacy, replay, and determinism tests
+
+B. Teacher remediation
+    -> retained Goal/Line commitment
+    -> Select continuation progress
+    -> Unselect no generic progress bonus
+    -> PLACE progress
+    -> exact Hiita Job0 regression
+
+C. before RUN_A
+    -> trusted trajectory/replay/evidence/bundle v2
+    -> shard/admission/dataset v2
+    -> Task7 collection job/schedule v2
+    -> new policy action-adapter and Teacher provenance IDs
+
+D. before new ML materialization or training
+    -> model logical/encoded/input/batch/supervision v2
+    -> Task7 materialization/config v2
+    -> Phase-6 BC/inference/numeric/architecture successor closure
+    -> only then consider a new data or training execution
 ```
 
-This design authorizes none of the implementation or execution steps after
-the review boundary.
+The semantic prerequisite is intentionally separable from the downstream
+trajectory/model migrations. It may establish the public operation contract
+and unlock the Teacher remediation after its own acceptance. It does not
+authorize RUN_A, RUN_B, collection, materialization, or training. Each later
+stage requires its own exact-head authorization and independent review.
