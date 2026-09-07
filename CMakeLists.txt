@@ -321,6 +321,18 @@ target_link_libraries(phase6_task7_live_progress_diagnostic_test PRIVATE ygo_pol
 add_test(NAME phase6_task7_live_progress_diagnostic_test
          COMMAND phase6_task7_live_progress_diagnostic_test)
 
+add_executable(phase6_task7_hiita_cycle_probe
+               tools/phase6/task7_hiita_cycle_probe.cpp)
+target_link_libraries(phase6_task7_hiita_cycle_probe PRIVATE
+                      ygo_task7_dataset_authority)
+if(MSVC)
+    target_compile_options(phase6_task7_hiita_cycle_probe PRIVATE
+                           /W4 /permissive- /EHsc)
+else()
+    target_compile_options(phase6_task7_hiita_cycle_probe PRIVATE
+                           -Wall -Wextra -Wpedantic)
+endif()
+
 add_executable(phase6_task7_materialization_probe
                tools/phase6_task7_materialization_probe/main.cpp)
 target_link_libraries(phase6_task7_materialization_probe PRIVATE ygo_phase6)
