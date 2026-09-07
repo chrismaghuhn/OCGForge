@@ -889,16 +889,28 @@ the new operation is not appended at an implementation-chosen offset:
 CandidateNumericRowV2 width = 29
 
 v2[0]      = normalized action_kind_code
-v2[1]      = normalized card_selection_operation_code
+v2[1]      = normalized_u8(card_selection_operation_code)
 v2[2..28]  = former CandidateNumericRowV1[1..27], in the existing order
               and with the existing normalization/presence rules
 ```
 
 The operation code uses the public categorical mapping `0=None`, `1=Select`,
-`2=Unselect`. Every former v1 feature therefore retains its relative order;
-only the new operation feature occupies index 1 and shifts the former v1
-indices 1 through 27 by one position. The additional row position is the
-fixed `card_selection_operation_code`.
+`2=Unselect` and the existing Task4 `u8` normalization exactly:
+
+```text
+normalized_u8(x) = IEEE-754 binary32(float(x) * (1.0F / 255.0F))
+
+None     -> normalized_u8(0) = 0 / 255
+Select   -> normalized_u8(1) = 1 / 255
+Unselect -> normalized_u8(2) = 2 / 255
+```
+
+The displayed fractions identify the exact input value to the existing
+binary32 normalization; the stored feature is the resulting finite binary32
+value. Every former v1 feature therefore retains its relative order; only the
+new operation feature occupies index 1 and shifts the former v1 indices 1
+through 27 by one position. The additional row position is the fixed
+`card_selection_operation_code`.
 `canonical_weight_export.v1` does not require a version bump merely because
 the architecture identity changes: its generic tensor/weight codec remains
 the same. A future weight manifest must nevertheless bind the v2 architecture
@@ -936,18 +948,18 @@ candidate table column descriptor[index]
 
 0  ("action_kind_code", "U16", 1, "required", "zero")
 1  ("card_selection_operation_code", "U8", 1, "required", "zero")
-2  ("choice_present", "Bool", 0, "required", "false_padding")
+2  ("choice_present", "Bool", 0, "required", "false")
 3  ("choice_kind_code", "U8", 1, "required", "zero")
 4  ("choice_value", "U64", 4, "required", "zero")
 5  ("choice_response_index", "P<U32>", 2, "optional", "zero")
-6  ("source_reference", "CR", 0, "composite", "not_applicable")
-7  ("target_reference", "CR", 0, "composite", "not_applicable")
+6  ("source_reference", "CR", 0, "composite_defined", "not_applicable")
+7  ("target_reference", "CR", 0, "composite_defined", "not_applicable")
 8  ("phase", "P<U32>", 2, "optional", "zero")
 9  ("position", "P<U8>", 1, "optional", "zero")
 10 ("source_index", "P<U32>", 2, "optional", "zero")
 11 ("amount", "P<I32>", 2, "optional", "zero")
 12 ("continuation_operation_code", "U8", 1, "required", "zero")
-13 ("submits_engine_response", "Bool", 0, "required", "false_padding")
+13 ("submits_engine_response", "Bool", 0, "required", "false")
 ```
 
 The exact v2 rule-descriptor vector retains the v1 entries at indices 0
@@ -1005,17 +1017,15 @@ bytes. It is not part of the configuration byte stream and is not a substitute
 for the descriptor vectors:
 
 ```text
-CONFIG_CANONICAL_BYTES_LENGTH=<decimal byte count>
-CONFIG_CANONICAL_BYTES_SHA256=<lowercase SHA-256 of the exact bytes>
-CONFIGURATION_IDENTITY=phase6_task7_input_materialization_config.v2.<same digest>
+CONFIG_CANONICAL_BYTES_LENGTH=8264
+CONFIG_CANONICAL_BYTES_SHA256=298cc5b9a8e27349cfea67e3df53adea57bb51c0cae1467e169d3482f7966162
+CONFIGURATION_IDENTITY=phase6_task7_input_materialization_config.v2.298cc5b9a8e27349cfea67e3df53adea57bb51c0cae1467e169d3482f7966162
 ```
 
-The implementation must generate and independently verify all three values;
-the design intentionally does not invent their eventual numeric length or
-digest before the v2 codec exists. The SHA-256 input has no appended newline,
-document hash, file path, Git commit, device, framework version beyond the
-frozen physical type tokens, batch composition, padding width, or runtime
-provenance.
+An independent reconstruction of the v2 grammar must reproduce all three
+values. The SHA-256 input has no appended newline, document hash, file path,
+Git commit, device, framework version beyond the frozen physical type tokens,
+batch composition, padding width, or runtime provenance.
 
 Task7 collection authority also requires successor orchestration identities:
 
