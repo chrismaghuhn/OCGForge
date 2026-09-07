@@ -3,10 +3,14 @@
 #include "ygo/environment/public_environment_observation.hpp"
 #include "ygo/observation/player_observation.hpp"
 #include "ygo/policy/policy.hpp"
+#include "ygo/teacher/goal_line_controller.hpp"
+#include "ygo/teacher/public_fact_registry.hpp"
+#include "ygo/teacher/salamangreat_profile.hpp"
 #include "ygo/teacher/strategy_profile.hpp"
 #include "ygo/teacher/strategy_state.hpp"
 #include "ygo/teacher/teacher_core.hpp"
 
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <iostream>
@@ -38,7 +42,7 @@ PredicateRef card_selection_intent() {
     return result;
 }
 
-StrategyProfileV1 valid_profile() {
+StrategyProfileV1 synthetic_scoring_profile() {
     StrategyProfileV1 value;
     value.matchup_id = "ocgforge.matchup.swordsoul_salamangreat.v1";
     value.rules_bundle_id =
@@ -102,6 +106,12 @@ PublicEnvironmentObservation public_observation(
     return project_public_observation(source);
 }
 
+PublicFactSnapshot public_facts(const PublicEnvironmentObservation& observation) {
+    const auto extracted = extract_public_fact_snapshot(observation);
+    require(extracted.valid, "Hiita public fact extraction failed");
+    return extracted.snapshot;
+}
+
 EpisodeLocalStrategyStateV1 reset_state(
     const StrategyProfileV1& profile) {
     const auto state = reset_strategy_state(profile);
@@ -109,11 +119,19 @@ EpisodeLocalStrategyStateV1 reset_state(
     return *state;
 }
 
-EpisodeLocalStrategyStateV1 retained_state(
+EpisodeLocalStrategyStateV1 synthetic_retained_state(
     const StrategyProfileV1& profile) {
     auto state = reset_state(profile);
     state.active_goal_id = "goal.test";
     state.active_line_id = "line.test";
+    return state;
+}
+
+EpisodeLocalStrategyStateV1 retained_salamangreat_state(
+    const StrategyProfileV1& profile) {
+    auto state = reset_state(profile);
+    state.active_goal_id = "goal.main1.salamangreat";
+    state.active_line_id = "line.main1.salamangreat";
     return state;
 }
 
@@ -193,7 +211,7 @@ void require_v2_candidate_shape(
 }
 
 void test_historical_v1_path() {
-    const auto profile = valid_profile();
+    const auto profile = synthetic_scoring_profile();
     require(validate_strategy_profile(profile),
             "B1 profile is not valid for the historical guard");
     const auto observation = public_observation();
@@ -214,7 +232,8 @@ void test_historical_v1_path() {
                 "historical V1 candidate carried non-None operation metadata");
     }
 
-    const auto result = propose(profile, retained_state(profile), observation, candidates);
+    const auto result = propose(
+        profile, synthetic_retained_state(profile), observation, candidates);
     require(result.status == TeacherRankingStatus::Selected,
             "historical V1 Teacher path was not structurally acceptable");
     require(result.selected_public_action_key.has_value() &&
@@ -224,7 +243,7 @@ void test_historical_v1_path() {
 }
 
 void test_v1_state_rejects_v2_action_key() {
-    const auto profile = valid_profile();
+    const auto profile = synthetic_scoring_profile();
     auto state = reset_state(profile);
     state.last_accepted_decision_index = 233;
     state.last_accepted_public_action_key =
@@ -268,18 +287,18 @@ void test_codec_and_mixed_domain_guards() {
     require(!is_public_action_key_v2("public_action.v2.malformed"),
             "malformed V2 public action key was accepted");
 
-    const auto profile = valid_profile();
+    const auto profile = synthetic_scoring_profile();
     const auto mixed = std::vector<EnvironmentActionCandidate>{
         v1, v2, make_cancel_candidate(true)};
     const auto mixed_result = propose(
-        profile, retained_state(profile), public_observation(), mixed);
+        profile, synthetic_retained_state(profile), public_observation(), mixed);
     require(mixed_result.status == TeacherRankingStatus::InvalidInput,
             "mixed V1/V2 Teacher domain was not rejected fail closed");
 
     auto malformed = v2;
     malformed.public_action_key = "public_action.v2.malformed";
     const auto malformed_result = propose(
-        profile, retained_state(profile), public_observation(),
+        profile, synthetic_retained_state(profile), public_observation(),
         std::vector<EnvironmentActionCandidate>{malformed});
     require(malformed_result.status == TeacherRankingStatus::InvalidInput,
             "malformed public action key was not rejected fail closed");
@@ -288,12 +307,78 @@ void test_codec_and_mixed_domain_guards() {
 struct V3Scenario final {
     std::string name;
     std::vector<EnvironmentActionCandidate> candidates;
+    std::vector<PublicCardSelectionOperation> expected_operations;
     EpisodeLocalStrategyStateV1 state;
     std::string expected_progress;
 };
 
+void test_salamangreat_reconciled_commitment() {
+    const auto profile = make_salamangreat_profile();
+    require(validate_strategy_profile(profile),
+            "canonical Salamangreat profile is not valid");
+    const auto state = retained_salamangreat_state(profile);
+    const auto observation = public_observation();
+
+    const auto reconciliation = reconcile_strategy_state_with_evidence(
+        state, 0, observation);
+    require(reconciliation.has_value(),
+            "Salamangreat unselect reconciliation was not accepted");
+    require(reconciliation->invalidation_reason_ids.empty(),
+            "Salamangreat unselect reconciliation reported an invalidation");
+    require(reconciliation->state.active_goal_id ==
+                std::optional<std::string>("goal.main1.salamangreat") &&
+                reconciliation->state.active_line_id ==
+                    std::optional<std::string>("line.main1.salamangreat"),
+            "reconciliation did not retain the Salamangreat goal and line");
+
+    const auto selection = select_goal_and_line(
+        profile, reconciliation->state, public_facts(observation));
+    require(selection.status == PredicateEvaluationStatus::False &&
+                !selection.goal_id.has_value() && !selection.line_id.has_value(),
+            "Salamangreat Main1 line was eligible at the unselect boundary");
+    std::cout << "SALAMANGREAT_RECONCILED_COMMITMENT=RETAINED\n"
+              << "SALAMANGREAT_CURRENT_STRATEGIC_ELIGIBILITY=NO\n"
+              << "SALAMANGREAT_PROFILE_CHANGED=NO\n"
+              << "CARD_SELECTION_INTENT_ADDED_TO_PROFILE=NO\n"
+              << "RECONCILIATION_SEMANTICS_CHANGED=NO\n";
+}
+
+bool expect_v3_boundary_red(
+    const StrategyProfileV1& profile,
+    const V3Scenario& scenario,
+    const PublicEnvironmentObservation& observation) {
+    require(scenario.candidates.size() == scenario.expected_operations.size(),
+            "V3 scenario operation expectations do not cover the complete domain");
+    for (std::size_t index = 0; index < scenario.candidates.size(); ++index) {
+        const auto& candidate = scenario.candidates[index];
+        if (candidate.action_kind == EnvironmentActionKind::Cancel) {
+            require(candidate.card_selection_operation ==
+                        PublicCardSelectionOperation::None,
+                    "Cancel fixture carried card-selection operation metadata");
+            require(is_public_action_key_v2(candidate.public_action_key),
+                    "Cancel fixture did not use a V2 public action key");
+        } else {
+            require_v2_candidate_shape(candidate, scenario.expected_operations[index]);
+        }
+    }
+
+    const auto result = propose(
+        profile, scenario.state, observation, scenario.candidates);
+    if (result.status == TeacherRankingStatus::InvalidInput) {
+        std::cout << "SCORING_DEFERRED=" << scenario.name
+                  << " expected=" << scenario.expected_progress
+                  << " current_boundary=V1_ONLY\n";
+        return true;
+    }
+
+    throw std::runtime_error(
+        "RED_OWNER=TEACHER_V3_PUBLIC_ACTION_BOUNDARY: current Teacher "
+        "unexpectedly accepted a V2 scenario " + scenario.name +
+        " with status " + ranking_status_name(result.status));
+}
+
 void test_v3_teacher_boundary_red() {
-    const auto profile = valid_profile();
+    const auto profile = make_salamangreat_profile();
     const auto observation = public_observation();
     const auto material_a_select = make_card_candidate(
         "p0:MONSTER_ZONE:0", PublicCardSelectionOperation::Select, true);
@@ -306,66 +391,57 @@ void test_v3_teacher_boundary_red() {
     const std::vector<V3Scenario> scenarios = {
         {"initial_material_selection",
          {material_a_select, material_b_select, cancel},
-         retained_state(profile),
+         {PublicCardSelectionOperation::Select,
+          PublicCardSelectionOperation::Select,
+          PublicCardSelectionOperation::None},
+         retained_salamangreat_state(profile),
          "A=+1,B=+1,Cancel=0"},
         {"second_material_selection",
          {material_a_unselect, material_b_select, cancel},
-         retained_state(profile),
+         {PublicCardSelectionOperation::Unselect,
+          PublicCardSelectionOperation::Select,
+          PublicCardSelectionOperation::None},
+         retained_salamangreat_state(profile),
          "A=0,B=+1,Cancel=0"},
+    };
+
+    bool saw_expected_red = false;
+    for (const auto& scenario : scenarios) {
+        saw_expected_red = expect_v3_boundary_red(profile, scenario, observation) ||
+                           saw_expected_red;
+    }
+    require(saw_expected_red,
+            "real Salamangreat V2 scenarios did not reach the expected V1-bound RED");
+}
+
+void test_generic_scoring_contract_red_guards() {
+    const auto profile = synthetic_scoring_profile();
+    const auto observation = public_observation();
+    const auto material_a_select = make_card_candidate(
+        "p0:MONSTER_ZONE:0", PublicCardSelectionOperation::Select, true);
+    const auto cancel = make_cancel_candidate(true);
+    const std::vector<V3Scenario> scenarios = {
         {"explicit_active_match_uses_max",
          {material_a_select, cancel},
-         retained_state(profile),
+         {PublicCardSelectionOperation::Select,
+          PublicCardSelectionOperation::None},
+         synthetic_retained_state(profile),
          "active Select=max(+3,+1)=+3,not+4"},
         {"no_retained_line_has_no_generic_bonus",
          {material_a_select, cancel},
+         {PublicCardSelectionOperation::Select,
+          PublicCardSelectionOperation::None},
          reset_state(profile),
          "generic Select=0"},
     };
 
     bool saw_expected_red = false;
     for (const auto& scenario : scenarios) {
-        for (const auto& candidate : scenario.candidates) {
-            if (candidate.action_kind == EnvironmentActionKind::Cancel) {
-                require(candidate.card_selection_operation ==
-                            PublicCardSelectionOperation::None,
-                        "Cancel fixture carried card-selection operation metadata");
-                require(is_public_action_key_v2(candidate.public_action_key),
-                        "Cancel fixture did not use a V2 public action key");
-            } else if (candidate.source_reference->observation_locator ==
-                       "p0:MONSTER_ZONE:0" &&
-                       scenario.name == "second_material_selection") {
-                require_v2_candidate_shape(
-                    candidate, PublicCardSelectionOperation::Unselect);
-            } else {
-                require_v2_candidate_shape(
-                    candidate, PublicCardSelectionOperation::Select);
-            }
-        }
-
-        const auto result = propose(
-            profile, scenario.state, observation, scenario.candidates);
-        if (result.status == TeacherRankingStatus::InvalidInput) {
-            std::cout << "SCORING_DEFERRED=" << scenario.name
-                      << " expected=" << scenario.expected_progress
-                      << " current_boundary=V1_ONLY\n";
-            saw_expected_red = true;
-            continue;
-        }
-
-        throw std::runtime_error(
-            "RED_OWNER=TEACHER_V3_PUBLIC_ACTION_BOUNDARY: current Teacher "
-            "unexpectedly accepted a V2 scenario " +
-            scenario.name + " with status " + ranking_status_name(result.status));
+        saw_expected_red = expect_v3_boundary_red(profile, scenario, observation) ||
+                           saw_expected_red;
     }
-
     require(saw_expected_red,
-            "V2 Teacher scenarios did not reach the expected V1-bound RED");
-    std::cerr << "RED_OWNER=TEACHER_V3_PUBLIC_ACTION_BOUNDARY\n"
-              << "RED_FAILURE_EXPECTED=YES\n"
-              << "RED_FAILURE_UNRELATED=NO\n";
-    throw std::runtime_error(
-        "expected runtime RED: current Teacher rejects homogeneous V2 "
-        "public-action domain");
+            "synthetic V2 scoring guards did not reach the expected V1-bound RED");
 }
 
 }  // namespace
@@ -375,9 +451,15 @@ int main() {
         test_historical_v1_path();
         test_v1_state_rejects_v2_action_key();
         test_codec_and_mixed_domain_guards();
+        test_salamangreat_reconciled_commitment();
         test_v3_teacher_boundary_red();
-        std::cerr << "RED_FAILURE_EXPECTED=YES but V3 Teacher boundary did not RED\n";
-        return 2;
+        test_generic_scoring_contract_red_guards();
+        std::cerr << "RED_OWNER=TEACHER_V3_PUBLIC_ACTION_BOUNDARY\n"
+                  << "RED_FAILURE_EXPECTED=YES\n"
+                  << "RED_FAILURE_UNRELATED=NO\n";
+        throw std::runtime_error(
+            "expected runtime RED: current Teacher rejects homogeneous V2 "
+            "public-action domain");
     } catch (const std::exception& error) {
         std::cerr << "teacher_v3_hiita_commitment_red_test: " << error.what()
                   << '\n';

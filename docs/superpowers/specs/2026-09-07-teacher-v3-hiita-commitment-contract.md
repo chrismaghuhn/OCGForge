@@ -103,9 +103,14 @@ are not reused for the new semantics.
 ## Retained-line commitment scoring
 
 The generic commitment rule applies only when normal public reconciliation
-leaves both a valid retained active goal and a valid retained active line. It
-does not award a bonus for every new line or recovery branch and it does not
-synthesize missing commitment state.
+leaves a valid active goal and a valid active line in the reconciled state. At
+an intermediate native `unselect_card` boundary, those retained identifiers
+constitute a **reconciled continuation commitment** even when the current
+public decision facts make the goal or line ineligible for a fresh strategic
+selection. In particular, `select_goal_and_line()` need not return the active
+goal/line at that boundary. This rule consumes the existing reconciled state;
+it does not add a second commitment state, synthesize missing identifiers, or
+change reconciliation semantics.
 
 For a native V3 unselect_card decision:
 
@@ -165,6 +170,16 @@ boundary
 
 The B1 RED slice does not run a real Task7 collection episode.
 
+The RED fixture uses the canonical `make_salamangreat_profile()` without
+adding a CardSelection intent or changing any Salamangreat profile data. It
+sets the existing active identifiers to `goal.main1.salamangreat` and
+`line.main1.salamangreat` before the `unselect_card` boundary. The fixture
+characterizes that normal reconciliation retains both identifiers while
+`select_goal_and_line()` reports no currently eligible Main1 line because the
+profile's `idle_context` applicability is not true for `unselect_card`.
+The future generic Select rule therefore relies on the reconciled continuation
+commitment, not on current strategic eligibility.
+
 ## Invalidations and non-applicability
 
 Existing authoritative invalidations remain in force:
@@ -176,9 +191,12 @@ Existing authoritative invalidations remain in force:
 - no active goal/line causes no synthetic commitment;
 - a rejected step does not mutate committed state.
 
-The retention exception does not weaken reconciliation and ends at the first
-ordinary strategic boundary outside the authorized continuation set. A future
-implementation returns to normal goal/line eligibility at that boundary.
+Normal reconciliation is unchanged. A decision-kind transition by itself does
+not clear the active goal or line; only the existing authoritative public-state
+contradiction, completion, invalid-state, or other fail-closed paths do so. If
+reconciliation clears either identifier, the reconciled continuation
+commitment no longer exists and the generic progress rule is not applicable.
+No additional persistence rule is introduced for later decision families.
 
 ## Privacy, determinism, and replay
 
