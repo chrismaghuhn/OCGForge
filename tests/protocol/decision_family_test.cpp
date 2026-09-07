@@ -279,6 +279,20 @@ int run() {
         std::cerr << "select-unselect-card operation metadata was not classified\n";
         return 1;
     }
+
+    std::vector<std::uint8_t> cancel_only = {MSG_SELECT_UNSELECT_CARD, 0, 0, 1};
+    append_u32(cancel_only, 0);
+    append_u32(cancel_only, 2);
+    append_u32(cancel_only, 1);
+    append_card(cancel_only, 803, 0);
+    append_u32(cancel_only, 1);
+    append_card(cancel_only, 804, 1);
+    const auto cancel_request = ygo::protocol::decode_messages(frame(cancel_only)).decisions.front();
+    const auto& cancel_candidate = find_kind(cancel_request, ActionKind::Cancel);
+    if (cancel_candidate.card_selection_operation != ygo::protocol::CardSelectionOperation::None) {
+        std::cerr << "select-unselect-card cancel operation metadata was not cleared\n";
+        return 1;
+    }
     return 0;
 }
 
