@@ -684,6 +684,14 @@ target_link_libraries(episodic_environment_v2_public_projection_test PRIVATE ygo
 add_test(NAME episodic_environment_v2_public_projection_test
          COMMAND episodic_environment_v2_public_projection_test)
 
+add_executable(episodic_environment_v3_public_operation_test
+               tests/episodic/episodic_environment_v3_public_operation_test.cpp)
+target_include_directories(episodic_environment_v3_public_operation_test PRIVATE
+                           "${CMAKE_SOURCE_DIR}/src/environment")
+target_link_libraries(episodic_environment_v3_public_operation_test PRIVATE ygo_m4)
+add_test(NAME episodic_environment_v3_public_operation_test
+         COMMAND episodic_environment_v3_public_operation_test)
+
 add_executable(episodic_paired_world_test tests/episodic/episodic_paired_world_test.cpp)
 target_link_libraries(episodic_paired_world_test PRIVATE ygo_m4)
 target_include_directories(episodic_paired_world_test PRIVATE

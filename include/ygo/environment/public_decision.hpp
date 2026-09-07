@@ -56,6 +56,11 @@ struct EnvironmentActionCandidate final {
     std::optional<std::int32_t> amount;
     std::string continuation_operation;
     bool submits_engine_response = true;
+    // Public V3 auxiliary metadata. It is kept at the end for source
+    // compatibility with existing positional V1 aggregate initializers;
+    // V2 public action identity encodes it immediately after action kind.
+    PublicCardSelectionOperation card_selection_operation =
+        PublicCardSelectionOperation::None;
 };
 
 struct EnvironmentContinuationView final {

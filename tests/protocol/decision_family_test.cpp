@@ -270,6 +270,71 @@ int run() {
         std::cerr << "select-unselect-card was merged into the wrong protocol\n";
         return 1;
     }
+    if (unselect_request.candidates[0].card_selection_operation !=
+            ygo::protocol::CardSelectionOperation::Unselect ||
+        unselect_request.candidates[1].card_selection_operation !=
+            ygo::protocol::CardSelectionOperation::Select ||
+        unselect_request.candidates[2].card_selection_operation !=
+            ygo::protocol::CardSelectionOperation::None) {
+        std::cerr << "select-unselect-card operation metadata was not classified\n";
+        return 1;
+    }
+
+    std::vector<std::uint8_t> cancel_only = {MSG_SELECT_UNSELECT_CARD, 0, 0, 1};
+    append_u32(cancel_only, 0);
+    append_u32(cancel_only, 2);
+    append_u32(cancel_only, 1);
+    append_card(cancel_only, 803, 0);
+    append_u32(cancel_only, 1);
+    append_card(cancel_only, 804, 1);
+    const auto cancel_request = ygo::protocol::decode_messages(frame(cancel_only)).decisions.front();
+    const auto& cancel_candidate = find_kind(cancel_request, ActionKind::Cancel);
+    if (cancel_candidate.card_selection_operation != ygo::protocol::CardSelectionOperation::None) {
+        std::cerr << "select-unselect-card cancel operation metadata was not cleared\n";
+        return 1;
+    }
+
+    auto invalid_unselect = unselect_request;
+    invalid_unselect.candidates.front().card_selection_operation =
+        ygo::protocol::CardSelectionOperation::None;
+    try {
+        ygo::protocol::validate_candidate_set(invalid_unselect);
+        std::cerr << "unselect-card validation accepted missing operation metadata\n";
+        return 1;
+    } catch (const ygo::protocol::ProtocolError& error) {
+        if (error.code() != ygo::protocol::ProtocolErrorCode::IncompleteCandidates) {
+            std::cerr << "unselect-card validation reported the wrong error\n";
+            return 1;
+        }
+    }
+
+    auto invalid_operation = unselect_request;
+    invalid_operation.candidates.front().card_selection_operation =
+        static_cast<ygo::protocol::CardSelectionOperation>(0xff);
+    try {
+        ygo::protocol::validate_candidate_set(invalid_operation);
+        std::cerr << "unselect-card validation accepted an unknown operation\n";
+        return 1;
+    } catch (const ygo::protocol::ProtocolError& error) {
+        if (error.code() != ygo::protocol::ProtocolErrorCode::IncompleteCandidates) {
+            std::cerr << "unknown operation validation reported the wrong error\n";
+            return 1;
+        }
+    }
+
+    auto invalid_option = option_request;
+    invalid_option.candidates.front().card_selection_operation =
+        ygo::protocol::CardSelectionOperation::Select;
+    try {
+        ygo::protocol::validate_candidate_set(invalid_option);
+        std::cerr << "non-unselect validation accepted operation metadata\n";
+        return 1;
+    } catch (const ygo::protocol::ProtocolError& error) {
+        if (error.code() != ygo::protocol::ProtocolErrorCode::IncompleteCandidates) {
+            std::cerr << "non-unselect validation reported the wrong error\n";
+            return 1;
+        }
+    }
     return 0;
 }
 
