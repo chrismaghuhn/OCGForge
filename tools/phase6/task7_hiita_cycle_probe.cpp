@@ -50,7 +50,7 @@ using ygo::teacher::TeacherFallbackLevel;
 using ygo::teacher::TeacherRankingResult;
 using ygo::teacher::TeacherRankingStatus;
 
-constexpr std::string_view kTask = "P6_TASK7_HIITA_CYCLE_ISOLATION";
+constexpr std::string_view kTask = "P6_TASK7_HIITA_PLACE_COMPLETION_TRACE";
 constexpr std::string_view kSemanticMain =
     "f929de0b4d4157327dba003067d2e21e42f7ad75";
 constexpr std::string_view kDiagnosticBase =
@@ -335,12 +335,36 @@ struct PendingPath final {
 
 struct InitialMaterialSummary final {
     std::string public_action_key = "ABSENT";
+    std::string source_locator = "ABSENT";
     std::string passcode = "ABSENT";
     std::string next_request_kind = "ABSENT";
     std::string next_candidate_count = "ABSENT";
     std::string next_finish_present = "NO";
     std::string next_cancel_present = "NO";
     std::string next_public_boundary_key = "ABSENT";
+};
+
+struct PublicHiitaFieldObservation final {
+    std::string state = "UNPROVEN";
+    std::string locator = "ABSENT";
+};
+
+struct PlaceCandidateTrace final {
+    EnvironmentActionCandidate candidate;
+    bool step_accepted = false;
+    std::string next_boundary_kind = "ABSENT";
+    std::optional<DecisionFrame> next_frame;
+    FrameProgress next_progress;
+    PublicHiitaFieldObservation hiita_on_field;
+    bool returned_to_same_hiita_idle_boundary = false;
+};
+
+struct PlaceRouteTrace final {
+    std::string material_route = "ABSENT";
+    std::vector<std::string> path;
+    DecisionFrame place_frame;
+    FrameProgress place_progress;
+    std::vector<PlaceCandidateTrace> candidates;
 };
 
 struct ProbeReport final {
@@ -362,6 +386,16 @@ struct ProbeReport final {
     std::vector<FrontierEdge> frontier_edges;
     std::vector<FrontierSeen> frontier_seen;
     std::array<InitialMaterialSummary, 2> initial_material;
+    std::vector<PlaceRouteTrace> place_routes;
+    bool legal_non_cancel_route_out_of_unselect = false;
+    bool place_trace_complete = false;
+    std::size_t place_candidate_trace_count = 0;
+    std::size_t hiita_field_completion_count = 0;
+    std::size_t hiita_field_absent_count = 0;
+    std::size_t hiita_field_unproven_count = 0;
+    bool hiita_summon_completion = false;
+    bool hiita_summon_completion_all_routes = false;
+    bool place_returned_to_same_hiita_idle = false;
     std::size_t counterfactual_path_count = 0;
     bool counterfactual_search_bound_exhausted = false;
     bool original_path_bound_reached = false;
@@ -615,8 +649,7 @@ bool is_hiita_idle_frame(const DecisionFrame& frame) {
 bool is_same_hiita_idle_boundary(const DecisionFrame& actual,
                                  const DecisionFrame& target_idle) {
     return is_hiita_idle_frame(actual) &&
-           actual.public_candidate_domain_digest ==
-               target_idle.public_candidate_domain_digest;
+           frontier_public_key(actual) == frontier_public_key(target_idle);
 }
 
 struct TeacherSessions final {
@@ -838,6 +871,35 @@ std::string visible_passcode(
     require_probe(match->passcode.has_value(), failure_kind,
                   "VisibleCard locator resolved without a public passcode");
     return std::to_string(*match->passcode);
+}
+
+PublicHiitaFieldObservation inspect_public_hiita_field(
+    const ygo::environment::PublicEnvironmentObservation& observation,
+    const FailureKind failure_kind) {
+    const auto decoded = ygo::environment::decode_canonical_public_safe_state(
+        observation.canonical_safe_state_bytes());
+    require_probe(decoded && decoded.value.has_value(), failure_kind,
+                  "Hiita field trace could not decode the public observation");
+
+    const ygo::observation::ObservedCard* known_hiita = nullptr;
+    for (const auto& entity : decoded.value->entities()) {
+        if (!entity.identity_known || !entity.passcode.has_value() ||
+            *entity.passcode != kHiitaPasscode) {
+            continue;
+        }
+        require_probe(known_hiita == nullptr, failure_kind,
+                      "public observation contained multiple known Hiita entities");
+        known_hiita = &entity;
+    }
+    if (known_hiita == nullptr) {
+        return PublicHiitaFieldObservation{};
+    }
+    if (known_hiita->zone != ygo::observation::SemanticZone::MonsterZone) {
+        return PublicHiitaFieldObservation{"NO", "ABSENT"};
+    }
+    require_probe(!known_hiita->locator.empty(), failure_kind,
+                  "known public Hiita on the field has no observation locator");
+    return PublicHiitaFieldObservation{"YES", known_hiita->locator.value};
 }
 
 void validate_public_references(const DecisionFrame& frame,
@@ -1382,7 +1444,14 @@ void record_initial_material_summary(
     auto& summary = report.initial_material[summary_index];
     const auto& source = report.frontier_nodes[0].frame.request.candidates[
         pending_path.parent_candidate_ordinal];
+    require_probe(
+        source.source_reference.has_value() &&
+            source.source_reference->kind ==
+                ygo::environment::PublicCardReferenceKind::VisibleCard,
+        FailureKind::Counterfactual,
+        "initial material candidate lacks a visible public source reference");
     summary.public_action_key = source.public_action_key;
+    summary.source_locator = source.source_reference->observation_locator;
     summary.passcode = visible_passcode(
         report.frontier_nodes[0].frame.public_observation,
         source.source_reference, FailureKind::Counterfactual);
@@ -1505,6 +1574,208 @@ void explore_counterfactuals(const Task7CollectionJobV1& job,
         report.path_bound_exhausted || report.depth_bound_exhausted;
 }
 
+bool has_candidate_kind(const DecisionFrame& frame,
+                        const EnvironmentActionKind action_kind) {
+    return std::any_of(
+        frame.request.candidates.begin(), frame.request.candidates.end(),
+        [action_kind](const auto& candidate) {
+            return candidate.action_kind == action_kind;
+        });
+}
+
+std::size_t non_cancel_candidate_count(const DecisionFrame& frame) {
+    return static_cast<std::size_t>(std::count_if(
+        frame.request.candidates.begin(), frame.request.candidates.end(),
+        [](const auto& candidate) {
+            return candidate.action_kind != EnvironmentActionKind::Cancel;
+        }));
+}
+
+const EnvironmentActionCandidate* material_candidate_for_locator(
+    const DecisionFrame& frame, const std::string& locator,
+    const std::string& passcode) {
+    const EnvironmentActionCandidate* match = nullptr;
+    for (const auto& candidate : frame.request.candidates) {
+        if (!candidate.source_reference.has_value() ||
+            candidate.source_reference->kind !=
+                ygo::environment::PublicCardReferenceKind::VisibleCard ||
+            candidate.source_reference->observation_locator != locator) {
+            continue;
+        }
+        require_probe(
+            visible_passcode(frame.public_observation, candidate.source_reference,
+                             FailureKind::Counterfactual) == passcode,
+            FailureKind::Counterfactual,
+            "material candidate locator resolved to an unexpected public passcode");
+        require_probe(match == nullptr, FailureKind::Counterfactual,
+                      "material locator matched multiple public candidates");
+        match = &candidate;
+    }
+    require_probe(match != nullptr, FailureKind::Counterfactual,
+                  "material locator was absent from the regenerated public domain");
+    return match;
+}
+
+std::vector<std::string> material_route_action_keys(
+    const Task7CollectionJobV1& job, const ProbeReport& report,
+    const std::size_t first_material_index,
+    const std::size_t second_material_index) {
+    const auto& first = report.initial_material[first_material_index];
+    const auto& second = report.initial_material[second_material_index];
+    require_probe(first.public_action_key != "ABSENT" &&
+                       second.source_locator != "ABSENT" &&
+                       second.passcode != "ABSENT",
+                   FailureKind::Internal,
+                   "material route lacks its public reference identity");
+    std::vector<std::string> path{first.public_action_key};
+    const auto state = replay_prefix_and_path(job, report, path);
+    const auto* frame = frame_of(state.next);
+    require_probe(frame != nullptr &&
+                      frame->request.kind == EnvironmentDecisionKind::UnselectCard,
+                  FailureKind::Counterfactual,
+                  "first material action did not produce the expected UNSELECT_CARD domain");
+    const auto* candidate = material_candidate_for_locator(
+        *frame, second.source_locator, second.passcode);
+    path.push_back(candidate->public_action_key);
+    return path;
+}
+
+PlaceRouteTrace trace_place_route(const Task7CollectionJobV1& job,
+                                  const ProbeReport& report,
+                                  std::string material_route,
+                                  std::vector<std::string> path) {
+    auto place_state = replay_prefix_and_path(job, report, path);
+    const auto* place = frame_of(place_state.next);
+    require_probe(place != nullptr, FailureKind::Counterfactual,
+                  "material route did not reach a PLACE decision boundary");
+    require_probe(place->request.kind == EnvironmentDecisionKind::Place,
+                  FailureKind::Counterfactual,
+                  "material route reached an unexpected decision family instead of PLACE");
+    validate_public_references(*place, FailureKind::Counterfactual);
+
+    PlaceRouteTrace route;
+    route.material_route = std::move(material_route);
+    route.path = std::move(path);
+    route.place_frame = *place;
+    route.place_progress = progress_for(place_state).value_or(FrameProgress{});
+    for (const auto& candidate : place->request.candidates) {
+        PlaceCandidateTrace candidate_trace;
+        candidate_trace.candidate = candidate;
+
+        auto candidate_state = replay_prefix_and_path(job, report, route.path);
+        const auto* replayed_place = frame_of(candidate_state.next);
+        require_probe(replayed_place != nullptr &&
+                          replayed_place->request.kind ==
+                              EnvironmentDecisionKind::Place &&
+                          frontier_public_key(*replayed_place) ==
+                              frontier_public_key(route.place_frame),
+                      FailureKind::Replay,
+                      "fresh PLACE replay did not reproduce the recorded public boundary");
+        const auto accepted = apply_public_key(
+            candidate_state, *replayed_place, candidate.public_action_key,
+            FailureKind::Counterfactual);
+        candidate_trace.step_accepted = true;
+        candidate_trace.next_boundary_kind = boundary_kind(accepted.next);
+        if (const auto* next = frame_of(accepted.next); next != nullptr) {
+            validate_public_references(*next, FailureKind::Counterfactual);
+            candidate_trace.next_frame = *next;
+            candidate_trace.next_progress =
+                progress_for(candidate_state).value_or(FrameProgress{});
+            candidate_trace.hiita_on_field = inspect_public_hiita_field(
+                next->public_observation, FailureKind::Counterfactual);
+            candidate_trace.returned_to_same_hiita_idle_boundary =
+                is_same_hiita_idle_boundary(*next, *report.target_idle_frame);
+        }
+        route.candidates.push_back(std::move(candidate_trace));
+    }
+    return route;
+}
+
+void trace_place_completions(const Task7CollectionJobV1& job,
+                             ProbeReport& report) {
+    require_probe(report.initial_material[0].public_action_key != "ABSENT" &&
+                       report.initial_material[1].public_action_key != "ABSENT",
+                   FailureKind::Internal,
+                   "PLACE trace lacks the two captured initial material action keys");
+    require_probe(report.target_idle_frame.has_value(), FailureKind::Internal,
+                  "PLACE trace lacks the target Hiita IDLE boundary");
+
+    struct MaterialRouteSpec final {
+        std::string label;
+        std::size_t first_material_index = 0;
+        std::size_t second_material_index = 0;
+    };
+    const std::array<MaterialRouteSpec, 2> routes = {
+        MaterialRouteSpec{"A->B", 0, 1},
+        MaterialRouteSpec{"B->A", 1, 0},
+    };
+
+    report.place_routes.clear();
+    for (const auto& route_spec : routes) {
+        auto path = material_route_action_keys(
+            job, report, route_spec.first_material_index,
+            route_spec.second_material_index);
+        auto route = trace_place_route(job, report, route_spec.label,
+                                       std::move(path));
+        report.legal_non_cancel_route_out_of_unselect =
+            report.legal_non_cancel_route_out_of_unselect ||
+            route.place_frame.request.kind == EnvironmentDecisionKind::Place;
+        report.place_candidate_trace_count += route.candidates.size();
+        for (const auto& candidate : route.candidates) {
+            if (candidate.hiita_on_field.state == "YES") {
+                ++report.hiita_field_completion_count;
+            } else if (candidate.hiita_on_field.state == "NO") {
+                ++report.hiita_field_absent_count;
+            } else {
+                ++report.hiita_field_unproven_count;
+            }
+            report.place_returned_to_same_hiita_idle =
+                report.place_returned_to_same_hiita_idle ||
+                candidate.returned_to_same_hiita_idle_boundary;
+        }
+        report.place_routes.push_back(std::move(route));
+    }
+
+    report.place_trace_complete = report.place_routes.size() == routes.size() &&
+                                  std::all_of(
+                                      report.place_routes.begin(),
+                                      report.place_routes.end(), [](const auto& route) {
+                                          return !route.candidates.empty() &&
+                                                 route.candidates.size() ==
+                                                     route.place_frame.request.candidates.size();
+                                      });
+    report.hiita_summon_completion = report.hiita_field_completion_count != 0;
+    report.hiita_summon_completion_all_routes =
+        report.place_trace_complete && report.place_candidate_trace_count != 0 &&
+        report.hiita_field_completion_count == report.place_candidate_trace_count;
+}
+
+bool teacher_selected_cancel(const ProbeReport& report) {
+    return report.unselect_ranking.has_value() &&
+           report.unselect_ranking->selected_public_action_key.has_value() &&
+           report.unselect_frame.has_value() &&
+           candidate_for_key(*report.unselect_frame,
+                             *report.unselect_ranking->selected_public_action_key) !=
+               nullptr &&
+           candidate_for_key(*report.unselect_frame,
+                             *report.unselect_ranking->selected_public_action_key)
+                   ->action_kind == EnvironmentActionKind::Cancel;
+}
+
+bool legal_hiita_progression_proven(const ProbeReport& report) {
+    return std::any_of(
+        report.place_routes.begin(), report.place_routes.end(),
+        [](const auto& route) {
+            return std::any_of(
+                route.candidates.begin(), route.candidates.end(),
+                [](const auto& candidate) {
+                    return candidate.step_accepted &&
+                           candidate.hiita_on_field.state == "YES" &&
+                           !candidate.returned_to_same_hiita_idle_boundary;
+                });
+        });
+}
+
 std::string root_cause_class(const ProbeReport& report) {
     if (report.failure_kind.has_value() &&
         *report.failure_kind == FailureKind::Replay) {
@@ -1516,7 +1787,14 @@ std::string root_cause_class(const ProbeReport& report) {
     if (!report.prefix_replay_exact) {
         return "PUBLIC_REPLAY_DIVERGENCE";
     }
+    if (report.place_trace_complete && teacher_selected_cancel(report) &&
+        legal_hiita_progression_proven(report)) {
+        return "TEACHER_CONTINUATION_COMMITMENT_LOSS_CONFIRMED";
+    }
     if (!report.finish_reachable) {
+        if (report.place_trace_complete) {
+            return "COUNTERFACTUAL_SEARCH_INCONCLUSIVE";
+        }
         if (report.path_bound_exhausted) {
             return "PATH_BOUND_EXHAUSTED";
         }
@@ -1528,17 +1806,7 @@ std::string root_cause_class(const ProbeReport& report) {
         }
         return "COUNTERFACTUAL_SEARCH_INCONCLUSIVE";
     }
-    const bool teacher_selected_cancel =
-        report.unselect_ranking.has_value() &&
-        report.unselect_ranking->selected_public_action_key.has_value() &&
-        report.unselect_frame.has_value() &&
-        candidate_for_key(*report.unselect_frame,
-                          *report.unselect_ranking->selected_public_action_key) !=
-            nullptr &&
-        candidate_for_key(*report.unselect_frame,
-                          *report.unselect_ranking->selected_public_action_key)
-                ->action_kind == EnvironmentActionKind::Cancel;
-    if (teacher_selected_cancel && report.finish_accepted &&
+    if (teacher_selected_cancel(report) && report.finish_accepted &&
         !report.returned_immediately_to_same_hiita_idle_boundary) {
         if (report.unselect_ranking->fallback_level ==
             std::optional<TeacherFallbackLevel>{TeacherFallbackLevel::F4}) {
@@ -1597,6 +1865,8 @@ void emit_initial_material_summary(std::ostream& output, const char* label,
                                    const InitialMaterialSummary& summary) {
     output << "INITIAL_MATERIAL_" << label << "_PASSCODE=" << summary.passcode
            << '\n'
+           << "INITIAL_MATERIAL_" << label << "_SOURCE_LOCATOR="
+           << summary.source_locator << '\n'
            << "INITIAL_MATERIAL_" << label << "_PUBLIC_ACTION_KEY="
            << summary.public_action_key << '\n'
            << "INITIAL_MATERIAL_" << label << "_NEXT_REQUEST_KIND="
@@ -1683,6 +1953,119 @@ void emit_frontier_edge(std::ostream& output, const std::size_t index,
            << prefix << "_TARGET_FRONTIER_KEY=" << edge.target_frontier_key << '\n'
            << prefix << "_TARGET_NODE_INDEX="
            << optional_size(edge.target_node_index) << '\n';
+}
+
+void emit_place_candidate_trace(std::ostream& output,
+                                const std::string& prefix,
+                                const DecisionFrame& place_frame,
+                                const std::size_t ordinal,
+                                const PlaceCandidateTrace& trace) {
+    output << prefix << "_ORDINAL=" << ordinal << '\n';
+    emit_candidate(output, prefix, place_frame.public_observation,
+                   trace.candidate);
+    output << prefix << "_STEP_ACCEPTED="
+           << (trace.step_accepted ? "YES" : "NO") << '\n'
+           << prefix << "_NEXT_BOUNDARY_KIND=" << trace.next_boundary_kind << '\n'
+           << prefix << "_RETURNED_TO_SAME_HIITA_IDLE_BOUNDARY="
+           << (trace.returned_to_same_hiita_idle_boundary ? "YES" : "NO")
+           << '\n'
+           << prefix << "_NEXT_HIITA_ON_FIELD="
+           << trace.hiita_on_field.state << '\n'
+           << prefix << "_NEXT_HIITA_FIELD_LOCATOR="
+           << trace.hiita_on_field.locator << '\n';
+    if (!trace.next_frame.has_value()) {
+        output << prefix << "_NEXT_DECISION_INDEX=ABSENT\n"
+               << prefix << "_NEXT_ENGINE_STEP_INDEX=ABSENT\n"
+               << prefix << "_NEXT_ACTING_PLAYER=ABSENT\n"
+               << prefix << "_NEXT_REQUEST_KIND=ABSENT\n"
+               << prefix << "_NEXT_PUBLIC_BOUNDARY_KEY=ABSENT\n"
+               << prefix << "_NEXT_PUBLIC_OBSERVATION_DIGEST=ABSENT\n"
+               << prefix << "_NEXT_PUBLIC_CANDIDATE_DOMAIN_DIGEST=ABSENT\n"
+               << prefix << "_NEXT_PUBLIC_SEMANTIC_DECISION_ID=ABSENT\n"
+               << prefix << "_NEXT_CANDIDATE_COUNT=ABSENT\n"
+               << prefix << "_NEXT_CONTINUATION_PRESENT=ABSENT\n"
+               << prefix << "_NEXT_HAS_FINISH=ABSENT\n"
+               << prefix << "_NEXT_HAS_CANCEL=ABSENT\n"
+               << prefix << "_NEXT_NON_CANCEL_CANDIDATE_COUNT=ABSENT\n";
+        emit_progress(output, prefix + "_NEXT", std::nullopt);
+        return;
+    }
+
+    const auto& next = *trace.next_frame;
+    output << prefix << "_NEXT_DECISION_INDEX=" << next.decision_index << '\n'
+           << prefix << "_NEXT_ENGINE_STEP_INDEX=" << next.engine_step_index
+           << '\n'
+           << prefix << "_NEXT_ACTING_PLAYER="
+           << static_cast<unsigned>(next.acting_player) << '\n'
+           << prefix << "_NEXT_REQUEST_KIND="
+           << ygo::environment::environment_decision_kind_name(next.request.kind)
+           << '\n'
+           << prefix << "_NEXT_PUBLIC_BOUNDARY_KEY="
+           << frontier_public_key(next) << '\n'
+           << prefix << "_NEXT_PUBLIC_OBSERVATION_DIGEST="
+           << next.public_observation_digest << '\n'
+           << prefix << "_NEXT_PUBLIC_CANDIDATE_DOMAIN_DIGEST="
+           << next.public_candidate_domain_digest << '\n'
+           << prefix << "_NEXT_PUBLIC_SEMANTIC_DECISION_ID="
+           << next.public_semantic_decision_id << '\n'
+           << prefix << "_NEXT_CANDIDATE_COUNT="
+           << next.request.candidates.size() << '\n'
+           << prefix << "_NEXT_CONTINUATION_PRESENT="
+           << (next.request.continuation.has_value() ? "YES" : "NO") << '\n'
+           << prefix << "_NEXT_HAS_FINISH="
+           << (finish_key_for(next).has_value() ? "YES" : "NO") << '\n'
+           << prefix << "_NEXT_HAS_CANCEL="
+           << (has_candidate_kind(next, EnvironmentActionKind::Cancel) ? "YES"
+                                                                         : "NO")
+           << '\n'
+           << prefix << "_NEXT_NON_CANCEL_CANDIDATE_COUNT="
+           << non_cancel_candidate_count(next) << '\n';
+    emit_progress(output, prefix + "_NEXT", trace.next_progress);
+    emit_continuation(output, prefix + "_NEXT", next.request.continuation);
+    emit_candidates(output, prefix + "_NEXT_CANDIDATE", next);
+}
+
+void emit_place_route(std::ostream& output, const std::size_t index,
+                      const PlaceRouteTrace& route) {
+    const auto prefix = "PLACE_ROUTE_" + std::to_string(index);
+    const auto& frame = route.place_frame;
+    output << prefix << "_MATERIAL_ROUTE=" << route.material_route << '\n'
+           << prefix << "_PATH_PUBLIC_ACTION_KEYS=" << path_text(route.path) << '\n'
+           << prefix << "_PUBLIC_BOUNDARY_KEY=" << frontier_public_key(frame)
+           << '\n'
+           << prefix << "_DECISION_INDEX=" << frame.decision_index << '\n'
+           << prefix << "_ENGINE_STEP_INDEX=" << frame.engine_step_index << '\n'
+           << prefix << "_ACTING_PLAYER="
+           << static_cast<unsigned>(frame.acting_player) << '\n'
+           << prefix << "_REQUEST_KIND="
+           << ygo::environment::environment_decision_kind_name(frame.request.kind)
+           << '\n'
+           << prefix << "_PUBLIC_OBSERVATION_DIGEST="
+           << frame.public_observation_digest << '\n'
+           << prefix << "_PUBLIC_CANDIDATE_DOMAIN_DIGEST="
+           << frame.public_candidate_domain_digest << '\n'
+           << prefix << "_PUBLIC_SEMANTIC_DECISION_ID="
+           << frame.public_semantic_decision_id << '\n'
+           << prefix << "_CANDIDATE_COUNT=" << frame.request.candidates.size()
+           << '\n'
+           << prefix << "_CONTINUATION_PRESENT="
+           << (frame.request.continuation.has_value() ? "YES" : "NO") << '\n'
+           << prefix << "_HAS_FINISH="
+           << (finish_key_for(frame).has_value() ? "YES" : "NO") << '\n'
+           << prefix << "_HAS_CANCEL="
+           << (has_candidate_kind(frame, EnvironmentActionKind::Cancel) ? "YES"
+                                                                         : "NO")
+           << '\n'
+           << prefix << "_NON_CANCEL_CANDIDATE_COUNT="
+           << non_cancel_candidate_count(frame) << '\n';
+    emit_progress(output, prefix, route.place_progress);
+    emit_continuation(output, prefix, frame.request.continuation);
+    for (std::size_t candidate_index = 0;
+         candidate_index < route.candidates.size(); ++candidate_index) {
+        emit_place_candidate_trace(
+            output, prefix + "_CANDIDATE_" + std::to_string(candidate_index),
+            frame, candidate_index, route.candidates[candidate_index]);
+    }
 }
 
 void render_report(const ProbeReport& report) {
@@ -1839,6 +2222,45 @@ void render_report(const ProbeReport& report) {
               << "DEPTH_BOUND_STATE_EXPLICIT=YES\n";
     emit_initial_material_summary(std::cout, "A", report.initial_material[0]);
     emit_initial_material_summary(std::cout, "B", report.initial_material[1]);
+    std::cout << "LEGAL_NON_CANCEL_ROUTE_OUT_OF_UNSELECT="
+              << (report.legal_non_cancel_route_out_of_unselect ? "YES" : "NO")
+              << '\n'
+              << "PLACE_TRACE_ROUTE_COUNT=" << report.place_routes.size() << '\n'
+              << "PLACE_TRACE_CANDIDATE_COUNT="
+              << report.place_candidate_trace_count << '\n'
+              << "PLACE_TRACE_COMPLETE="
+              << (report.place_trace_complete ? "YES" : "NO") << '\n'
+              << "HIITA_FIELD_COMPLETION_COUNT="
+              << report.hiita_field_completion_count << '\n'
+              << "HIITA_FIELD_ABSENT_COUNT=" << report.hiita_field_absent_count
+              << '\n'
+              << "HIITA_FIELD_UNPROVEN_COUNT="
+              << report.hiita_field_unproven_count << '\n'
+              << "HIITA_SUMMON_COMPLETION="
+              << (report.hiita_summon_completion
+                      ? "YES"
+                      : (report.place_trace_complete &&
+                                 report.hiita_field_unproven_count == 0
+                             ? "NO"
+                             : "NOT_YET_PROVEN"))
+              << '\n'
+              << "HIITA_SUMMON_COMPLETION_ALL_PLACE_CANDIDATES="
+              << (report.hiita_summon_completion_all_routes
+                      ? "YES"
+                      : (report.place_trace_complete &&
+                                 report.hiita_field_unproven_count == 0
+                             ? "NO"
+                             : "NOT_YET_PROVEN"))
+              << '\n'
+              << "RETURN_TO_SAME_HIITA_IDLE="
+              << (report.place_returned_to_same_hiita_idle ? "YES" : "NO")
+              << '\n'
+              << "DEPTH4_MATERIAL_FRONTIER_EXHAUSTIVE="
+              << (report.depth4_frontier_exhaustive ? "YES" : "NO") << '\n'
+              << "FULL_LEGAL_FRONTIER_EXHAUSTIVE=NO\n";
+    for (std::size_t index = 0; index < report.place_routes.size(); ++index) {
+        emit_place_route(std::cout, index, report.place_routes[index]);
+    }
     std::cout << "MAX_CONTINUATION_DEPTH=" << kMaxContinuationDepth << '\n'
               << "ORIGINAL_COUNTERFACTUAL_PATH_LIMIT="
               << kOriginalCounterfactualPathLimit << '\n'
@@ -1880,8 +2302,6 @@ void render_report(const ProbeReport& report) {
               << (report.path_bound_exhausted ? "YES" : "NO") << '\n'
               << "DEPTH_BOUND_EXHAUSTED="
               << (report.depth_bound_exhausted ? "YES" : "NO") << '\n'
-              << "DEPTH4_FRONTIER_EXHAUSTIVE="
-              << (report.depth4_frontier_exhaustive ? "YES" : "NO") << '\n'
               << "PUBLIC_FRONTIER_CYCLE_FOUND="
               << (report.public_frontier_cycle_count != 0 ? "YES" : "NO") << '\n'
               << "PUBLIC_FRONTIER_CYCLE_COUNT="
@@ -1941,7 +2361,8 @@ bool successful_report(const ProbeReport& report) {
         classification == "COUNTERFACTUAL_SEARCH_INCONCLUSIVE";
     return report.error.empty() && report.target_found && report.unselect_found &&
            report.visible_reference_resolution && report.prefix_replay_exact &&
-           supported_classification;
+           report.legal_non_cancel_route_out_of_unselect &&
+           report.place_trace_complete && supported_classification;
 }
 
 void validate_task7_job(const Task7CollectionJobV1& job) {
@@ -1985,6 +2406,7 @@ int main() {
         collect_baseline(job, report);
         report.prefix_replay_exact = true;
         explore_counterfactuals(job, report);
+        trace_place_completions(job, report);
     } catch (const ProbeFailure& failure) {
         report.error = failure.what();
         report.failure_kind = failure.kind;
