@@ -270,6 +270,15 @@ int run() {
         std::cerr << "select-unselect-card was merged into the wrong protocol\n";
         return 1;
     }
+    if (unselect_request.candidates[0].card_selection_operation !=
+            ygo::protocol::CardSelectionOperation::Unselect ||
+        unselect_request.candidates[1].card_selection_operation !=
+            ygo::protocol::CardSelectionOperation::Select ||
+        unselect_request.candidates[2].card_selection_operation !=
+            ygo::protocol::CardSelectionOperation::None) {
+        std::cerr << "select-unselect-card operation metadata was not classified\n";
+        return 1;
+    }
     return 0;
 }
 
