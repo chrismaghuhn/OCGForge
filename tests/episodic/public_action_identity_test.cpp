@@ -333,6 +333,57 @@ void test_typed_public_choices_are_part_of_identity() {
     require(invalid_option_rejected, "option choice without response selector was accepted");
 }
 
+void test_public_identity_v2_red() {
+    static_assert(ygo::environment::kPublicActionIdentityV2SchemaId ==
+                  "ocgforge.public_action_identity.v2");
+    static_assert(ygo::environment::kPublicCandidateDomainV2SchemaId ==
+                  "ocgforge.public_candidate_domain.v2");
+    static_assert(ygo::environment::kPublicSemanticDecisionIdentityV2SchemaId ==
+                  "ocgforge.public_semantic_decision_identity.v2");
+
+    auto select = hidden_card_action();
+    select.card_selection_operation =
+        ygo::environment::PublicCardSelectionOperation::Select;
+    auto unselect = select;
+    unselect.card_selection_operation =
+        ygo::environment::PublicCardSelectionOperation::Unselect;
+    const auto select_key = ygo::environment::public_action_key_v2(select);
+    const auto unselect_key = ygo::environment::public_action_key_v2(unselect);
+    require(select_key != unselect_key,
+            "Select and Unselect shared a V2 public action identity");
+    require(ygo::environment::is_public_action_key_v2(select_key) &&
+                ygo::environment::is_public_action_key_v2(unselect_key),
+            "V2 public action keys failed canonical validation");
+    require(!ygo::environment::is_public_action_key_v2(
+                ygo::environment::public_action_key(hidden_card_action())),
+            "V1 public action key was accepted by the V2 validator");
+
+    auto invalid_action = select;
+    invalid_action.action_kind = "cancel";
+    bool invalid_action_rejected = false;
+    try {
+        (void)ygo::environment::public_action_key_v2(invalid_action);
+    } catch (const std::invalid_argument&) {
+        invalid_action_rejected = true;
+    }
+    require(invalid_action_rejected,
+            "non-card-selection action accepted a V2 selection operation");
+
+    const auto domain = ygo::environment::public_candidate_domain_digest_v2(
+        "unselect_card", {select_key, unselect_key});
+    require(!domain.empty(), "V2 public candidate domain digest was empty");
+
+    ygo::environment::PublicSemanticDecisionIdentityInput decision_input;
+    decision_input.episode_semantic_id = std::string(64, 'a');
+    decision_input.decision_index = 17;
+    decision_input.acting_player = 1;
+    decision_input.request_kind = "unselect_card";
+    decision_input.public_observation_digest = std::string(64, 'b');
+    decision_input.public_candidate_domain_digest = domain;
+    require(!ygo::environment::public_semantic_decision_id_v2(decision_input).empty(),
+            "V2 public semantic decision identity was empty");
+}
+
 void test_attached_internal_context_is_sanitized_before_public_digest() {
     auto observation_a = hidden_card_observation();
     auto observation_b = hidden_card_observation();
@@ -502,6 +553,7 @@ int main() {
         test_public_safe_state_is_owned_by_projection();
         test_paired_world_hidden_card_projection();
         test_typed_public_choices_are_part_of_identity();
+        test_public_identity_v2_red();
         test_attached_internal_context_is_sanitized_before_public_digest();
         test_public_domain_order_and_mapping_collision();
         test_public_codec_rejects_non_locator_reference();
