@@ -60,7 +60,11 @@ constexpr std::string_view kCollectorSemanticSourceCommit =
 constexpr std::uint64_t kEngineProcessBudget = 5000;
 constexpr std::uint64_t kSemanticActionBudget = 2000;
 constexpr std::size_t kMaxContinuationDepth = 4;
-constexpr std::size_t kMaxCounterfactualPaths = 16;
+constexpr std::size_t kOriginalCounterfactualPathLimit = 16;
+// This is diagnostic-only path recording capacity. The original 16-path
+// cutoff is retained and measured; two additional records are the smallest
+// capacity needed to exhaust the observed depth-4 frontier.
+constexpr std::size_t kMaxCounterfactualPaths = 18;
 constexpr std::uint32_t kHiitaPasscode = 48815792;
 
 using Boundary = std::variant<DecisionFrame, EpisodeTerminal, EpisodeInterrupted,
@@ -248,6 +252,17 @@ std::string path_text(const std::vector<std::string>& path) {
     return output.str();
 }
 
+std::string frontier_public_key(const DecisionFrame& frame) {
+    std::ostringstream output;
+    output << "acting_player=" << static_cast<unsigned>(frame.acting_player)
+           << ";request_kind="
+           << ygo::environment::environment_decision_kind_name(frame.request.kind)
+           << ";public_observation_digest=" << frame.public_observation_digest
+           << ";public_candidate_domain_digest="
+           << frame.public_candidate_domain_digest;
+    return output.str();
+}
+
 struct FrameProgress final {
     std::optional<std::uint8_t> turn_player;
     std::optional<std::uint32_t> turn_count;
@@ -273,20 +288,65 @@ struct ReplayState final {
     Boundary next;
 };
 
-struct CounterfactualNode final {
-    std::vector<std::string> path;
-    DecisionFrame frame;
-    FrameProgress progress;
+struct SelectedPublicAction final {
+    EnvironmentActionCandidate candidate;
+    ygo::environment::PublicEnvironmentObservation observation;
 };
 
-struct CounterfactualOutcome final {
+struct FrontierNode final {
     std::vector<std::string> path;
-    std::string next_boundary_kind;
+    std::string frontier_public_key;
+    DecisionFrame frame;
+    FrameProgress progress;
+    std::string material_path_references = "ABSENT";
+    std::string material_operation = "UNPROVEN";
+    bool expanded = false;
+    bool has_finish = false;
+    bool has_cancel = false;
+    std::size_t non_cancel_candidate_count = 0;
+};
+
+struct FrontierEdge final {
+    std::size_t source_node_index = 0;
+    std::size_t source_depth = 0;
+    std::size_t candidate_ordinal = 0;
+    std::string source_frontier_key;
+    std::string action_kind;
+    std::string public_action_key;
+    std::string material_operation = "UNPROVEN";
+    std::string result_boundary_kind;
+    std::string edge_class;
+    std::string target_frontier_key = "ABSENT";
+    std::optional<std::size_t> target_node_index;
+};
+
+struct FrontierSeen final {
+    std::string public_key;
+    std::size_t first_node_index = 0;
+    std::vector<std::string> first_path;
+    std::size_t occurrence_count = 0;
+};
+
+struct PendingPath final {
+    std::vector<std::string> path;
+    std::size_t parent_node_index = 0;
+    std::size_t parent_candidate_ordinal = 0;
+};
+
+struct InitialMaterialSummary final {
+    std::string public_action_key = "ABSENT";
+    std::string passcode = "ABSENT";
+    std::string next_request_kind = "ABSENT";
+    std::string next_candidate_count = "ABSENT";
+    std::string next_finish_present = "NO";
+    std::string next_cancel_present = "NO";
+    std::string next_public_boundary_key = "ABSENT";
 };
 
 struct ProbeReport final {
     bool target_found = false;
     bool unselect_found = false;
+    bool visible_reference_resolution = false;
     std::optional<DecisionFrame> target_idle_frame;
     std::optional<FrameProgress> target_idle_progress;
     std::optional<TeacherRankingResult> target_idle_ranking;
@@ -298,10 +358,30 @@ struct ProbeReport final {
     std::size_t unselect_non_cancel_count = 0;
     bool unselect_cancel_present = false;
     bool unselect_finish_present = false;
-    std::vector<CounterfactualNode> counterfactual_nodes;
-    std::vector<CounterfactualOutcome> counterfactual_outcomes;
+    std::vector<FrontierNode> frontier_nodes;
+    std::vector<FrontierEdge> frontier_edges;
+    std::vector<FrontierSeen> frontier_seen;
+    std::array<InitialMaterialSummary, 2> initial_material;
     std::size_t counterfactual_path_count = 0;
     bool counterfactual_search_bound_exhausted = false;
+    bool original_path_bound_reached = false;
+    std::size_t queued_unexplored_at_original_bound = 0;
+    std::size_t queued_unexplored_at_effective_bound = 0;
+    bool path_bound_exhausted = false;
+    bool depth_bound_exhausted = false;
+    bool depth4_frontier_exhaustive = false;
+    std::size_t revisited_public_boundary_count = 0;
+    std::size_t converged_public_boundary_count = 0;
+    std::size_t max_observed_depth = 0;
+    std::size_t max_candidate_count = 0;
+    std::size_t total_non_cancel_edges = 0;
+    std::size_t total_non_cancel_candidates_seen = 0;
+    std::size_t total_finish_edges = 0;
+    std::size_t total_cancel_edges = 0;
+    std::size_t public_frontier_cycle_count = 0;
+    std::size_t cycle_length = 0;
+    std::string cycle_path = "ABSENT";
+    std::string cycle_boundary_keys = "ABSENT";
     bool finish_reachable = false;
     std::vector<std::string> finish_path;
     bool finish_accepted = false;
@@ -468,7 +548,9 @@ ReplayState replay_prefix(const Task7CollectionJobV1& job,
 
 ReplayState replay_prefix_and_path(const Task7CollectionJobV1& job,
                                    const ProbeReport& report,
-                                   const std::vector<std::string>& path) {
+                                   const std::vector<std::string>& path,
+    std::vector<SelectedPublicAction>*
+                                       selected_path_candidates = nullptr) {
     auto state = replay_prefix(job, report.prefix);
     const auto* target = frame_of(state.next);
     require_probe(target != nullptr, FailureKind::Replay,
@@ -491,6 +573,13 @@ ReplayState replay_prefix_and_path(const Task7CollectionJobV1& job,
         const auto* frame = frame_of(state.next);
         require_probe(frame != nullptr, FailureKind::Counterfactual,
                       "counterfactual path ended before its next action");
+        const auto* candidate = candidate_for_key(*frame, public_action_key);
+        require_probe(candidate != nullptr, FailureKind::Counterfactual,
+                      "counterfactual path action is absent from its public domain");
+        if (selected_path_candidates != nullptr) {
+            selected_path_candidates->push_back(
+                SelectedPublicAction{*candidate, frame->public_observation});
+        }
         (void)apply_public_key(state, *frame, public_action_key,
                                FailureKind::Counterfactual);
     }
@@ -698,6 +787,7 @@ void collect_baseline(const Task7CollectionJobV1& job, ProbeReport& report) {
             report.unselect_frame = *unselect;
             report.unselect_progress = unselect_progress;
             validate_public_references(*unselect, FailureKind::Baseline);
+            report.visible_reference_resolution = true;
             auto& unselect_session = *sessions.sessions[unselect->acting_player];
             report.unselect_ranking = select_teacher(unselect_session, *unselect);
             for (const auto& candidate : unselect->request.candidates) {
@@ -760,6 +850,42 @@ void validate_public_references(const DecisionFrame& frame,
     }
 }
 
+std::string material_path_references(
+    const std::vector<SelectedPublicAction>& selected_actions,
+    const FailureKind failure_kind) {
+    std::ostringstream output;
+    bool first = true;
+    for (const auto& selected : selected_actions) {
+        const auto& candidate = selected.candidate;
+        if (!candidate.source_reference.has_value()) {
+            continue;
+        }
+        if (!first) {
+            output << ',';
+        }
+        first = false;
+        output << candidate.source_reference->observation_locator << '('
+               << visible_passcode(selected.observation, candidate.source_reference,
+                                   failure_kind)
+               << ')';
+    }
+    return first ? "ABSENT" : output.str();
+}
+
+std::string material_operation_name(const EnvironmentActionCandidate& candidate) {
+    if (candidate.action_kind == EnvironmentActionKind::CardSelection ||
+        candidate.action_kind == EnvironmentActionKind::Pick) {
+        return "UNPROVEN";
+    }
+    if (candidate.action_kind == EnvironmentActionKind::Finish) {
+        return "FINISH";
+    }
+    if (candidate.action_kind == EnvironmentActionKind::Cancel) {
+        return "CANCEL";
+    }
+    return "NON_MATERIAL";
+}
+
 void emit_reference(std::ostream& output, const std::string& prefix,
                     const ygo::environment::PublicEnvironmentObservation& observation,
                     const std::optional<ygo::environment::PublicCardReference>& reference,
@@ -771,6 +897,8 @@ void emit_reference(std::ostream& output, const std::string& prefix,
         if (source) {
             output << prefix << "_SOURCE_LOCATOR=ABSENT\n"
                    << prefix << "_VISIBLE_PASSCODE=ABSENT\n";
+        } else {
+            output << prefix << "_TARGET_VISIBLE_PASSCODE=ABSENT\n";
         }
         return;
     }
@@ -783,6 +911,10 @@ void emit_reference(std::ostream& output, const std::string& prefix,
                << reference->observation_locator << '\n'
                << prefix << "_VISIBLE_PASSCODE="
                << visible_passcode(observation, reference, FailureKind::Internal) << '\n';
+    } else {
+        output << prefix << "_TARGET_VISIBLE_PASSCODE="
+               << visible_passcode(observation, reference, FailureKind::Internal)
+               << '\n';
     }
 }
 
@@ -890,6 +1022,49 @@ void emit_progress(std::ostream& output, const std::string& prefix,
            << prefix << "_PHASE=" << optional_u32(progress->phase) << '\n';
 }
 
+std::string continuation_indices(const std::vector<std::uint32_t>& indices) {
+    std::ostringstream output;
+    for (std::size_t index = 0; index < indices.size(); ++index) {
+        if (index != 0) {
+            output << ',';
+        }
+        output << indices[index];
+    }
+    return indices.empty() ? "EMPTY" : output.str();
+}
+
+void emit_continuation(std::ostream& output, const std::string& prefix,
+                       const std::optional<
+                           ygo::environment::EnvironmentContinuationView>& continuation) {
+    if (!continuation.has_value()) {
+        output << prefix << "_CONTINUATION_KIND=ABSENT\n"
+               << prefix << "_CONTINUATION_STEP=ABSENT\n"
+               << prefix << "_CONTINUATION_SELECTED_INDICES=ABSENT\n"
+               << prefix << "_CONTINUATION_REMAINING_INDICES=ABSENT\n"
+               << prefix << "_CONTINUATION_MIN_COUNT=ABSENT\n"
+               << prefix << "_CONTINUATION_MAX_COUNT=ABSENT\n"
+               << prefix << "_CONTINUATION_CAN_FINISH=ABSENT\n"
+               << prefix << "_CONTINUATION_CAN_CANCEL=ABSENT\n";
+        return;
+    }
+    output << prefix << "_CONTINUATION_KIND=" << continuation->continuation_kind
+           << '\n'
+           << prefix << "_CONTINUATION_STEP=" << continuation->continuation_step
+           << '\n'
+           << prefix << "_CONTINUATION_SELECTED_INDICES="
+           << continuation_indices(continuation->selected_indices) << '\n'
+           << prefix << "_CONTINUATION_REMAINING_INDICES="
+           << continuation_indices(continuation->remaining_indices) << '\n'
+           << prefix << "_CONTINUATION_MIN_COUNT=" << continuation->min_count
+           << '\n'
+           << prefix << "_CONTINUATION_MAX_COUNT=" << continuation->max_count
+           << '\n'
+           << prefix << "_CONTINUATION_CAN_FINISH="
+           << (continuation->can_finish ? "YES" : "NO") << '\n'
+           << prefix << "_CONTINUATION_CAN_CANCEL="
+           << (continuation->can_cancel ? "YES" : "NO") << '\n';
+}
+
 void record_next_boundary(ProbeReport& report, const Boundary& next,
                           const std::shared_ptr<ProgressTracker>& progress) {
     report.next_boundary_kind = boundary_kind(next);
@@ -928,9 +1103,141 @@ bool is_material_continuation_boundary(const DecisionFrame& frame) {
            frame.request.continuation.has_value();
 }
 
-void replay_finish(ProbeReport& report, const Task7CollectionJobV1& job,
-                   const std::vector<std::string>& path,
-                   const std::string& finish_key) {
+bool is_path_prefix(const std::vector<std::string>& prefix,
+                    const std::vector<std::string>& value) {
+    return prefix.size() < value.size() &&
+           std::equal(prefix.begin(), prefix.end(), value.begin());
+}
+
+std::string material_path_operation(
+    const std::vector<SelectedPublicAction>& selected_actions) {
+    if (selected_actions.empty()) {
+        return "NONE";
+    }
+    for (const auto& selected : selected_actions) {
+        if (selected.candidate.action_kind == EnvironmentActionKind::CardSelection ||
+            selected.candidate.action_kind == EnvironmentActionKind::Pick) {
+            return "UNPROVEN";
+        }
+    }
+    return material_operation_name(selected_actions.back().candidate);
+}
+
+struct FrontierRegistration final {
+    std::size_t node_index = 0;
+    std::size_t occurrence_before = 0;
+};
+
+FrontierRegistration register_frontier_node(
+    ProbeReport& report, const std::vector<std::string>& path,
+    const DecisionFrame& frame, const FrameProgress& progress,
+    const std::vector<SelectedPublicAction>& selected_actions) {
+    const auto public_key = frontier_public_key(frame);
+    auto seen = std::find_if(
+        report.frontier_seen.begin(), report.frontier_seen.end(),
+        [&public_key](const auto& value) { return value.public_key == public_key; });
+    std::size_t occurrence_before = 0;
+    if (seen == report.frontier_seen.end()) {
+        report.frontier_seen.push_back(
+            FrontierSeen{public_key, report.frontier_nodes.size(), path, 1});
+    } else {
+        occurrence_before = seen->occurrence_count;
+        ++seen->occurrence_count;
+        if (occurrence_before == 1) {
+            ++report.converged_public_boundary_count;
+        } else {
+            ++report.revisited_public_boundary_count;
+        }
+        if (is_path_prefix(seen->first_path, path)) {
+            ++report.public_frontier_cycle_count;
+            if (report.cycle_length == 0) {
+                report.cycle_length = path.size() - seen->first_path.size();
+                report.cycle_path = path_text(path);
+                report.cycle_boundary_keys =
+                    seen->public_key + " -> " + public_key;
+            }
+        }
+    }
+
+    FrontierNode node;
+    node.path = path;
+    node.frontier_public_key = public_key;
+    node.frame = frame;
+    node.progress = progress;
+    node.material_path_references = material_path_references(
+        selected_actions, FailureKind::Counterfactual);
+    node.material_operation = material_path_operation(selected_actions);
+    for (const auto& candidate : frame.request.candidates) {
+        if (candidate.action_kind == EnvironmentActionKind::Cancel) {
+            node.has_cancel = true;
+            ++report.total_cancel_edges;
+        } else {
+            ++node.non_cancel_candidate_count;
+            ++report.total_non_cancel_candidates_seen;
+        }
+        if (candidate.action_kind == EnvironmentActionKind::Finish) {
+            node.has_finish = true;
+        }
+    }
+    report.max_observed_depth = std::max(report.max_observed_depth, path.size());
+    report.max_candidate_count = std::max(
+        report.max_candidate_count, frame.request.candidates.size());
+    const auto node_index = report.frontier_nodes.size();
+    report.frontier_nodes.push_back(std::move(node));
+    return FrontierRegistration{node_index, occurrence_before};
+}
+
+void append_frontier_edge(
+    ProbeReport& report, const std::size_t source_node_index,
+    const std::size_t candidate_ordinal, const std::string& result_boundary_kind,
+    const std::string& edge_class, const std::string& target_frontier_key,
+    const std::optional<std::size_t> target_node_index) {
+    require_probe(
+        source_node_index < report.frontier_nodes.size() &&
+            candidate_ordinal <
+                report.frontier_nodes[source_node_index].frame.request.candidates.size(),
+        FailureKind::Internal, "frontier edge source is not in the public node domain");
+    const auto& source = report.frontier_nodes[source_node_index];
+    const auto& candidate = source.frame.request.candidates[candidate_ordinal];
+    FrontierEdge edge;
+    edge.source_node_index = source_node_index;
+    edge.source_depth = source.path.size();
+    edge.candidate_ordinal = candidate_ordinal;
+    edge.source_frontier_key = source.frontier_public_key;
+    edge.action_kind = std::string(
+        ygo::environment::environment_action_kind_name(candidate.action_kind));
+    edge.public_action_key = candidate.public_action_key;
+    edge.material_operation = material_operation_name(candidate);
+    edge.result_boundary_kind = result_boundary_kind;
+    edge.edge_class = edge_class;
+    edge.target_frontier_key = target_frontier_key;
+    edge.target_node_index = target_node_index;
+    report.frontier_edges.push_back(std::move(edge));
+}
+
+std::string public_edge_class_for_boundary(const Boundary& boundary) {
+    if (std::holds_alternative<EpisodeTerminal>(boundary)) {
+        return "TERMINAL";
+    }
+    if (std::holds_alternative<EpisodeInterrupted>(boundary)) {
+        return "INTERRUPTED";
+    }
+    if (std::holds_alternative<EpisodeFailure>(boundary)) {
+        return "FAILURE";
+    }
+    return "FAILURE";
+}
+
+struct FinishReplayOutcome final {
+    bool accepted = false;
+    std::string result_boundary_kind = "STEP_REJECTED";
+    std::string target_frontier_key = "ABSENT";
+};
+
+FinishReplayOutcome replay_finish(ProbeReport& report,
+                                  const Task7CollectionJobV1& job,
+                                  const std::vector<std::string>& path,
+                                  const std::string& finish_key) {
     auto state = replay_prefix_and_path(job, report, path);
     const auto* frame = frame_of(state.next);
     require_probe(frame != nullptr, FailureKind::Counterfactual,
@@ -947,7 +1254,7 @@ void replay_finish(ProbeReport& report, const Task7CollectionJobV1& job,
         report.finish_accepted = false;
         report.next_boundary_kind = "STEP_REJECTED";
         report.next_decision_family = "ABSENT";
-        return;
+        return FinishReplayOutcome{};
     }
     const auto* accepted = std::get_if<StepAccepted>(&result);
     require_probe(accepted != nullptr, FailureKind::Counterfactual,
@@ -955,35 +1262,179 @@ void replay_finish(ProbeReport& report, const Task7CollectionJobV1& job,
     report.finish_accepted = true;
     state.next = accepted->next;
     record_next_boundary(report, state.next, state.progress);
+    FinishReplayOutcome outcome;
+    outcome.accepted = true;
+    outcome.result_boundary_kind = boundary_kind(state.next);
+    if (const auto* next_frame = frame_of(state.next); next_frame != nullptr) {
+        outcome.target_frontier_key = frontier_public_key(*next_frame);
+    }
+    return outcome;
 }
 
-std::optional<DecisionFrame> evaluate_counterfactual_path(
+void evaluate_finish_edge(ProbeReport& report, const Task7CollectionJobV1& job,
+                          const std::size_t source_node_index,
+                          const std::size_t candidate_ordinal) {
+    const auto& source = report.frontier_nodes[source_node_index];
+    const auto& candidate =
+        source.frame.request.candidates[candidate_ordinal];
+    ++report.total_non_cancel_edges;
+    ++report.total_finish_edges;
+    report.finish_reachable = true;
+    report.finish_path = source.path;
+    report.finish_path.push_back(candidate.public_action_key);
+    const auto replay = replay_finish(report, job, source.path,
+                                      candidate.public_action_key);
+    append_frontier_edge(
+        report, source_node_index, candidate_ordinal,
+        replay.result_boundary_kind,
+        replay.accepted ? "FINISH_REACHED" : "FAILURE",
+        replay.target_frontier_key, std::nullopt);
+}
+
+std::optional<std::size_t> evaluate_counterfactual_path(
     ProbeReport& report, const Task7CollectionJobV1& job,
-    const std::vector<std::string>& path) {
+    const PendingPath& pending_path) {
     require_probe(report.counterfactual_path_count < kMaxCounterfactualPaths,
                   FailureKind::Counterfactual,
                   "counterfactual path budget was exceeded");
     ++report.counterfactual_path_count;
-    auto state = replay_prefix_and_path(job, report, path);
-    report.counterfactual_outcomes.push_back(
-        CounterfactualOutcome{path, boundary_kind(state.next)});
+    require_probe(
+        pending_path.parent_node_index < report.frontier_nodes.size(),
+        FailureKind::Internal, "counterfactual parent node is not recorded");
+    const auto& parent = report.frontier_nodes[pending_path.parent_node_index];
+    require_probe(
+        pending_path.parent_candidate_ordinal <
+            parent.frame.request.candidates.size(),
+        FailureKind::Internal,
+        "counterfactual parent candidate ordinal is not in the public domain");
+    const auto& source_candidate =
+        parent.frame.request.candidates[pending_path.parent_candidate_ordinal];
+    require_probe(
+        !pending_path.path.empty() &&
+            pending_path.path.back() == source_candidate.public_action_key,
+        FailureKind::Internal,
+        "counterfactual path does not end in its parent public action");
+
+    ++report.total_non_cancel_edges;
+    std::vector<SelectedPublicAction> selected_actions;
+    auto state = replay_prefix_and_path(job, report, pending_path.path,
+                                        &selected_actions);
     const auto* frame = frame_of(state.next);
     if (frame == nullptr) {
+        append_frontier_edge(
+            report, pending_path.parent_node_index,
+            pending_path.parent_candidate_ordinal, boundary_kind(state.next),
+            public_edge_class_for_boundary(state.next), "ABSENT", std::nullopt);
         return std::nullopt;
     }
     const auto progress = progress_for(state).value_or(FrameProgress{});
     validate_public_references(*frame, FailureKind::Counterfactual);
-    report.counterfactual_nodes.push_back(
-        CounterfactualNode{path, *frame, progress});
-    if (!report.finish_reachable) {
-        if (const auto finish_key = finish_key_for(*frame); finish_key.has_value()) {
-            report.finish_reachable = true;
-            report.finish_path = path;
-            report.finish_path.push_back(*finish_key);
-            replay_finish(report, job, path, *finish_key);
-        }
+    const auto registration = register_frontier_node(
+        report, pending_path.path, *frame, progress, selected_actions);
+    std::string edge_class;
+    if (registration.occurrence_before == 0) {
+        edge_class = is_material_continuation_boundary(*frame)
+                         ? "NEW_DECISION_BOUNDARY"
+                         : "NON_MATERIAL_DECISION_BOUNDARY";
+    } else if (registration.occurrence_before == 1) {
+        edge_class = "CONVERGED_PUBLIC_BOUNDARY";
+    } else {
+        edge_class = "REVISITED_PUBLIC_BOUNDARY";
     }
-    return *frame;
+    append_frontier_edge(
+        report, pending_path.parent_node_index,
+        pending_path.parent_candidate_ordinal, "DECISION_FRAME", edge_class,
+        report.frontier_nodes[registration.node_index].frontier_public_key,
+        registration.node_index);
+    return registration.node_index;
+}
+
+std::size_t initial_material_index(const ProbeReport& report,
+                                   const std::size_t candidate_ordinal) {
+    require_probe(report.unselect_frame.has_value(), FailureKind::Internal,
+                  "initial material summary lacks its target frame");
+    std::size_t non_cancel_ordinal = 0;
+    for (std::size_t ordinal = 0;
+         ordinal < report.unselect_frame->request.candidates.size(); ++ordinal) {
+        if (report.unselect_frame->request.candidates[ordinal].action_kind ==
+            EnvironmentActionKind::Cancel) {
+            continue;
+        }
+        if (ordinal == candidate_ordinal) {
+            return non_cancel_ordinal < 2 ? non_cancel_ordinal : 2;
+        }
+        ++non_cancel_ordinal;
+    }
+    return 2;
+}
+
+void record_initial_material_summary(
+    ProbeReport& report, const PendingPath& pending_path,
+    const Boundary& next) {
+    if (pending_path.path.size() != 1 || pending_path.parent_node_index != 0) {
+        return;
+    }
+    const auto summary_index =
+        initial_material_index(report, pending_path.parent_candidate_ordinal);
+    if (summary_index >= report.initial_material.size()) {
+        return;
+    }
+    auto& summary = report.initial_material[summary_index];
+    const auto& source = report.frontier_nodes[0].frame.request.candidates[
+        pending_path.parent_candidate_ordinal];
+    summary.public_action_key = source.public_action_key;
+    summary.passcode = visible_passcode(
+        report.frontier_nodes[0].frame.public_observation,
+        source.source_reference, FailureKind::Counterfactual);
+    if (const auto* frame = frame_of(next); frame != nullptr) {
+        summary.next_request_kind = std::string(
+            ygo::environment::environment_decision_kind_name(frame->request.kind));
+        summary.next_candidate_count = std::to_string(frame->request.candidates.size());
+        summary.next_finish_present = finish_key_for(*frame).has_value() ? "YES" : "NO";
+        summary.next_cancel_present = std::any_of(
+            frame->request.candidates.begin(), frame->request.candidates.end(),
+            [](const auto& candidate) {
+                return candidate.action_kind == EnvironmentActionKind::Cancel;
+            })
+                                           ? "YES"
+                                           : "NO";
+        summary.next_public_boundary_key = frontier_public_key(*frame);
+    }
+}
+
+void expand_frontier_node(ProbeReport& report, const Task7CollectionJobV1& job,
+                          const std::size_t node_index,
+                          std::deque<PendingPath>& pending) {
+    auto& node = report.frontier_nodes[node_index];
+    const bool material_boundary = is_material_continuation_boundary(node.frame);
+    for (std::size_t ordinal = 0;
+         ordinal < node.frame.request.candidates.size(); ++ordinal) {
+        const auto& candidate = node.frame.request.candidates[ordinal];
+        if (candidate.action_kind == EnvironmentActionKind::Cancel) {
+            continue;
+        }
+        if (candidate.action_kind == EnvironmentActionKind::Finish) {
+            if (!report.finish_reachable) {
+                node.expanded = true;
+                evaluate_finish_edge(report, job, node_index, ordinal);
+            }
+            continue;
+        }
+        if (!material_boundary) {
+            continue;
+        }
+        if (node.path.size() >= kMaxContinuationDepth) {
+            report.depth_bound_exhausted = true;
+            continue;
+        }
+        if (report.finish_reachable) {
+            continue;
+        }
+        node.expanded = true;
+        auto path = node.path;
+        path.push_back(candidate.public_action_key);
+        pending.push_back(PendingPath{std::move(path), node_index, ordinal});
+    }
 }
 
 void explore_counterfactuals(const Task7CollectionJobV1& job,
@@ -993,59 +1444,65 @@ void explore_counterfactuals(const Task7CollectionJobV1& job,
                        report.unselect_ranking.has_value(),
                    FailureKind::Internal,
                    "counterfactual exploration lacks the captured public boundary");
-    std::vector<std::string> roots;
-    for (const auto& candidate : report.unselect_frame->request.candidates) {
+    std::vector<std::size_t> roots;
+    for (std::size_t ordinal = 0;
+         ordinal < report.unselect_frame->request.candidates.size(); ++ordinal) {
+        const auto& candidate = report.unselect_frame->request.candidates[ordinal];
         if (candidate.action_kind != EnvironmentActionKind::Cancel) {
-            roots.push_back(candidate.public_action_key);
+            roots.push_back(ordinal);
         }
     }
-    std::deque<std::vector<std::string>> pending;
-    for (const auto& root : roots) {
-        pending.push_back({root});
+    const auto root_progress = report.unselect_progress.value_or(FrameProgress{});
+    const auto root_registration = register_frontier_node(
+        report, {}, *report.unselect_frame, root_progress, {});
+    require_probe(root_registration.node_index == 0, FailureKind::Internal,
+                  "target frontier root was not recorded at index zero");
+    report.frontier_nodes[root_registration.node_index].expanded = !roots.empty();
+    std::deque<PendingPath> pending_paths;
+    for (const auto ordinal : roots) {
+        pending_paths.push_back(PendingPath{
+            {report.unselect_frame->request.candidates[ordinal].public_action_key},
+            root_registration.node_index, ordinal});
     }
 
-    while (!pending.empty()) {
-        auto path = std::move(pending.front());
-        pending.pop_front();
+    while (!pending_paths.empty()) {
+        auto pending_path = std::move(pending_paths.front());
+        pending_paths.pop_front();
         // Both initial non-Cancel choices are always replayed. Once one of
         // them proves a Finish route, deeper siblings are unnecessary.
-        if (report.finish_reachable && path.size() > 1) {
+        if (report.finish_reachable && pending_path.path.size() > 1) {
             break;
         }
         if (report.counterfactual_path_count >= kMaxCounterfactualPaths) {
-            report.counterfactual_search_bound_exhausted = true;
+            report.path_bound_exhausted = true;
+            report.queued_unexplored_at_effective_bound = pending_paths.size();
             break;
         }
-        const auto frame = evaluate_counterfactual_path(report, job, path);
-        if (report.finish_reachable || !frame.has_value()) {
-            continue;
+        const auto node_index = evaluate_counterfactual_path(
+            report, job, pending_path);
+        if (node_index.has_value()) {
+            record_initial_material_summary(report, pending_path,
+                                            report.frontier_nodes[*node_index].frame);
+            expand_frontier_node(report, job, *node_index, pending_paths);
         }
-        if (path.size() >= kMaxContinuationDepth) {
-            report.counterfactual_search_bound_exhausted = true;
-            continue;
-        }
-        if (!is_material_continuation_boundary(*frame)) {
-            continue;
-        }
-        for (const auto& candidate : frame->request.candidates) {
-            if (candidate.action_kind == EnvironmentActionKind::Cancel) {
-                continue;
-            }
-            if (report.counterfactual_path_count + pending.size() >=
-                kMaxCounterfactualPaths) {
-                report.counterfactual_search_bound_exhausted = true;
-                break;
-            }
-            auto child = path;
-            child.push_back(candidate.public_action_key);
-            pending.push_back(std::move(child));
+        if (!report.original_path_bound_reached &&
+            report.counterfactual_path_count >=
+                kOriginalCounterfactualPathLimit) {
+            report.original_path_bound_reached = true;
+            report.queued_unexplored_at_original_bound = pending_paths.size();
         }
     }
-    if (!report.finish_reachable &&
-        report.counterfactual_path_count >= kMaxCounterfactualPaths &&
-        !pending.empty()) {
-        report.counterfactual_search_bound_exhausted = true;
+    if (!report.finish_reachable && report.counterfactual_path_count >=
+                                      kMaxCounterfactualPaths &&
+        !pending_paths.empty()) {
+        report.path_bound_exhausted = true;
+        report.queued_unexplored_at_effective_bound = pending_paths.size();
     }
+    report.depth4_frontier_exhaustive =
+        !report.finish_reachable && !report.path_bound_exhausted &&
+        pending_paths.empty();
+    report.counterfactual_search_bound_exhausted =
+        report.path_bound_exhausted || report.depth_bound_exhausted;
 }
 
 std::string root_cause_class(const ProbeReport& report) {
@@ -1059,12 +1516,17 @@ std::string root_cause_class(const ProbeReport& report) {
     if (!report.prefix_replay_exact) {
         return "PUBLIC_REPLAY_DIVERGENCE";
     }
-    if (report.counterfactual_search_bound_exhausted &&
-        !report.finish_reachable) {
-        return "COUNTERFACTUAL_SEARCH_INCONCLUSIVE";
-    }
     if (!report.finish_reachable) {
-        return "NO_COMPLETING_PUBLIC_CONTINUATION_PATH_FOUND";
+        if (report.path_bound_exhausted) {
+            return "PATH_BOUND_EXHAUSTED";
+        }
+        if (report.depth4_frontier_exhaustive) {
+            return "DEPTH_BOUNDED_FRONTIER_EXHAUSTED_NO_FINISH";
+        }
+        if (report.depth_bound_exhausted) {
+            return "DEPTH_BOUND_EXHAUSTED";
+        }
+        return "COUNTERFACTUAL_SEARCH_INCONCLUSIVE";
     }
     const bool teacher_selected_cancel =
         report.unselect_ranking.has_value() &&
@@ -1085,6 +1547,142 @@ std::string root_cause_class(const ProbeReport& report) {
         return "TEACHER_SELECTION_BUG_CONFIRMED_F4_HYPOTHESIS_FALSE";
     }
     return "COUNTERFACTUAL_SEARCH_INCONCLUSIVE";
+}
+
+std::string optional_size(const std::optional<std::size_t>& value) {
+    return value.has_value() ? std::to_string(*value) : "ABSENT";
+}
+
+std::size_t node_count_at_depth(const ProbeReport& report,
+                                const std::size_t depth) {
+    return static_cast<std::size_t>(std::count_if(
+        report.frontier_nodes.begin(), report.frontier_nodes.end(),
+        [depth](const auto& node) { return node.path.size() == depth; }));
+}
+
+std::size_t unique_node_count_at_depth(const ProbeReport& report,
+                                       const std::size_t depth) {
+    std::vector<std::string> keys;
+    for (const auto& node : report.frontier_nodes) {
+        if (node.path.size() != depth ||
+            std::find(keys.begin(), keys.end(), node.frontier_public_key) !=
+                keys.end()) {
+            continue;
+        }
+        keys.push_back(node.frontier_public_key);
+    }
+    return keys.size();
+}
+
+std::size_t expanded_node_count(const ProbeReport& report) {
+    return static_cast<std::size_t>(std::count_if(
+        report.frontier_nodes.begin(), report.frontier_nodes.end(),
+        [](const auto& node) { return node.expanded; }));
+}
+
+std::size_t unique_expanded_node_count(const ProbeReport& report) {
+    std::vector<std::string> keys;
+    for (const auto& node : report.frontier_nodes) {
+        if (!node.expanded ||
+            std::find(keys.begin(), keys.end(), node.frontier_public_key) !=
+                keys.end()) {
+            continue;
+        }
+        keys.push_back(node.frontier_public_key);
+    }
+    return keys.size();
+}
+
+void emit_initial_material_summary(std::ostream& output, const char* label,
+                                   const InitialMaterialSummary& summary) {
+    output << "INITIAL_MATERIAL_" << label << "_PASSCODE=" << summary.passcode
+           << '\n'
+           << "INITIAL_MATERIAL_" << label << "_PUBLIC_ACTION_KEY="
+           << summary.public_action_key << '\n'
+           << "INITIAL_MATERIAL_" << label << "_NEXT_REQUEST_KIND="
+           << summary.next_request_kind << '\n'
+           << "INITIAL_MATERIAL_" << label << "_NEXT_CANDIDATE_COUNT="
+           << summary.next_candidate_count << '\n'
+           << "INITIAL_MATERIAL_" << label << "_FINISH_PRESENT="
+           << summary.next_finish_present << '\n'
+           << "INITIAL_MATERIAL_" << label << "_CANCEL_PRESENT="
+           << summary.next_cancel_present << '\n'
+           << "INITIAL_MATERIAL_" << label << "_PUBLIC_BOUNDARY_KEY="
+           << summary.next_public_boundary_key << '\n'
+           << "INITIAL_MATERIAL_" << label << "_CHARACTERIZED="
+           << (summary.public_action_key == "ABSENT" ||
+                       summary.next_request_kind == "ABSENT"
+                   ? "NO"
+                   : "YES")
+           << '\n';
+}
+
+void emit_frontier_node(std::ostream& output, const std::size_t index,
+                        const FrontierNode& node) {
+    const auto prefix = "FRONTIER_NODE_" + std::to_string(index);
+    output << prefix << "_INDEX=" << index << '\n'
+           << prefix << "_PATH_DEPTH=" << node.path.size() << '\n'
+           << prefix << "_PATH_PUBLIC_ACTION_KEYS=" << path_text(node.path) << '\n'
+           << prefix << "_PUBLIC_KEY=" << node.frontier_public_key << '\n'
+           << prefix << "_DECISION_INDEX=" << node.frame.decision_index << '\n'
+           << prefix << "_ENGINE_STEP_INDEX=" << node.frame.engine_step_index << '\n'
+           << prefix << "_ACTING_PLAYER="
+           << static_cast<unsigned>(node.frame.acting_player) << '\n'
+           << prefix << "_REQUEST_KIND="
+           << ygo::environment::environment_decision_kind_name(
+                  node.frame.request.kind)
+           << '\n'
+           << prefix << "_TURN_PLAYER=" << optional_u8(node.progress.turn_player)
+           << '\n'
+           << prefix << "_TURN_COUNT=" << optional_u32(node.progress.turn_count)
+           << '\n'
+           << prefix << "_PHASE=" << optional_u32(node.progress.phase) << '\n'
+           << prefix << "_PUBLIC_OBSERVATION_DIGEST="
+           << node.frame.public_observation_digest << '\n'
+           << prefix << "_PUBLIC_CANDIDATE_DOMAIN_DIGEST="
+           << node.frame.public_candidate_domain_digest << '\n'
+           << prefix << "_PUBLIC_SEMANTIC_DECISION_ID="
+           << node.frame.public_semantic_decision_id << '\n'
+           << prefix << "_CANDIDATE_COUNT="
+           << node.frame.request.candidates.size() << '\n'
+           << prefix << "_CONTINUATION_PRESENT="
+           << (node.frame.request.continuation.has_value() ? "YES" : "NO")
+           << '\n'
+           << prefix << "_HAS_FINISH=" << (node.has_finish ? "YES" : "NO")
+           << '\n'
+           << prefix << "_HAS_CANCEL=" << (node.has_cancel ? "YES" : "NO")
+           << '\n'
+           << prefix << "_NON_CANCEL_CANDIDATE_COUNT="
+           << node.non_cancel_candidate_count << '\n'
+           << prefix << "_EXPANDED=" << (node.expanded ? "YES" : "NO") << '\n'
+           << prefix << "_MATERIAL_PATH_SELECTED="
+           << (node.material_operation == "UNPROVEN" ? "UNPROVEN"
+                                                      : node.material_path_references)
+           << '\n'
+           << prefix << "_MATERIAL_PATH_REFERENCES="
+           << node.material_path_references << '\n'
+           << prefix << "_MATERIAL_OPERATION=" << node.material_operation << '\n';
+    emit_continuation(output, prefix, node.frame.request.continuation);
+    emit_candidates(output, prefix + "_CANDIDATE", node.frame);
+}
+
+void emit_frontier_edge(std::ostream& output, const std::size_t index,
+                        const FrontierEdge& edge) {
+    const auto prefix = "FRONTIER_EDGE_" + std::to_string(index);
+    output << prefix << "_INDEX=" << index << '\n'
+           << prefix << "_SOURCE_NODE_INDEX=" << edge.source_node_index << '\n'
+           << prefix << "_SOURCE_DEPTH=" << edge.source_depth << '\n'
+           << prefix << "_SOURCE_FRONTIER_KEY=" << edge.source_frontier_key << '\n'
+           << prefix << "_ORDINAL=" << edge.candidate_ordinal << '\n'
+           << prefix << "_ACTION_KIND=" << edge.action_kind << '\n'
+           << prefix << "_PUBLIC_ACTION_KEY=" << edge.public_action_key << '\n'
+           << prefix << "_MATERIAL_OPERATION=" << edge.material_operation << '\n'
+           << prefix << "_RESULT_BOUNDARY_KIND=" << edge.result_boundary_kind
+           << '\n'
+           << prefix << "_EDGE_CLASS=" << edge.edge_class << '\n'
+           << prefix << "_TARGET_FRONTIER_KEY=" << edge.target_frontier_key << '\n'
+           << prefix << "_TARGET_NODE_INDEX="
+           << optional_size(edge.target_node_index) << '\n';
 }
 
 void render_report(const ProbeReport& report) {
@@ -1230,44 +1828,78 @@ void render_report(const ProbeReport& report) {
                   << "UNSELECT_TEACHER_SELECTED_CANCEL=NO\n";
     }
 
-    std::cout << "PREFIX_DECISION_COUNT=" << report.prefix.size() << '\n'
-              << "PREFIX_REPLAY_EXACT="
-              << (report.prefix_replay_exact ? "YES" : "NO") << '\n'
-              << "COUNTERFACTUAL_OUTCOME_COUNT="
-              << report.counterfactual_outcomes.size() << '\n';
-    for (std::size_t index = 0; index < report.counterfactual_outcomes.size();
-         ++index) {
-        const auto& outcome = report.counterfactual_outcomes[index];
-        const auto prefix = "COUNTERFACTUAL_OUTCOME_" + std::to_string(index);
-        std::cout << prefix << "_PATH=" << path_text(outcome.path) << '\n'
-                  << prefix << "_NEXT_BOUNDARY_KIND="
-                  << outcome.next_boundary_kind << '\n';
+    std::cout << "VISIBLE_REFERENCE_RESOLUTION="
+              << (report.visible_reference_resolution ? "PASS" : "FAIL") << '\n'
+              << "FRONTIER_NODES_RECORDED="
+              << (!report.frontier_nodes.empty() ? "YES" : "NO") << '\n'
+              << "FRONTIER_TOPOLOGY_METRICS_PRESENT=YES\n"
+              << "PUBLIC_BOUNDARY_REVISITS_CLASSIFIED=YES\n"
+              << "PUBLIC_BOUNDARY_CONVERGENCE_CLASSIFIED=YES\n"
+              << "PATH_BOUND_STATE_EXPLICIT=YES\n"
+              << "DEPTH_BOUND_STATE_EXPLICIT=YES\n";
+    emit_initial_material_summary(std::cout, "A", report.initial_material[0]);
+    emit_initial_material_summary(std::cout, "B", report.initial_material[1]);
+    std::cout << "MAX_CONTINUATION_DEPTH=" << kMaxContinuationDepth << '\n'
+              << "ORIGINAL_COUNTERFACTUAL_PATH_LIMIT="
+              << kOriginalCounterfactualPathLimit << '\n'
+              << "COUNTERFACTUAL_PATH_LIMIT=" << kMaxCounterfactualPaths << '\n'
+              << "COUNTERFACTUAL_PATH_RECORDING_CAPACITY_INCREASE="
+              << (kMaxCounterfactualPaths - kOriginalCounterfactualPathLimit) << '\n'
+              << "COUNTERFACTUAL_PATH_RECORDING_CAPACITY_REASON="
+                 "original_16_path_cutoff_queue_was_measured" << '\n'
+              << "UNIQUE_PUBLIC_FRONTIER_NODE_COUNT="
+              << report.frontier_seen.size() << '\n'
+              << "EXPANDED_PUBLIC_FRONTIER_NODE_COUNT="
+              << expanded_node_count(report) << '\n'
+              << "UNIQUE_EXPANDED_PUBLIC_FRONTIER_NODE_COUNT="
+              << unique_expanded_node_count(report) << '\n'
+              << "REVISITED_PUBLIC_BOUNDARY_COUNT="
+              << report.revisited_public_boundary_count << '\n'
+              << "CONVERGED_PUBLIC_BOUNDARY_COUNT="
+              << report.converged_public_boundary_count << '\n';
+    for (std::size_t depth = 1; depth <= kMaxContinuationDepth; ++depth) {
+        std::cout << "DEPTH_" << depth << "_NODE_COUNT="
+                  << node_count_at_depth(report, depth) << '\n'
+                  << "DEPTH_" << depth << "_UNIQUE_PUBLIC_FRONTIER_NODE_COUNT="
+                  << unique_node_count_at_depth(report, depth) << '\n';
     }
-    std::cout << "COUNTERFACTUAL_NODE_COUNT="
-              << report.counterfactual_nodes.size() << '\n';
-    for (std::size_t index = 0; index < report.counterfactual_nodes.size(); ++index) {
-        const auto& node = report.counterfactual_nodes[index];
-        const auto prefix = "COUNTERFACTUAL_NODE_" + std::to_string(index);
-        std::cout << prefix << "_PATH=" << path_text(node.path) << '\n'
-                  << prefix << "_DECISION_INDEX=" << node.frame.decision_index << '\n'
-                  << prefix << "_ENGINE_STEP_INDEX=" << node.frame.engine_step_index << '\n'
-                  << prefix << "_REQUEST_KIND="
-                  << ygo::environment::environment_decision_kind_name(
-                         node.frame.request.kind)
-                  << '\n'
-                  << prefix << "_ACTING_PLAYER="
-                  << static_cast<unsigned>(node.frame.acting_player) << '\n'
-                  << prefix << "_PUBLIC_OBSERVATION_DIGEST="
-                  << node.frame.public_observation_digest << '\n'
-                  << prefix << "_PUBLIC_CANDIDATE_DOMAIN_DIGEST="
-                  << node.frame.public_candidate_domain_digest << '\n'
-                  << prefix << "_CANDIDATE_COUNT="
-                  << node.frame.request.candidates.size() << '\n'
-                  << prefix << "_CONTINUATION_PRESENT="
-                  << (node.frame.request.continuation.has_value() ? "YES" : "NO")
-                  << '\n';
-        emit_progress(std::cout, prefix, node.progress);
-        emit_candidates(std::cout, prefix + "_CANDIDATE", node.frame);
+    std::cout << "MAX_OBSERVED_DEPTH=" << report.max_observed_depth << '\n'
+              << "MAX_CANDIDATE_COUNT=" << report.max_candidate_count << '\n'
+              << "TOTAL_NON_CANCEL_EDGES=" << report.total_non_cancel_edges << '\n'
+              << "TOTAL_NON_CANCEL_CANDIDATES_SEEN="
+              << report.total_non_cancel_candidates_seen << '\n'
+              << "TOTAL_FINISH_EDGES=" << report.total_finish_edges << '\n'
+              << "TOTAL_CANCEL_EDGES=" << report.total_cancel_edges << '\n'
+              << "QUEUED_UNEXPLORED_AT_BOUND="
+              << report.queued_unexplored_at_original_bound << '\n'
+              << "QUEUED_UNEXPLORED_AT_EFFECTIVE_BOUND="
+              << report.queued_unexplored_at_effective_bound << '\n'
+              << "ORIGINAL_PATH_BOUND_REACHED="
+              << (report.original_path_bound_reached ? "YES" : "NO") << '\n'
+              << "PATH_BOUND_EXHAUSTED="
+              << (report.path_bound_exhausted ? "YES" : "NO") << '\n'
+              << "DEPTH_BOUND_EXHAUSTED="
+              << (report.depth_bound_exhausted ? "YES" : "NO") << '\n'
+              << "DEPTH4_FRONTIER_EXHAUSTIVE="
+              << (report.depth4_frontier_exhaustive ? "YES" : "NO") << '\n'
+              << "PUBLIC_FRONTIER_CYCLE_FOUND="
+              << (report.public_frontier_cycle_count != 0 ? "YES" : "NO") << '\n'
+              << "PUBLIC_FRONTIER_CYCLE_COUNT="
+              << report.public_frontier_cycle_count << '\n'
+              << "CYCLE_LENGTH="
+              << (report.public_frontier_cycle_count == 0
+                      ? "ABSENT"
+                      : std::to_string(report.cycle_length))
+              << '\n'
+              << "CYCLE_PATH=" << report.cycle_path << '\n'
+              << "CYCLE_BOUNDARY_KEYS=" << report.cycle_boundary_keys << '\n'
+              << "FRONTIER_NODE_COUNT=" << report.frontier_nodes.size() << '\n';
+    for (std::size_t index = 0; index < report.frontier_nodes.size(); ++index) {
+        emit_frontier_node(std::cout, index, report.frontier_nodes[index]);
+    }
+    std::cout << "FRONTIER_EDGE_COUNT=" << report.frontier_edges.size() << '\n';
+    for (std::size_t index = 0; index < report.frontier_edges.size(); ++index) {
+        emit_frontier_edge(std::cout, index, report.frontier_edges[index]);
     }
     std::cout << "COUNTERFACTUAL_PATH_COUNT="
               << report.counterfactual_path_count << '\n'
@@ -1289,6 +1921,8 @@ void render_report(const ProbeReport& report) {
               << (report.returned_immediately_to_same_hiita_idle_boundary ? "YES"
                                                                             : "NO")
               << '\n'
+              << "PUBLIC_BOUNDARY_EQUIVALENCE_ONLY=YES\n"
+              << "FULL_STATE_EQUIVALENCE_PROVEN=NO\n"
               << "ROOT_CAUSE_CLASS=" << root_cause_class(report) << '\n';
     if (!report.error.empty()) {
         std::cout << "ERROR=" << report.error << '\n';
@@ -1300,10 +1934,14 @@ bool successful_report(const ProbeReport& report) {
     const bool supported_classification =
         classification == "TEACHER_CONTINUATION_COMMITMENT_LOSS_CONFIRMED" ||
         classification == "TEACHER_SELECTION_BUG_CONFIRMED_F4_HYPOTHESIS_FALSE" ||
+        classification == "DEPTH_BOUNDED_FRONTIER_EXHAUSTED_NO_FINISH" ||
+        classification == "PATH_BOUND_EXHAUSTED" ||
+        classification == "DEPTH_BOUND_EXHAUSTED" ||
         classification == "NO_COMPLETING_PUBLIC_CONTINUATION_PATH_FOUND" ||
         classification == "COUNTERFACTUAL_SEARCH_INCONCLUSIVE";
     return report.error.empty() && report.target_found && report.unselect_found &&
-           report.prefix_replay_exact && supported_classification;
+           report.visible_reference_resolution && report.prefix_replay_exact &&
+           supported_classification;
 }
 
 void validate_task7_job(const Task7CollectionJobV1& job) {
