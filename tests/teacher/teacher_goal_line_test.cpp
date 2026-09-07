@@ -772,6 +772,33 @@ void test_validated_public_facts_reuse_matches_observation_path() {
             "validated public-fact reuse changed goal-line evaluation");
 }
 
+void test_public_wrappers_preserve_pre_extraction_fast_paths() {
+    const auto profile = valid_profile();
+    const PublicEnvironmentObservation invalid_observation;
+    const auto value = candidate();
+
+    std::vector<std::string> matched;
+    require(match_candidate_intent_set(profile, {}, value, invalid_observation, 0, matched) ==
+                PredicateEvaluationStatus::False,
+            "empty intents no longer short-circuit before public-fact extraction");
+
+    GoalLineSelection unsupported;
+    unsupported.status = PredicateEvaluationStatus::Unsupported;
+    RecoverySelection recovery;
+    const auto unsupported_result = evaluate_goal_line_progress(
+        profile, unsupported, recovery, value, invalid_observation, 0);
+    require(unsupported_result.status == CandidateEvaluationStatus::Unsupported,
+            "unsupported goal-line selection no longer short-circuits before extraction");
+
+    GoalLineSelection not_applicable;
+    not_applicable.status = PredicateEvaluationStatus::True;
+    not_applicable.goal_id = "goal.alpha";
+    const auto not_applicable_result = evaluate_goal_line_progress(
+        profile, not_applicable, recovery, value, invalid_observation, 0);
+    require(not_applicable_result.status == CandidateEvaluationStatus::NotApplicable,
+            "not-applicable goal-line selection no longer short-circuits before extraction");
+}
+
 }  // namespace
 
 int main() {
@@ -780,6 +807,7 @@ int main() {
         test_resource_binding_and_runtime_statuses();
         test_goal_line_selection_and_progress();
         test_validated_public_facts_reuse_matches_observation_path();
+        test_public_wrappers_preserve_pre_extraction_fast_paths();
         std::cout << "teacher_goal_line_test: PASS\n";
         return 0;
     } catch (const std::exception& error) {
