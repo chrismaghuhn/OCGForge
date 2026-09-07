@@ -457,11 +457,39 @@ phase6_task7_dataset_collection_schedule.v1
 
 The policy-artifact and participant-assignment codecs may retain their own
 codec versions if their field layouts are unchanged. Their content IDs must
-be recomputed from the v2 action-adapter identity, so new PolicyArtifact and
-ParticipantPolicyAssignment IDs are required. The v2 job binds
-`episodic_environment.v3`, the new policy artifact/binding IDs, and the same
-ordered 16 seed/placement/starting-player coordinates. It does not alter the
-coordinates or silently replace a job.
+be recomputed from the v2 action-adapter identity, so new PolicyArtifact IDs
+and, transitively, new ParticipantPolicyAssignment IDs are required.
+
+The Teacher continuation remediation is a separate semantic implementation
+change in Stage B. `TeacherPolicyBindingV1` does not contain the action-adapter
+identity in its canonical bytes; it binds the Teacher core artifact identity,
+strategy profile, score/fallback/tie-break contracts, and diagnostic
+contracts. Therefore changing only
+`ocgforge.policy.public_action_key.v1` to v2 cannot produce the new Teacher
+binding identity. Before any new artifact, assignment, or collection job is
+issued, Stage B MUST:
+
+```text
+Teacher continuation-remediation
+    -> new teacher_core_artifact_identity
+    -> recompute TeacherPolicyBindingV1 content identity
+
+ocgforge.policy.public_action_key.v1
+    -> ocgforge.policy.public_action_key.v2
+    -> new PolicyArtifact content identity
+    -> new ParticipantPolicyAssignment content identity
+```
+
+The exact new `teacher_core_artifact_identity` value is intentionally frozen
+by the authorized Teacher-fix slice, not invented by this public-operation
+design. Reusing the old `ocgforge.policy.teacher_core.v1` producer/artifact
+identity for the changed continuation behavior is forbidden. The
+`TeacherPolicyBindingV1` codec itself may remain v1 because its field schema
+does not change; its content ID must nevertheless be recomputed from the new
+Teacher core artifact identity. The v2 job then binds `episodic_environment.v3`,
+the new policy artifact and binding IDs, and the same ordered 16
+seed/placement/starting-player coordinates. It does not alter the coordinates
+or silently replace a job.
 
 ## 9.5 Exact trajectory and evidence byte deltas
 
@@ -722,8 +750,8 @@ order, with the new field inserted after the action-kind token:
 1  card_selection_operation:u8 (0=None, 1=Select, 2=Unselect)
 2  public_action_key:string (routing value, not a learned feature)
 3  choice:optional {kind:u8, value:u64be, response_index:optional u32be}
-4  source_reference:optional {kind:u8, locator:string, current ordinal:optional u32be}
-5  target_reference:optional {kind:u8, locator:string, current ordinal:optional u32be}
+4  source_reference:optional {kind:u8, public_locator:string}
+5  target_reference:optional {kind:u8, public_locator:string}
 6  phase:optional u32be
 7  position:optional u8
 8  source_index:optional u32be
@@ -731,6 +759,14 @@ order, with the new field inserted after the action-kind token:
 10 continuation_operation:string
 11 submits_engine_response:boolean
 ```
+
+`current_entity_ordinal` is not part of either logical reference entry and is
+not written to the canonical `LogicalCandidateV2` bytes. It may remain an
+in-memory value used while resolving a public reference and may be represented
+by the encoded candidate codec's existing derived-reference representation,
+but it must not become a new logical-input byte or a second logical reference
+identity. The logical contract writes only the public locator string shown
+above.
 
 The exact encoded candidate row retains the current encoded-v1 order, with
 the new `u8` immediately after the `action_kind_code`:
@@ -846,7 +882,23 @@ the successor identity values, the successor numeric projection identity, and:
 candidate row width:u32 = 29
 ```
 
-The additional row position is the fixed `card_selection_operation_code`.
+The Task4 numeric projection v2 is positional and fully specified as follows;
+the new operation is not appended at an implementation-chosen offset:
+
+```text
+CandidateNumericRowV2 width = 29
+
+v2[0]      = normalized action_kind_code
+v2[1]      = normalized card_selection_operation_code
+v2[2..28]  = former CandidateNumericRowV1[1..27], in the existing order
+              and with the existing normalization/presence rules
+```
+
+The operation code uses the public categorical mapping `0=None`, `1=Select`,
+`2=Unselect`. Every former v1 feature therefore retains its relative order;
+only the new operation feature occupies index 1 and shifts the former v1
+indices 1 through 27 by one position. The additional row position is the
+fixed `card_selection_operation_code`.
 `canonical_weight_export.v1` does not require a version bump merely because
 the architecture identity changes: its generic tensor/weight codec remains
 the same. A future weight manifest must nevertheless bind the v2 architecture
@@ -874,10 +926,52 @@ card_selection_operation_code:u8
     2=Unselect
 ```
 
-That column is immediately after the existing action-kind code. The v2
-materialization configuration bytes retain the current top-level field order,
-but bind the successor materialization/schema IDs, Phase-5 contract vector,
-candidate table descriptor, column order, and the new operation-code rule.
+That column is immediately after the existing action-kind code. The exact
+candidate-table descriptor vector is the v1 vector with exactly one inserted
+descriptor at position 1; every other descriptor retains its old position
+relative to the other v1 descriptors:
+
+```text
+candidate table column descriptor[index]
+
+0  ("action_kind_code", "U16", 1, "required", "zero")
+1  ("card_selection_operation_code", "U8", 1, "required", "zero")
+2  ("choice_present", "Bool", 0, "required", "false_padding")
+3  ("choice_kind_code", "U8", 1, "required", "zero")
+4  ("choice_value", "U64", 4, "required", "zero")
+5  ("choice_response_index", "P<U32>", 2, "optional", "zero")
+6  ("source_reference", "CR", 0, "composite", "not_applicable")
+7  ("target_reference", "CR", 0, "composite", "not_applicable")
+8  ("phase", "P<U32>", 2, "optional", "zero")
+9  ("position", "P<U8>", 1, "optional", "zero")
+10 ("source_index", "P<U32>", 2, "optional", "zero")
+11 ("amount", "P<I32>", 2, "optional", "zero")
+12 ("continuation_operation_code", "U8", 1, "required", "zero")
+13 ("submits_engine_response", "Bool", 0, "required", "false_padding")
+```
+
+The exact v2 rule-descriptor vector retains the v1 entries at indices 0
+through 9 and appends one descriptor at index 10:
+
+```text
+0  { rule_id:"candidate_cardinality",             rule_value:"N_TO_N" }
+1  { rule_id:"candidate_order",                  rule_value:"SOURCE_ORDER" }
+2  { rule_id:"candidate_split",                  rule_value:"FORBIDDEN" }
+3  { rule_id:"routing_key_learned_feature",      rule_value:"NO" }
+4  { rule_id:"raw_locator_learned_feature",      rule_value:"NO" }
+5  { rule_id:"padding_semantic",                 rule_value:"NO" }
+6  { rule_id:"ragged_authority",                 rule_value:"RAGGED_FIRST" }
+7  { rule_id:"padded_equivalence",               rule_value:"EXACT_UNPAD" }
+8  { rule_id:"globals_chain_length_source",      rule_value:"DISTINCT" }
+9  { rule_id:"chain_state_length_source",        rule_value:"DISTINCT" }
+10 { rule_id:"card_selection_operation_code",
+     rule_value:"U8_CODE_0_NONE_1_SELECT_2_UNSELECT" }
+```
+
+The v2 materialization configuration bytes retain the current top-level field
+order, but bind the successor materialization/schema IDs, Phase-5 contract
+vector, candidate table descriptor vector above, column order, and rule
+descriptor vector above.
 Its configuration identity and KAT are new values; the v1 materialization
 identity and KAT remain historical.
 
@@ -906,9 +1000,22 @@ The exact top-level v2 materialization configuration order is:
 8  rule descriptor vector:existing order plus operation-code rule
 ```
 
-The v2 KAT is the SHA-256 of these exact bytes under the v2 configuration
-identity prefix. No KAT value is invented in this design; implementation must
-generate and independently verify it.
+The v2 known-answer vector is a three-field evidence record over these exact
+bytes. It is not part of the configuration byte stream and is not a substitute
+for the descriptor vectors:
+
+```text
+CONFIG_CANONICAL_BYTES_LENGTH=<decimal byte count>
+CONFIG_CANONICAL_BYTES_SHA256=<lowercase SHA-256 of the exact bytes>
+CONFIGURATION_IDENTITY=phase6_task7_input_materialization_config.v2.<same digest>
+```
+
+The implementation must generate and independently verify all three values;
+the design intentionally does not invent their eventual numeric length or
+digest before the v2 codec exists. The SHA-256 input has no appended newline,
+document hash, file path, Git commit, device, framework version beyond the
+frozen physical type tokens, batch composition, padding width, or runtime
+provenance.
 
 Task7 collection authority also requires successor orchestration identities:
 
