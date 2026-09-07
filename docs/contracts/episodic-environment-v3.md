@@ -204,17 +204,25 @@ canonical V3 config + V3 EpisodeSpec
 mixed contract/config/public identity fields
     -> factory rejection before a session is created
 
+V1 public key/domain/decision value in a V2 frame
+    -> historical accepted version
+
+V2 public key/domain/decision value in a V3 frame
+    -> accepted successor version
+
 V1 public key/domain/decision value in a V3 frame
     -> reject
 
 V2 public key/domain/decision value in a V2 frame
-    -> historical behavior only
+    -> reject
 ```
 
 The V2 environment does not reinterpret its historical public DTO or identity
 bytes. It emits the new candidate field as its default `None` and keeps using
 the V1 public identity functions; V3 is the only path that exposes the
-Select/Unselect operation.
+Select/Unselect operation. The `key/domain/decision` wording above describes
+the frame's version binding; domain and decision identities are not separate
+submit-able action inputs.
 
 ## 7. Retained contracts and deferred migrations
 
