@@ -43,6 +43,17 @@ std::vector<std::uint8_t> from_hex(const std::string& value) {
     return bytes;
 }
 
+std::string to_hex(const std::vector<std::uint8_t>& bytes) {
+    constexpr char digits[] = "0123456789abcdef";
+    std::string result;
+    result.reserve(bytes.size() * 2);
+    for (const auto byte : bytes) {
+        result.push_back(digits[byte >> 4]);
+        result.push_back(digits[byte & 0x0f]);
+    }
+    return result;
+}
+
 ygo::observation::PlayerObservation hidden_card_observation() {
     ygo::observation::PlayerObservation observation;
     observation.perspective_player = 1;
@@ -354,24 +365,94 @@ void test_public_identity_v2_red() {
     require(ygo::environment::is_public_action_key_v2(select_key) &&
                 ygo::environment::is_public_action_key_v2(unselect_key),
             "V2 public action keys failed canonical validation");
+    const auto none_key = ygo::environment::public_action_key_v2(hidden_card_action());
+    require(ygo::environment::is_public_action_key_v2(none_key),
+            "V2 card-selection key with None operation failed canonical validation");
     require(!ygo::environment::is_public_action_key_v2(
                 ygo::environment::public_action_key(hidden_card_action())),
             "V1 public action key was accepted by the V2 validator");
 
-    auto invalid_action = select;
-    invalid_action.action_kind = "cancel";
-    bool invalid_action_rejected = false;
+    const auto require_v2_action_rejected = [](const auto& input,
+                                               const std::string& message) {
+        bool rejected = false;
+        try {
+            (void)ygo::environment::public_action_key_v2(input);
+        } catch (const std::invalid_argument&) {
+            rejected = true;
+        }
+        require(rejected, message);
+    };
+    auto invalid_select_action = select;
+    invalid_select_action.action_kind = "cancel";
+    require_v2_action_rejected(invalid_select_action,
+                               "non-card-selection action accepted Select");
+    auto invalid_unselect_action = unselect;
+    invalid_unselect_action.action_kind = "cancel";
+    require_v2_action_rejected(invalid_unselect_action,
+                               "non-card-selection action accepted Unselect");
+    auto invalid_unknown_operation = select;
+    invalid_unknown_operation.card_selection_operation =
+        static_cast<ygo::environment::PublicCardSelectionOperation>(0xff);
+    require_v2_action_rejected(invalid_unknown_operation,
+                               "V2 action accepted an unknown selection operation");
+    auto invalid_key_bytes =
+        ygo::environment::canonical_public_action_key_bytes_v2(select);
+    const auto operation_offset =
+        sizeof(std::uint32_t) + ygo::environment::kPublicActionIdentityV2SchemaId.size() +
+        sizeof(std::uint32_t) + ygo::environment::kPublicActionIdentityV2SchemaId.size() +
+        sizeof(std::uint32_t) + select.action_kind.size();
+    require(operation_offset < invalid_key_bytes.size(),
+            "V2 operation byte offset was outside the canonical key");
+    invalid_key_bytes[operation_offset] = 0xff;
+    require(!ygo::environment::is_public_action_key_v2(
+                "public_action.v2." + to_hex(invalid_key_bytes)),
+            "V2 key validator accepted an unknown operation code");
+
+    bool v1_select_rejected = false;
     try {
-        (void)ygo::environment::public_action_key_v2(invalid_action);
+        (void)ygo::environment::public_action_key(select);
     } catch (const std::invalid_argument&) {
-        invalid_action_rejected = true;
+        v1_select_rejected = true;
     }
-    require(invalid_action_rejected,
-            "non-card-selection action accepted a V2 selection operation");
+    require(v1_select_rejected,
+            "V1 action codec silently discarded Select metadata");
+    bool v1_unselect_rejected = false;
+    try {
+        (void)ygo::environment::public_action_key(unselect);
+    } catch (const std::invalid_argument&) {
+        v1_unselect_rejected = true;
+    }
+    require(v1_unselect_rejected,
+            "V1 action codec silently discarded Unselect metadata");
 
     const auto domain = ygo::environment::public_candidate_domain_digest_v2(
         "unselect_card", {select_key, unselect_key});
     require(!domain.empty(), "V2 public candidate domain digest was empty");
+    bool duplicate_domain_rejected = false;
+    try {
+        (void)ygo::environment::public_candidate_domain_digest_v2(
+            "unselect_card", {select_key, select_key});
+    } catch (const std::invalid_argument&) {
+        duplicate_domain_rejected = true;
+    }
+    require(duplicate_domain_rejected,
+            "V2 public candidate domain accepted duplicate keys");
+    bool empty_domain_rejected = false;
+    try {
+        (void)ygo::environment::public_candidate_domain_digest_v2("unselect_card", {});
+    } catch (const std::invalid_argument&) {
+        empty_domain_rejected = true;
+    }
+    require(empty_domain_rejected, "V2 public candidate domain accepted an empty domain");
+
+    require(ygo::environment::detail::resolve_public_action_key_v2(
+                {{select_key, "internal-select"}}, select_key)
+                .value_or("") == "internal-select",
+            "V2 public key did not resolve through the V2 resolver");
+    require(!ygo::environment::detail::resolve_public_action_key(
+                 {{select_key, "internal-select"}}, select_key)
+                 .has_value(),
+            "V2 public key resolved through the V1 resolver");
 
     ygo::environment::PublicSemanticDecisionIdentityInput decision_input;
     decision_input.episode_semantic_id = std::string(64, 'a');
