@@ -1,4 +1,5 @@
 #include "ygo/environment/episodic_environment.hpp"
+#include "ygo/environment/public_safe_state.hpp"
 #include "ygo/phase6/task7_dataset_authority_provisioning.hpp"
 #include "ygo/policy/teacher.hpp"
 #include "ygo/teacher/salamangreat_profile.hpp"
@@ -54,6 +55,8 @@ constexpr std::string_view kSemanticMain =
     "f929de0b4d4157327dba003067d2e21e42f7ad75";
 constexpr std::string_view kDiagnosticBase =
     "827f73db843636e289e5687698bb77996b4692ef";
+constexpr std::string_view kCollectorSemanticSourceCommit =
+    "d0cf9f8e9168aef304474930a28722bc7e1d1e4a";
 constexpr std::uint64_t kEngineProcessBudget = 5000;
 constexpr std::uint64_t kSemanticActionBudget = 2000;
 constexpr std::size_t kMaxContinuationDepth = 4;
@@ -612,6 +615,9 @@ void commit_teacher(TeacherPolicySession& session,
                   "Teacher accepted transition did not commit its pending ranking");
 }
 
+void validate_public_references(const DecisionFrame& frame,
+                                FailureKind failure_kind);
+
 void require_target_unselect(const DecisionFrame& frame,
                              const std::optional<FrameProgress>& progress) {
     std::ostringstream mismatch;
@@ -678,6 +684,7 @@ void collect_baseline(const Task7CollectionJobV1& job, ProbeReport& report) {
             report.target_idle_frame = *frame;
             report.target_idle_progress = progress;
             report.target_idle_ranking = ranking;
+            validate_public_references(*frame, FailureKind::Baseline);
             report.prefix.push_back(replay_step_for(*frame, selected_key));
             const auto accepted = apply_public_key(
                 state, *frame, selected_key, FailureKind::Baseline);
@@ -690,6 +697,7 @@ void collect_baseline(const Task7CollectionJobV1& job, ProbeReport& report) {
             report.unselect_found = true;
             report.unselect_frame = *unselect;
             report.unselect_progress = unselect_progress;
+            validate_public_references(*unselect, FailureKind::Baseline);
             auto& unselect_session = *sessions.sessions[unselect->acting_player];
             report.unselect_ranking = select_teacher(unselect_session, *unselect);
             for (const auto& candidate : unselect->request.candidates) {
@@ -713,32 +721,47 @@ void collect_baseline(const Task7CollectionJobV1& job, ProbeReport& report) {
 }
 
 std::string visible_passcode(
-    const std::optional<ygo::environment::PublicCardReference>& reference) {
+    const ygo::environment::PublicEnvironmentObservation& observation,
+    const std::optional<ygo::environment::PublicCardReference>& reference,
+    const FailureKind failure_kind) {
     if (!reference.has_value() ||
         reference->kind != ygo::environment::PublicCardReferenceKind::VisibleCard) {
         return "ABSENT";
     }
-    constexpr std::string_view marker = ":public:";
-    const auto marker_position = reference->observation_locator.find(marker);
-    if (marker_position == std::string::npos) {
-        return "ABSENT";
+    const auto decoded = ygo::environment::decode_canonical_public_safe_state(
+        observation.canonical_safe_state_bytes());
+    require_probe(decoded && decoded.value.has_value(), failure_kind,
+                  "VisibleCard reference could not decode the public observation");
+    const ygo::observation::ObservedCard* match = nullptr;
+    for (const auto& entity : decoded.value->entities()) {
+        if (entity.locator.value != reference->observation_locator) {
+            continue;
+        }
+        require_probe(match == nullptr, failure_kind,
+                      "VisibleCard locator matched multiple public observation entities");
+        match = &entity;
     }
-    const auto begin = marker_position + marker.size();
-    const auto end = reference->observation_locator.find(':', begin);
-    if (end == std::string::npos || end == begin) {
-        return "ABSENT";
+    require_probe(match != nullptr, failure_kind,
+                  "VisibleCard locator did not resolve to a public observation entity");
+    require_probe(match->identity_known, failure_kind,
+                  "VisibleCard locator resolved to an identity-unknown entity");
+    require_probe(match->passcode.has_value(), failure_kind,
+                  "VisibleCard locator resolved without a public passcode");
+    return std::to_string(*match->passcode);
+}
+
+void validate_public_references(const DecisionFrame& frame,
+                                const FailureKind failure_kind) {
+    for (const auto& candidate : frame.request.candidates) {
+        (void)visible_passcode(frame.public_observation,
+                               candidate.source_reference, failure_kind);
+        (void)visible_passcode(frame.public_observation,
+                               candidate.target_reference, failure_kind);
     }
-    const auto value = reference->observation_locator.substr(begin, end - begin);
-    if (!std::all_of(value.begin(), value.end(),
-                     [](const char character) {
-                         return character >= '0' && character <= '9';
-                     })) {
-        return "ABSENT";
-    }
-    return value;
 }
 
 void emit_reference(std::ostream& output, const std::string& prefix,
+                    const ygo::environment::PublicEnvironmentObservation& observation,
                     const std::optional<ygo::environment::PublicCardReference>& reference,
                     const bool source) {
     const auto side = source ? "SOURCE" : "TARGET";
@@ -759,11 +782,12 @@ void emit_reference(std::ostream& output, const std::string& prefix,
         output << prefix << "_SOURCE_LOCATOR="
                << reference->observation_locator << '\n'
                << prefix << "_VISIBLE_PASSCODE="
-               << visible_passcode(reference) << '\n';
+               << visible_passcode(observation, reference, FailureKind::Internal) << '\n';
     }
 }
 
 void emit_candidate(std::ostream& output, const std::string& prefix,
+                    const ygo::environment::PublicEnvironmentObservation& observation,
                     const EnvironmentActionCandidate& candidate) {
     output << prefix << "_ACTION_KIND="
            << ygo::environment::environment_action_kind_name(candidate.action_kind)
@@ -780,8 +804,8 @@ void emit_candidate(std::ostream& output, const std::string& prefix,
                << prefix << "_CHOICE_VALUE=ABSENT\n"
                << prefix << "_CHOICE_RESPONSE_INDEX=ABSENT\n";
     }
-    emit_reference(output, prefix, candidate.source_reference, true);
-    emit_reference(output, prefix, candidate.target_reference, false);
+    emit_reference(output, prefix, observation, candidate.source_reference, true);
+    emit_reference(output, prefix, observation, candidate.target_reference, false);
     output << prefix << "_PHASE=" << optional_u32(candidate.phase) << '\n'
            << prefix << "_POSITION=" << optional_u8(candidate.position) << '\n'
            << prefix << "_SOURCE_INDEX=" << optional_u32(candidate.source_index) << '\n'
@@ -800,6 +824,7 @@ void emit_candidates(std::ostream& output, const std::string& prefix,
     for (std::size_t index = 0; index < frame.request.candidates.size(); ++index) {
         output << prefix << '_' << index << "_ORDINAL=" << index << '\n';
         emit_candidate(output, prefix + '_' + std::to_string(index),
+                       frame.public_observation,
                        frame.request.candidates[index]);
     }
 }
@@ -947,6 +972,7 @@ std::optional<DecisionFrame> evaluate_counterfactual_path(
         return std::nullopt;
     }
     const auto progress = progress_for(state).value_or(FrameProgress{});
+    validate_public_references(*frame, FailureKind::Counterfactual);
     report.counterfactual_nodes.push_back(
         CounterfactualNode{path, *frame, progress});
     if (!report.finish_reachable) {
@@ -1065,6 +1091,8 @@ void render_report(const ProbeReport& report) {
     std::cout << "TASK=" << kTask << '\n'
               << "SEMANTIC_MAIN=" << kSemanticMain << '\n'
               << "DIAGNOSTIC_BASE=" << kDiagnosticBase << '\n'
+              << "COLLECTOR_SEMANTIC_SOURCE_COMMIT="
+              << kCollectorSemanticSourceCommit << '\n'
               << "SEED=4\n"
               << "PLACEMENT=NORMAL\n"
               << "STARTING_PLAYER=0\n"
@@ -1281,7 +1309,7 @@ bool successful_report(const ProbeReport& report) {
 void validate_task7_job(const Task7CollectionJobV1& job) {
     const auto config = CertifiedEnvironmentConfig::canonical();
     require_probe(
-        job.collector_semantic_source_commit == kDiagnosticBase &&
+        job.collector_semantic_source_commit == kCollectorSemanticSourceCommit &&
             job.matchup == "ocgforge.matchup.swordsoul_salamangreat.v1" &&
             job.rules_bundle == config.rules_bundle_id &&
             job.format == config.format_id && job.duel_mode == config.duel_mode &&
@@ -1307,7 +1335,7 @@ int main() {
     ProbeReport report;
     try {
         const auto schedule = ygo::phase6::task7::make_task7_collection_schedule(
-            std::string(kDiagnosticBase));
+            std::string(kCollectorSemanticSourceCommit));
         require_probe(schedule.jobs.size() == 16, FailureKind::Internal,
                       "frozen Task7 schedule does not contain 16 jobs");
         const auto& job = schedule.jobs.front();
