@@ -378,6 +378,7 @@ add_library(ygo_policy STATIC
     src/policy/teacher_v2.cpp
     src/policy/teacher_runner.cpp
     src/policy/teacher_runner_v3.cpp
+    src/policy/teacher_runner_v3_trajectory.cpp
 )
 target_include_directories(ygo_policy PUBLIC "${CMAKE_SOURCE_DIR}/include")
 target_link_libraries(ygo_policy PUBLIC ygo_teacher)
@@ -542,6 +543,14 @@ add_executable(teacher_runner_v3_policy_session_test
 target_link_libraries(teacher_runner_v3_policy_session_test PRIVATE ygo_policy)
 add_test(NAME teacher_runner_v3_policy_session_test
          COMMAND teacher_runner_v3_policy_session_test)
+
+add_executable(teacher_runner_v3_trusted_trajectory_v2_test
+               tests/teacher/teacher_runner_v3_trusted_trajectory_v2_test.cpp)
+target_include_directories(teacher_runner_v3_trusted_trajectory_v2_test PRIVATE
+                           "${CMAKE_SOURCE_DIR}/tests/trajectory")
+target_link_libraries(teacher_runner_v3_trusted_trajectory_v2_test PRIVATE ygo_policy)
+add_test(NAME teacher_runner_v3_trusted_trajectory_v2_test
+         COMMAND teacher_runner_v3_trusted_trajectory_v2_test)
 
 add_executable(teacher_explanation_test tests/teacher/teacher_explanation_test.cpp)
 target_link_libraries(teacher_explanation_test PRIVATE ygo_teacher)
