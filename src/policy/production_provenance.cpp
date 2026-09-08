@@ -6,6 +6,7 @@
 
 #include "ygo/policy/rng.hpp"
 #include "ygo/policy/teacher.hpp"
+#include "ygo/policy/teacher_v2.hpp"
 #include "ygo/teacher/salamangreat_profile.hpp"
 #include "ygo/teacher/swordsoul_tenyi_profile.hpp"
 #include "ygo/trajectory/codec.hpp"
@@ -61,6 +62,13 @@ trajectory::ProvenanceRegistration teacher_binding_registration(
                         binding.teacher_policy_binding_id);
 }
 
+trajectory::ProvenanceRegistration teacher_binding_registration_v2(
+    const teacher::StrategyProfileV1& profile) {
+    const auto binding = make_teacher_policy_binding_v2(profile);
+    return registration(trajectory::ProvenanceKind::ArtifactMetadataArtifact,
+                        binding.teacher_policy_binding_id);
+}
+
 }  // namespace
 
 trajectory::ProvenanceResolver make_production_policy_provenance_resolver() {
@@ -79,6 +87,9 @@ trajectory::ProvenanceResolver make_production_policy_provenance_resolver() {
     registrations.push_back(registration(
         trajectory::ProvenanceKind::ActionAdapter,
         kPublicActionKeyAdapterIdentity));
+    registrations.push_back(registration(
+        trajectory::ProvenanceKind::ActionAdapter,
+        kPublicActionKeyAdapterIdentityV2));
 
     auto sampling = registration(trajectory::ProvenanceKind::SamplingContract,
                                  kUniformBelowU64SamplingContractIdentity);
@@ -93,9 +104,16 @@ trajectory::ProvenanceResolver make_production_policy_provenance_resolver() {
     registrations.push_back(registration(
         trajectory::ProvenanceKind::ProducerImplementation,
         kTeacherProducerImplementationIdentity));
+    registrations.push_back(registration(
+        trajectory::ProvenanceKind::ProducerImplementation,
+        kTeacherProducerImplementationIdentityV2));
     registrations.push_back(teacher_binding_registration(
         teacher::make_swordsoul_tenyi_profile()));
     registrations.push_back(teacher_binding_registration(
+        teacher::make_salamangreat_profile()));
+    registrations.push_back(teacher_binding_registration_v2(
+        teacher::make_swordsoul_tenyi_profile()));
+    registrations.push_back(teacher_binding_registration_v2(
         teacher::make_salamangreat_profile()));
     return trajectory::ProvenanceResolver(std::move(registrations));
 }

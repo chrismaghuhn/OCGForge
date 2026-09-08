@@ -7,8 +7,10 @@
 #include <utility>
 
 #include "ygo/environment/episodic_environment.hpp"
+#include "ygo/environment/public_safe_state.hpp"
 #include "ygo/teacher/deterministic_resolver.hpp"
 #include "ygo/teacher/recovery_controller.hpp"
+#include "ygo/trajectory/codec.hpp"
 #include "teacher_validation.hpp"
 
 namespace ygo::teacher {
@@ -47,6 +49,45 @@ bool valid_snapshot(const PublicFactSnapshot& snapshot) noexcept {
 bool valid_state_for_profile(const EpisodeLocalStrategyStateV1& state,
                              const StrategyProfileV1& profile) noexcept {
     if (!validate_strategy_state(state) || state.strategy_profile_id != profile.profile_id) {
+        return false;
+    }
+    const auto goal_exists = [&profile](const std::string& id) noexcept {
+        return std::any_of(profile.goals.begin(), profile.goals.end(), [&](const auto& goal) {
+            return goal.goal_id == id;
+        });
+    };
+    for (const auto& id : state.achieved_goal_ids) {
+        if (!goal_exists(id)) {
+            return false;
+        }
+    }
+    if (state.active_goal_id.has_value() && !goal_exists(*state.active_goal_id)) {
+        return false;
+    }
+    if (!state.active_line_id.has_value()) {
+        return state.completed_line_node_ids.empty();
+    }
+    const auto line = std::find_if(
+        profile.lines.begin(), profile.lines.end(), [&](const auto& value) {
+            return value.line_id == *state.active_line_id;
+        });
+    if (line == profile.lines.end() || !state.active_goal_id.has_value() ||
+        line->goal_id != *state.active_goal_id) {
+        return false;
+    }
+    for (const auto& node_id : state.completed_line_node_ids) {
+        if (std::none_of(line->nodes.begin(), line->nodes.end(), [&](const auto& node) {
+                return node.node_id == node_id;
+            })) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool valid_state_for_profile_v2(const EpisodeLocalStrategyStateV2& state,
+                                const StrategyProfileV1& profile) noexcept {
+    if (!validate_strategy_state_v2(state) || state.strategy_profile_id != profile.profile_id) {
         return false;
     }
     const auto goal_exists = [&profile](const std::string& id) noexcept {
@@ -126,6 +167,262 @@ const PublicFactDefinition* find_fact(const std::string_view id) noexcept {
 
 bool contains_id(const std::vector<std::string>& values, const std::string_view id) noexcept {
     return std::binary_search(values.begin(), values.end(), id);
+}
+
+bool valid_choice_v2(const environment::PublicChoice& choice) noexcept {
+    switch (choice.kind) {
+    case environment::PublicChoiceKind::YesNo:
+    case environment::PublicChoiceKind::EffectYesNo:
+        return choice.value <= 1 && !choice.response_index.has_value();
+    case environment::PublicChoiceKind::EffectChoice:
+        return choice.value <= std::numeric_limits<std::uint32_t>::max() &&
+               !choice.response_index.has_value();
+    case environment::PublicChoiceKind::OptionValue:
+    case environment::PublicChoiceKind::AnnouncementNumber:
+        return choice.response_index.has_value();
+    }
+    return false;
+}
+
+bool valid_candidate_metadata_v2(
+    const environment::EnvironmentActionCandidate& candidate) noexcept {
+    if (static_cast<std::uint8_t>(candidate.action_kind) >
+            static_cast<std::uint8_t>(environment::EnvironmentActionKind::Unsupported) ||
+        !environment::is_public_action_key_v2(candidate.public_action_key)) {
+        return false;
+    }
+    if (candidate.choice.has_value() && !valid_choice_v2(*candidate.choice)) {
+        return false;
+    }
+    for (const auto* reference : {&candidate.source_reference, &candidate.target_reference}) {
+        if (reference->has_value() &&
+            (static_cast<std::uint8_t>(reference->value().kind) >
+                 static_cast<std::uint8_t>(environment::PublicCardReferenceKind::RedactedSlot) ||
+             reference->value().observation_locator.empty() ||
+             !std::all_of(reference->value().observation_locator.begin(),
+                          reference->value().observation_locator.end(),
+                          [](const unsigned char character) {
+                              return character >= 0x20 && character != 0x7f;
+                          }) ||
+             !trajectory::is_valid_utf8(reference->value().observation_locator))) {
+            return false;
+        }
+    }
+    return candidate.continuation_operation.empty() ||
+           detail::canonical_token(candidate.continuation_operation);
+}
+
+bool role_contains_v2(const std::uint32_t passcode,
+                      const std::string_view role_id,
+                      const StrategyProfileV1& profile) noexcept {
+    const auto it = std::lower_bound(
+        profile.card_roles.begin(), profile.card_roles.end(), passcode,
+        [](const CardRoleEntry& entry, const std::uint32_t value) {
+            return entry.passcode < value;
+        });
+    return it != profile.card_roles.end() && it->passcode == passcode &&
+           std::binary_search(it->role_ids.begin(), it->role_ids.end(), role_id);
+}
+
+PredicateEvaluationStatus evaluate_role_reference_v2(
+    const std::optional<environment::PublicCardReference>& reference,
+    const environment::PublicEnvironmentObservation& observation,
+    const std::uint8_t owning_participant,
+    const std::string_view role_id,
+    const StrategyProfileV1& profile) noexcept {
+    if (!reference.has_value()) {
+        return PredicateEvaluationStatus::False;
+    }
+    if (reference->kind == environment::PublicCardReferenceKind::RedactedSlot) {
+        return PredicateEvaluationStatus::Unsupported;
+    }
+    if (reference->kind != environment::PublicCardReferenceKind::VisibleCard ||
+        owning_participant > 1 || observation.perspective_player != owning_participant) {
+        return PredicateEvaluationStatus::Invalid;
+    }
+    const auto decoded = environment::decode_canonical_public_safe_state(
+        observation.canonical_safe_state_bytes());
+    if (!decoded || decoded.value->match_context().perspective_player != owning_participant) {
+        return PredicateEvaluationStatus::Invalid;
+    }
+    const auto& entities = decoded.value->entities();
+    const auto matches = std::count_if(
+        entities.begin(), entities.end(), [&](const auto& entity) {
+            return entity.locator.value == reference->observation_locator;
+        });
+    if (matches != 1) {
+        return PredicateEvaluationStatus::Invalid;
+    }
+    const auto it = std::find_if(entities.begin(), entities.end(), [&](const auto& entity) {
+        return entity.locator.value == reference->observation_locator;
+    });
+    if (it == entities.end() || !it->identity_known || !it->passcode.has_value()) {
+        return PredicateEvaluationStatus::Invalid;
+    }
+    return role_contains_v2(*it->passcode, role_id, profile)
+               ? PredicateEvaluationStatus::True
+               : PredicateEvaluationStatus::False;
+}
+
+PredicateEvaluationStatus compare_visibility_v2(
+    const std::optional<environment::PublicCardReference>& reference,
+    const std::string_view expected) noexcept {
+    std::string_view actual = "absent";
+    if (reference.has_value()) {
+        if (reference->kind == environment::PublicCardReferenceKind::VisibleCard) {
+            actual = "visible";
+        } else if (reference->kind == environment::PublicCardReferenceKind::RedactedSlot) {
+            actual = "redacted";
+        } else {
+            return PredicateEvaluationStatus::Invalid;
+        }
+    }
+    return actual == expected ? PredicateEvaluationStatus::True
+                              : PredicateEvaluationStatus::False;
+}
+
+PredicateEvaluationStatus evaluate_candidate_predicate_v2(
+    const PredicateRef& value,
+    const environment::EnvironmentActionCandidate& candidate,
+    const environment::PublicEnvironmentObservation& observation,
+    const std::uint8_t owning_participant,
+    const StrategyProfileV1& profile) noexcept {
+    try {
+        const auto& registry = TeacherPredicateRegistryV1::canonical();
+        if (!registry.validate_profile_ref(value, profile) ||
+            value.scope != PredicateScope::Candidate ||
+            !valid_candidate_metadata_v2(candidate) || owning_participant > 1 ||
+            observation.perspective_player != owning_participant) {
+            return PredicateEvaluationStatus::Invalid;
+        }
+        const auto& id = value.predicate_id;
+        if (id == "candidate.action_kind_equals") {
+            return environment::environment_action_kind_name(candidate.action_kind) ==
+                           value.arguments[0].token
+                       ? PredicateEvaluationStatus::True
+                       : PredicateEvaluationStatus::False;
+        }
+        if (id == "candidate.choice_present") {
+            return candidate.choice.has_value() ? PredicateEvaluationStatus::True
+                                                : PredicateEvaluationStatus::False;
+        }
+        if (id == "candidate.choice_value_equals") {
+            return !candidate.choice.has_value()
+                       ? PredicateEvaluationStatus::False
+                       : (candidate.choice->value == value.arguments[0].u64
+                              ? PredicateEvaluationStatus::True
+                              : PredicateEvaluationStatus::False);
+        }
+        if (id == "candidate.source_visibility_equals") {
+            return compare_visibility_v2(candidate.source_reference, value.arguments[0].token);
+        }
+        if (id == "candidate.target_visibility_equals") {
+            return compare_visibility_v2(candidate.target_reference, value.arguments[0].token);
+        }
+        if (id == "candidate.source_role_contains") {
+            return evaluate_role_reference_v2(candidate.source_reference, observation,
+                                               owning_participant, value.arguments[0].token,
+                                               profile);
+        }
+        if (id == "candidate.target_role_contains") {
+            return evaluate_role_reference_v2(candidate.target_reference, observation,
+                                               owning_participant, value.arguments[0].token,
+                                               profile);
+        }
+        if (id == "candidate.phase_equals") {
+            return !candidate.phase.has_value()
+                       ? PredicateEvaluationStatus::False
+                       : (*candidate.phase == value.arguments[0].u64
+                              ? PredicateEvaluationStatus::True
+                              : PredicateEvaluationStatus::False);
+        }
+        if (id == "candidate.position_equals") {
+            return !candidate.position.has_value()
+                       ? PredicateEvaluationStatus::False
+                       : (*candidate.position == value.arguments[0].u64
+                              ? PredicateEvaluationStatus::True
+                              : PredicateEvaluationStatus::False);
+        }
+        if (id == "candidate.source_index_equals") {
+            return !candidate.source_index.has_value()
+                       ? PredicateEvaluationStatus::False
+                       : (*candidate.source_index == value.arguments[0].u64
+                              ? PredicateEvaluationStatus::True
+                              : PredicateEvaluationStatus::False);
+        }
+        if (id == "candidate.continuation_present") {
+            return candidate.continuation_operation.empty()
+                       ? PredicateEvaluationStatus::False
+                       : PredicateEvaluationStatus::True;
+        }
+        if (id == "candidate.submits_engine_response") {
+            return candidate.submits_engine_response ? PredicateEvaluationStatus::True
+                                                     : PredicateEvaluationStatus::False;
+        }
+        return PredicateEvaluationStatus::Invalid;
+    } catch (...) {
+        return PredicateEvaluationStatus::Invalid;
+    }
+}
+
+PredicateEvaluationStatus match_candidate_intent_set_v2(
+    const StrategyProfileV1& profile,
+    const std::vector<std::string>& intent_ids,
+    const environment::EnvironmentActionCandidate& candidate,
+    const environment::PublicEnvironmentObservation& observation,
+    const std::uint8_t owning_participant,
+    std::vector<std::string>& matched_ids) noexcept {
+    try {
+        matched_ids.clear();
+        if (!validate_strategy_profile(profile) || owning_participant > 1 ||
+            observation.perspective_player != owning_participant ||
+            !sorted_unique_ids(intent_ids)) {
+            return PredicateEvaluationStatus::Invalid;
+        }
+        if (intent_ids.empty()) {
+            return PredicateEvaluationStatus::False;
+        }
+        bool saw_unsupported = false;
+        bool saw_invalid = false;
+        for (const auto& intent_id : intent_ids) {
+            const auto intent = std::find_if(
+                profile.candidate_intents.begin(), profile.candidate_intents.end(),
+                [&](const auto& value) { return value.intent_id == intent_id; });
+            if (intent == profile.candidate_intents.end()) {
+                saw_invalid = true;
+                continue;
+            }
+            std::vector<PredicateEvaluationStatus> statuses;
+            statuses.reserve(intent->public_predicates.size());
+            for (const auto& predicate : intent->public_predicates) {
+                if (predicate.scope != PredicateScope::Candidate) {
+                    statuses.push_back(PredicateEvaluationStatus::Invalid);
+                } else {
+                    statuses.push_back(evaluate_candidate_predicate_v2(
+                        predicate, candidate, observation, owning_participant, profile));
+                }
+            }
+            const auto status = combine_predicate_statuses(statuses);
+            if (status == PredicateEvaluationStatus::True) {
+                matched_ids.push_back(intent_id);
+            } else if (status == PredicateEvaluationStatus::Unsupported) {
+                saw_unsupported = true;
+            } else if (status == PredicateEvaluationStatus::Invalid) {
+                saw_invalid = true;
+            }
+        }
+        if (!matched_ids.empty()) {
+            return PredicateEvaluationStatus::True;
+        }
+        if (saw_invalid) {
+            return PredicateEvaluationStatus::Invalid;
+        }
+        return saw_unsupported ? PredicateEvaluationStatus::Unsupported
+                               : PredicateEvaluationStatus::False;
+    } catch (...) {
+        matched_ids.clear();
+        return PredicateEvaluationStatus::Invalid;
+    }
 }
 
 void append_sorted_unique(std::vector<std::string>& values, const std::string& id) {
@@ -447,6 +744,116 @@ GoalLineSelection select_goal_and_line(const StrategyProfileV1& profile,
     }
 }
 
+GoalLineSelection select_goal_and_line_v2(const StrategyProfileV1& profile,
+                                          const EpisodeLocalStrategyStateV2& state,
+                                          const PublicFactSnapshot& public_facts) noexcept {
+    GoalLineSelection result;
+    try {
+        if (!validate_strategy_profile(profile) ||
+            !valid_state_for_profile_v2(state, profile) || !valid_snapshot(public_facts)) {
+            result.status = PredicateEvaluationStatus::Invalid;
+            return result;
+        }
+
+        const auto goal_is_achieved = [&state](const std::string_view id) noexcept {
+            return contains_id(state.achieved_goal_ids, id);
+        };
+        const auto eligible_goal = [&](const GoalDefinition& goal) {
+            return !goal_is_achieved(goal.goal_id) &&
+                   goal_eligibility(goal, public_facts, profile) == PredicateEvaluationStatus::True;
+        };
+
+        const GoalDefinition* selected_goal = nullptr;
+        if (state.active_goal_id.has_value()) {
+            const auto* active = find_goal(profile, *state.active_goal_id);
+            if (active != nullptr && eligible_goal(*active)) {
+                selected_goal = active;
+            }
+        }
+
+        bool saw_unsupported = false;
+        bool saw_invalid = false;
+        if (selected_goal == nullptr) {
+            std::vector<const GoalDefinition*> eligible;
+            for (const auto& goal : profile.goals) {
+                if (goal_is_achieved(goal.goal_id)) {
+                    continue;
+                }
+                const auto status = goal_eligibility(goal, public_facts, profile);
+                saw_invalid = saw_invalid || status == PredicateEvaluationStatus::Invalid;
+                saw_unsupported =
+                    saw_unsupported || status == PredicateEvaluationStatus::Unsupported;
+                if (status == PredicateEvaluationStatus::True) {
+                    eligible.push_back(&goal);
+                }
+            }
+            std::sort(eligible.begin(), eligible.end(), [](const auto* left, const auto* right) {
+                if (left->priority != right->priority) {
+                    return left->priority > right->priority;
+                }
+                return left->goal_id < right->goal_id;
+            });
+            if (!eligible.empty()) {
+                selected_goal = eligible.front();
+            }
+        }
+
+        if (selected_goal == nullptr) {
+            result.status = saw_invalid ? PredicateEvaluationStatus::Invalid
+                                         : (saw_unsupported ? PredicateEvaluationStatus::Unsupported
+                                                            : PredicateEvaluationStatus::False);
+            return result;
+        }
+
+        result.status = PredicateEvaluationStatus::True;
+        result.goal_id = selected_goal->goal_id;
+
+        const LineDefinition* selected_line = nullptr;
+        if (state.active_line_id.has_value()) {
+            const auto* active_line = find_line(profile, *state.active_line_id);
+            if (active_line != nullptr && active_line->goal_id == selected_goal->goal_id &&
+                line_eligibility(*active_line, profile, public_facts) ==
+                    PredicateEvaluationStatus::True) {
+                selected_line = active_line;
+            }
+        }
+
+        if (selected_line == nullptr) {
+            std::vector<const LineDefinition*> eligible;
+            for (const auto& line : profile.lines) {
+                if (line.goal_id != selected_goal->goal_id) {
+                    continue;
+                }
+                if (line_eligibility(line, profile, public_facts) ==
+                    PredicateEvaluationStatus::True) {
+                    eligible.push_back(&line);
+                }
+            }
+            std::sort(eligible.begin(), eligible.end(), [&](const auto* left, const auto* right) {
+                const auto left_preference = line_preference(profile, left->line_id);
+                const auto right_preference = line_preference(profile, right->line_id);
+                if (left_preference != right_preference) {
+                    return left_preference > right_preference;
+                }
+                return left->line_id < right->line_id;
+            });
+            if (!eligible.empty()) {
+                selected_line = eligible.front();
+            }
+        }
+
+        if (selected_line != nullptr) {
+            result.line_id = selected_line->line_id;
+            result.ready_node_ids = ready_nodes(*selected_line, state.completed_line_node_ids);
+        }
+        return result;
+    } catch (...) {
+        result = {};
+        result.status = PredicateEvaluationStatus::Invalid;
+        return result;
+    }
+}
+
 PredicateEvaluationStatus match_candidate_intent_set(
     const StrategyProfileV1& profile,
     const std::vector<std::string>& intent_ids,
@@ -554,6 +961,195 @@ PredicateEvaluationStatus evaluate_goal_completion(
                                                     profile);
     } catch (...) {
         return PredicateEvaluationStatus::Invalid;
+    }
+}
+
+PredicateEvaluationStatus evaluate_node_completion_v2(
+    const LineNode& node,
+    const environment::AcceptedActionTransition& accepted_transition,
+    const environment::PublicEnvironmentObservation& subsequent_observation,
+    const std::uint8_t owning_participant,
+    const StrategyProfileV1& profile) noexcept {
+    try {
+        if (node.completion_predicates.empty()) {
+            return PredicateEvaluationStatus::False;
+        }
+        if (owning_participant > 1 ||
+            subsequent_observation.perspective_player != owning_participant ||
+            subsequent_observation.decision_index <= accepted_transition.decision_index ||
+            !environment::is_public_action_key_v2(
+                accepted_transition.selected_public_action_key)) {
+            return PredicateEvaluationStatus::Invalid;
+        }
+        const auto facts = extract_public_fact_snapshot(subsequent_observation);
+        if (!facts.valid) {
+            return PredicateEvaluationStatus::Invalid;
+        }
+        return evaluate_public_predicate_conjunction(node.completion_predicates, facts.snapshot,
+                                                     profile);
+    } catch (...) {
+        return PredicateEvaluationStatus::Invalid;
+    }
+}
+
+PredicateEvaluationStatus evaluate_goal_completion_v2(
+    const GoalDefinition& goal,
+    const environment::AcceptedActionTransition& accepted_transition,
+    const environment::PublicEnvironmentObservation& subsequent_observation,
+    const std::uint8_t owning_participant,
+    const StrategyProfileV1& profile) noexcept {
+    try {
+        if (goal.completion_predicates.empty()) {
+            return PredicateEvaluationStatus::False;
+        }
+        if (owning_participant > 1 ||
+            subsequent_observation.perspective_player != owning_participant ||
+            subsequent_observation.decision_index <= accepted_transition.decision_index ||
+            !environment::is_public_action_key_v2(
+                accepted_transition.selected_public_action_key)) {
+            return PredicateEvaluationStatus::Invalid;
+        }
+        const auto facts = extract_public_fact_snapshot(subsequent_observation);
+        if (!facts.valid) {
+            return PredicateEvaluationStatus::Invalid;
+        }
+        return evaluate_public_predicate_conjunction(goal.completion_predicates, facts.snapshot,
+                                                     profile);
+    } catch (...) {
+        return PredicateEvaluationStatus::Invalid;
+    }
+}
+
+RecoverySelection select_recovery_edge_v2(
+    const StrategyProfileV1& profile,
+    const EpisodeLocalStrategyStateV2& pre_reconciliation_state,
+    const environment::PublicEnvironmentObservation& current_observation,
+    const std::uint8_t owning_participant) noexcept {
+    RecoverySelection result;
+    try {
+        if (!validate_strategy_profile(profile) ||
+            !valid_state_for_profile_v2(pre_reconciliation_state, profile) ||
+            owning_participant > 1 ||
+            current_observation.perspective_player != owning_participant) {
+            result.status = PredicateEvaluationStatus::Invalid;
+            return result;
+        }
+        const auto reconciliation = reconcile_strategy_state_with_evidence_v2(
+            pre_reconciliation_state, owning_participant, current_observation);
+        if (!reconciliation.has_value() ||
+            !valid_state_for_profile_v2(reconciliation->state, profile)) {
+            result.status = PredicateEvaluationStatus::Invalid;
+            return result;
+        }
+        const auto facts = extract_public_fact_snapshot(current_observation);
+        if (!facts.valid) {
+            result.status = PredicateEvaluationStatus::Invalid;
+            return result;
+        }
+
+        std::vector<std::string> ready_node_ids;
+        if (pre_reconciliation_state.active_line_id.has_value()) {
+            const auto* line = find_line(profile, *pre_reconciliation_state.active_line_id);
+            if (line == nullptr) {
+                result.status = PredicateEvaluationStatus::Invalid;
+                return result;
+            }
+            ready_node_ids = ready_nodes(*line,
+                                         pre_reconciliation_state.completed_line_node_ids);
+        }
+        const auto reason_ids = reconciliation->invalidation_reason_ids;
+        if (!sorted_unique_ids(ready_node_ids) || !sorted_unique_ids(reason_ids)) {
+            result.status = PredicateEvaluationStatus::Invalid;
+            return result;
+        }
+
+        const auto source_matches = [&](const RecoveryEdge& edge) noexcept {
+            if (edge.source_kind == RecoverySourceKind::Goal) {
+                return pre_reconciliation_state.active_goal_id.has_value() &&
+                       *pre_reconciliation_state.active_goal_id == edge.source_id;
+            }
+            if (edge.source_kind == RecoverySourceKind::Line) {
+                return pre_reconciliation_state.active_line_id.has_value() &&
+                       *pre_reconciliation_state.active_line_id == edge.source_id;
+            }
+            return std::binary_search(ready_node_ids.begin(), ready_node_ids.end(),
+                                      edge.source_id);
+        };
+        const auto has_all_reasons = [&](const std::vector<std::string>& required) noexcept {
+            return std::all_of(required.begin(), required.end(), [&](const auto& reason) {
+                return std::binary_search(reason_ids.begin(), reason_ids.end(), reason);
+            });
+        };
+
+        const RecoveryEdge* selected = nullptr;
+        bool saw_unsupported = false;
+        bool saw_invalid = false;
+        for (const auto& edge : profile.recovery_edges) {
+            if (!source_matches(edge) || edge.invalidation_reason_ids.empty() ||
+                !has_all_reasons(edge.invalidation_reason_ids)) {
+                continue;
+            }
+            if (pre_reconciliation_state.active_line_id.has_value() &&
+                (edge.source_kind == RecoverySourceKind::Line ||
+                 edge.source_kind == RecoverySourceKind::Node)) {
+                const auto* line = find_line(profile, *pre_reconciliation_state.active_line_id);
+                if (line == nullptr ||
+                    !std::binary_search(line->recovery_edge_ids.begin(),
+                                        line->recovery_edge_ids.end(), edge.recovery_edge_id)) {
+                    continue;
+                }
+            }
+            const auto status = edge.preconditions.empty()
+                                    ? PredicateEvaluationStatus::True
+                                    : evaluate_public_predicate_conjunction(
+                                          edge.preconditions, facts.snapshot, profile);
+            if (status == PredicateEvaluationStatus::Invalid) {
+                saw_invalid = true;
+                continue;
+            }
+            if (status == PredicateEvaluationStatus::Unsupported) {
+                saw_unsupported = true;
+                continue;
+            }
+            if (status != PredicateEvaluationStatus::True) {
+                continue;
+            }
+            const auto* target_goal = find_goal(profile, edge.target_goal_id);
+            if (target_goal == nullptr) {
+                saw_invalid = true;
+                continue;
+            }
+            const auto* selected_goal =
+                selected == nullptr ? nullptr : find_goal(profile, selected->target_goal_id);
+            const bool preferred =
+                selected == nullptr || selected_goal == nullptr ||
+                target_goal->priority > selected_goal->priority ||
+                (target_goal->priority == selected_goal->priority &&
+                 static_cast<std::uint8_t>(edge.confidence_cap) <
+                     static_cast<std::uint8_t>(selected->confidence_cap)) ||
+                (target_goal->priority == selected_goal->priority &&
+                 edge.confidence_cap == selected->confidence_cap &&
+                 edge.recovery_edge_id < selected->recovery_edge_id);
+            if (preferred) {
+                selected = &edge;
+            }
+        }
+
+        if (selected == nullptr) {
+            result.status = saw_invalid ? PredicateEvaluationStatus::Invalid
+                                         : (saw_unsupported ? PredicateEvaluationStatus::Unsupported
+                                                            : PredicateEvaluationStatus::False);
+            return result;
+        }
+        result.status = PredicateEvaluationStatus::True;
+        result.recovery_edge_id = selected->recovery_edge_id;
+        result.target_goal_id = selected->target_goal_id;
+        result.target_line_id = selected->target_line_id;
+        return result;
+    } catch (...) {
+        result = {};
+        result.status = PredicateEvaluationStatus::Invalid;
+        return result;
     }
 }
 
@@ -716,6 +1312,219 @@ PublicEvaluatorOutcome evaluate_goal_line_progress(
 
         outcome.status = CandidateEvaluationStatus::Supported;
         const auto contribution = active_match ? 3 : (recovery_match ? 2 : 0);
+        ScoreVector checked_score;
+        if (!add_score_contribution(
+                checked_score, ScoreDimension::ActiveGoalLineOrValidatedRecoveryProgress,
+                contribution)) {
+            outcome.status = CandidateEvaluationStatus::Invalid;
+            outcome.contributions.clear();
+            return outcome;
+        }
+        outcome.contributions.push_back(
+            {ScoreDimension::ActiveGoalLineOrValidatedRecoveryProgress, contribution});
+        return outcome;
+    } catch (...) {
+        outcome.status = CandidateEvaluationStatus::Invalid;
+        outcome.contributions.clear();
+        return outcome;
+    }
+}
+
+PublicEvaluatorOutcome evaluate_goal_line_progress_v2(
+    const StrategyProfileV1& profile,
+    const GoalLineSelection& selection,
+    const RecoverySelection& recovery,
+    const environment::EnvironmentActionCandidate& candidate,
+    const environment::PublicEnvironmentObservation& observation,
+    const std::uint8_t owning_participant,
+    const bool reconciled_continuation_commitment) noexcept {
+    PublicEvaluatorOutcome outcome;
+    outcome.public_action_key = candidate.public_action_key;
+    try {
+        if (!validate_strategy_profile(profile) || owning_participant > 1 ||
+            observation.perspective_player != owning_participant ||
+            !valid_candidate_metadata_v2(candidate)) {
+            outcome.status = CandidateEvaluationStatus::Invalid;
+            return outcome;
+        }
+        const auto facts = extract_public_fact_snapshot(observation);
+        if (!facts.valid) {
+            outcome.status = CandidateEvaluationStatus::Invalid;
+            return outcome;
+        }
+        const auto decision_kind = facts.snapshot.value("public.decision_context.kind");
+        if (!decision_kind.has_value() || decision_kind->value_kind != PublicFactValueKind::Token) {
+            outcome.status = CandidateEvaluationStatus::Invalid;
+            return outcome;
+        }
+        const auto operation_code = static_cast<std::uint8_t>(
+            candidate.card_selection_operation);
+        if (operation_code > static_cast<std::uint8_t>(
+                                 environment::PublicCardSelectionOperation::Unselect) ||
+            (decision_kind->token_value == "unselect_card" &&
+             candidate.action_kind == environment::EnvironmentActionKind::CardSelection &&
+             candidate.card_selection_operation ==
+                 environment::PublicCardSelectionOperation::None) ||
+            (decision_kind->token_value != "unselect_card" &&
+             candidate.card_selection_operation !=
+                 environment::PublicCardSelectionOperation::None) ||
+            (candidate.action_kind != environment::EnvironmentActionKind::CardSelection &&
+             candidate.card_selection_operation !=
+                 environment::PublicCardSelectionOperation::None)) {
+            outcome.status = CandidateEvaluationStatus::Invalid;
+            return outcome;
+        }
+
+        const bool native_unselect = decision_kind->token_value == "unselect_card";
+        const bool continuation_boundary =
+            reconciled_continuation_commitment && native_unselect;
+
+        const auto valid_status = [](const PredicateEvaluationStatus status) noexcept {
+            return static_cast<std::uint8_t>(status) <=
+                   static_cast<std::uint8_t>(PredicateEvaluationStatus::Invalid);
+        };
+        if (!valid_status(selection.status) || !valid_status(recovery.status) ||
+            selection.status == PredicateEvaluationStatus::Invalid ||
+            recovery.status == PredicateEvaluationStatus::Invalid) {
+            outcome.status = CandidateEvaluationStatus::Invalid;
+            return outcome;
+        }
+        if ((selection.status == PredicateEvaluationStatus::Unsupported ||
+             recovery.status == PredicateEvaluationStatus::Unsupported) &&
+            !continuation_boundary) {
+            outcome.status = CandidateEvaluationStatus::Unsupported;
+            return outcome;
+        }
+
+        if (selection.status == PredicateEvaluationStatus::True) {
+            if (!selection.goal_id.has_value() || !sorted_unique_ids(selection.ready_node_ids) ||
+                find_goal(profile, *selection.goal_id) == nullptr ||
+                (!selection.line_id.has_value() && !selection.ready_node_ids.empty())) {
+                outcome.status = CandidateEvaluationStatus::Invalid;
+                return outcome;
+            }
+            if (selection.line_id.has_value()) {
+                const auto* selected_line = find_line(profile, *selection.line_id);
+                if (selected_line == nullptr || selected_line->goal_id != *selection.goal_id ||
+                    std::any_of(selection.ready_node_ids.begin(), selection.ready_node_ids.end(),
+                                [&](const auto& node_id) {
+                                    return std::none_of(
+                                        selected_line->nodes.begin(), selected_line->nodes.end(),
+                                        [&](const auto& node) { return node.node_id == node_id; });
+                                })) {
+                    outcome.status = CandidateEvaluationStatus::Invalid;
+                    return outcome;
+                }
+            }
+        }
+        if (recovery.status == PredicateEvaluationStatus::True &&
+            (!recovery.recovery_edge_id.has_value() || !recovery.target_goal_id.has_value())) {
+            outcome.status = CandidateEvaluationStatus::Invalid;
+            return outcome;
+        }
+
+        const bool active_applicable = selection.status == PredicateEvaluationStatus::True &&
+                                       selection.line_id.has_value();
+        const bool recovery_applicable = recovery.status == PredicateEvaluationStatus::True;
+        const bool generic_select =
+            continuation_boundary &&
+            candidate.action_kind == environment::EnvironmentActionKind::CardSelection &&
+            candidate.card_selection_operation ==
+                environment::PublicCardSelectionOperation::Select;
+        bool active_match = false;
+        bool recovery_match = false;
+        bool saw_unsupported = false;
+        bool saw_invalid = false;
+
+        if (active_applicable) {
+            const auto* line = find_line(profile, *selection.line_id);
+            if (line == nullptr || !selection.goal_id.has_value() ||
+                line->goal_id != *selection.goal_id) {
+                outcome.status = CandidateEvaluationStatus::Invalid;
+                return outcome;
+            }
+            for (const auto& node_id : selection.ready_node_ids) {
+                const auto node = std::find_if(
+                    line->nodes.begin(), line->nodes.end(), [&](const auto& value) {
+                        return value.node_id == node_id;
+                    });
+                if (node == line->nodes.end()) {
+                    saw_invalid = true;
+                    continue;
+                }
+                std::vector<std::string> matched;
+                const auto status = match_candidate_intent_set_v2(
+                    profile, node->candidate_intent_ids, candidate, observation,
+                    owning_participant, matched);
+                if (status == PredicateEvaluationStatus::True) {
+                    active_match = true;
+                    outcome.matched_intent_ids.insert(outcome.matched_intent_ids.end(),
+                                                      matched.begin(), matched.end());
+                    append_sorted_unique(outcome.matched_goal_ids, *selection.goal_id);
+                    append_sorted_unique(outcome.matched_line_ids, *selection.line_id);
+                } else if (status == PredicateEvaluationStatus::Unsupported) {
+                    saw_unsupported = true;
+                } else if (status == PredicateEvaluationStatus::Invalid) {
+                    saw_invalid = true;
+                }
+            }
+        }
+
+        if (recovery_applicable) {
+            if (!recovery.recovery_edge_id.has_value()) {
+                outcome.status = CandidateEvaluationStatus::Invalid;
+                return outcome;
+            }
+            const auto edge = std::find_if(
+                profile.recovery_edges.begin(), profile.recovery_edges.end(),
+                [&](const auto& value) {
+                    return value.recovery_edge_id == *recovery.recovery_edge_id;
+                });
+            if (edge == profile.recovery_edges.end() ||
+                recovery.target_goal_id != std::optional<std::string>(edge->target_goal_id) ||
+                recovery.target_line_id != edge->target_line_id) {
+                outcome.status = CandidateEvaluationStatus::Invalid;
+                return outcome;
+            }
+            std::vector<std::string> matched;
+            const auto status = match_candidate_intent_set_v2(
+                profile, edge->candidate_intent_ids, candidate, observation,
+                owning_participant, matched);
+            if (status == PredicateEvaluationStatus::True) {
+                recovery_match = true;
+                outcome.matched_intent_ids.insert(outcome.matched_intent_ids.end(),
+                                                  matched.begin(), matched.end());
+                append_sorted_unique(outcome.matched_goal_ids, edge->target_goal_id);
+                if (edge->target_line_id.has_value()) {
+                    append_sorted_unique(outcome.matched_line_ids, *edge->target_line_id);
+                }
+            } else if (status == PredicateEvaluationStatus::Unsupported) {
+                saw_unsupported = true;
+            } else if (status == PredicateEvaluationStatus::Invalid) {
+                saw_invalid = true;
+            }
+        }
+
+        sort_evidence(outcome);
+        if (saw_invalid) {
+            outcome.status = CandidateEvaluationStatus::Invalid;
+            outcome.contributions.clear();
+            return outcome;
+        }
+        if (saw_unsupported) {
+            outcome.status = CandidateEvaluationStatus::Unsupported;
+            outcome.contributions.clear();
+            return outcome;
+        }
+        if (!active_applicable && !recovery_applicable && !continuation_boundary) {
+            outcome.status = CandidateEvaluationStatus::NotApplicable;
+            return outcome;
+        }
+
+        outcome.status = CandidateEvaluationStatus::Supported;
+        const auto existing_contribution =
+            active_match ? 3 : (recovery_match ? 2 : 0);
+        const auto contribution = std::max(existing_contribution, generic_select ? 1 : 0);
         ScoreVector checked_score;
         if (!add_score_contribution(
                 checked_score, ScoreDimension::ActiveGoalLineOrValidatedRecoveryProgress,

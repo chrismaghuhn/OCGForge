@@ -14,12 +14,16 @@ inline constexpr std::string_view kPublicObservationAdapterIdentity =
     "ocgforge.policy.public_observation.v1";
 inline constexpr std::string_view kPublicActionKeyAdapterIdentity =
     "ocgforge.policy.public_action_key.v1";
+inline constexpr std::string_view kPublicActionKeyAdapterIdentityV2 =
+    "ocgforge.policy.public_action_key.v2";
 inline constexpr std::string_view kUniformBelowU64SamplingContractIdentity =
     "ocgforge.policy.uniform_below_u64.v1";
 inline constexpr std::string_view kSha256CounterPolicyRngContractIdentity =
     "ocgforge.policy_rng.sha256_counter.v1";
 inline constexpr std::string_view kTeacherProducerImplementationIdentity =
     "ocgforge.policy.teacher_core.v1";
+inline constexpr std::string_view kTeacherProducerImplementationIdentityV2 =
+    "ocgforge.policy.teacher_core.v2";
 inline constexpr std::string_view kTeacherDeterministicSamplingContractIdentity =
     "ocgforge.policy.deterministic_lexicographic_argmax.v1";
 inline constexpr std::string_view kDeterministicLexicographicArgmaxSamplingContractIdentity =

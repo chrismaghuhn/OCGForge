@@ -6,10 +6,16 @@
 #include "ygo/teacher/goal_line_controller.hpp"
 #include "ygo/teacher/public_fact_registry.hpp"
 #include "ygo/teacher/salamangreat_profile.hpp"
+#include "ygo/teacher/goal_line_controller.hpp"
+#include "ygo/teacher/recovery_controller.hpp"
 #include "ygo/teacher/strategy_profile.hpp"
 #include "ygo/teacher/strategy_state.hpp"
+#include "ygo/teacher/strategy_state_v2.hpp"
 #include "ygo/teacher/teacher_core.hpp"
+#include "ygo/teacher/teacher_core_v2.hpp"
 
+#include <cstddef>
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -86,7 +92,8 @@ StrategyProfileV1 synthetic_scoring_profile() {
 }
 
 PublicEnvironmentObservation public_observation(
-    const std::uint64_t decision_index = 234) {
+    const std::uint64_t decision_index = 234,
+    const std::optional<std::uint64_t> private_metadata_marker = std::nullopt) {
     ygo::observation::PlayerObservation source;
     source.schema_version = "ygo.player_observation.v1";
     source.perspective_player = 0;
@@ -103,6 +110,16 @@ PublicEnvironmentObservation public_observation(
     source.match_context.knowledge.opponent_decklist_known = false;
     source.decision_context.kind = "unselect_card";
     source.decision_context.player = 0;
+    if (private_metadata_marker.has_value()) {
+        const auto marker = std::to_string(*private_metadata_marker);
+        source.decision_context.decision_id = "private.decision." + marker;
+        source.decision_context.engine_step_index = *private_metadata_marker;
+        source.decision_context.engine_message_type =
+            static_cast<std::uint8_t>(*private_metadata_marker % 255);
+        source.decision_context.engine_message_name = "private.message." + marker;
+        source.decision_context.continuation_id = "private.continuation." + marker;
+        source.observation_hash = "private.observation." + marker;
+    }
     return project_public_observation(source);
 }
 
@@ -130,6 +147,29 @@ EpisodeLocalStrategyStateV1 synthetic_retained_state(
 EpisodeLocalStrategyStateV1 retained_salamangreat_state(
     const StrategyProfileV1& profile) {
     auto state = reset_state(profile);
+    state.active_goal_id = "goal.main1.salamangreat";
+    state.active_line_id = "line.main1.salamangreat";
+    return state;
+}
+
+EpisodeLocalStrategyStateV2 reset_state_v2(
+    const StrategyProfileV1& profile) {
+    const auto state = reset_strategy_state_v2(profile);
+    require(state.has_value(), "valid profile did not reset V2 strategy state");
+    return *state;
+}
+
+EpisodeLocalStrategyStateV2 synthetic_retained_state_v2(
+    const StrategyProfileV1& profile) {
+    auto state = reset_state_v2(profile);
+    state.active_goal_id = "goal.test";
+    state.active_line_id = "line.test";
+    return state;
+}
+
+EpisodeLocalStrategyStateV2 retained_salamangreat_state_v2(
+    const StrategyProfileV1& profile) {
+    auto state = reset_state_v2(profile);
     state.active_goal_id = "goal.main1.salamangreat";
     state.active_line_id = "line.main1.salamangreat";
     return state;
@@ -176,20 +216,6 @@ bool throws_invalid_argument(const std::function<void()>& action) {
     return false;
 }
 
-std::string ranking_status_name(const TeacherRankingStatus status) {
-    switch (status) {
-    case TeacherRankingStatus::Selected:
-        return "selected";
-    case TeacherRankingStatus::InvalidInput:
-        return "invalid_input";
-    case TeacherRankingStatus::Blocked:
-        return "blocked";
-    case TeacherRankingStatus::Unsupported:
-        return "unsupported";
-    }
-    return "unknown";
-}
-
 TeacherRankingResult propose(
     const StrategyProfileV1& profile,
     const EpisodeLocalStrategyStateV1& state,
@@ -197,6 +223,15 @@ TeacherRankingResult propose(
     const std::vector<EnvironmentActionCandidate>& candidates) {
     const ygo::policy::PolicyInput input{observation, candidates};
     return TeacherCore{}.propose(input, profile, state);
+}
+
+TeacherRankingResultV2 propose_v2(
+    const StrategyProfileV1& profile,
+    const EpisodeLocalStrategyStateV2& state,
+    const PublicEnvironmentObservation& observation,
+    const std::vector<EnvironmentActionCandidate>& candidates) {
+    const ygo::policy::PolicyInput input{observation, candidates};
+    return TeacherCoreV2{}.propose(input, profile, state);
 }
 
 void require_v2_candidate_shape(
@@ -208,6 +243,30 @@ void require_v2_candidate_shape(
             "V2 material fixture changed its action family");
     require(candidate.card_selection_operation == expected_operation,
             "fixture operation metadata does not match the expected public operation");
+}
+
+const CandidateEvaluation& evaluation_for(
+    const TeacherRankingResultV2& result,
+    const std::string& public_action_key) {
+    const auto found = std::find_if(
+        result.evaluations.begin(), result.evaluations.end(),
+        [&](const auto& evaluation) {
+            return evaluation.public_action_key == public_action_key;
+        });
+    require(found != result.evaluations.end(),
+            "V2 ranking result omitted a complete candidate evaluation");
+    return *found;
+}
+
+void require_v2_progress(const TeacherRankingResultV2& result,
+                         const std::string& public_action_key,
+                         const std::int64_t expected) {
+    const auto& evaluation = evaluation_for(result, public_action_key);
+    require(evaluation.status == CandidateEvaluationStatus::Supported &&
+                evaluation.score.has_value() &&
+                evaluation.score->values[static_cast<std::size_t>(
+                    ScoreDimension::ActiveGoalLineOrValidatedRecoveryProgress)] == expected,
+            "V2 active-line progress did not match the declared contract");
 }
 
 void test_historical_v1_path() {
@@ -302,13 +361,45 @@ void test_codec_and_mixed_domain_guards() {
         std::vector<EnvironmentActionCandidate>{malformed});
     require(malformed_result.status == TeacherRankingStatus::InvalidInput,
             "malformed public action key was not rejected fail closed");
+
+    const auto v3_profile = make_salamangreat_profile();
+    const auto v3_state = retained_salamangreat_state_v2(v3_profile);
+    const auto v3_observation = public_observation();
+    const auto v2_cancel = make_cancel_candidate(true);
+    const auto mixed_v2_result = propose_v2(
+        v3_profile, v3_state, v3_observation,
+        std::vector<EnvironmentActionCandidate>{v2, v1, v2_cancel});
+    require(mixed_v2_result.status == TeacherRankingStatus::InvalidInput,
+            "V2 Teacher accepted a mixed V1/V2 candidate domain");
+
+    const auto malformed_v2_result = propose_v2(
+        v3_profile, v3_state, v3_observation,
+        std::vector<EnvironmentActionCandidate>{malformed});
+    require(malformed_v2_result.status == TeacherRankingStatus::InvalidInput,
+            "V2 Teacher accepted a malformed public action key");
+
+    auto missing_operation = make_card_candidate(
+        "p0:MONSTER_ZONE:0", PublicCardSelectionOperation::None, true);
+    const auto missing_operation_result = propose_v2(
+        v3_profile, v3_state, v3_observation,
+        std::vector<EnvironmentActionCandidate>{missing_operation, v2_cancel});
+    require(missing_operation_result.status == TeacherRankingStatus::InvalidInput,
+            "V2 Teacher accepted an unselect CardSelection without an operation");
+
+    auto non_card_operation = v2_cancel;
+    non_card_operation.card_selection_operation = PublicCardSelectionOperation::Select;
+    const auto non_card_operation_result = propose_v2(
+        v3_profile, v3_state, v3_observation,
+        std::vector<EnvironmentActionCandidate>{non_card_operation});
+    require(non_card_operation_result.status == TeacherRankingStatus::InvalidInput,
+            "V2 Teacher accepted non-None operation metadata on Cancel");
 }
 
 struct V3Scenario final {
     std::string name;
     std::vector<EnvironmentActionCandidate> candidates;
     std::vector<PublicCardSelectionOperation> expected_operations;
-    EpisodeLocalStrategyStateV1 state;
+    EpisodeLocalStrategyStateV2 state;
     std::string expected_progress;
 };
 
@@ -343,10 +434,7 @@ void test_salamangreat_reconciled_commitment() {
               << "RECONCILIATION_SEMANTICS_CHANGED=NO\n";
 }
 
-bool expect_v3_boundary_red(
-    const StrategyProfileV1& profile,
-    const V3Scenario& scenario,
-    const PublicEnvironmentObservation& observation) {
+void validate_v2_fixture(const V3Scenario& scenario) {
     require(scenario.candidates.size() == scenario.expected_operations.size(),
             "V3 scenario operation expectations do not cover the complete domain");
     for (std::size_t index = 0; index < scenario.candidates.size(); ++index) {
@@ -361,23 +449,28 @@ bool expect_v3_boundary_red(
             require_v2_candidate_shape(candidate, scenario.expected_operations[index]);
         }
     }
-
-    const auto result = propose(
-        profile, scenario.state, observation, scenario.candidates);
-    if (result.status == TeacherRankingStatus::InvalidInput) {
-        std::cout << "SCORING_DEFERRED=" << scenario.name
-                  << " expected=" << scenario.expected_progress
-                  << " current_boundary=V1_ONLY\n";
-        return true;
-    }
-
-    throw std::runtime_error(
-        "RED_OWNER=TEACHER_V3_PUBLIC_ACTION_BOUNDARY: current Teacher "
-        "unexpectedly accepted a V2 scenario " + scenario.name +
-        " with status " + ranking_status_name(result.status));
 }
 
-void test_v3_teacher_boundary_red() {
+void require_v2_result_selected(const TeacherRankingResultV2& result,
+                                const std::vector<EnvironmentActionCandidate>& candidates) {
+    std::string diagnostic;
+    require(result.status == TeacherRankingStatus::Selected &&
+                result.evaluations.size() == candidates.size() &&
+                validate_teacher_ranking_result_v2(result, &diagnostic),
+            "V2 Teacher did not return a complete valid ranking result status=" +
+                std::to_string(static_cast<int>(result.status)) +
+                " evaluations=" + std::to_string(result.evaluations.size()) + ": " +
+                " candidates=" + std::to_string(candidates.size()) + ": " +
+                diagnostic);
+    require(result.selected_public_action_key.has_value() &&
+                result.selected_score_vector.has_value() &&
+                result.proposed_state_delta.has_value() &&
+                result.proposed_state_delta->proposed_for_public_action_key ==
+                    *result.selected_public_action_key,
+            "V2 Teacher selected result did not carry its V2 state delta");
+}
+
+void test_hiita_v2_commitment() {
     const auto profile = make_salamangreat_profile();
     const auto observation = public_observation();
     const auto material_a_select = make_card_candidate(
@@ -394,27 +487,81 @@ void test_v3_teacher_boundary_red() {
          {PublicCardSelectionOperation::Select,
           PublicCardSelectionOperation::Select,
           PublicCardSelectionOperation::None},
-         retained_salamangreat_state(profile),
+         retained_salamangreat_state_v2(profile),
          "A=+1,B=+1,Cancel=0"},
         {"second_material_selection",
          {material_a_unselect, material_b_select, cancel},
          {PublicCardSelectionOperation::Unselect,
           PublicCardSelectionOperation::Select,
           PublicCardSelectionOperation::None},
-         retained_salamangreat_state(profile),
+         retained_salamangreat_state_v2(profile),
          "A=0,B=+1,Cancel=0"},
     };
 
-    bool saw_expected_red = false;
-    for (const auto& scenario : scenarios) {
-        saw_expected_red = expect_v3_boundary_red(profile, scenario, observation) ||
-                           saw_expected_red;
-    }
-    require(saw_expected_red,
-            "real Salamangreat V2 scenarios did not reach the expected V1-bound RED");
+    validate_v2_fixture(scenarios[0]);
+    const auto initial = propose_v2(
+        profile, scenarios[0].state, observation, scenarios[0].candidates);
+    require_v2_result_selected(initial, scenarios[0].candidates);
+    require(initial.fallback_level ==
+                std::optional<TeacherFallbackLevel>{TeacherFallbackLevel::F0},
+            "initial Hiita material domain did not resolve at F0");
+    require_v2_progress(initial, material_a_select.public_action_key, 1);
+    require_v2_progress(initial, material_b_select.public_action_key, 1);
+    require_v2_progress(initial, cancel.public_action_key, 0);
+    require(*initial.selected_public_action_key == material_a_select.public_action_key ||
+                *initial.selected_public_action_key == material_b_select.public_action_key,
+            "initial Hiita material selection did not choose a legal material candidate");
+    auto invalid_explanation_result = initial;
+    TeacherDecisionExplanation invalid_explanation;
+    invalid_explanation.selected_public_action_key = *initial.selected_public_action_key;
+    invalid_explanation.selected_score_vector = *initial.selected_score_vector;
+    invalid_explanation.explanation_schema_id = "invalid_explanation_schema";
+    invalid_explanation_result.explanation = invalid_explanation;
+    require(!validate_teacher_ranking_result_v2(invalid_explanation_result),
+            "V2 result accepted an invalid explanation payload");
+
+    validate_v2_fixture(scenarios[1]);
+    const auto second = propose_v2(
+        profile, scenarios[1].state, observation, scenarios[1].candidates);
+    require_v2_result_selected(second, scenarios[1].candidates);
+    require(second.fallback_level ==
+                std::optional<TeacherFallbackLevel>{TeacherFallbackLevel::F0},
+            "second Hiita material domain did not resolve at F0");
+    require_v2_progress(second, material_a_unselect.public_action_key, 0);
+    require_v2_progress(second, material_b_select.public_action_key, 1);
+    require_v2_progress(second, cancel.public_action_key, 0);
+    require(second.selected_public_action_key ==
+                std::optional<std::string>(material_b_select.public_action_key),
+            "Hiita second material selection did not choose the remaining Select candidate");
+
+    const V3Scenario symmetric{
+        "symmetric_second_material_selection",
+        {material_a_select,
+         make_card_candidate("p0:MONSTER_ZONE:1",
+                             PublicCardSelectionOperation::Unselect, true),
+         cancel},
+        {PublicCardSelectionOperation::Select,
+         PublicCardSelectionOperation::Unselect,
+         PublicCardSelectionOperation::None},
+        retained_salamangreat_state_v2(profile),
+        "A=+1,B=0,Cancel=0"};
+    validate_v2_fixture(symmetric);
+    const auto symmetric_result = propose_v2(
+        profile, symmetric.state, observation, symmetric.candidates);
+    require_v2_result_selected(symmetric_result, symmetric.candidates);
+    require(symmetric_result.fallback_level ==
+                std::optional<TeacherFallbackLevel>{TeacherFallbackLevel::F0},
+            "symmetric Hiita material domain did not resolve at F0");
+    require_v2_progress(symmetric_result, material_a_select.public_action_key, 1);
+    require_v2_progress(symmetric_result,
+                        symmetric.candidates[1].public_action_key, 0);
+    require_v2_progress(symmetric_result, cancel.public_action_key, 0);
+    require(symmetric_result.selected_public_action_key ==
+                std::optional<std::string>(material_a_select.public_action_key),
+            "symmetric Hiita material selection did not choose the remaining Select candidate");
 }
 
-void test_generic_scoring_contract_red_guards() {
+void test_generic_scoring_contract() {
     const auto profile = synthetic_scoring_profile();
     const auto observation = public_observation();
     const auto material_a_select = make_card_candidate(
@@ -425,23 +572,109 @@ void test_generic_scoring_contract_red_guards() {
          {material_a_select, cancel},
          {PublicCardSelectionOperation::Select,
           PublicCardSelectionOperation::None},
-         synthetic_retained_state(profile),
+         synthetic_retained_state_v2(profile),
          "active Select=max(+3,+1)=+3,not+4"},
         {"no_retained_line_has_no_generic_bonus",
          {material_a_select, cancel},
          {PublicCardSelectionOperation::Select,
           PublicCardSelectionOperation::None},
-         reset_state(profile),
+         reset_state_v2(profile),
          "generic Select=0"},
     };
 
-    bool saw_expected_red = false;
-    for (const auto& scenario : scenarios) {
-        saw_expected_red = expect_v3_boundary_red(profile, scenario, observation) ||
-                           saw_expected_red;
+    validate_v2_fixture(scenarios[0]);
+    const auto max_result = propose_v2(
+        profile, scenarios[0].state, observation, scenarios[0].candidates);
+    require_v2_result_selected(max_result, scenarios[0].candidates);
+    require(max_result.fallback_level ==
+                std::optional<TeacherFallbackLevel>{TeacherFallbackLevel::F0},
+            "explicit active-line scenario did not resolve at F0");
+    require_v2_progress(max_result, material_a_select.public_action_key, 3);
+    require_v2_progress(max_result, cancel.public_action_key, 0);
+    require(max_result.selected_public_action_key ==
+                std::optional<std::string>(material_a_select.public_action_key),
+            "explicit active-line progress did not beat Cancel");
+
+    validate_v2_fixture(scenarios[1]);
+    const auto no_commitment = propose_v2(
+        profile, scenarios[1].state, observation, scenarios[1].candidates);
+    require_v2_result_selected(no_commitment, scenarios[1].candidates);
+    require(no_commitment.fallback_level ==
+                std::optional<TeacherFallbackLevel>{TeacherFallbackLevel::F4},
+            "no-commitment scenario did not fall back without a progress stage");
+    require_v2_progress(no_commitment, material_a_select.public_action_key, 0);
+    require_v2_progress(no_commitment, cancel.public_action_key, 0);
+}
+
+void test_select_progress_survives_unsupported_plan() {
+    const auto profile = make_salamangreat_profile();
+    const auto observation = public_observation();
+    const auto select = make_card_candidate(
+        "p0:MONSTER_ZONE:0", PublicCardSelectionOperation::Select, true);
+    const auto cancel = make_cancel_candidate(true);
+    GoalLineSelection unsupported_selection;
+    unsupported_selection.status = PredicateEvaluationStatus::Unsupported;
+    RecoverySelection no_recovery;
+
+    const auto select_outcome = evaluate_goal_line_progress_v2(
+        profile, unsupported_selection, no_recovery, select, observation, 0, true);
+    require(select_outcome.status == CandidateEvaluationStatus::Supported &&
+                select_outcome.contributions.size() == 1 &&
+                select_outcome.contributions[0].value == 1,
+            "retained Select progress was suppressed by unsupported strategic eligibility");
+
+    const auto cancel_outcome = evaluate_goal_line_progress_v2(
+        profile, unsupported_selection, no_recovery, cancel, observation, 0, true);
+    require(cancel_outcome.status == CandidateEvaluationStatus::Supported &&
+                cancel_outcome.contributions.size() == 1 &&
+                cancel_outcome.contributions[0].value == 0,
+            "Cancel was not represented as complete zero-progress evidence");
+}
+
+void require_same_public_v2_result(const TeacherRankingResultV2& left,
+                                   const TeacherRankingResultV2& right) {
+    require(left.status == right.status &&
+                left.selected_public_action_key == right.selected_public_action_key &&
+                left.selected_score_vector == right.selected_score_vector &&
+                left.fallback_level == right.fallback_level &&
+                left.proposed_state_delta == right.proposed_state_delta &&
+                left.evaluations.size() == right.evaluations.size(),
+            "paired public-equivalent V2 results differ in public ranking state");
+    for (std::size_t index = 0; index < left.evaluations.size(); ++index) {
+        const auto& left_evaluation = left.evaluations[index];
+        const auto& right_evaluation = right.evaluations[index];
+        require(left_evaluation.public_action_key == right_evaluation.public_action_key &&
+                    left_evaluation.status == right_evaluation.status &&
+                    left_evaluation.score == right_evaluation.score &&
+                    left_evaluation.matched_intent_ids ==
+                        right_evaluation.matched_intent_ids &&
+                    left_evaluation.matched_goal_ids == right_evaluation.matched_goal_ids &&
+                    left_evaluation.matched_line_ids == right_evaluation.matched_line_ids &&
+                    left_evaluation.reason_ids == right_evaluation.reason_ids,
+                "paired public-equivalent V2 evaluations differ");
     }
-    require(saw_expected_red,
-            "synthetic V2 scoring guards did not reach the expected V1-bound RED");
+}
+
+void test_v2_paired_public_equivalence() {
+    const auto profile = make_salamangreat_profile();
+    const auto left_observation = public_observation(234, 1);
+    const auto right_observation = public_observation(234, 2);
+    require(public_observation_digest(left_observation) ==
+                public_observation_digest(right_observation),
+            "private observation metadata changed the public observation digest");
+
+    const auto candidates = std::vector<EnvironmentActionCandidate>{
+        make_card_candidate("p0:MONSTER_ZONE:0", PublicCardSelectionOperation::Select, true),
+        make_card_candidate("p0:MONSTER_ZONE:1", PublicCardSelectionOperation::Select, true),
+        make_cancel_candidate(true),
+    };
+    const auto left = propose_v2(
+        profile, retained_salamangreat_state_v2(profile), left_observation, candidates);
+    const auto right = propose_v2(
+        profile, retained_salamangreat_state_v2(profile), right_observation, candidates);
+    require_v2_result_selected(left, candidates);
+    require_v2_result_selected(right, candidates);
+    require_same_public_v2_result(left, right);
 }
 
 }  // namespace
@@ -452,16 +685,14 @@ int main() {
         test_v1_state_rejects_v2_action_key();
         test_codec_and_mixed_domain_guards();
         test_salamangreat_reconciled_commitment();
-        test_v3_teacher_boundary_red();
-        test_generic_scoring_contract_red_guards();
-        std::cerr << "RED_OWNER=TEACHER_V3_PUBLIC_ACTION_BOUNDARY\n"
-                  << "RED_FAILURE_EXPECTED=YES\n"
-                  << "RED_FAILURE_UNRELATED=NO\n";
-        throw std::runtime_error(
-            "expected runtime RED: current Teacher rejects homogeneous V2 "
-            "public-action domain");
+        test_hiita_v2_commitment();
+        test_generic_scoring_contract();
+        test_select_progress_survives_unsupported_plan();
+        test_v2_paired_public_equivalence();
+        std::cout << "teacher_v3_hiita_commitment_test: PASS\n";
+        return 0;
     } catch (const std::exception& error) {
-        std::cerr << "teacher_v3_hiita_commitment_red_test: " << error.what()
+        std::cerr << "teacher_v3_hiita_commitment_test: " << error.what()
                   << '\n';
         return 1;
     }

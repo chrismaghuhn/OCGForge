@@ -1,10 +1,10 @@
 # Teacher V3 Hiita Continuation-Commitment Contract
 
-Status: Stage B1 contract freeze and runtime RED slice.
+Status: Stage B1 contract freeze and V2 successor implementation.
 
-This document defines the future Teacher successor that consumes the V3 public
-card-selection operation metadata. It does not implement that successor and
-does not change the accepted Stage-A environment or public-action contracts.
+This document defines the Teacher successor that consumes the V3 public
+card-selection operation metadata. It does not change the accepted Stage-A
+environment or public-action contracts.
 
 ## Ownership and authority
 
@@ -90,15 +90,23 @@ The future V3 Teacher implementation uses these successor semantics:
 - TeacherStateDeltaV2.
 
 The corresponding three public-action-key fields in the successor state and
-delta are V2 public-action keys. These successor types are not implemented by
-the B1 RED slice.
+delta are V2 public-action keys. These successor types are implemented by the
+B1 GREEN slice; Runner, Trajectory, and downstream migration remain deferred.
 
-Changing Teacher semantics changes policy provenance. Historical Teacher
-provenance remains ocgforge.teacher_core.v1. The V3-aware successor is
-ocgforge.teacher_core.v2. A changed Teacher core must therefore produce a
-changed Teacher policy artifact and binding identity. The old
+Changing Teacher semantics changes policy provenance. The historical Teacher
+producer remains `ocgforge.policy.teacher_core.v1`; the V3-aware successor
+producer is `ocgforge.policy.teacher_core.v2`. The historical action adapter is
+`ocgforge.policy.public_action_key.v1`; the V3 action adapter is
+`ocgforge.policy.public_action_key.v2`. A changed Teacher core must therefore
+produce a changed Teacher policy artifact and binding identity. The old
 TeacherPolicyBinding content identity and old Teacher policy artifact identity
 are not reused for the new semantics.
+
+The `TeacherPolicyBindingV1` schema, `PolicyArtifact` schema,
+`StrategyProfileV1`, score vector, fallback, tie-break, diagnostic, deterministic
+sampling, and no-policy-RNG contracts remain unchanged. The V2 identities are
+new content identities of those existing schemas; this slice does not create a
+V2 binding, artifact, or profile schema.
 
 ## Retained-line commitment scoring
 
@@ -168,7 +176,7 @@ IDLE -> Hiita -> UNSELECT Select first material -> UNSELECT Select second
 material -> PLACE -> public Hiita summon completion -> next legal public
 boundary
 
-The B1 RED slice does not run a real Task7 collection episode.
+The B1 test slice does not run a real Task7 collection episode.
 
 The RED fixture uses the canonical `make_salamangreat_profile()` without
 adding a CardSelection intent or changing any Salamangreat profile data. It
@@ -216,20 +224,17 @@ input and dataset migration are deferred. Task7 materialization and any
 Task7 RUN are deferred. RUN_A, RUN_B, dataset generation, and training are
 outside this slice.
 
-## B1 RED boundary
+## B1 RED boundary and GREEN implementation
 
-The current production Teacher remains V1-bound and accepts historical V1
-public-action keys only. The dedicated runtime RED test constructs valid
-public V2 keys through the Stage-A authoritative V2 codec and presents a
-homogeneous V2 domain with explicit Select/Unselect metadata.
+The accepted B1 RED at the preceding base commit recorded that the production
+Teacher was V1-bound and rejected a homogeneous V2 public-action domain. The
+GREEN implementation retains that historical V1 path and adds an explicit V2
+path with `TeacherCoreV2`, V2 state/delta, V2 candidate extraction, V2 domain
+evaluation, V2 fallback resolution, and V2 provenance factories.
 
-The expected current result is rejection at the Teacher V3 public-action
-boundary. This is a runtime RED, not a missing-API compile failure. The RED
-owner is TEACHER_V3_PUBLIC_ACTION_BOUNDARY.
-
-The RED slice freezes the historical V1 guard, V1 state rejection of V2 keys,
-homogeneous V2 domain shape, mixed/malformed fail-closed guards, retained-line
-progress expectations, MAX-not-sum behavior, and no-retained-line
-non-applicability. It does not add V2 state/delta, TeacherCore V2, a new
-Teacher artifact, a Runner migration, trajectory changes, Task7 work, or a
-Teacher fix.
+The GREEN path consumes the complete ordered V2 domain and explicit
+Select/Unselect metadata. It retains a reconciled active goal/line commitment
+at the Hiita `unselect_card` boundary, gives only Select the generic +1, uses
+MAX for overlapping progress sources, and keeps V1 state/result contracts
+isolated. The V2 state, result, and provenance implementations are not wired
+into TeacherRunner or any Trajectory, Model, Task7, dataset, or training path.
