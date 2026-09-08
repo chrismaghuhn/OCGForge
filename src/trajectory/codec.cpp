@@ -3833,7 +3833,6 @@ void validate_v2_manifest(const EpisodeManifestV2& value) {
 bool read_manifest_v2_direct(ByteReader& reader, EpisodeManifestV2& value) noexcept {
     std::string schema;
     if (!reader.string(schema) || schema != kManifestSchemaV2 ||
-        !reader.string(value.trusted_trajectory_contract_id) ||
         value.trusted_trajectory_contract_id != kTrustedTrajectoryV2ContractId ||
         !reader.string(value.episodic_environment_contract_id) ||
         value.episodic_environment_contract_id != environment::kEpisodicEnvironmentV3ContractId ||
@@ -3980,7 +3979,6 @@ std::vector<std::uint8_t> canonical_episode_manifest_bytes_v2(
     validate_v2_manifest(value);
     ByteWriter writer;
     writer.string(kManifestSchemaV2);
-    writer.string(value.trusted_trajectory_contract_id);
     writer.string(value.episodic_environment_contract_id);
     writer.string(value.environment_semantic_id);
     writer.bytes(value.environment_identity_input);

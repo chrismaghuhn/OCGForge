@@ -27,7 +27,10 @@ void require(const bool condition, const std::string& message) {
 void require_golden(const std::vector<std::uint8_t>& bytes,
                     const std::string& expected,
                     const std::string& message) {
-    require(trace::sha256_bytes(bytes) == expected, message + " (SHA-256 mismatch)");
+    if (trace::sha256_bytes(bytes) != expected) {
+        throw std::runtime_error(message + " (actual SHA-256=" +
+                                 trace::sha256_bytes(bytes) + ")");
+    }
 }
 
 template <typename T>
@@ -305,6 +308,18 @@ void test_v2_record_manifest_and_envelope_round_trip() {
     const auto collection_bytes = canonical_collection_decision_record_bytes_v2(record);
     require(decode_collection_decision_record_v2(collection_bytes),
             "V2 collection decision record did not decode");
+    const auto v1_record = trajectory_test::terminal_envelope(19).records.front();
+    const auto v1_attribution = canonical_policy_decision_attribution_bytes(v1_record);
+    const auto v2_public_record = canonical_public_decision_record_bytes_v2(record);
+    const std::size_t v2_attribution_offset =
+        sizeof(std::uint32_t) + std::string(kTrustedTrajectoryV2ContractId).size() +
+        v2_public_record.size();
+    require(v2_attribution_offset <= collection_bytes.size(),
+            "V2 collection attribution offset is outside the record");
+    require(std::vector<std::uint8_t>(
+                collection_bytes.begin() + static_cast<std::ptrdiff_t>(v2_attribution_offset),
+                collection_bytes.end()) == v1_attribution,
+            "V2 attribution bytes differ from equivalent V1 attribution bytes");
     auto collection_trailing = collection_bytes;
     collection_trailing.push_back(0);
     require(!static_cast<bool>(decode_collection_decision_record_v2(collection_trailing)),
@@ -407,7 +422,7 @@ void test_v2_goldens() {
                    "433614916ff88576c59a22593138239c07e1abaa8d3eb2cf38ee4276cb0572c7",
                    "V2 collection record golden");
     require_golden(manifest,
-                   "50a10aa10d0c94af3d75dab54059a5ce580001c18d8a7b3e3d08f4fa7cb785d3",
+                   "72c3f683d85808a9d5515cc386b2b7f360f25083666c0e6512cd54e77b0a1f4d",
                    "V2 manifest golden");
     require_golden(terminal_bytes,
                    "9681f79396c15810f5337b72f5fc9cd819a18258013ea570db281b415e53a1c0",
@@ -419,7 +434,7 @@ void test_v2_goldens() {
                    "8a57f5979bcbc3fb020c00518d199edd4b88096989e4267a1bd9736f4d29e3e3",
                    "V2 failed closure golden");
     require_golden(envelope,
-                   "01d97f35d81c8a0bc160eb0dc0e4007aeae97ae35d8d53263be0ed5b6fb6ad7e",
+                   "1e229abcd588b9c7507e779f0f8a4c8b608a7a79db77c4f3d22307409dac301d",
                    "V2 envelope golden");
     require_golden(restricted,
                    "e5e00d15745ad110ef80c636c5ea022da5d7a6fd122e4c2638d2bd37824734b0",
