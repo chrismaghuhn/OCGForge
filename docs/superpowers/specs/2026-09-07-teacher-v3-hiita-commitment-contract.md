@@ -108,6 +108,13 @@ sampling, and no-policy-RNG contracts remain unchanged. The V2 identities are
 new content identities of those existing schemas; this slice does not create a
 V2 binding, artifact, or profile schema.
 
+The historical V1 diagnostic contract remains unchanged. V2 Teacher diagnostic
+publication is deferred because the existing diagnostic codec is V1-key-bound.
+The B1 V2 policy binding therefore leaves `diagnostic_contract_identity` absent
+and does not advertise a diagnostic contract. A V2 ranking result containing an
+explanation is invalid until a separately authorized versioned diagnostic
+contract exists; no `teacher_decision_explanation.v2` is introduced here.
+
 ## Retained-line commitment scoring
 
 The generic commitment rule applies only when normal public reconciliation

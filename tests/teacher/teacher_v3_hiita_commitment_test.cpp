@@ -515,7 +515,8 @@ void test_hiita_v2_commitment() {
     TeacherDecisionExplanation invalid_explanation;
     invalid_explanation.selected_public_action_key = *initial.selected_public_action_key;
     invalid_explanation.selected_score_vector = *initial.selected_score_vector;
-    invalid_explanation.explanation_schema_id = "invalid_explanation_schema";
+    invalid_explanation.explanation_schema_id =
+        std::string(kTeacherDiagnosticContractId);
     invalid_explanation_result.explanation = invalid_explanation;
     require(!validate_teacher_ranking_result_v2(invalid_explanation_result),
             "V2 result accepted an invalid explanation payload");

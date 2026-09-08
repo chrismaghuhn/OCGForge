@@ -1,6 +1,5 @@
 #include "ygo/teacher/teacher_decision_v2.hpp"
 
-#include <algorithm>
 #include <cstdint>
 #include <exception>
 #include <string>
@@ -54,55 +53,6 @@ bool validate_candidate_evaluation_v2(const CandidateEvaluation& value,
            validate_id_vector(value.reason_ids, "reason IDs", diagnostic);
 }
 
-bool valid_fact_vector_v2(const std::vector<PublicFactValue>& values) {
-    const auto& registry = PublicFactRegistry::canonical();
-    for (std::size_t index = 0; index < values.size(); ++index) {
-        if (!registry.validate(values[index])) {
-            return false;
-        }
-        if (index > 0 &&
-            (values[index - 1].fact_id == values[index].fact_id ||
-             !(canonical_public_fact_value_bytes(values[index - 1]) <
-               canonical_public_fact_value_bytes(values[index])))) {
-            return false;
-        }
-    }
-    return true;
-}
-
-bool validate_explanation_v2(const TeacherDecisionExplanation& value,
-                             std::string* diagnostic) {
-    if (!environment::is_public_action_key_v2(value.selected_public_action_key)) {
-        set_diagnostic(diagnostic, "V2 explanation has an invalid selected action key");
-        return false;
-    }
-    if ((value.active_goal_id.has_value() &&
-         !detail::canonical_token(*value.active_goal_id)) ||
-        (value.active_line_id.has_value() &&
-         !detail::canonical_token(*value.active_line_id)) ||
-        (value.active_line_node_id.has_value() &&
-         !detail::canonical_token(*value.active_line_node_id)) ||
-        !validate_id_vector(value.matched_intent_ids, "explanation intent IDs", diagnostic) ||
-        !validate_id_vector(value.invalidation_reason_ids,
-                            "explanation invalidation IDs", diagnostic) ||
-        !std::all_of(value.invalidation_reason_ids.begin(),
-                     value.invalidation_reason_ids.end(), [](const auto& reason) {
-                         return is_registered_invalidation_reason(reason);
-                     }) ||
-        !valid_fact_vector_v2(value.relevant_public_feature_values) ||
-        static_cast<std::uint8_t>(value.confidence_class) >
-            static_cast<std::uint8_t>(ConfidenceClass::Fallback) ||
-        static_cast<std::uint8_t>(value.fallback_level) >
-            static_cast<std::uint8_t>(TeacherFallbackLevel::F4) ||
-        (value.fallback_level == TeacherFallbackLevel::F4 &&
-         value.confidence_class != ConfidenceClass::Fallback) ||
-        value.explanation_schema_id != kTeacherDiagnosticContractId) {
-        set_diagnostic(diagnostic, "V2 explanation contains invalid public fields");
-        return false;
-    }
-    return true;
-}
-
 policy::PolicySelection error_selection(const policy::PolicyErrorCode code,
                                         const std::string& message) noexcept {
     return policy::PolicySelection{
@@ -122,6 +72,11 @@ bool validate_teacher_ranking_result_v2(
         if (value.fallback_level.has_value() &&
             !valid_fallback_level(static_cast<std::uint8_t>(*value.fallback_level))) {
             set_diagnostic(diagnostic, "V2 teacher fallback level is unknown");
+            return false;
+        }
+        if (value.explanation.has_value()) {
+            set_diagnostic(diagnostic,
+                           "V2 Teacher diagnostic publication is not versioned in B1");
             return false;
         }
         if (value.proposed_state_delta.has_value() &&
@@ -159,13 +114,6 @@ bool validate_teacher_ranking_result_v2(
             !environment::is_public_action_key_v2(*value.selected_public_action_key)) {
             set_diagnostic(diagnostic,
                            "selected V2 result lacks a valid public action key");
-            return false;
-        }
-        if (value.explanation.has_value() &&
-            (!validate_explanation_v2(*value.explanation, diagnostic) ||
-             value.explanation->selected_public_action_key !=
-                 *value.selected_public_action_key)) {
-            set_diagnostic(diagnostic, "V2 explanation does not bind to selected action");
             return false;
         }
         if (value.proposed_state_delta.has_value() &&

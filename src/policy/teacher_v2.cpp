@@ -20,7 +20,7 @@ teacher::TeacherPolicyBindingV1 make_teacher_policy_binding_v2(
     binding.score_contract_identity = std::string(teacher::kTeacherScoreContractId);
     binding.fallback_contract_identity = std::string(teacher::kTeacherFallbackContractId);
     binding.tie_break_contract_identity = std::string(teacher::kTeacherTieBreakContractId);
-    binding.diagnostic_contract_identity = std::string(teacher::kTeacherDiagnosticContractId);
+    binding.diagnostic_contract_identity.reset();
     binding.teacher_policy_binding_id = teacher::teacher_policy_binding_id(binding);
     return binding;
 }

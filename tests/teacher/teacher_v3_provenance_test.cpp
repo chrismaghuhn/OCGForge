@@ -30,13 +30,13 @@ constexpr std::string_view kSwordsoulArtifactV1 =
 constexpr std::string_view kSalamangreatArtifactV1 =
     "policy_artifact.v1.a68642ee28f0dd53ebe4908994664f178b3d5cea6fb7c06421990729cd9c4527";
 constexpr std::string_view kSwordsoulBindingV2 =
-    "ocgforge.teacher_policy_binding.v1.504014a9c5db4711eeaab497c7f80e3156aa14c855dc6ecfcb4db672f503c050";
+    "ocgforge.teacher_policy_binding.v1.4da70292d08b5608552d9f9246050c2ea5b9c3b52c962ea26a8f9816c5447a5f";
 constexpr std::string_view kSalamangreatBindingV2 =
-    "ocgforge.teacher_policy_binding.v1.24ae44cbe825c5b9a64686cffdb450c3d26a2d88e9ca8a4b502908db63e35061";
+    "ocgforge.teacher_policy_binding.v1.0ec1d4ce29956c72e7e8537d24ba04834dbed4f820ff222d0209f9d7880bc7c0";
 constexpr std::string_view kSwordsoulArtifactV2 =
-    "policy_artifact.v1.b0eb04a3f2c11a0ae6ef9b925bcea389d0554c9cc4c8de984b23737c3310ebd3";
+    "policy_artifact.v1.efbd7962734c993d9374acc4c527f722a2413e7279b851d10340a83defccfc01";
 constexpr std::string_view kSalamangreatArtifactV2 =
-    "policy_artifact.v1.2e27335aa76a187a089191f5def67a067d50a76647f525daf20d52386bf850ec";
+    "policy_artifact.v1.17b2395a97e820c645f59037e7203f17bab808f90c1b70936c1000591efdb40e";
 
 void require(const bool condition, const std::string& message) {
     if (!condition) {
@@ -96,7 +96,9 @@ void test_v1_and_v2_provenance() {
                     "ocgforge.policy.public_action_key.v2",
             "V2 provenance constants are not the frozen identities");
     require(validate_teacher_policy_binding(swordsoul_binding_v2, swordsoul) &&
-                validate_teacher_policy_binding(salamangreat_binding_v2, salamangreat),
+                validate_teacher_policy_binding(salamangreat_binding_v2, salamangreat) &&
+                !swordsoul_binding_v2.diagnostic_contract_identity.has_value() &&
+                !salamangreat_binding_v2.diagnostic_contract_identity.has_value(),
             "V2 Teacher binding failed canonical validation");
     require(swordsoul_binding_v2.strategy_profile_id == swordsoul.profile_id &&
                 salamangreat_binding_v2.strategy_profile_id == salamangreat.profile_id &&
