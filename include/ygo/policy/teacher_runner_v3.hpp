@@ -44,8 +44,11 @@ public:
     bool reject_pending_proposal() noexcept;
 
     bool has_pending_proposal() const noexcept { return pending_player_.has_value(); }
-    const TeacherPolicySessionV2& session(std::uint8_t player) const noexcept {
-        return *config_.sessions[player];
+    const TeacherPolicySessionV2* session(std::uint8_t player) const noexcept {
+        if (player >= 2 || !config_.sessions[player].has_value()) {
+            return nullptr;
+        }
+        return &*config_.sessions[player];
     }
 
 private:

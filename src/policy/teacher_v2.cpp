@@ -99,6 +99,87 @@ bool is_published_teacher_profile_pair_v2(
 
 }  // namespace
 
+namespace detail {
+
+bool validate_teacher_policy_session_v2(
+    const teacher::StrategyProfileV1& profile,
+    const teacher::TeacherPolicyBindingV1& policy_binding,
+    const trajectory::PolicyArtifact& artifact,
+    const trajectory::ParticipantPolicyAssignment& assignment,
+    std::string* diagnostic) noexcept {
+    const auto fail = [diagnostic](const std::string& message) noexcept {
+        if (diagnostic != nullptr) {
+            *diagnostic = message;
+        }
+        return false;
+    };
+    try {
+        const auto resolver = make_production_policy_provenance_resolver();
+        const auto canonical_config = environment::CertifiedEnvironmentConfig::canonical();
+        if (!teacher::validate_teacher_policy_binding(policy_binding, profile, diagnostic)) {
+            return false;
+        }
+        if (policy_binding.teacher_core_artifact_identity !=
+                kTeacherProducerImplementationIdentityV2 ||
+            policy_binding.diagnostic_contract_identity.has_value() ||
+            !teacher::validate_strategy_profile_binding(profile, canonical_config, diagnostic)) {
+            return fail("V2 Teacher binding/profile generation is invalid");
+        }
+        if (!resolver.can_resolve(trajectory::ProvenanceKind::ProducerImplementation,
+                                  kTeacherProducerImplementationIdentityV2) ||
+            !resolver.can_resolve(trajectory::ProvenanceKind::InferenceAdapter,
+                                  kDirectExecutionInferenceAdapterIdentity) ||
+            !resolver.can_resolve(trajectory::ProvenanceKind::ObservationAdapter,
+                                  kPublicObservationAdapterIdentity) ||
+            !resolver.can_resolve(trajectory::ProvenanceKind::ActionAdapter,
+                                  kPublicActionKeyAdapterIdentityV2) ||
+            !resolver.can_resolve(trajectory::ProvenanceKind::SamplingContract,
+                                  kTeacherDeterministicSamplingContractIdentity) ||
+            !resolver.can_resolve(trajectory::ProvenanceKind::ArtifactMetadataArtifact,
+                                  policy_binding.teacher_policy_binding_id)) {
+            return fail("V2 Teacher provenance is not registered");
+        }
+        if (!is_published_teacher_profile_pair_v2(profile, policy_binding, artifact)) {
+            return fail("V2 Teacher profile/provenance pair is not published");
+        }
+        if (artifact.policy_kind != trajectory::PolicyKind::DeterministicHeuristic ||
+            artifact.producer_implementation_identity !=
+                kTeacherProducerImplementationIdentityV2 ||
+            artifact.inference_adapter_identity != kDirectExecutionInferenceAdapterIdentity ||
+            artifact.observation_adapter_identity != kPublicObservationAdapterIdentity ||
+            artifact.action_adapter_identity != kPublicActionKeyAdapterIdentityV2 ||
+            artifact.sampling_contract_identity !=
+                kTeacherDeterministicSamplingContractIdentity ||
+            artifact.policy_rng_contract_identity != trajectory::kNoPolicyRngContractId ||
+            artifact.artifact_metadata_identity !=
+                std::optional<std::string>{policy_binding.teacher_policy_binding_id} ||
+            artifact.policy_artifact_id != trajectory::compute_policy_artifact_id(artifact)) {
+            return fail("V2 Teacher artifact provenance or identity is invalid");
+        }
+        if (assignment.player > 1 ||
+            assignment.policy_artifact_id != artifact.policy_artifact_id ||
+            static_cast<std::uint8_t>(assignment.deck_role) != profile.own_deck_role ||
+            assignment.resolved_locked_deck_id != profile.own_deck_id ||
+            assignment.resolved_locked_deck_sha256 != profile.own_deck_sha256 ||
+            !trajectory::is_canonical_identity(
+                assignment.participant_policy_assignment_id,
+                "participant_policy_assignment.v1.") ||
+            assignment.participant_policy_assignment_id !=
+                trajectory::compute_participant_policy_assignment_id(assignment)) {
+            return fail("V2 Teacher assignment provenance or identity is invalid");
+        }
+        (void)trajectory::canonical_policy_artifact_bytes(artifact);
+        (void)trajectory::canonical_participant_policy_assignment_bytes(assignment);
+        return true;
+    } catch (const std::exception& error) {
+        return fail(error.what());
+    } catch (...) {
+        return fail("V2 Teacher session validation threw");
+    }
+}
+
+}  // namespace detail
+
 DeterministicTeacherPolicyV2::DeterministicTeacherPolicyV2(
     teacher::StrategyProfileV1 profile,
     teacher::TeacherPolicyBindingV1 policy_binding,
@@ -192,52 +273,13 @@ TeacherPolicySessionCreateResultV2 create_teacher_policy_session_v2(
     const trajectory::ParticipantPolicyAssignment& assignment) noexcept {
     try {
         std::string diagnostic;
-        const auto resolver = make_production_policy_provenance_resolver();
-        const auto canonical_config = environment::CertifiedEnvironmentConfig::canonical();
-        if (!teacher::validate_teacher_policy_binding(policy_binding, profile, &diagnostic) ||
-            policy_binding.teacher_core_artifact_identity !=
-                kTeacherProducerImplementationIdentityV2 ||
-            policy_binding.diagnostic_contract_identity.has_value() ||
-            !teacher::validate_strategy_profile_binding(profile, canonical_config, &diagnostic) ||
-            !resolver.can_resolve(trajectory::ProvenanceKind::ProducerImplementation,
-                                  kTeacherProducerImplementationIdentityV2) ||
-            !resolver.can_resolve(trajectory::ProvenanceKind::InferenceAdapter,
-                                  kDirectExecutionInferenceAdapterIdentity) ||
-            !resolver.can_resolve(trajectory::ProvenanceKind::ObservationAdapter,
-                                  kPublicObservationAdapterIdentity) ||
-            !resolver.can_resolve(trajectory::ProvenanceKind::ActionAdapter,
-                                  kPublicActionKeyAdapterIdentityV2) ||
-            !resolver.can_resolve(trajectory::ProvenanceKind::SamplingContract,
-                                  kTeacherDeterministicSamplingContractIdentity) ||
-            !resolver.can_resolve(trajectory::ProvenanceKind::ArtifactMetadataArtifact,
-                                  policy_binding.teacher_policy_binding_id) ||
-            !is_published_teacher_profile_pair_v2(profile, policy_binding, artifact) ||
-            artifact.policy_kind != trajectory::PolicyKind::DeterministicHeuristic ||
-            artifact.producer_implementation_identity !=
-                kTeacherProducerImplementationIdentityV2 ||
-            artifact.inference_adapter_identity != kDirectExecutionInferenceAdapterIdentity ||
-            artifact.observation_adapter_identity != kPublicObservationAdapterIdentity ||
-            artifact.action_adapter_identity != kPublicActionKeyAdapterIdentityV2 ||
-            artifact.sampling_contract_identity !=
-                kTeacherDeterministicSamplingContractIdentity ||
-            artifact.policy_rng_contract_identity != trajectory::kNoPolicyRngContractId ||
-            artifact.artifact_metadata_identity !=
-                std::optional<std::string>{policy_binding.teacher_policy_binding_id} ||
-            assignment.policy_artifact_id != artifact.policy_artifact_id ||
-            assignment.player > 1 ||
-            static_cast<std::uint8_t>(assignment.deck_role) != profile.own_deck_role ||
-            assignment.resolved_locked_deck_id != profile.own_deck_id ||
-            assignment.resolved_locked_deck_sha256 != profile.own_deck_sha256 ||
-            !trajectory::is_canonical_identity(
-                assignment.participant_policy_assignment_id,
-                "participant_policy_assignment.v1.")) {
+        if (!detail::validate_teacher_policy_session_v2(
+                profile, policy_binding, artifact, assignment, &diagnostic)) {
             return {std::nullopt,
                     PolicyError{PolicyErrorCode::InvalidConfiguration,
                                 diagnostic.empty() ? "invalid V2 Teacher session binding"
                                                     : diagnostic}};
         }
-        (void)trajectory::canonical_policy_artifact_bytes(artifact);
-        (void)trajectory::canonical_participant_policy_assignment_bytes(assignment);
         TeacherPolicySessionV2 session{
             DeterministicTeacherPolicyV2(profile, policy_binding, assignment.player,
                                          assignment.participant_policy_assignment_id),

@@ -1,8 +1,12 @@
 #include "ygo/policy/teacher_runner_v3.hpp"
 
+#include <algorithm>
+#include <array>
 #include <exception>
 #include <string>
 #include <utility>
+
+#include "teacher_v2_internal.hpp"
 
 namespace ygo::policy {
 
@@ -16,6 +20,9 @@ PolicySelection TeacherRunnerV3::failure(const PolicyErrorCode code,
 TeacherRunnerV3CreateResult TeacherRunnerV3::create(
     TeacherRunnerV3Config config) noexcept {
     try {
+        std::array<bool, 2> deck_role_seen = {false, false};
+        std::array<std::string, 2> assignment_ids;
+        std::array<std::string, 2> artifact_ids;
         for (std::uint8_t player = 0; player < 2; ++player) {
             if (!config.sessions[player].has_value()) {
                 return {std::nullopt,
@@ -23,23 +30,39 @@ TeacherRunnerV3CreateResult TeacherRunnerV3::create(
                                     "V3 Teacher runner lacks a session for a player"}};
             }
             const auto& session = *config.sessions[player];
+            std::string diagnostic;
             if (session.assignment.player != player ||
                 session.policy.participant() != player ||
                 session.assignment.participant_policy_assignment_id !=
                     session.policy.participant_policy_assignment_id() ||
-                session.assignment.policy_artifact_id != session.artifact.policy_artifact_id ||
-                session.artifact.artifact_metadata_identity !=
-                    std::optional<std::string>{session.policy.policy_binding().teacher_policy_binding_id} ||
-                session.policy.policy_binding().teacher_core_artifact_identity !=
-                    kTeacherProducerImplementationIdentityV2 ||
-                session.policy.policy_binding().diagnostic_contract_identity.has_value() ||
-                session.artifact.action_adapter_identity != kPublicActionKeyAdapterIdentityV2 ||
-                session.artifact.policy_rng_contract_identity !=
-                    trajectory::kNoPolicyRngContractId) {
+                !detail::validate_teacher_policy_session_v2(
+                    session.policy.profile(), session.policy.policy_binding(),
+                    session.artifact, session.assignment, &diagnostic)) {
                 return {std::nullopt,
                         PolicyError{PolicyErrorCode::InvalidConfiguration,
-                                    "V3 Teacher session does not match its assignment"}};
+                                    diagnostic.empty()
+                                        ? "V3 Teacher session does not match its assignment"
+                                        : diagnostic}};
             }
+            const auto deck_role = static_cast<std::size_t>(session.assignment.deck_role);
+            if (deck_role > 1 || deck_role_seen[deck_role] ||
+                std::find(assignment_ids.begin(), assignment_ids.end(),
+                          session.assignment.participant_policy_assignment_id) !=
+                    assignment_ids.end() ||
+                std::find(artifact_ids.begin(), artifact_ids.end(),
+                          session.artifact.policy_artifact_id) != artifact_ids.end()) {
+                return {std::nullopt,
+                        PolicyError{PolicyErrorCode::InvalidConfiguration,
+                                    "V3 Teacher runner requires two distinct deck roles, assignments, and artifacts"}};
+            }
+            deck_role_seen[deck_role] = true;
+            assignment_ids[player] = session.assignment.participant_policy_assignment_id;
+            artifact_ids[player] = session.artifact.policy_artifact_id;
+        }
+        if (!deck_role_seen[0] || !deck_role_seen[1]) {
+            return {std::nullopt,
+                    PolicyError{PolicyErrorCode::InvalidConfiguration,
+                                "V3 Teacher runner requires one session per locked deck role"}};
         }
         return {std::optional<TeacherRunnerV3>(
                     TeacherRunnerV3(std::move(config))),

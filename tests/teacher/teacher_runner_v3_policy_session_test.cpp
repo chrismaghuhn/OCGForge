@@ -6,6 +6,7 @@
 #include "ygo/policy/teacher_v2.hpp"
 #include "ygo/teacher/salamangreat_profile.hpp"
 #include "ygo/teacher/swordsoul_tenyi_profile.hpp"
+#include "ygo/trajectory/codec.hpp"
 
 #include <algorithm>
 #include <array>
@@ -211,10 +212,15 @@ TeacherPolicySessionV2 make_session(const Fixture& value, const std::uint8_t pla
     return std::move(*created.value);
 }
 
-TeacherRunnerV3 make_runner(const Fixture& value) {
+TeacherRunnerV3Config make_config(const Fixture& value) {
     TeacherRunnerV3Config config;
     config.sessions[0] = make_session(value, 0);
     config.sessions[1] = make_session(value, 1);
+    return config;
+}
+
+TeacherRunnerV3 make_runner(const Fixture& value) {
+    auto config = make_config(value);
     auto created = TeacherRunnerV3::create(std::move(config));
     require(static_cast<bool>(created), "V3 runner creation failed");
     return std::move(*created.value);
@@ -253,6 +259,66 @@ void test_v2_session_provenance_and_rng() {
                 swordsoul_session.artifact.policy_artifact_id ==
                     "policy_artifact.v1.efbd7962734c993d9374acc4c527f722a2413e7279b851d10340a83defccfc01",
             "V2 Swordsoul provenance identity changed");
+}
+
+template <typename Mutator>
+void require_runner_rejects_mutated_session(Mutator mutator,
+                                             const std::string& label) {
+    const auto value = fixture();
+    auto config = make_config(value);
+    mutator(*config.sessions[0]);
+    const auto created = TeacherRunnerV3::create(std::move(config));
+    require(!created, "V3 runner accepted " + label);
+}
+
+void test_runner_revalidates_mutable_session_provenance() {
+    require_runner_rejects_mutated_session(
+        [](auto& session) {
+            session.artifact.producer_implementation_identity = "tampered.producer";
+        },
+        "a tampered producer");
+    require_runner_rejects_mutated_session(
+        [](auto& session) {
+            session.artifact.inference_adapter_identity = "tampered.inference";
+        },
+        "a tampered inference adapter");
+    require_runner_rejects_mutated_session(
+        [](auto& session) {
+            session.artifact.sampling_contract_identity = "tampered.sampling";
+        },
+        "a tampered sampling contract");
+    require_runner_rejects_mutated_session(
+        [](auto& session) {
+            session.assignment.resolved_locked_deck_id = "tampered.deck";
+        },
+        "a tampered locked-deck ID");
+    require_runner_rejects_mutated_session(
+        [](auto& session) {
+            session.assignment.resolved_locked_deck_sha256 = "tampered.sha256";
+        },
+        "a tampered locked-deck SHA256");
+    require_runner_rejects_mutated_session(
+        [](auto& session) {
+            session.assignment.deck_role = DeckRole::FirstLockedDeck;
+        },
+        "a tampered deck role");
+
+    const auto value = fixture();
+    auto duplicate_config = make_config(value);
+    auto duplicate_assignment = assignment_for(value.assignments, 0);
+    duplicate_assignment.player = 1;
+    duplicate_assignment.seat_role = SeatRole::NonStartingPlayer;
+    duplicate_assignment.policy_role = PolicyRole::Opponent;
+    duplicate_assignment.participant_policy_assignment_id =
+        compute_participant_policy_assignment_id(duplicate_assignment);
+    const auto duplicate_binding = make_teacher_policy_binding_v2(value.salamangreat);
+    auto duplicate_session = create_teacher_policy_session_v2(
+        value.salamangreat, duplicate_binding, value.salamangreat_artifact,
+        duplicate_assignment);
+    require(static_cast<bool>(duplicate_session), "duplicate-deck fixture session was invalid");
+    duplicate_config.sessions[1] = std::move(*duplicate_session.value);
+    require(!TeacherRunnerV3::create(std::move(duplicate_config)),
+            "V3 runner accepted two sessions for one locked deck role");
 }
 
 void test_v2_domain_rejection() {
@@ -311,7 +377,7 @@ void test_hiita_session_lifecycle(const bool relabel_first_material) {
                     initial_material.submission_token,
             "V3 runner did not select the first V2 material");
     const auto first_key = first_material_selection.value->public_action_key;
-    const auto pending_first = runner.session(0).policy.pending_ranking_result();
+    const auto pending_first = runner.session(0)->policy.pending_ranking_result();
     require(pending_first.has_value(), "V2 first-material ranking was not retained");
     require(!runner.select_action(initial_material),
             "V3 runner allowed a second selection before commit");
@@ -332,11 +398,11 @@ void test_hiita_session_lifecycle(const bool relabel_first_material) {
                 second_selection.value->contract_id == second_material.contract_id &&
                 second_selection.value->public_action_key == remaining.public_action_key,
             "V3 runner did not select the remaining V2 material");
-    const auto pending_second = runner.session(0).policy.pending_ranking_result();
+    const auto pending_second = runner.session(0)->policy.pending_ranking_result();
     require(pending_second.has_value(), "V2 second-material ranking was not retained");
     commit_selected(runner, second_material, second_selection.value->public_action_key);
 
-    const auto committed_state = runner.session(0).policy.state();
+    const auto committed_state = runner.session(0)->policy.state();
     require(committed_state.last_accepted_decision_index ==
                 std::optional<std::uint64_t>{12} &&
                 !runner.has_pending_proposal(),
@@ -346,6 +412,8 @@ void test_hiita_session_lifecycle(const bool relabel_first_material) {
 void test_rejection_preserves_state_and_cross_participant_rejects() {
     const auto value = fixture();
     auto runner = make_runner(value);
+    require(runner.session(2) == nullptr,
+            "V3 runner out-of-range session accessor was not fail-closed");
     const auto idle = frame(10, EnvironmentDecisionKind::IdleCommand, "idle_command",
                             {idle_card_v2(1)}, 48815792);
     auto wrong_perspective = idle;
@@ -354,9 +422,9 @@ void test_rejection_preserves_state_and_cross_participant_rejects() {
             "V3 runner accepted a cross-participant observation");
     const auto selection = runner.select_action(idle);
     require(static_cast<bool>(selection), "V3 rejection fixture could not select");
-    const auto before = runner.session(0).policy.state();
+    const auto before = runner.session(0)->policy.state();
     require(runner.reject_pending_proposal(), "V3 runner did not reject pending proposal");
-    require(runner.session(0).policy.state() == before &&
+    require(runner.session(0)->policy.state() == before &&
                 !runner.has_pending_proposal(),
             "V3 rejection mutated committed V2 state");
 }
@@ -379,8 +447,8 @@ void test_public_equivalence() {
                 left_selection.value->public_action_key ==
                     right_selection.value->public_action_key,
             "public-equivalent worlds produced different V2 selections");
-    const auto left_ranking = left.session(0).policy.pending_ranking_result();
-    const auto right_ranking = right.session(0).policy.pending_ranking_result();
+    const auto left_ranking = left.session(0)->policy.pending_ranking_result();
+    const auto right_ranking = right.session(0)->policy.pending_ranking_result();
     require(left_ranking.has_value() && right_ranking.has_value() &&
                 left_ranking->selected_public_action_key ==
                     right_ranking->selected_public_action_key &&
@@ -396,6 +464,7 @@ void test_public_equivalence() {
 int main() {
     try {
         test_v2_session_provenance_and_rng();
+        test_runner_revalidates_mutable_session_provenance();
         test_v2_domain_rejection();
         test_hiita_session_lifecycle(false);
         test_hiita_session_lifecycle(true);
