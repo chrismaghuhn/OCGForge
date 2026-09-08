@@ -206,6 +206,8 @@ add_library(ygo_trajectory STATIC
     src/trajectory/trajectory_identity_v2.cpp
     src/trajectory/policy_provenance.cpp
     src/trajectory/identity_resolver.cpp
+    src/trajectory/replay_v2.cpp
+    src/trajectory/admission_v2.cpp
     src/trajectory/recorder.cpp
     src/trajectory/shard.cpp
     src/trajectory/restricted_evidence.cpp
@@ -408,6 +410,15 @@ target_include_directories(trusted_trajectory_v2_recorder_test PRIVATE
 target_link_libraries(trusted_trajectory_v2_recorder_test PRIVATE ygo_trajectory)
 add_test(NAME trusted_trajectory_v2_recorder_test
          COMMAND trusted_trajectory_v2_recorder_test)
+
+add_executable(trusted_trajectory_v2_replay_admission_test
+               tests/trajectory/trusted_trajectory_v2_replay_admission_test.cpp)
+target_include_directories(trusted_trajectory_v2_replay_admission_test PRIVATE
+                           "${CMAKE_SOURCE_DIR}/tests/trajectory"
+                           "${CMAKE_SOURCE_DIR}/src/environment")
+target_link_libraries(trusted_trajectory_v2_replay_admission_test PRIVATE ygo_trajectory)
+add_test(NAME trusted_trajectory_v2_replay_admission_test
+         COMMAND trusted_trajectory_v2_replay_admission_test)
 
 add_executable(trajectory_shard_test tests/trajectory/shard_test.cpp)
 target_link_libraries(trajectory_shard_test PRIVATE ygo_trajectory)
