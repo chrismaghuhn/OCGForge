@@ -164,6 +164,8 @@ DecodeResult<DecisionRecordV2> decode_public_decision_record_v2(
 
 std::vector<std::uint8_t> canonical_policy_decision_attribution_bytes(
     const DecisionRecord& value);
+std::vector<std::uint8_t> canonical_policy_decision_attribution_bytes_v2(
+    const DecisionRecordV2& value);
 
 std::vector<std::uint8_t> canonical_episode_closure_bytes(const EpisodeClosure& value);
 std::vector<std::uint8_t> canonical_public_episode_closure_bytes(const EpisodeClosure& value);
@@ -212,5 +214,7 @@ DecodeResult<RestrictedReplayEvidenceV2> decode_restricted_replay_evidence_v2(
 
 std::string public_gameplay_trajectory_id(const EpisodeEnvelope& value);
 std::string trajectory_record_id(const EpisodeEnvelope& value);
+std::string public_gameplay_trajectory_id_v2(const EpisodeEnvelopeV2& value);
+std::string trajectory_record_id_v2(const EpisodeEnvelopeV2& value);
 
 }  // namespace ygo::trajectory

@@ -3631,7 +3631,7 @@ void validate_v2_decision_record(const DecisionRecordV2& value) {
     }
 }
 
-std::vector<std::uint8_t> canonical_policy_decision_attribution_bytes_v2(
+std::vector<std::uint8_t> canonical_policy_decision_attribution_bytes_v2_impl(
     const DecisionRecordV2& value) {
     validate_v2_decision_record(value);
     ByteWriter writer;
@@ -3923,13 +3923,18 @@ void validate_v2_envelope_sequence(const EpisodeEnvelopeV2& value) {
 
 }  // namespace
 
+std::vector<std::uint8_t> canonical_policy_decision_attribution_bytes_v2(
+    const DecisionRecordV2& value) {
+    return canonical_policy_decision_attribution_bytes_v2_impl(value);
+}
+
 std::vector<std::uint8_t> canonical_collection_decision_record_bytes_v2(
     const DecisionRecordV2& value) {
     validate_v2_decision_record(value);
     ByteWriter writer;
     writer.string(kTrustedTrajectoryV2ContractId);
     writer.raw(canonical_public_decision_record_bytes_v2(value));
-    writer.raw(canonical_policy_decision_attribution_bytes_v2(value));
+    writer.raw(canonical_policy_decision_attribution_bytes_v2_impl(value));
     return std::move(writer).take();
 }
 
