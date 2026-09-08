@@ -6,7 +6,12 @@
 #include <string>
 
 #include "ygo/policy/teacher_runner_v3.hpp"
+#include "ygo/trajectory/admission_v2.hpp"
+#include "ygo/trajectory/dataset_manifest_v2.hpp"
 #include "ygo/trajectory/recorder_v2.hpp"
+#include "ygo/trajectory/receipt_v2.hpp"
+#include "ygo/trajectory/restricted_evidence_v2.hpp"
+#include "ygo/trajectory/shard_v2.hpp"
 
 namespace ygo::policy {
 
@@ -32,6 +37,12 @@ struct TeacherRunnerV3TrajectoryConfig final {
 struct TeacherRunnerV3TrajectoryRunResult final {
     std::optional<trajectory::EpisodeEnvelopeV2> envelope;
     std::optional<trajectory::RestrictedReplayEvidenceV2> replay_evidence;
+    std::optional<trajectory::CandidateTrajectoryShardV2> candidate_shard;
+    std::optional<trajectory::RestrictedCollectionEvidenceBundleV2>
+        restricted_collection_evidence;
+    std::optional<trajectory::admission_v2::AdmissionVerification> admission_verification;
+    std::optional<trajectory::VerifiedAdmissionReceiptV2> admission_receipt;
+    std::optional<trajectory::DatasetManifestV2> dataset_manifest;
     std::optional<PolicyError> error;
     std::string diagnostic;
     bool quarantined = false;

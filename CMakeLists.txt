@@ -208,6 +208,10 @@ add_library(ygo_trajectory STATIC
     src/trajectory/identity_resolver.cpp
     src/trajectory/replay_v2.cpp
     src/trajectory/admission_v2.cpp
+    src/trajectory/shard_v2.cpp
+    src/trajectory/restricted_evidence_v2.cpp
+    src/trajectory/receipt_v2.cpp
+    src/trajectory/dataset_manifest_v2.cpp
     src/trajectory/recorder.cpp
     src/trajectory/shard.cpp
     src/trajectory/restricted_evidence.cpp
@@ -551,6 +555,14 @@ target_include_directories(teacher_runner_v3_trusted_trajectory_v2_test PRIVATE
 target_link_libraries(teacher_runner_v3_trusted_trajectory_v2_test PRIVATE ygo_policy)
 add_test(NAME teacher_runner_v3_trusted_trajectory_v2_test
          COMMAND teacher_runner_v3_trusted_trajectory_v2_test)
+
+add_executable(trusted_trajectory_v2_collection_closure_test
+               tests/trajectory/trusted_trajectory_v2_collection_closure_test.cpp)
+target_include_directories(trusted_trajectory_v2_collection_closure_test PRIVATE
+                           "${CMAKE_SOURCE_DIR}/tests/trajectory")
+target_link_libraries(trusted_trajectory_v2_collection_closure_test PRIVATE ygo_policy)
+add_test(NAME trusted_trajectory_v2_collection_closure_test
+         COMMAND trusted_trajectory_v2_collection_closure_test)
 
 add_executable(teacher_explanation_test tests/teacher/teacher_explanation_test.cpp)
 target_link_libraries(teacher_explanation_test PRIVATE ygo_teacher)

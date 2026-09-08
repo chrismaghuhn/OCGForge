@@ -5,6 +5,9 @@
 
 #include "ygo/trajectory/codec.hpp"
 #include "ygo/trajectory/identity_resolver.hpp"
+#include "ygo/trajectory/restricted_evidence_v2.hpp"
+#include "ygo/trajectory/shard_v2.hpp"
+#include "ygo/trace/sha256.hpp"
 
 namespace ygo::trajectory::admission_v2 {
 namespace {
@@ -172,6 +175,116 @@ std::optional<AdmissionVerification> verify_episode_for_admission_v2(
         return std::nullopt;
     } catch (...) {
         set_error(error, "V2 admission threw");
+        return std::nullopt;
+    }
+}
+
+std::optional<AdmissionVerification> verify_collection_for_admission_v2(
+    const CandidateTrajectoryShardV2& shard,
+    const RestrictedCollectionEvidenceBundleV2& restricted_evidence,
+    const std::string_view candidate_shard_artifact_sha256,
+    const std::string_view restricted_evidence_artifact_sha256,
+    const replay_v2::ReplayOptions& options,
+    const ProvenanceResolver& resolver,
+    std::string* error) {
+    try {
+        (void)canonical_candidate_trajectory_shard_bytes_v2(shard);
+        (void)canonical_restricted_collection_evidence_bundle_bytes_v2(
+            restricted_evidence);
+        const auto computed_shard = candidate_shard_artifact_sha256_v2(shard);
+        const auto computed_evidence =
+            restricted_collection_evidence_artifact_sha256_v2(restricted_evidence);
+        if (candidate_shard_artifact_sha256 != computed_shard ||
+            restricted_evidence_artifact_sha256 != computed_evidence ||
+            restricted_evidence.candidate_shard_artifact_sha256 != computed_shard ||
+            shard.entries.empty()) {
+            set_error(error, "V2 collection artifact digest binding is invalid");
+            return std::nullopt;
+        }
+
+        std::vector<AdmissionEntryCommitmentV2> entries;
+        entries.reserve(shard.entries.size());
+        std::size_t interrupted_count = 0;
+        for (const auto& shard_entry : shard.entries) {
+            const auto decoded = decode_episode_envelope_v2(shard_entry.envelope_bytes);
+            if (!decoded) {
+                set_error(error, "V2 shard contains an undecodable envelope");
+                return std::nullopt;
+            }
+            const auto& envelope = *decoded.value;
+            const auto envelope_digest = trace::sha256_bytes(shard_entry.envelope_bytes);
+            std::optional<RestrictedReplayEvidenceV2> evidence;
+            const auto evidence_it = std::lower_bound(
+                restricted_evidence.interrupted_episodes.begin(),
+                restricted_evidence.interrupted_episodes.end(), envelope_digest,
+                [](const auto& entry, const std::string_view key) {
+                    return entry.episode_envelope_sha256 < key;
+                });
+            const bool interrupted =
+                std::holds_alternative<InterruptedClosureV2>(envelope.closure);
+            if (interrupted) {
+                ++interrupted_count;
+                if (evidence_it == restricted_evidence.interrupted_episodes.end() ||
+                    evidence_it->episode_envelope_sha256 != envelope_digest) {
+                    set_error(error, "V2 interrupted envelope lacks restricted evidence");
+                    return std::nullopt;
+                }
+                evidence = evidence_it->evidence;
+            } else if (evidence_it != restricted_evidence.interrupted_episodes.end() &&
+                       evidence_it->episode_envelope_sha256 == envelope_digest) {
+                set_error(error, "V2 non-interrupted envelope has interruption evidence");
+                return std::nullopt;
+            }
+
+            std::string episode_error;
+            const auto verified = verify_episode_for_admission_v2(
+                envelope, evidence, options, resolver, &episode_error);
+            if (!verified.has_value()) {
+                set_error(error, std::move(episode_error));
+                return std::nullopt;
+            }
+            AdmissionEntryCommitmentV2 commitment;
+            commitment.trajectory_record_id = verified->trajectory_record_id();
+            commitment.public_gameplay_trajectory_id =
+                verified->public_gameplay_trajectory_id();
+            commitment.environment_semantic_id = verified->environment_semantic_id();
+            commitment.episode_semantic_id = verified->episode_semantic_id();
+            commitment.episode_envelope_sha256 = envelope_digest;
+            commitment.closure_kind = interrupted ? 1 : 0;
+            entries.push_back(std::move(commitment));
+        }
+
+        if (restricted_evidence.interrupted_episodes.size() != interrupted_count) {
+            set_error(error, "V2 restricted evidence contains an unreferenced interrupted episode");
+            return std::nullopt;
+        }
+        std::sort(entries.begin(), entries.end(), [](const auto& left, const auto& right) {
+            return left.trajectory_record_id < right.trajectory_record_id;
+        });
+        if (std::adjacent_find(
+                entries.begin(), entries.end(), [](const auto& left, const auto& right) {
+                    return left.trajectory_record_id == right.trajectory_record_id;
+                }) != entries.end()) {
+            set_error(error, "V2 collection admission contains a duplicate trajectory record ID");
+            return std::nullopt;
+        }
+        if (entries.empty()) {
+            set_error(error, "V2 collection admission produced no commitments");
+            return std::nullopt;
+        }
+        const auto first_public_gameplay_id = entries.front().public_gameplay_trajectory_id;
+        const auto first_trajectory_record_id = entries.front().trajectory_record_id;
+        const auto first_environment_id = entries.front().environment_semantic_id;
+        const auto first_episode_id = entries.front().episode_semantic_id;
+        return AdmissionVerification(
+            first_public_gameplay_id, first_trajectory_record_id, first_environment_id,
+            first_episode_id, 0, std::string(candidate_shard_artifact_sha256),
+            std::string(restricted_evidence_artifact_sha256), std::move(entries));
+    } catch (const std::exception& exception) {
+        set_error(error, exception.what());
+        return std::nullopt;
+    } catch (...) {
+        set_error(error, "V2 collection admission threw");
         return std::nullopt;
     }
 }
