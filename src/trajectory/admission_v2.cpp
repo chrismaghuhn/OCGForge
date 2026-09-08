@@ -204,7 +204,7 @@ std::optional<AdmissionVerification> verify_collection_for_admission_v2(
 
         std::vector<AdmissionEntryCommitmentV2> entries;
         entries.reserve(shard.entries.size());
-        std::string previous_record_id;
+        std::size_t interrupted_count = 0;
         for (const auto& shard_entry : shard.entries) {
             const auto decoded = decode_episode_envelope_v2(shard_entry.envelope_bytes);
             if (!decoded) {
@@ -223,6 +223,7 @@ std::optional<AdmissionVerification> verify_collection_for_admission_v2(
             const bool interrupted =
                 std::holds_alternative<InterruptedClosureV2>(envelope.closure);
             if (interrupted) {
+                ++interrupted_count;
                 if (evidence_it == restricted_evidence.interrupted_episodes.end() ||
                     evidence_it->episode_envelope_sha256 != envelope_digest) {
                     set_error(error, "V2 interrupted envelope lacks restricted evidence");
@@ -250,15 +251,23 @@ std::optional<AdmissionVerification> verify_collection_for_admission_v2(
             commitment.episode_semantic_id = verified->episode_semantic_id();
             commitment.episode_envelope_sha256 = envelope_digest;
             commitment.closure_kind = interrupted ? 1 : 0;
-            if (!previous_record_id.empty() &&
-                commitment.trajectory_record_id <= previous_record_id) {
-                set_error(error, "V2 shard entries do not produce sorted record identities");
-                return std::nullopt;
-            }
-            previous_record_id = commitment.trajectory_record_id;
             entries.push_back(std::move(commitment));
         }
 
+        if (restricted_evidence.interrupted_episodes.size() != interrupted_count) {
+            set_error(error, "V2 restricted evidence contains an unreferenced interrupted episode");
+            return std::nullopt;
+        }
+        std::sort(entries.begin(), entries.end(), [](const auto& left, const auto& right) {
+            return left.trajectory_record_id < right.trajectory_record_id;
+        });
+        if (std::adjacent_find(
+                entries.begin(), entries.end(), [](const auto& left, const auto& right) {
+                    return left.trajectory_record_id == right.trajectory_record_id;
+                }) != entries.end()) {
+            set_error(error, "V2 collection admission contains a duplicate trajectory record ID");
+            return std::nullopt;
+        }
         if (entries.empty()) {
             set_error(error, "V2 collection admission produced no commitments");
             return std::nullopt;

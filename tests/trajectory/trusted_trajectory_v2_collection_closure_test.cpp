@@ -55,10 +55,10 @@ const ParticipantPolicyAssignment& assignment_for_player(
     return *it;
 }
 
-Fixture fixture() {
+Fixture fixture(const std::uint64_t root_seed = 2) {
     Fixture result;
     result.episode_spec.contract_id = std::string(kEpisodicEnvironmentV3ContractId);
-    result.episode_spec.root_seed = 2;
+    result.episode_spec.root_seed = root_seed;
     result.episode_spec.seat_assignment = SeatAssignment::Normal;
     result.episode_spec.starting_player = 0;
     result.run_control.engine_process_budget = 512;
@@ -105,8 +105,8 @@ struct Collected final {
     replay_v2::ReplayOptions replay_options;
 };
 
-Collected collect() {
-    auto value = fixture();
+Collected collect(const std::uint64_t root_seed = 2) {
+    auto value = fixture(root_seed);
     replay_v2::ReplayOptions options;
     options.cancellation_source = value.run_control.cancellation.source;
     auto created = TeacherRunnerV3TrajectoryRunner::create(
@@ -305,6 +305,73 @@ void test_tamper_and_missing_evidence_rejection() {
             "V2 dataset validation accepted a tampered trajectory identity");
 }
 
+void test_multi_episode_admission_order_and_evidence_binding() {
+    const auto first = collect(2);
+    const auto second = collect(3);
+
+    CandidateTrajectoryShardV2 shard;
+    shard.entries.push_back(first.result.candidate_shard->entries.front());
+    shard.entries.push_back(second.result.candidate_shard->entries.front());
+    std::sort(shard.entries.begin(), shard.entries.end(),
+              [](const auto& left, const auto& right) {
+                  return left.episode_envelope_sha256 < right.episode_envelope_sha256;
+              });
+
+    std::vector<std::string> record_ids_in_shard_order;
+    for (const auto& entry : shard.entries) {
+        const auto decoded = decode_episode_envelope_v2(entry.envelope_bytes);
+        require(static_cast<bool>(decoded),
+                "A5 multi-episode fixture contains an undecodable V2 envelope");
+        record_ids_in_shard_order.push_back(trajectory_record_id_v2(*decoded.value));
+    }
+    require(record_ids_in_shard_order.size() == 2 &&
+                record_ids_in_shard_order[0] > record_ids_in_shard_order[1],
+            "A5 multi-episode fixture did not separate shard and record-ID ordering");
+    require(first.result.replay_evidence.has_value() &&
+                second.result.replay_evidence.has_value(),
+            "A5 multi-episode fixture lacks restricted replay evidence");
+
+    RestrictedCollectionEvidenceBundleV2 evidence;
+    evidence.candidate_shard_artifact_sha256 = candidate_shard_artifact_sha256_v2(shard);
+    evidence.interrupted_episodes = {
+        {first.result.candidate_shard->entries.front().episode_envelope_sha256,
+         *first.result.replay_evidence},
+        {second.result.candidate_shard->entries.front().episode_envelope_sha256,
+         *second.result.replay_evidence}};
+    std::sort(evidence.interrupted_episodes.begin(), evidence.interrupted_episodes.end(),
+              [](const auto& left, const auto& right) {
+                  return left.episode_envelope_sha256 < right.episode_envelope_sha256;
+              });
+
+    const auto shard_id = candidate_shard_artifact_sha256_v2(shard);
+    const auto evidence_id = restricted_collection_evidence_artifact_sha256_v2(evidence);
+    std::string error;
+    const auto verification = admission_v2::verify_collection_for_admission_v2(
+        shard, evidence, shard_id, evidence_id, first.replay_options,
+        make_production_policy_provenance_resolver(), &error);
+    require(verification.has_value(), "A5 multi-episode admission rejected valid entries: " + error);
+    require(verification->entries().size() == 2 &&
+                verification->entries()[0].trajectory_record_id <
+                    verification->entries()[1].trajectory_record_id,
+            "A5 collection commitments were not sorted by trajectory record identity");
+
+    auto extra_evidence = evidence;
+    extra_evidence.interrupted_episodes.push_back(
+        {std::string(64, 'f'), *first.result.replay_evidence});
+    std::sort(extra_evidence.interrupted_episodes.begin(),
+              extra_evidence.interrupted_episodes.end(),
+              [](const auto& left, const auto& right) {
+                  return left.episode_envelope_sha256 < right.episode_envelope_sha256;
+              });
+    const auto extra_evidence_id =
+        restricted_collection_evidence_artifact_sha256_v2(extra_evidence);
+    require(!admission_v2::verify_collection_for_admission_v2(
+                 shard, extra_evidence, shard_id, extra_evidence_id, first.replay_options,
+                 make_production_policy_provenance_resolver(), &error)
+                  .has_value(),
+            "A5 admission accepted unreferenced restricted evidence");
+}
+
 void test_adapter_failure_and_quarantine_boundaries() {
     const auto failed = run_adapter_scenario(
         ygo::policy::detail::TeacherRunnerV3TrajectoryTestScenario::Failure);
@@ -345,6 +412,7 @@ int main() {
         test_clean_real_collection_chain();
         test_historical_and_mixed_downstream_rejection();
         test_tamper_and_missing_evidence_rejection();
+        test_multi_episode_admission_order_and_evidence_binding();
         test_adapter_failure_and_quarantine_boundaries();
         const auto collected = collect();
         std::cout << "A5_SHARD_SHA256="
