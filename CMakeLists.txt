@@ -202,6 +202,8 @@ endif()
 
 add_library(ygo_trajectory STATIC
     src/trajectory/codec.cpp
+    src/trajectory/recorder_v2.cpp
+    src/trajectory/trajectory_identity_v2.cpp
     src/trajectory/policy_provenance.cpp
     src/trajectory/identity_resolver.cpp
     src/trajectory/recorder.cpp
@@ -387,9 +389,25 @@ add_executable(trajectory_codec_test tests/trajectory/codec_test.cpp)
 target_link_libraries(trajectory_codec_test PRIVATE ygo_trajectory)
 add_test(NAME trajectory_codec_test COMMAND trajectory_codec_test)
 
+add_executable(trusted_trajectory_v2_codec_test
+               tests/trajectory/trusted_trajectory_v2_codec_test.cpp)
+target_include_directories(trusted_trajectory_v2_codec_test PRIVATE
+                           "${CMAKE_SOURCE_DIR}/tests/trajectory")
+target_link_libraries(trusted_trajectory_v2_codec_test PRIVATE ygo_trajectory)
+add_test(NAME trusted_trajectory_v2_codec_test
+         COMMAND trusted_trajectory_v2_codec_test)
+
 add_executable(trajectory_recorder_test tests/trajectory/recorder_test.cpp)
 target_link_libraries(trajectory_recorder_test PRIVATE ygo_trajectory)
 add_test(NAME trajectory_recorder_test COMMAND trajectory_recorder_test)
+
+add_executable(trusted_trajectory_v2_recorder_test
+               tests/trajectory/trusted_trajectory_v2_recorder_test.cpp)
+target_include_directories(trusted_trajectory_v2_recorder_test PRIVATE
+                           "${CMAKE_SOURCE_DIR}/tests/trajectory")
+target_link_libraries(trusted_trajectory_v2_recorder_test PRIVATE ygo_trajectory)
+add_test(NAME trusted_trajectory_v2_recorder_test
+         COMMAND trusted_trajectory_v2_recorder_test)
 
 add_executable(trajectory_shard_test tests/trajectory/shard_test.cpp)
 target_link_libraries(trajectory_shard_test PRIVATE ygo_trajectory)

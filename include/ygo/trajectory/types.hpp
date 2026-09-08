@@ -11,10 +11,15 @@
 namespace ygo::trajectory {
 
 inline constexpr char kTrustedTrajectoryContractId[] = "ocgforge.trusted_trajectory.v1";
+inline constexpr char kTrustedTrajectoryV2ContractId[] = "ocgforge.trusted_trajectory.v2";
 inline constexpr char kPolicyProvenanceContractId[] = "ocgforge.policy_provenance.v1";
 inline constexpr char kPublicGameplayIdentityDomain[] =
     "ocgforge.public_gameplay_trajectory_identity.v1";
+inline constexpr char kPublicGameplayIdentityV2Domain[] =
+    "ocgforge.public_gameplay_trajectory_identity.v2";
 inline constexpr char kTrajectoryRecordIdentityDomain[] = "ocgforge.trajectory_record_identity.v1";
+inline constexpr char kTrajectoryRecordIdentityV2Domain[] =
+    "ocgforge.trajectory_record_identity.v2";
 inline constexpr char kPolicyArtifactIdentityDomain[] = "ocgforge.policy_artifact_identity.v1";
 inline constexpr char kParticipantAssignmentIdentityDomain[] =
     "ocgforge.participant_policy_assignment_identity.v1";
@@ -27,6 +32,8 @@ inline constexpr char kPolicyRngDecisionProvenanceDomain[] =
 inline constexpr char kNoPolicyRngContractId[] = "ocgforge.no_policy_rng.v1";
 inline constexpr char kRestrictedReplayEvidenceSchemaId[] =
     "ocgforge.restricted_replay_evidence.v1";
+inline constexpr char kRestrictedReplayEvidenceV2SchemaId[] =
+    "ocgforge.restricted_replay_evidence.v2";
 
 enum class PolicyKind : std::uint8_t {
     RandomLegal = 0,
@@ -236,6 +243,90 @@ struct EpisodeEnvelope final {
 struct RestrictedReplayEvidence final {
     std::string v2_contract_id = std::string(environment::kEpisodicEnvironmentV2ContractId);
     std::string episode_semantic_id;
+    environment::InterruptionReason interruption_reason =
+        environment::InterruptionReason::AdministrativeCancel;
+    std::uint64_t engine_process_budget = 0;
+    std::uint64_t semantic_action_budget = 0;
+    std::uint64_t observed_engine_process_count = 0;
+    std::uint64_t observed_semantic_action_count = 0;
+    std::uint64_t final_engine_step_index = 0;
+};
+
+struct EpisodeManifestV2 final {
+    std::string trusted_trajectory_contract_id = kTrustedTrajectoryV2ContractId;
+    std::string episodic_environment_contract_id =
+        std::string(environment::kEpisodicEnvironmentV3ContractId);
+    std::string environment_semantic_id;
+    std::vector<std::uint8_t> environment_identity_input;
+    std::string episode_identity_schema_id = std::string(environment::kEpisodeIdentitySchemaId);
+    std::string episode_semantic_id;
+    std::vector<std::uint8_t> episode_identity_input;
+    PolicyProvenanceEnvelope policy_provenance;
+    CollectionDisposition collection_disposition;
+};
+
+struct PublicFrameSnapshotV2 final {
+    std::string episodic_environment_contract_id =
+        std::string(environment::kEpisodicEnvironmentV3ContractId);
+    std::string episode_semantic_id;
+    std::string public_semantic_decision_id;
+    std::uint64_t decision_index = 0;
+    std::uint8_t acting_player = 0;
+    environment::PublicEnvironmentObservation public_observation;
+    std::string public_observation_digest;
+    environment::EnvironmentDecisionRequest request;
+    std::string public_candidate_domain_digest;
+};
+
+struct DecisionRecordV2 final {
+    PublicFrameSnapshotV2 frame;
+    std::string selected_public_action_key;
+    TransitionClass transition_class = TransitionClass::AtomicEngineResponse;
+    Successor successor;
+    std::string acting_policy_assignment_id;
+    PolicyRngDecisionProvenance policy_rng_decision_provenance;
+};
+
+struct TerminalClosureV2 final {
+    std::uint8_t winner = 255;
+    std::uint8_t win_reason = 255;
+    std::uint64_t semantic_action_count = 0;
+    std::optional<std::uint64_t> last_decision_index;
+    environment::PublicEnvironmentObservation terminal_view_player_0;
+    std::string terminal_view_player_0_digest;
+    environment::PublicEnvironmentObservation terminal_view_player_1;
+    std::string terminal_view_player_1_digest;
+};
+
+struct InterruptedClosureV2 final {
+    std::uint64_t record_count = 0;
+    std::optional<PublicFrameSnapshotV2> pending_unacted_frame;
+};
+
+struct FailedClosureV2 final {
+    environment::FailureCode failure_code = environment::FailureCode::InvalidAuthoritativeState;
+    environment::FailureStage failure_stage = environment::FailureStage::Validation;
+    bool mutation_may_have_occurred = false;
+    std::uint64_t record_count = 0;
+};
+
+using EpisodeClosureV2 =
+    std::variant<TerminalClosureV2, InterruptedClosureV2, FailedClosureV2>;
+
+struct EpisodeEnvelopeV2 final {
+    EpisodeManifestV2 manifest;
+    std::vector<DecisionRecordV2> records;
+    EpisodeClosureV2 closure;
+};
+
+struct RestrictedReplayEvidenceV2 final {
+    std::string restricted_replay_evidence_contract_id =
+        kRestrictedReplayEvidenceV2SchemaId;
+    std::string trusted_trajectory_contract_id = kTrustedTrajectoryV2ContractId;
+    std::string episodic_environment_contract_id =
+        std::string(environment::kEpisodicEnvironmentV3ContractId);
+    std::string episode_semantic_id;
+    std::uint8_t closure_kind = 1;
     environment::InterruptionReason interruption_reason =
         environment::InterruptionReason::AdministrativeCancel;
     std::uint64_t engine_process_budget = 0;
