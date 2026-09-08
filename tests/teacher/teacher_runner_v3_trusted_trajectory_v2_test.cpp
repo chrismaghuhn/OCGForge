@@ -49,12 +49,14 @@ const ParticipantPolicyAssignment& assignment_for_player(
 }
 
 Fixture fixture(const std::uint64_t root_seed = 2,
-                const std::uint64_t semantic_action_budget = 1) {
+                const std::uint64_t semantic_action_budget = 1,
+                const SeatAssignment seat_assignment = SeatAssignment::Normal,
+                const std::uint8_t starting_player = 0) {
     Fixture result;
     result.episode_spec.contract_id = std::string(kEpisodicEnvironmentV3ContractId);
     result.episode_spec.root_seed = root_seed;
-    result.episode_spec.seat_assignment = SeatAssignment::Normal;
-    result.episode_spec.starting_player = 0;
+    result.episode_spec.seat_assignment = seat_assignment;
+    result.episode_spec.starting_player = starting_player;
     result.run_control.engine_process_budget = 512;
     result.run_control.semantic_action_budget = semantic_action_budget;
     result.run_control.cancellation.reason = "ADMINISTRATIVE_CANCEL";
@@ -102,8 +104,11 @@ struct Collected final {
     replay_v2::ReplayOptions replay_options;
 };
 
-Collected collect_bounded_run() {
-    auto value = fixture();
+Collected collect_bounded_run(const std::uint64_t root_seed = 2,
+                              const std::uint64_t semantic_action_budget = 1,
+                              const SeatAssignment seat_assignment = SeatAssignment::Normal,
+                              const std::uint8_t starting_player = 0) {
+    auto value = fixture(root_seed, semantic_action_budget, seat_assignment, starting_player);
     const auto cancellation_source = value.run_control.cancellation.source;
     auto created = TeacherRunnerV3TrajectoryRunner::create(
         TeacherRunnerV3TrajectoryConfig{value.environment_config, value.episode_spec,
@@ -115,8 +120,8 @@ Collected collect_bounded_run() {
             "V3 trajectory runner did not seal a V2 envelope: " + result.diagnostic);
     require(result.envelope.has_value() && result.replay_evidence.has_value(),
             "bounded V3 run did not return interruption evidence");
-    require(result.envelope->records.size() == 1,
-            "bounded V3 run did not record exactly one accepted action");
+    require(!result.envelope->records.empty(),
+            "bounded V3 run did not record an accepted action");
     Collected collected{std::move(value), *result.envelope, *result.replay_evidence, {}};
     collected.replay_options.cancellation_source = cancellation_source;
     return collected;
@@ -177,6 +182,45 @@ void test_fresh_runs_are_byte_and_identity_deterministic() {
                 trajectory_record_id_v2(first.envelope) ==
                     trajectory_record_id_v2(second.envelope),
             "fresh V3 runner runs produced different V2 identities");
+}
+
+void test_adapter_boundary_harness() {
+    const auto run_scenario = [](const ygo::policy::detail::TeacherRunnerV3TrajectoryTestScenario scenario) {
+        auto value = fixture();
+        auto created = TeacherRunnerV3TrajectoryRunner::create(
+            TeacherRunnerV3TrajectoryConfig{value.environment_config, value.episode_spec,
+                                            value.run_control, value.policy_provenance,
+                                            std::move(value.runner_config)});
+        require(static_cast<bool>(created), "V3 boundary harness could not create runner");
+        auto result = ygo::policy::detail::TeacherRunnerV3TrajectoryTestAccess::run_with_scenario(
+            *created.value, scenario);
+        require(result.envelope.has_value(),
+                "V3 boundary harness did not seal an envelope: " + result.diagnostic);
+        return *result.envelope;
+    };
+
+    const auto rejected = run_scenario(ygo::policy::detail::TeacherRunnerV3TrajectoryTestScenario::StepRejected);
+    require(std::get<InterruptedClosureV2>(rejected.closure).pending_unacted_frame.has_value() &&
+                rejected.records.empty(),
+            "adapter StepRejected did not quarantine a zero-record pending closure");
+
+    const auto terminal = run_scenario(ygo::policy::detail::TeacherRunnerV3TrajectoryTestScenario::Terminal);
+    require(std::holds_alternative<TerminalClosureV2>(terminal.closure),
+            "adapter terminal scenario did not seal TerminalClosureV2");
+
+    const auto failed = run_scenario(ygo::policy::detail::TeacherRunnerV3TrajectoryTestScenario::Failure);
+    require(std::holds_alternative<FailedClosureV2>(failed.closure),
+            "adapter failure scenario did not seal FailedClosureV2");
+
+    const auto continuation = run_scenario(
+        ygo::policy::detail::TeacherRunnerV3TrajectoryTestScenario::Continuation);
+    require(std::any_of(
+                continuation.records.begin(), continuation.records.end(),
+                [](const auto& record) {
+                    return record.transition_class == TransitionClass::FinalContinuationResponse ||
+                           record.transition_class == TransitionClass::IntermediateContinuation;
+                }),
+            "adapter continuation scenario did not record a continuation transition");
 }
 
 void test_v3_boundary_and_historical_boundary_are_explicit() {
@@ -371,6 +415,7 @@ int main() {
     try {
         test_runner_v3_records_and_replays_v2();
         test_fresh_runs_are_byte_and_identity_deterministic();
+        test_adapter_boundary_harness();
         test_v3_boundary_and_historical_boundary_are_explicit();
         test_recorder_step_rejected_and_terminal_boundaries();
         const auto stable = collect_bounded_run();

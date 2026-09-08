@@ -4,8 +4,10 @@
 #include <string>
 #include <utility>
 #include <variant>
+#include <vector>
 
 #include "runner_shared.hpp"
+#include "ygo/environment/public_action_identity.hpp"
 #include "ygo/policy/production_provenance.hpp"
 #include "ygo/trajectory/identity_resolver.hpp"
 
@@ -72,6 +74,107 @@ TeacherRunnerV3TrajectoryRunResult failed_result(
     TeacherRunnerV3TrajectoryRunResult result;
     result.error = std::move(policy_error);
     result.diagnostic = std::move(message);
+    return result;
+}
+
+environment::DecisionFrame test_continuation_frame(
+    const environment::DecisionFrame& current) {
+    auto result = current;
+    result.request.kind = environment::EnvironmentDecisionKind::UnselectCard;
+    result.request.player = current.acting_player;
+    result.request.continuation.reset();
+    environment::EnvironmentContinuationView continuation;
+    continuation.continuation_kind = "unordered";
+    continuation.remaining_indices = {0};
+    continuation.available_mask = 1;
+    continuation.max_count = 1;
+    continuation.can_finish = true;
+    result.request.continuation = continuation;
+    environment::EnvironmentActionCandidate finish;
+    finish.action_kind = environment::EnvironmentActionKind::Finish;
+    finish.continuation_operation = "finish";
+    finish.submits_engine_response = true;
+    environment::PublicActionKeyInput key;
+    key.action_kind = "finish";
+    key.continuation_operation = "finish";
+    finish.public_action_key = environment::public_action_key_v2(key);
+    result.request.candidates = {finish};
+    std::vector<std::string> keys = {finish.public_action_key};
+    result.public_candidate_domain_digest = environment::public_candidate_domain_digest_v2(
+        "unselect_card", keys);
+    environment::PublicSemanticDecisionIdentityInput identity;
+    identity.episode_semantic_id = result.episode_semantic_id;
+    identity.decision_index = result.decision_index;
+    identity.acting_player = result.acting_player;
+    identity.request_kind = "unselect_card";
+    identity.public_observation_digest = result.public_observation_digest;
+    identity.public_candidate_domain_digest = result.public_candidate_domain_digest;
+    result.public_semantic_decision_id = environment::public_semantic_decision_id_v2(identity);
+    return result;
+}
+
+trajectory::TerminalViews test_terminal_views(
+    const environment::DecisionFrame& frame) {
+    auto player_zero = frame.public_observation;
+    auto player_one = frame.public_observation;
+    player_zero.perspective_player = 0;
+    player_zero.decision_context.player = std::uint8_t{0};
+    player_one.perspective_player = 1;
+    player_one.decision_context.player = std::uint8_t{1};
+    return trajectory::TerminalViews{player_zero, player_one};
+}
+
+environment::EpisodeTerminal test_terminal(
+    const environment::DecisionFrame& frame) {
+    environment::EpisodeTerminal result;
+    result.contract_id = std::string(environment::kEpisodicEnvironmentV3ContractId);
+    result.episode_semantic_id = frame.episode_semantic_id;
+    result.winner = 0;
+    result.win_reason = 1;
+    result.semantic_action_count = 1;
+    result.last_decision_index = frame.decision_index;
+    return result;
+}
+
+environment::EpisodeFailure test_failure(
+    const environment::DecisionFrame& frame) {
+    environment::EpisodeFailure result;
+    result.contract_id = std::string(environment::kEpisodicEnvironmentV3ContractId);
+    result.episode_semantic_id = frame.episode_semantic_id;
+    result.failure_code = environment::FailureCode::CoreError;
+    result.failure_stage = environment::FailureStage::Advance;
+    result.semantic_action_count = 1;
+    result.last_public_semantic_decision_id = frame.public_semantic_decision_id;
+    return result;
+}
+
+environment::StepRejected test_rejection(
+    const environment::DecisionFrame& frame) {
+    environment::StepRejected result;
+    result.contract_id = std::string(environment::kEpisodicEnvironmentV3ContractId);
+    result.rejection_code = environment::RejectionCode::StaleSubmissionToken;
+    result.current_episode_semantic_id = frame.episode_semantic_id;
+    result.current_public_semantic_decision_id = frame.public_semantic_decision_id;
+    result.current_public_candidate_domain_digest = frame.public_candidate_domain_digest;
+    result.authoritative_state_unchanged = true;
+    return result;
+}
+
+environment::EpisodeInterrupted test_interruption(
+    const environment::DecisionFrame& frame,
+    const environment::RunControl& control) {
+    environment::EpisodeInterrupted result;
+    result.contract_id = std::string(environment::kEpisodicEnvironmentV3ContractId);
+    result.episode_semantic_id = frame.episode_semantic_id;
+    result.reason = environment::InterruptionReason::SemanticActionBudget;
+    result.semantic_action_count = 1;
+    result.last_decision_index = frame.decision_index;
+    result.last_public_semantic_decision_id = frame.public_semantic_decision_id;
+    result.final_engine_step_index = frame.engine_step_index + 1;
+    result.run_control_evidence.engine_process_budget = control.engine_process_budget;
+    result.run_control_evidence.semantic_action_budget = control.semantic_action_budget;
+    result.run_control_evidence.engine_process_count = frame.engine_step_index + 1;
+    result.run_control_evidence.semantic_action_count = 1;
     return result;
 }
 
@@ -147,7 +250,8 @@ TeacherRunnerV3TrajectoryRunResult TeacherRunnerV3TrajectoryRunner::failure(
     return failed_result(std::move(message), std::move(policy_error));
 }
 
-TeacherRunnerV3TrajectoryRunResult TeacherRunnerV3TrajectoryRunner::run() noexcept {
+TeacherRunnerV3TrajectoryRunResult TeacherRunnerV3TrajectoryRunner::run_impl(
+    const std::optional<detail::TeacherRunnerV3TrajectoryTestScenario> test_scenario) noexcept {
     if (has_run_) {
         return failure("V3 trajectory runner can only execute one run");
     }
@@ -159,6 +263,17 @@ TeacherRunnerV3TrajectoryRunResult TeacherRunnerV3TrajectoryRunner::run() noexce
             return failure("V3 reset was rejected");
         }
         Boundary boundary = reset_accepted->next;
+        environment::ResetAccepted recording_reset = *reset_accepted;
+        if (test_scenario.has_value() &&
+            *test_scenario == detail::TeacherRunnerV3TrajectoryTestScenario::Continuation) {
+            const auto* reset_frame = std::get_if<environment::DecisionFrame>(&boundary);
+            if (reset_frame == nullptr) {
+                return failure("V3 continuation test scenario lacks an initial frame");
+            }
+            const auto synthetic_frame = test_continuation_frame(*reset_frame);
+            recording_reset.next = synthetic_frame;
+            boundary = synthetic_frame;
+        }
         std::optional<trajectory::TerminalViews> terminal_views;
         if (std::holds_alternative<environment::EpisodeTerminal>(boundary)) {
             terminal_views = detail::terminal_views_for_environment(*environment_);
@@ -167,7 +282,7 @@ TeacherRunnerV3TrajectoryRunResult TeacherRunnerV3TrajectoryRunner::run() noexce
             }
         }
         std::string recorder_error;
-        if (!recorder_->on_reset_accepted(*reset_accepted, terminal_views, &recorder_error)) {
+        if (!recorder_->on_reset_accepted(recording_reset, terminal_views, &recorder_error)) {
             return failure("V2 recorder rejected V3 reset: " + recorder_error);
         }
         if (recorder_->lifecycle() == trajectory::RecorderLifecycle::Closed) {
@@ -194,6 +309,49 @@ TeacherRunnerV3TrajectoryRunResult TeacherRunnerV3TrajectoryRunner::run() noexce
                 !frame->submission_token.valid()) {
                 return failure("V3 trajectory runner reached an invalid public frame");
             }
+            if (test_scenario.has_value() &&
+                *test_scenario == detail::TeacherRunnerV3TrajectoryTestScenario::Continuation &&
+                recorder_->records().empty()) {
+                const auto synthetic_frame = test_continuation_frame(*frame);
+                const auto selection = runner_.select(synthetic_frame);
+                if (!selection || selection.value->rng_cursor.has_value()) {
+                    return failure("V3 continuation test scenario could not select a synthetic frame",
+                                   selection.error);
+                }
+                const auto* session = runner_.session(synthetic_frame.acting_player);
+                if (session == nullptr) {
+                    return failure("V3 continuation test scenario lacks the acting session");
+                }
+                environment::StepAccepted accepted;
+                accepted.transition.episode_semantic_id = synthetic_frame.episode_semantic_id;
+                accepted.transition.public_semantic_decision_id =
+                    synthetic_frame.public_semantic_decision_id;
+                accepted.transition.decision_index = synthetic_frame.decision_index;
+                accepted.transition.selected_public_action_key =
+                    selection.value->public_action_key;
+                accepted.transition.core_response_submitted = true;
+                accepted.next = test_interruption(synthetic_frame, config_.run_control);
+                if (!runner_.commit(accepted)) {
+                    return failure("V3 continuation test scenario could not commit");
+                }
+                const auto attribution = detail::make_policy_rng_attribution(
+                    synthetic_frame, session->execution_binding(), *selection.value);
+                if (!recorder_->on_step_accepted(
+                        accepted, attribution, std::nullopt, &recorder_error)) {
+                    return failure("V2 recorder rejected synthetic continuation: " +
+                                   recorder_error);
+                }
+                TeacherRunnerV3TrajectoryRunResult result;
+                result.envelope = recorder_->seal(&recorder_error);
+                result.replay_evidence = evidence_for_interruption(
+                    std::get<environment::EpisodeInterrupted>(accepted.next));
+                if (!result.envelope.has_value()) {
+                    return failure("V2 recorder could not seal synthetic continuation: " +
+                                   recorder_error);
+                }
+                return result;
+            }
+
             const auto selection = runner_.select(*frame);
             if (!selection) {
                 return failure(
@@ -217,7 +375,37 @@ TeacherRunnerV3TrajectoryRunResult TeacherRunnerV3TrajectoryRunner::run() noexce
                 frame->episode_semantic_id, frame->public_semantic_decision_id,
                 frame->submission_token, selection.value->public_action_key};
             const auto pre_rejection_frame = *frame;
-            const auto stepped = environment_->step(action);
+            environment::StepResult stepped;
+            if (test_scenario.has_value() && recorder_->records().empty() &&
+                *test_scenario == detail::TeacherRunnerV3TrajectoryTestScenario::StepRejected) {
+                stepped = test_rejection(*frame);
+            } else if (test_scenario.has_value() && recorder_->records().empty() &&
+                       *test_scenario == detail::TeacherRunnerV3TrajectoryTestScenario::Terminal) {
+                environment::StepAccepted synthetic;
+                synthetic.transition.episode_semantic_id = frame->episode_semantic_id;
+                synthetic.transition.public_semantic_decision_id =
+                    frame->public_semantic_decision_id;
+                synthetic.transition.decision_index = frame->decision_index;
+                synthetic.transition.selected_public_action_key =
+                    selection.value->public_action_key;
+                synthetic.transition.core_response_submitted = true;
+                synthetic.next = test_terminal(*frame);
+                stepped = std::move(synthetic);
+            } else if (test_scenario.has_value() && recorder_->records().empty() &&
+                       *test_scenario == detail::TeacherRunnerV3TrajectoryTestScenario::Failure) {
+                environment::StepAccepted synthetic;
+                synthetic.transition.episode_semantic_id = frame->episode_semantic_id;
+                synthetic.transition.public_semantic_decision_id =
+                    frame->public_semantic_decision_id;
+                synthetic.transition.decision_index = frame->decision_index;
+                synthetic.transition.selected_public_action_key =
+                    selection.value->public_action_key;
+                synthetic.transition.core_response_submitted = true;
+                synthetic.next = test_failure(*frame);
+                stepped = std::move(synthetic);
+            } else {
+                stepped = environment_->step(action);
+            }
             if (const auto* rejected = std::get_if<environment::StepRejected>(&stepped)) {
                 if (!runner_.reject_pending_proposal() ||
                     !recorder_->on_step_rejected(*rejected, true, &recorder_error)) {
@@ -252,7 +440,12 @@ TeacherRunnerV3TrajectoryRunResult TeacherRunnerV3TrajectoryRunner::run() noexce
             }
             terminal_views.reset();
             if (std::holds_alternative<environment::EpisodeTerminal>(accepted->next)) {
-                terminal_views = detail::terminal_views_for_environment(*environment_);
+                if (test_scenario.has_value() && recorder_->records().empty() &&
+                    *test_scenario == detail::TeacherRunnerV3TrajectoryTestScenario::Terminal) {
+                    terminal_views = test_terminal_views(*frame);
+                } else {
+                    terminal_views = detail::terminal_views_for_environment(*environment_);
+                }
                 if (!terminal_views.has_value()) {
                     return failure("V3 terminal step lacks both public terminal views");
                 }
@@ -291,6 +484,10 @@ TeacherRunnerV3TrajectoryRunResult TeacherRunnerV3TrajectoryRunner::run() noexce
     } catch (...) {
         return failure("V3 trajectory runner execution threw");
     }
+}
+
+TeacherRunnerV3TrajectoryRunResult TeacherRunnerV3TrajectoryRunner::run() noexcept {
+    return run_impl(std::nullopt);
 }
 
 }  // namespace ygo::policy

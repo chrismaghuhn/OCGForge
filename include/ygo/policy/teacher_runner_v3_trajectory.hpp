@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
@@ -8,6 +9,17 @@
 #include "ygo/trajectory/recorder_v2.hpp"
 
 namespace ygo::policy {
+
+namespace detail {
+enum class TeacherRunnerV3TrajectoryTestScenario : std::uint8_t {
+    StepRejected = 0,
+    Continuation = 1,
+    Terminal = 2,
+    Failure = 3,
+};
+
+struct TeacherRunnerV3TrajectoryTestAccess;
+}  // namespace detail
 
 struct TeacherRunnerV3TrajectoryConfig final {
     environment::CertifiedEnvironmentConfig environment_config;
@@ -44,6 +56,8 @@ public:
     TeacherRunnerV3TrajectoryRunResult run() noexcept;
 
 private:
+    friend struct detail::TeacherRunnerV3TrajectoryTestAccess;
+
     TeacherRunnerV3TrajectoryRunner(
         TeacherRunnerV3TrajectoryConfig config,
         TeacherRunnerV3 runner,
@@ -56,6 +70,8 @@ private:
 
     static TeacherRunnerV3TrajectoryRunResult failure(
         std::string message, std::optional<PolicyError> policy_error = std::nullopt) noexcept;
+    TeacherRunnerV3TrajectoryRunResult run_impl(
+        std::optional<detail::TeacherRunnerV3TrajectoryTestScenario> scenario) noexcept;
 
     TeacherRunnerV3TrajectoryConfig config_;
     TeacherRunnerV3 runner_;
@@ -72,5 +88,17 @@ struct TeacherRunnerV3TrajectoryCreateResult final {
         return value.has_value() && !error.has_value();
     }
 };
+
+namespace detail {
+
+struct TeacherRunnerV3TrajectoryTestAccess final {
+    static TeacherRunnerV3TrajectoryRunResult run_with_scenario(
+        TeacherRunnerV3TrajectoryRunner& runner,
+        const TeacherRunnerV3TrajectoryTestScenario scenario) {
+        return runner.run_impl(scenario);
+    }
+};
+
+}  // namespace detail
 
 }  // namespace ygo::policy
