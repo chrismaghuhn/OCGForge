@@ -34,6 +34,16 @@ inline constexpr char kRestrictedReplayEvidenceSchemaId[] =
     "ocgforge.restricted_replay_evidence.v1";
 inline constexpr char kRestrictedReplayEvidenceV2SchemaId[] =
     "ocgforge.restricted_replay_evidence.v2";
+inline constexpr char kTrajectoryShardV2ContractId[] =
+    "ocgforge.trajectory_shard.v2";
+inline constexpr char kRestrictedCollectionEvidenceBundleV2ContractId[] =
+    "ocgforge.restricted_collection_evidence_bundle.v2";
+inline constexpr char kAdmissionReceiptV2ContractId[] =
+    "ocgforge.admission_receipt.v2";
+inline constexpr char kDatasetManifestV2ContractId[] =
+    "ocgforge.dataset_manifest.v2";
+inline constexpr char kDatasetIdentityV2ContractId[] =
+    "ocgforge.dataset_identity.v2";
 
 enum class PolicyKind : std::uint8_t {
     RandomLegal = 0,
@@ -334,6 +344,57 @@ struct RestrictedReplayEvidenceV2 final {
     std::uint64_t observed_engine_process_count = 0;
     std::uint64_t observed_semantic_action_count = 0;
     std::uint64_t final_engine_step_index = 0;
+};
+
+struct ShardEntryV2 final {
+    std::string episode_envelope_sha256;
+    std::vector<std::uint8_t> envelope_bytes;
+};
+
+struct CandidateTrajectoryShardV2 final {
+    std::vector<ShardEntryV2> entries;
+};
+
+struct InterruptedEvidenceEntryV2 final {
+    std::string episode_envelope_sha256;
+    RestrictedReplayEvidenceV2 evidence;
+};
+
+struct RestrictedCollectionEvidenceBundleV2 final {
+    std::string candidate_shard_artifact_sha256;
+    std::vector<InterruptedEvidenceEntryV2> interrupted_episodes;
+};
+
+struct AdmissionEntryCommitmentV2 final {
+    std::string trajectory_record_id;
+    std::string public_gameplay_trajectory_id;
+    std::string environment_semantic_id;
+    std::string episode_semantic_id;
+    std::string episode_envelope_sha256;
+    std::uint8_t closure_kind = 0;
+};
+
+struct AdmissionReceiptV2 final {
+    std::string admission_contract_id = kAdmissionReceiptV2ContractId;
+    std::string candidate_shard_artifact_sha256;
+    std::string restricted_evidence_artifact_sha256;
+    std::vector<AdmissionEntryCommitmentV2> entries;
+};
+
+struct DatasetManifestMemberV2 final {
+    std::string trajectory_record_id;
+    std::string public_gameplay_trajectory_id;
+    std::string admission_receipt_id;
+    std::string candidate_shard_artifact_sha256;
+    std::string episode_envelope_sha256;
+};
+
+struct DatasetManifestV2 final {
+    std::string dataset_manifest_schema_id = kDatasetManifestV2ContractId;
+    std::string dataset_identity_schema_id = kDatasetIdentityV2ContractId;
+    std::string trusted_trajectory_contract_id = kTrustedTrajectoryV2ContractId;
+    std::string dataset_semantic_id;
+    std::vector<DatasetManifestMemberV2> members;
 };
 
 struct ShardEntry final {

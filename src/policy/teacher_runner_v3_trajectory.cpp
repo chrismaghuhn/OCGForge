@@ -1,6 +1,7 @@
 #include "ygo/policy/teacher_runner_v3_trajectory.hpp"
 
 #include <exception>
+#include <algorithm>
 #include <string>
 #include <utility>
 #include <variant>
@@ -9,6 +10,7 @@
 #include "runner_shared.hpp"
 #include "ygo/environment/public_action_identity.hpp"
 #include "ygo/policy/production_provenance.hpp"
+#include "ygo/trace/sha256.hpp"
 #include "ygo/trajectory/identity_resolver.hpp"
 
 namespace ygo::policy {
@@ -75,6 +77,86 @@ TeacherRunnerV3TrajectoryRunResult failed_result(
     result.error = std::move(policy_error);
     result.diagnostic = std::move(message);
     return result;
+}
+
+TeacherRunnerV3TrajectoryRunResult finalize_v2_collection(
+    TeacherRunnerV3TrajectoryRunResult result,
+    const TeacherRunnerV3TrajectoryConfig& config) {
+    if (!result.envelope.has_value() || result.quarantined ||
+        std::holds_alternative<trajectory::FailedClosureV2>(result.envelope->closure)) {
+        return result;
+    }
+    try {
+        const auto envelope_bytes = trajectory::canonical_episode_envelope_bytes_v2(
+            *result.envelope);
+        trajectory::CandidateTrajectoryShardV2 shard;
+        shard.entries.push_back({trace::sha256_bytes(envelope_bytes), envelope_bytes});
+        const auto shard_id = trajectory::candidate_shard_artifact_sha256_v2(shard);
+
+        trajectory::RestrictedCollectionEvidenceBundleV2 evidence;
+        evidence.candidate_shard_artifact_sha256 = shard_id;
+        if (std::holds_alternative<trajectory::InterruptedClosureV2>(result.envelope->closure)) {
+            if (!result.replay_evidence.has_value()) {
+                return failed_result("V2 interrupted collection lacks replay evidence");
+            }
+            evidence.interrupted_episodes.push_back({
+                trace::sha256_bytes(envelope_bytes), *result.replay_evidence});
+        }
+        const auto evidence_id =
+            trajectory::restricted_collection_evidence_artifact_sha256_v2(evidence);
+
+        trajectory::replay_v2::ReplayOptions replay_options;
+        if (std::holds_alternative<trajectory::TerminalClosureV2>(result.envelope->closure)) {
+            replay_options.terminal_run_control = config.run_control;
+        } else {
+            replay_options.cancellation_source = config.run_control.cancellation.source;
+        }
+        std::string error;
+        const auto verification = trajectory::admission_v2::verify_collection_for_admission_v2(
+            shard, evidence, shard_id, evidence_id, replay_options,
+            make_production_policy_provenance_resolver(), &error);
+        if (!verification.has_value()) {
+            return failed_result("V2 collection admission failed: " + error);
+        }
+        auto receipt = trajectory::issue_admission_receipt_v2(*verification, &error);
+        if (!receipt.has_value()) {
+            return failed_result("V2 admission receipt issuance failed: " + error);
+        }
+        trajectory::DatasetManifestV2 manifest;
+        for (const auto& entry : verification->entries()) {
+            manifest.members.push_back({
+                entry.trajectory_record_id,
+                entry.public_gameplay_trajectory_id,
+                trajectory::admission_receipt_id_v2(receipt->receipt()),
+                shard_id,
+                entry.episode_envelope_sha256});
+        }
+        std::sort(manifest.members.begin(), manifest.members.end(),
+                  [](const auto& left, const auto& right) {
+                      return left.trajectory_record_id < right.trajectory_record_id;
+                  });
+        std::vector<std::string> record_ids;
+        record_ids.reserve(manifest.members.size());
+        for (const auto& member : manifest.members) {
+            record_ids.push_back(member.trajectory_record_id);
+        }
+        manifest.dataset_semantic_id = trajectory::dataset_v2::dataset_semantic_id_v2(record_ids);
+        if (!trajectory::dataset_v2::validate_dataset_manifest_v2(
+                manifest, std::vector<trajectory::VerifiedAdmissionReceiptV2>{*receipt},
+                &error)) {
+            return failed_result("V2 dataset manifest validation failed: " + error);
+        }
+        result.candidate_shard = std::move(shard);
+        result.restricted_collection_evidence = std::move(evidence);
+        result.admission_verification = *verification;
+        result.admission_receipt = std::move(*receipt);
+        result.dataset_manifest = std::move(manifest);
+        return result;
+    } catch (const std::exception& exception) {
+        return failed_result(exception.what());
+    } catch (...) {
+        return failed_result("V2 collection finalization threw");
+    }
 }
 
 environment::DecisionFrame test_continuation_frame(
@@ -282,6 +364,11 @@ TeacherRunnerV3TrajectoryRunResult TeacherRunnerV3TrajectoryRunner::run_impl(
             }
         }
         std::string recorder_error;
+        const auto finish = [&](TeacherRunnerV3TrajectoryRunResult result) {
+            return test_scenario.has_value()
+                       ? result
+                       : finalize_v2_collection(std::move(result), config_);
+        };
         if (!recorder_->on_reset_accepted(recording_reset, terminal_views, &recorder_error)) {
             return failure("V2 recorder rejected V3 reset: " + recorder_error);
         }
@@ -297,7 +384,7 @@ TeacherRunnerV3TrajectoryRunResult TeacherRunnerV3TrajectoryRunner::run_impl(
                     std::get_if<environment::EpisodeInterrupted>(&boundary)) {
                 result.replay_evidence = evidence_for_interruption(*interrupted);
             }
-            return result;
+            return finish(std::move(result));
         }
 
         for (;;) {
@@ -349,7 +436,7 @@ TeacherRunnerV3TrajectoryRunResult TeacherRunnerV3TrajectoryRunner::run_impl(
                     return failure("V2 recorder could not seal synthetic continuation: " +
                                    recorder_error);
                 }
-                return result;
+                return finish(std::move(result));
             }
 
             const auto selection = runner_.select(*frame);
@@ -431,7 +518,7 @@ TeacherRunnerV3TrajectoryRunResult TeacherRunnerV3TrajectoryRunner::run_impl(
                     return failure("V2 recorder could not seal StepRejected closure: " +
                                    recorder_error);
                 }
-                return result;
+                return finish(std::move(result));
             }
 
             const auto* accepted = std::get_if<environment::StepAccepted>(&stepped);
@@ -467,7 +554,7 @@ TeacherRunnerV3TrajectoryRunResult TeacherRunnerV3TrajectoryRunner::run_impl(
                 if (!result.envelope.has_value()) {
                     return failure("V2 recorder could not seal interruption: " + recorder_error);
                 }
-                return result;
+                return finish(std::move(result));
             }
             if (recorder_->lifecycle() == trajectory::RecorderLifecycle::Closed) {
                 TeacherRunnerV3TrajectoryRunResult result;
@@ -475,7 +562,7 @@ TeacherRunnerV3TrajectoryRunResult TeacherRunnerV3TrajectoryRunner::run_impl(
                 if (!result.envelope.has_value()) {
                     return failure("V2 recorder could not seal V3 closure: " + recorder_error);
                 }
-                return result;
+                return finish(std::move(result));
             }
             boundary = accepted->next;
         }
