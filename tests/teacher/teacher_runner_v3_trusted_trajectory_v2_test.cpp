@@ -230,6 +230,55 @@ DecisionFrame synthetic_v3_frame(const CertifiedEnvironmentConfig& config,
     return result;
 }
 
+EnvironmentActionCandidate synthetic_card_selection(
+    const std::string& locator,
+    const PublicCardSelectionOperation operation) {
+    EnvironmentActionCandidate result;
+    result.action_kind = EnvironmentActionKind::CardSelection;
+    result.source_reference =
+        PublicCardReference{PublicCardReferenceKind::VisibleCard, locator};
+    result.card_selection_operation = operation;
+    result.submits_engine_response = true;
+    PublicActionKeyInput key;
+    key.action_kind = "card_selection";
+    key.source_reference = result.source_reference;
+    key.card_selection_operation = operation;
+    result.public_action_key = public_action_key_v2(key);
+    return result;
+}
+
+DecisionFrame synthetic_v3_unselect_frame(const CertifiedEnvironmentConfig& config,
+                                          const EpisodeSpec& spec) {
+    auto result = synthetic_v3_frame(config, spec);
+    result.public_observation = trajectory_test::observation(0, 0, true);
+    result.public_observation_digest = public_observation_digest(result.public_observation);
+    result.request.kind = EnvironmentDecisionKind::UnselectCard;
+    result.request.candidates = {
+        synthetic_card_selection("p0:MONSTER_ZONE:0", PublicCardSelectionOperation::Select),
+        synthetic_card_selection("p0:MONSTER_ZONE:1", PublicCardSelectionOperation::Unselect),
+        synthetic_v2_yes_no()};
+    result.request.candidates.back().action_kind = EnvironmentActionKind::Cancel;
+    result.request.candidates.back().choice.reset();
+    PublicActionKeyInput cancel_key;
+    cancel_key.action_kind = "cancel";
+    result.request.candidates.back().public_action_key = public_action_key_v2(cancel_key);
+    std::vector<std::string> keys;
+    for (const auto& candidate : result.request.candidates) {
+        keys.push_back(candidate.public_action_key);
+    }
+    result.public_candidate_domain_digest = public_candidate_domain_digest_v2(
+        "unselect_card", keys);
+    PublicSemanticDecisionIdentityInput identity;
+    identity.episode_semantic_id = result.episode_semantic_id;
+    identity.decision_index = result.decision_index;
+    identity.acting_player = result.acting_player;
+    identity.request_kind = "unselect_card";
+    identity.public_observation_digest = result.public_observation_digest;
+    identity.public_candidate_domain_digest = result.public_candidate_domain_digest;
+    result.public_semantic_decision_id = public_semantic_decision_id_v2(identity);
+    return result;
+}
+
 void test_recorder_step_rejected_and_terminal_boundaries() {
     const auto config = CertifiedEnvironmentConfig::canonical_v3();
     EpisodeSpec spec;
@@ -290,6 +339,30 @@ void test_recorder_step_rejected_and_terminal_boundaries() {
     require(terminal_envelope.has_value() &&
                 std::holds_alternative<TerminalClosureV2>(terminal_envelope->closure),
             "V2 recorder did not seal a terminal V2 closure");
+
+    const auto operation_frame = synthetic_v3_unselect_frame(config, spec);
+    TrajectoryRecorderV2 operation_recorder(
+        config, spec, provenance, trajectory_test::test_provenance_resolver());
+    require(operation_recorder.on_reset_accepted(
+                ResetAccepted{operation_frame}, std::nullopt, &error),
+            "V2 recorder rejected synthetic Select/Unselect frame: " + error);
+    interruption.last_public_semantic_decision_id =
+        operation_frame.public_semantic_decision_id;
+    require(operation_recorder.on_interrupt_accepted(
+                std::optional<DecisionFrame>{operation_frame},
+                InterruptAccepted{interruption}, &error),
+            "V2 recorder rejected Select/Unselect interruption: " + error);
+    const auto operation_envelope = operation_recorder.seal(&error);
+    require(operation_envelope.has_value(),
+            "V2 recorder did not seal Select/Unselect frame: " + error);
+    const auto& pending = std::get<InterruptedClosureV2>(operation_envelope->closure)
+                              .pending_unacted_frame;
+    require(pending.has_value() &&
+                pending->request.candidates[0].card_selection_operation ==
+                    PublicCardSelectionOperation::Select &&
+                pending->request.candidates[1].card_selection_operation ==
+                    PublicCardSelectionOperation::Unselect,
+            "V2 recorder did not preserve Select/Unselect metadata");
 }
 
 }  // namespace
