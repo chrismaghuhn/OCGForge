@@ -10,6 +10,7 @@
 #include "ygo/environment/public_action_identity.hpp"
 #include "ygo/teacher/teacher_decision_v2.hpp"
 #include "ygo/teacher/teacher_explanation_codec.hpp"
+#include "strategy_state_common.hpp"
 #include "teacher_validation.hpp"
 
 namespace ygo::teacher {
@@ -41,46 +42,20 @@ bool better_evaluation(const CandidateEvaluation& left,
            (score_order == 0 && left.public_action_key < right.public_action_key);
 }
 
+template <typename KeyValidator>
 bool valid_candidate_domain(
-    const std::vector<environment::EnvironmentActionCandidate>& candidates) noexcept {
+    const std::vector<environment::EnvironmentActionCandidate>& candidates,
+    KeyValidator key_validator) noexcept {
     if (candidates.empty()) {
         return false;
     }
     for (std::size_t index = 0; index < candidates.size(); ++index) {
-        if (!environment::is_public_action_key(candidates[index].public_action_key)) {
-            return false;
-        }
-        for (std::size_t previous = 0; previous < index; ++previous) {
-            if (candidates[previous].public_action_key == candidates[index].public_action_key) {
-                return false;
-            }
-        }
-    }
-    return true;
-}
-
-bool valid_candidate_domain_v2(
-    const std::vector<environment::EnvironmentActionCandidate>& candidates) noexcept {
-    if (candidates.empty()) {
-        return false;
-    }
-    for (std::size_t index = 0; index < candidates.size(); ++index) {
-        if (!environment::is_public_action_key_v2(candidates[index].public_action_key)) {
-            return false;
-        }
-        for (std::size_t previous = 0; previous < index; ++previous) {
-            if (candidates[previous].public_action_key == candidates[index].public_action_key) {
-                return false;
-            }
-        }
-    }
-    return true;
-}
-
-bool valid_id_vector(const std::vector<std::string>& values) noexcept {
-    for (std::size_t index = 0; index < values.size(); ++index) {
-        if (!detail::canonical_token(values[index]) ||
-            (index > 0 && !(values[index - 1] < values[index]))) {
+        if (!key_validator(candidates[index].public_action_key) ||
+            std::any_of(candidates.begin(), candidates.begin() + index,
+                        [&](const auto& candidate) {
+                            return candidate.public_action_key ==
+                                   candidates[index].public_action_key;
+                        })) {
             return false;
         }
     }
@@ -100,61 +75,33 @@ std::vector<CandidateEvaluation> base_evaluations(
     return result;
 }
 
-TeacherRankingResult no_selection(TeacherRankingStatus status,
-                                  std::vector<CandidateEvaluation> evaluations) {
-    TeacherRankingResult result;
+template <typename Result>
+Result no_selection(TeacherRankingStatus status,
+                    std::vector<CandidateEvaluation> evaluations) {
+    Result result;
     result.status = status;
     result.evaluations = std::move(evaluations);
     return result;
 }
 
-TeacherRankingResultV2 no_selection_v2(
-    const TeacherRankingStatus status,
-    std::vector<CandidateEvaluation> evaluations) {
-    TeacherRankingResultV2 result;
-    result.status = status;
-    result.evaluations = std::move(evaluations);
-    return result;
-}
-
+template <typename KeyValidator>
 bool stage_shape_is_valid(
     const std::vector<environment::EnvironmentActionCandidate>& candidates,
-    const std::vector<TeacherFallbackCandidateValue>& evaluations) noexcept {
+    const std::vector<TeacherFallbackCandidateValue>& evaluations,
+    KeyValidator key_validator) noexcept {
     if (evaluations.size() != candidates.size()) {
         return false;
     }
     for (std::size_t index = 0; index < evaluations.size(); ++index) {
         const auto& evaluation = evaluations[index];
-        if (!environment::is_public_action_key(evaluation.public_action_key) ||
+        if (!key_validator(evaluation.public_action_key) ||
             evaluation.public_action_key != candidates[index].public_action_key ||
             static_cast<std::uint8_t>(evaluation.status) >
                 static_cast<std::uint8_t>(CandidateEvaluationStatus::Invalid) ||
-            !valid_id_vector(evaluation.matched_intent_ids) ||
-            !valid_id_vector(evaluation.matched_goal_ids) ||
-            !valid_id_vector(evaluation.matched_line_ids) ||
-            !valid_id_vector(evaluation.reason_ids)) {
-            return false;
-        }
-    }
-    return true;
-}
-
-bool stage_shape_is_valid_v2(
-    const std::vector<environment::EnvironmentActionCandidate>& candidates,
-    const std::vector<TeacherFallbackCandidateValue>& evaluations) noexcept {
-    if (evaluations.size() != candidates.size()) {
-        return false;
-    }
-    for (std::size_t index = 0; index < evaluations.size(); ++index) {
-        const auto& evaluation = evaluations[index];
-        if (!environment::is_public_action_key_v2(evaluation.public_action_key) ||
-            evaluation.public_action_key != candidates[index].public_action_key ||
-            static_cast<std::uint8_t>(evaluation.status) >
-                static_cast<std::uint8_t>(CandidateEvaluationStatus::Invalid) ||
-            !valid_id_vector(evaluation.matched_intent_ids) ||
-            !valid_id_vector(evaluation.matched_goal_ids) ||
-            !valid_id_vector(evaluation.matched_line_ids) ||
-            !valid_id_vector(evaluation.reason_ids)) {
+            !internal::valid_sorted_id_vector(evaluation.matched_intent_ids) ||
+            !internal::valid_sorted_id_vector(evaluation.matched_goal_ids) ||
+            !internal::valid_sorted_id_vector(evaluation.matched_line_ids) ||
+            !internal::valid_sorted_id_vector(evaluation.reason_ids)) {
             return false;
         }
     }
@@ -295,30 +242,88 @@ void attach_explanation(TeacherRankingResult& result) noexcept {
     }
 }
 
-TeacherRankingResult selected_result(std::vector<CandidateEvaluation> evaluations,
-                                     const std::size_t best_index,
-                                     const TeacherFallbackLevel level) {
-    TeacherRankingResult result;
+template <typename Result, typename Finalizer>
+Result selected_result(std::vector<CandidateEvaluation> evaluations,
+                       const std::size_t best_index,
+                       const TeacherFallbackLevel level,
+                       Finalizer finalizer) {
+    Result result;
     result.status = TeacherRankingStatus::Selected;
     result.evaluations = std::move(evaluations);
     result.selected_public_action_key = result.evaluations[best_index].public_action_key;
     result.selected_score_vector = result.evaluations[best_index].score;
     result.fallback_level = level;
-    attach_explanation(result);
+    finalizer(result);
     return result;
 }
 
-TeacherRankingResultV2 selected_result_v2(
-    std::vector<CandidateEvaluation> evaluations,
-    const std::size_t best_index,
-    const TeacherFallbackLevel level) {
-    TeacherRankingResultV2 result;
-    result.status = TeacherRankingStatus::Selected;
-    result.evaluations = std::move(evaluations);
-    result.selected_public_action_key = result.evaluations[best_index].public_action_key;
-    result.selected_score_vector = result.evaluations[best_index].score;
-    result.fallback_level = level;
-    return result;
+template <typename Result, typename KeyValidator, typename Finalizer>
+Result resolve_teacher_fallback_impl(
+    const std::vector<environment::EnvironmentActionCandidate>& candidates,
+    const TeacherFallbackStageSet& stages,
+    KeyValidator key_validator,
+    Finalizer finalizer) noexcept {
+    try {
+        auto base = base_evaluations(candidates);
+        if (!valid_candidate_domain(candidates, key_validator)) {
+            return no_selection<Result>(TeacherRankingStatus::InvalidInput, std::move(base));
+        }
+
+        for (std::size_t stage_index = 0; stage_index < stages.stage_evaluations.size();
+             ++stage_index) {
+            if (!stages.stage_evaluations[stage_index].has_value()) {
+                continue;
+            }
+            const auto& stage = *stages.stage_evaluations[stage_index];
+            if (!stage_shape_is_valid(candidates, stage, key_validator)) {
+                return no_selection<Result>(TeacherRankingStatus::InvalidInput, std::move(base));
+            }
+            switch (stage_readiness(stage)) {
+            case StageReadiness::Invalid:
+                return no_selection<Result>(TeacherRankingStatus::InvalidInput, std::move(base));
+            case StageReadiness::Blocked:
+                return no_selection<Result>(TeacherRankingStatus::Blocked, std::move(base));
+            case StageReadiness::Unsupported:
+                continue;
+            case StageReadiness::Total: {
+                if (!apply_stage(base, candidates, stage)) {
+                    return no_selection<Result>(TeacherRankingStatus::InvalidInput,
+                                                std::move(base));
+                }
+                std::size_t best_index = 0;
+                for (std::size_t index = 1; index < base.size(); ++index) {
+                    if (better_evaluation(base[index], base[best_index])) {
+                        best_index = index;
+                    }
+                }
+                return selected_result<Result>(
+                    std::move(base), best_index,
+                    static_cast<TeacherFallbackLevel>(stage_index), finalizer);
+            }
+            }
+        }
+
+        ScoreVector zero;
+        for (auto& evaluation : base) {
+            evaluation.status = CandidateEvaluationStatus::Supported;
+            evaluation.score = zero;
+        }
+        std::size_t best_index = 0;
+        for (std::size_t index = 1; index < base.size(); ++index) {
+            if (base[index].public_action_key < base[best_index].public_action_key) {
+                best_index = index;
+            }
+        }
+        return selected_result<Result>(std::move(base), best_index, TeacherFallbackLevel::F4,
+                                       finalizer);
+    } catch (...) {
+        try {
+            return no_selection<Result>(TeacherRankingStatus::InvalidInput,
+                                        base_evaluations(candidates));
+        } catch (...) {
+            return Result{};
+        }
+    }
 }
 
 }  // namespace
@@ -326,126 +331,23 @@ TeacherRankingResultV2 selected_result_v2(
 TeacherRankingResult resolve_teacher_fallback(
     const std::vector<environment::EnvironmentActionCandidate>& candidates,
     const TeacherFallbackStageSet& stages) noexcept {
-    try {
-        auto base = base_evaluations(candidates);
-        if (!valid_candidate_domain(candidates)) {
-            return no_selection(TeacherRankingStatus::InvalidInput, std::move(base));
-        }
-
-        for (std::size_t stage_index = 0; stage_index < stages.stage_evaluations.size();
-             ++stage_index) {
-            if (!stages.stage_evaluations[stage_index].has_value()) {
-                continue;
-            }
-            const auto& stage = *stages.stage_evaluations[stage_index];
-            if (!stage_shape_is_valid(candidates, stage)) {
-                return no_selection(TeacherRankingStatus::InvalidInput, std::move(base));
-            }
-            switch (stage_readiness(stage)) {
-            case StageReadiness::Invalid:
-                return no_selection(TeacherRankingStatus::InvalidInput, std::move(base));
-            case StageReadiness::Blocked:
-                return no_selection(TeacherRankingStatus::Blocked, std::move(base));
-            case StageReadiness::Unsupported:
-                continue;
-            case StageReadiness::Total: {
-                if (!apply_stage(base, candidates, stage)) {
-                    return no_selection(TeacherRankingStatus::InvalidInput, std::move(base));
-                }
-                std::size_t best_index = 0;
-                for (std::size_t index = 1; index < base.size(); ++index) {
-                    if (better_evaluation(base[index], base[best_index])) {
-                        best_index = index;
-                    }
-                }
-                return selected_result(std::move(base), best_index,
-                                       static_cast<TeacherFallbackLevel>(stage_index));
-            }
-            }
-        }
-
-        ScoreVector zero;
-        for (auto& evaluation : base) {
-            evaluation.status = CandidateEvaluationStatus::Supported;
-            evaluation.score = zero;
-        }
-        std::size_t best_index = 0;
-        for (std::size_t index = 1; index < base.size(); ++index) {
-            if (base[index].public_action_key < base[best_index].public_action_key) {
-                best_index = index;
-            }
-        }
-        return selected_result(std::move(base), best_index, TeacherFallbackLevel::F4);
-    } catch (...) {
-        try {
-            return no_selection(TeacherRankingStatus::InvalidInput, base_evaluations(candidates));
-        } catch (...) {
-            return TeacherRankingResult{};
-        }
-    }
+    return resolve_teacher_fallback_impl<TeacherRankingResult>(
+        candidates, stages,
+        [](const std::string& key) noexcept {
+            return environment::is_public_action_key(key);
+        },
+        [](TeacherRankingResult& result) noexcept { attach_explanation(result); });
 }
 
 TeacherRankingResultV2 resolve_teacher_fallback_v2(
     const std::vector<environment::EnvironmentActionCandidate>& candidates,
     const TeacherFallbackStageSet& stages) noexcept {
-    try {
-        auto base = base_evaluations(candidates);
-        if (!valid_candidate_domain_v2(candidates)) {
-            return no_selection_v2(TeacherRankingStatus::InvalidInput, std::move(base));
-        }
-
-        for (std::size_t stage_index = 0; stage_index < stages.stage_evaluations.size();
-             ++stage_index) {
-            if (!stages.stage_evaluations[stage_index].has_value()) {
-                continue;
-            }
-            const auto& stage = *stages.stage_evaluations[stage_index];
-            if (!stage_shape_is_valid_v2(candidates, stage)) {
-                return no_selection_v2(TeacherRankingStatus::InvalidInput, std::move(base));
-            }
-            switch (stage_readiness(stage)) {
-            case StageReadiness::Invalid:
-                return no_selection_v2(TeacherRankingStatus::InvalidInput, std::move(base));
-            case StageReadiness::Blocked:
-                return no_selection_v2(TeacherRankingStatus::Blocked, std::move(base));
-            case StageReadiness::Unsupported:
-                continue;
-            case StageReadiness::Total: {
-                if (!apply_stage(base, candidates, stage)) {
-                    return no_selection_v2(TeacherRankingStatus::InvalidInput, std::move(base));
-                }
-                std::size_t best_index = 0;
-                for (std::size_t index = 1; index < base.size(); ++index) {
-                    if (better_evaluation(base[index], base[best_index])) {
-                        best_index = index;
-                    }
-                }
-                return selected_result_v2(std::move(base), best_index,
-                                          static_cast<TeacherFallbackLevel>(stage_index));
-            }
-            }
-        }
-
-        ScoreVector zero;
-        for (auto& evaluation : base) {
-            evaluation.status = CandidateEvaluationStatus::Supported;
-            evaluation.score = zero;
-        }
-        std::size_t best_index = 0;
-        for (std::size_t index = 1; index < base.size(); ++index) {
-            if (base[index].public_action_key < base[best_index].public_action_key) {
-                best_index = index;
-            }
-        }
-        return selected_result_v2(std::move(base), best_index, TeacherFallbackLevel::F4);
-    } catch (...) {
-        try {
-            return no_selection_v2(TeacherRankingStatus::InvalidInput,
-                                   base_evaluations(candidates));
-        } catch (...) {
-            return TeacherRankingResultV2{};
-        }
-    }
+    return resolve_teacher_fallback_impl<TeacherRankingResultV2>(
+        candidates, stages,
+        [](const std::string& key) noexcept {
+            return environment::is_public_action_key_v2(key);
+        },
+        [](TeacherRankingResultV2&) noexcept {});
 }
 
 }  // namespace ygo::teacher

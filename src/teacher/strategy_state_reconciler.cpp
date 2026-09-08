@@ -3,6 +3,8 @@
 #include <cstddef>
 #include <utility>
 
+#include "strategy_state_common.hpp"
+
 namespace ygo::teacher {
 namespace {
 
@@ -24,16 +26,6 @@ bool retain_current_facts(std::vector<PublicFactValue>& facts,
         }
     }
     facts = std::move(retained);
-    return true;
-}
-
-bool valid_reason_vector(const std::vector<std::string>& values) noexcept {
-    for (std::size_t index = 0; index < values.size(); ++index) {
-        if (!is_registered_invalidation_reason(values[index]) ||
-            (index > 0 && !(values[index - 1] < values[index]))) {
-            return false;
-        }
-    }
     return true;
 }
 
@@ -63,7 +55,7 @@ bool reconcile_in_place(EpisodeLocalStrategyStateV1& state,
         state.achieved_goal_ids.clear();
         invalidation_reason_ids.emplace_back("public_state_contradiction");
     }
-    return valid_reason_vector(invalidation_reason_ids);
+    return internal::valid_reason_vector(invalidation_reason_ids);
 }
 
 }  // namespace

@@ -11,117 +11,35 @@
 #include "ygo/teacher/deterministic_resolver.hpp"
 #include "ygo/teacher/recovery_controller.hpp"
 #include "ygo/trajectory/codec.hpp"
+#include "strategy_state_common.hpp"
 #include "teacher_validation.hpp"
 
 namespace ygo::teacher {
 namespace {
 
-bool sorted_unique_ids(const std::vector<std::string>& values) noexcept {
-    for (std::size_t index = 0; index < values.size(); ++index) {
-        if (!detail::canonical_token(values[index]) ||
-            (index > 0 && !(values[index - 1] < values[index]))) {
-            return false;
-        }
-    }
-    return true;
-}
-
 bool valid_snapshot(const PublicFactSnapshot& snapshot) noexcept {
     try {
-        const auto& registry = PublicFactRegistry::canonical();
-        for (std::size_t index = 0; index < snapshot.values.size(); ++index) {
-            if (!registry.validate(snapshot.values[index])) {
-                return false;
-            }
-            if (index > 0 &&
-                (snapshot.values[index - 1].fact_id == snapshot.values[index].fact_id ||
-                 !(canonical_public_fact_value_bytes(snapshot.values[index - 1]) <
-                   canonical_public_fact_value_bytes(snapshot.values[index])))) {
-                return false;
-            }
-        }
-        return true;
+        return internal::valid_public_fact_vector(snapshot.values);
     } catch (...) {
         return false;
     }
 }
 
+template <typename State, typename StateValidator>
+bool valid_state_for_profile_common(const State& state,
+                                    const StrategyProfileV1& profile,
+                                    StateValidator state_validator) noexcept {
+    return state_validator(state) && internal::valid_plan_references(state, profile);
+}
+
 bool valid_state_for_profile(const EpisodeLocalStrategyStateV1& state,
                              const StrategyProfileV1& profile) noexcept {
-    if (!validate_strategy_state(state) || state.strategy_profile_id != profile.profile_id) {
-        return false;
-    }
-    const auto goal_exists = [&profile](const std::string& id) noexcept {
-        return std::any_of(profile.goals.begin(), profile.goals.end(), [&](const auto& goal) {
-            return goal.goal_id == id;
-        });
-    };
-    for (const auto& id : state.achieved_goal_ids) {
-        if (!goal_exists(id)) {
-            return false;
-        }
-    }
-    if (state.active_goal_id.has_value() && !goal_exists(*state.active_goal_id)) {
-        return false;
-    }
-    if (!state.active_line_id.has_value()) {
-        return state.completed_line_node_ids.empty();
-    }
-    const auto line = std::find_if(
-        profile.lines.begin(), profile.lines.end(), [&](const auto& value) {
-            return value.line_id == *state.active_line_id;
-        });
-    if (line == profile.lines.end() || !state.active_goal_id.has_value() ||
-        line->goal_id != *state.active_goal_id) {
-        return false;
-    }
-    for (const auto& node_id : state.completed_line_node_ids) {
-        if (std::none_of(line->nodes.begin(), line->nodes.end(), [&](const auto& node) {
-                return node.node_id == node_id;
-            })) {
-            return false;
-        }
-    }
-    return true;
+    return valid_state_for_profile_common(state, profile, validate_strategy_state);
 }
 
 bool valid_state_for_profile_v2(const EpisodeLocalStrategyStateV2& state,
                                 const StrategyProfileV1& profile) noexcept {
-    if (!validate_strategy_state_v2(state) || state.strategy_profile_id != profile.profile_id) {
-        return false;
-    }
-    const auto goal_exists = [&profile](const std::string& id) noexcept {
-        return std::any_of(profile.goals.begin(), profile.goals.end(), [&](const auto& goal) {
-            return goal.goal_id == id;
-        });
-    };
-    for (const auto& id : state.achieved_goal_ids) {
-        if (!goal_exists(id)) {
-            return false;
-        }
-    }
-    if (state.active_goal_id.has_value() && !goal_exists(*state.active_goal_id)) {
-        return false;
-    }
-    if (!state.active_line_id.has_value()) {
-        return state.completed_line_node_ids.empty();
-    }
-    const auto line = std::find_if(
-        profile.lines.begin(), profile.lines.end(), [&](const auto& value) {
-            return value.line_id == *state.active_line_id;
-        });
-    if (line == profile.lines.end() || !state.active_goal_id.has_value() ||
-        line->goal_id != *state.active_goal_id) {
-        return false;
-    }
-    for (const auto& node_id : state.completed_line_node_ids) {
-        if (std::none_of(line->nodes.begin(), line->nodes.end(), [&](const auto& node) {
-                return node.node_id == node_id;
-            })) {
-            return false;
-        }
-    }
-    return true;
+    return valid_state_for_profile_common(state, profile, validate_strategy_state_v2);
 }
 
 const GoalDefinition* find_goal(const StrategyProfileV1& profile,
@@ -376,7 +294,7 @@ PredicateEvaluationStatus match_candidate_intent_set_v2(
         matched_ids.clear();
         if (!validate_strategy_profile(profile) || owning_participant > 1 ||
             observation.perspective_player != owning_participant ||
-            !sorted_unique_ids(intent_ids)) {
+            !internal::valid_sorted_id_vector(intent_ids)) {
             return PredicateEvaluationStatus::Invalid;
         }
         if (intent_ids.empty()) {
@@ -865,7 +783,7 @@ PredicateEvaluationStatus match_candidate_intent_set(
         matched_ids.clear();
         if (!validate_strategy_profile(profile) || owning_participant > 1 ||
             observation.perspective_player != owning_participant ||
-            !sorted_unique_ids(intent_ids)) {
+            !internal::valid_sorted_id_vector(intent_ids)) {
             return PredicateEvaluationStatus::Invalid;
         }
         if (intent_ids.empty()) {
@@ -1058,7 +976,8 @@ RecoverySelection select_recovery_edge_v2(
                                          pre_reconciliation_state.completed_line_node_ids);
         }
         const auto reason_ids = reconciliation->invalidation_reason_ids;
-        if (!sorted_unique_ids(ready_node_ids) || !sorted_unique_ids(reason_ids)) {
+        if (!internal::valid_sorted_id_vector(ready_node_ids) ||
+            !internal::valid_sorted_id_vector(reason_ids)) {
             result.status = PredicateEvaluationStatus::Invalid;
             return result;
         }
@@ -1188,7 +1107,8 @@ PublicEvaluatorOutcome evaluate_goal_line_progress(
         }
 
         if (selection.status == PredicateEvaluationStatus::True) {
-            if (!selection.goal_id.has_value() || !sorted_unique_ids(selection.ready_node_ids) ||
+            if (!selection.goal_id.has_value() ||
+                !internal::valid_sorted_id_vector(selection.ready_node_ids) ||
                 find_goal(profile, *selection.goal_id) == nullptr ||
                 (!selection.line_id.has_value() && !selection.ready_node_ids.empty())) {
                 outcome.status = CandidateEvaluationStatus::Invalid;
@@ -1397,7 +1317,8 @@ PublicEvaluatorOutcome evaluate_goal_line_progress_v2(
         }
 
         if (selection.status == PredicateEvaluationStatus::True) {
-            if (!selection.goal_id.has_value() || !sorted_unique_ids(selection.ready_node_ids) ||
+            if (!selection.goal_id.has_value() ||
+                !internal::valid_sorted_id_vector(selection.ready_node_ids) ||
                 find_goal(profile, *selection.goal_id) == nullptr ||
                 (!selection.line_id.has_value() && !selection.ready_node_ids.empty())) {
                 outcome.status = CandidateEvaluationStatus::Invalid;

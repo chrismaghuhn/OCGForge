@@ -495,6 +495,12 @@ target_link_libraries(teacher_v3_strategy_state_test PRIVATE ygo_teacher)
 add_test(NAME teacher_v3_strategy_state_test
          COMMAND teacher_v3_strategy_state_test)
 
+add_executable(teacher_v3_source_of_truth_equivalence_test
+               tests/teacher/teacher_v3_source_of_truth_equivalence_test.cpp)
+target_link_libraries(teacher_v3_source_of_truth_equivalence_test PRIVATE ygo_teacher)
+add_test(NAME teacher_v3_source_of_truth_equivalence_test
+         COMMAND teacher_v3_source_of_truth_equivalence_test)
+
 add_executable(teacher_v3_provenance_test
                tests/teacher/teacher_v3_provenance_test.cpp)
 target_link_libraries(teacher_v3_provenance_test PRIVATE ygo_policy)

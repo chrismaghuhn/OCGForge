@@ -1,142 +1,28 @@
 #include "ygo/teacher/strategy_state_v2.hpp"
 
-#include <algorithm>
 #include <cstddef>
 #include <exception>
-#include <string_view>
 #include <utility>
 
 #include "ygo/environment/episodic_environment.hpp"
 #include "ygo/environment/public_action_identity.hpp"
 #include "ygo/teacher/teacher_decision_v2.hpp"
 #include "ygo/trajectory/codec.hpp"
+#include "strategy_state_common.hpp"
 #include "teacher_validation.hpp"
 
 namespace ygo::teacher {
 namespace {
 
-bool valid_profile_id(const std::string_view value) noexcept {
-    return trajectory::is_canonical_identity(value, kStrategyProfileIdentityPrefix);
-}
-
-bool valid_optional_id(const std::optional<std::string>& value) noexcept {
-    return !value.has_value() || detail::canonical_token(*value);
-}
-
-bool valid_id_vector(const std::vector<std::string>& values) noexcept {
-    for (std::size_t index = 0; index < values.size(); ++index) {
-        if (!detail::canonical_token(values[index]) ||
-            (index > 0 && !(values[index - 1] < values[index]))) {
-            return false;
-        }
-    }
-    return true;
-}
-
-bool valid_fact_vector(const std::vector<PublicFactValue>& values) {
-    const auto& registry = PublicFactRegistry::canonical();
-    for (std::size_t index = 0; index < values.size(); ++index) {
-        if (!registry.validate(values[index])) {
-            return false;
-        }
-        if (index > 0 &&
-            (values[index - 1].fact_id == values[index].fact_id ||
-             !(canonical_public_fact_value_bytes(values[index - 1]) <
-               canonical_public_fact_value_bytes(values[index])))) {
-            return false;
-        }
-    }
-    return true;
-}
-
-bool current_facts_match_snapshot(const std::vector<PublicFactValue>& values,
-                                  const PublicFactSnapshot& snapshot) {
-    for (const auto& fact : values) {
-        if (fact.validity_scope != PublicFactValidityScope::CurrentReconciliation) {
-            continue;
-        }
-        const auto current = snapshot.value(fact.fact_id);
-        if (!current.has_value() || *current != fact) {
-            return false;
-        }
-    }
-    return true;
-}
-
-bool delta_current_facts_match_snapshot(const TeacherStateDeltaV2& delta,
-                                        const PublicFactSnapshot& snapshot) {
-    return current_facts_match_snapshot(delta.public_resource_facts, snapshot) &&
-           current_facts_match_snapshot(delta.public_restriction_facts, snapshot) &&
-           current_facts_match_snapshot(delta.public_threat_facts, snapshot);
-}
-
-bool valid_reason_vector(const std::vector<std::string>& values) noexcept {
-    for (std::size_t index = 0; index < values.size(); ++index) {
-        if (!detail::canonical_token(values[index]) ||
-            !is_registered_invalidation_reason(values[index]) ||
-            (index > 0 && !(values[index - 1] < values[index]))) {
-            return false;
-        }
-    }
-    return true;
-}
-
-template <typename Value>
-bool valid_plan_references(const Value& value,
-                           const StrategyProfileV1& profile) noexcept {
-    if (value.strategy_profile_id != profile.profile_id) {
-        return false;
-    }
-
-    const auto goal_exists = [&profile](const std::string& id) noexcept {
-        return std::any_of(profile.goals.begin(), profile.goals.end(),
-                           [&id](const auto& goal) { return goal.goal_id == id; });
-    };
-    for (const auto& goal_id : value.achieved_goal_ids) {
-        if (!goal_exists(goal_id)) {
-            return false;
-        }
-    }
-
-    const LineDefinition* active_line = nullptr;
-    if (value.active_goal_id.has_value() && !goal_exists(*value.active_goal_id)) {
-        return false;
-    }
-    if (value.active_line_id.has_value()) {
-        const auto line = std::find_if(
-            profile.lines.begin(), profile.lines.end(), [&value](const auto& candidate) {
-                return candidate.line_id == *value.active_line_id;
-            });
-        if (line == profile.lines.end() || !value.active_goal_id.has_value() ||
-            line->goal_id != *value.active_goal_id) {
-            return false;
-        }
-        active_line = &*line;
-    } else if (!value.completed_line_node_ids.empty()) {
-        return false;
-    }
-
-    if (active_line != nullptr) {
-        for (const auto& node_id : value.completed_line_node_ids) {
-            const auto node = std::find_if(
-                active_line->nodes.begin(), active_line->nodes.end(),
-                [&node_id](const auto& candidate) { return candidate.node_id == node_id; });
-            if (node == active_line->nodes.end()) {
-                return false;
-            }
-        }
-    }
-    return true;
-}
-
 bool valid_state_for_profile(const EpisodeLocalStrategyStateV2& state,
                              const StrategyProfileV1& profile) noexcept {
-    return validate_strategy_state_v2(state) && valid_plan_references(state, profile);
+    return validate_strategy_state_v2(state) && internal::valid_plan_references(state, profile);
 }
 
 bool valid_delta_for_profile(const TeacherStateDeltaV2& delta,
                              const StrategyProfileV1& profile) noexcept {
-    return validate_teacher_state_delta_v2(delta) && valid_plan_references(delta, profile);
+    return validate_teacher_state_delta_v2(delta) &&
+           internal::valid_plan_references(delta, profile);
 }
 
 bool observation_belongs_to_participant(
@@ -185,7 +71,7 @@ bool reconcile_in_place(EpisodeLocalStrategyStateV2& state,
         state.achieved_goal_ids.clear();
         invalidation_reason_ids.emplace_back("public_state_contradiction");
     }
-    return valid_reason_vector(invalidation_reason_ids);
+    return internal::valid_reason_vector(invalidation_reason_ids);
 }
 
 }  // namespace
@@ -194,14 +80,14 @@ bool validate_strategy_state_v2(const EpisodeLocalStrategyStateV2& state) noexce
     try {
         const bool has_index = state.last_accepted_decision_index.has_value();
         const bool has_key = state.last_accepted_public_action_key.has_value();
-        return valid_profile_id(state.strategy_profile_id) &&
-               valid_optional_id(state.active_goal_id) &&
-               valid_optional_id(state.active_line_id) &&
-               valid_id_vector(state.completed_line_node_ids) &&
-               valid_id_vector(state.achieved_goal_ids) &&
-               valid_fact_vector(state.public_resource_facts) &&
-               valid_fact_vector(state.public_restriction_facts) &&
-               valid_fact_vector(state.public_threat_facts) &&
+        return internal::valid_profile_id(state.strategy_profile_id) &&
+               internal::valid_optional_id(state.active_goal_id) &&
+               internal::valid_optional_id(state.active_line_id) &&
+               internal::valid_sorted_id_vector(state.completed_line_node_ids) &&
+               internal::valid_sorted_id_vector(state.achieved_goal_ids) &&
+               internal::valid_public_fact_vector(state.public_resource_facts) &&
+               internal::valid_public_fact_vector(state.public_restriction_facts) &&
+               internal::valid_public_fact_vector(state.public_threat_facts) &&
                has_index == has_key &&
                (!has_key ||
                 environment::is_public_action_key_v2(*state.last_accepted_public_action_key));
@@ -214,19 +100,19 @@ bool validate_teacher_state_delta_v2(const TeacherStateDeltaV2& delta) noexcept 
     try {
         const bool has_index = delta.base_last_accepted_decision_index.has_value();
         const bool has_key = delta.base_last_accepted_public_action_key.has_value();
-        return valid_profile_id(delta.strategy_profile_id) &&
+        return internal::valid_profile_id(delta.strategy_profile_id) &&
                has_index == has_key &&
                (!has_key || environment::is_public_action_key_v2(
                                 *delta.base_last_accepted_public_action_key)) &&
                environment::is_public_action_key_v2(delta.proposed_for_public_action_key) &&
-               valid_optional_id(delta.active_goal_id) &&
-               valid_optional_id(delta.active_line_id) &&
-               valid_id_vector(delta.completed_line_node_ids) &&
-               valid_id_vector(delta.achieved_goal_ids) &&
-               valid_fact_vector(delta.public_resource_facts) &&
-               valid_fact_vector(delta.public_restriction_facts) &&
-               valid_fact_vector(delta.public_threat_facts) &&
-               valid_reason_vector(delta.invalidation_reason_ids);
+               internal::valid_optional_id(delta.active_goal_id) &&
+               internal::valid_optional_id(delta.active_line_id) &&
+               internal::valid_sorted_id_vector(delta.completed_line_node_ids) &&
+               internal::valid_sorted_id_vector(delta.achieved_goal_ids) &&
+               internal::valid_public_fact_vector(delta.public_resource_facts) &&
+               internal::valid_public_fact_vector(delta.public_restriction_facts) &&
+               internal::valid_public_fact_vector(delta.public_threat_facts) &&
+               internal::valid_reason_vector(delta.invalidation_reason_ids);
     } catch (...) {
         return false;
     }
@@ -236,7 +122,7 @@ std::optional<EpisodeLocalStrategyStateV2> reset_strategy_state_v2(
     const StrategyProfileV1& validated_profile) noexcept {
     try {
         if (!validate_strategy_profile(validated_profile) ||
-            !valid_profile_id(validated_profile.profile_id)) {
+            !internal::valid_profile_id(validated_profile.profile_id)) {
             return std::nullopt;
         }
         EpisodeLocalStrategyStateV2 state;
@@ -311,7 +197,8 @@ std::optional<TeacherStateDeltaV2> propose_teacher_state_delta_v2(
         if (!current_facts.valid || !validate_teacher_state_delta_v2(requested_replacement) ||
             !requested_replacement.invalidation_reason_ids.empty() ||
             !valid_delta_for_profile(requested_replacement, validated_profile) ||
-            !delta_current_facts_match_snapshot(requested_replacement, current_facts.snapshot) ||
+            !internal::delta_current_facts_match_snapshot(requested_replacement,
+                                                          current_facts.snapshot) ||
             requested_replacement.base_last_accepted_decision_index !=
                 reconciled->state.last_accepted_decision_index ||
             requested_replacement.base_last_accepted_public_action_key !=
@@ -373,7 +260,7 @@ commit_teacher_state_delta_with_evidence_v2(
         const auto& delta = *ranking_result.proposed_state_delta;
         const auto proposal_facts = extract_public_fact_snapshot(proposal_observation);
         if (!proposal_facts.valid ||
-            !delta_current_facts_match_snapshot(delta, proposal_facts.snapshot) ||
+            !internal::delta_current_facts_match_snapshot(delta, proposal_facts.snapshot) ||
             !valid_state_for_profile(current_state, validated_profile) ||
             (current_state.last_accepted_decision_index.has_value() &&
              proposal_observation.decision_index <=
@@ -394,7 +281,7 @@ commit_teacher_state_delta_with_evidence_v2(
             accepted_transition.selected_public_action_key;
 
         if (!valid_state_for_profile(next_state, validated_profile) ||
-            !valid_reason_vector(delta.invalidation_reason_ids)) {
+            !internal::valid_reason_vector(delta.invalidation_reason_ids)) {
             return std::nullopt;
         }
         StrategyReconciliationResultV2 result;
