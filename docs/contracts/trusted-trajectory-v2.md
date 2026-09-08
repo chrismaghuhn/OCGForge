@@ -103,6 +103,8 @@ successor is owned.
 | include/ygo/trajectory/types.hpp | V1 logical types, trusted_trajectory.v1, episodic_environment.v2, V1 identity domains | Yes | Shared provenance, observation, safe-state, and enum values | TTV2-A1 | Historical structs contain v2_contract_id and V1 defaults; explicit V2 structs are required. |
 | include/ygo/trajectory/codec.hpp | V1 encode/decode API | Yes | Byte reader/writer primitives and shared child codecs | TTV2-A1 | Public codec functions are generation-specific and must not become a version union. |
 | src/trajectory/codec.cpp | V1 candidate validator and canonical bytes; V1 frame/domain/decision validation | Yes | Primitive writers/readers and unchanged child codecs | TTV2-A1/A2 | Candidate validation recomputes environment::public_action_key and accepts only V1 keys; operation metadata is absent. |
+| include/ygo/trajectory/identity_resolver.hpp | Unversioned resolver API whose schema and current-environment checks are V2-bound | Yes | Internal parsing helpers may be shared only behind explicit generation APIs | TTV2-A1, reused by TTV2-A3 | The public resolver semantics must distinguish historical V2 environment identity from successor V3 identity. |
+| src/trajectory/identity_resolver.cpp | Requires environment_identity.v2, sets EpisodicEnvironment V2, and compares canonical() | Yes | Common byte parsing is allowed only under separate V1/V3 entry points | TTV2-A1, reused by TTV2-A3 | A V1 resolver cannot be widened to accept V3 without breaking version purity. |
 | include/ygo/trajectory/recorder.hpp | V1 TrajectoryRecorder and V1 frame/closure types | Yes | Public transition and closure enum meanings | TTV2-A2 | Recorder snapshots V2-environment frames into V1 logical values and must not drop operation metadata. |
 | src/trajectory/recorder.cpp | Hard-coded EpisodicEnvironment V2 checks and V1 snapshots | Yes | Shared policy/RNG validation | TTV2-A2/A4 | V3 frames cannot be recorded by the historical recorder without reinterpretation. |
 | include/ygo/trajectory/restricted_evidence.hpp | Restricted replay evidence V1 and collection bundle V1 | Yes for replay evidence; bundle deferred | Shared RNG evidence child values | TTV2-A3 | Replay evidence binds directly to environment V2; the bundle is a separate downstream persistence surface. |
@@ -114,6 +116,10 @@ successor is owned.
 | include/ygo/trajectory/shard.hpp | V1 candidate shard contract | Not in A0; successor decision deferred | Entry framing may be reusable | TTV2-A3/A5 | Persistence successor must be decided after the V2 envelope core exists. |
 | src/trajectory/shard.cpp | V1 shard validation | Not in A0; successor decision deferred | Byte framing only if formally unchanged | TTV2-A3/A5 | A0 must not make a V1 shard accept V2 envelopes. |
 | tests/trajectory/** | V1 fixtures, V1 keys, V1 goldens, V2-environment replay fixtures | No historical changes | Existing tests remain regression gates | TTV2-A1/A3 | Historical vectors must remain untouched; V2 tests belong to successor slices. |
+
+src/trajectory/storage.cpp was also inspected. It provides generic content-addressed
+byte storage and does not own trusted-trajectory V1 semantics, so it has no separate
+successor obligation in A0.
 
 The current DatasetManifest, AdmissionReceipt, RestrictedCollectionEvidenceBundle,
 candidate shard, model input, and Task7 materialization surfaces are downstream of
@@ -151,6 +157,39 @@ The manifest validator must verify:
 * the episode input decodes against that environment identity;
 * the episode schema is episode_identity.v1;
 * policy provenance and disposition pass their existing canonical validators.
+
+### 5.1.1 V3 identity resolver boundary
+
+The historical resolver API remains unchanged and remains V2-bound:
+
+~~~
+decode_environment_identity_input(...)
+decode_episode_identity_input(...)
+is_current_certified_environment(...)
+    -> environment_identity.v2
+    -> episodic_environment.v2
+    -> CertifiedEnvironmentConfig::canonical()
+~~~
+
+The V2 trajectory implementation requires explicit successor entry points:
+
+~~~
+decode_environment_identity_input_v3(...)
+decode_episode_identity_input_v3(...)
+is_current_certified_environment_v3(...)
+    -> environment_identity.v3
+    -> episodic_environment.v3
+    -> CertifiedEnvironmentConfig::canonical_v3()
+~~~
+
+The V3 functions must validate the V3 schema and V3 contract binding, set the V3
+episode contract when decoding the episode identity, and compare the supplied
+environment identity against canonical_v3(). A V1 resolver must not accept either
+V3 schema or V3 environment values. Common parsing code may be private, but the
+generation-specific public semantics and failure behavior remain explicit.
+
+TTV2-A1 owns the V3 resolver required by EpisodeManifestV2 validation. TTV2-A3
+reuses that exact accepted resolver for RestrictedReplayEvidenceV2 reconstruction.
 
 ### 5.2 PublicFrameSnapshotV2
 
@@ -348,6 +387,36 @@ For a V2 closure, the schema marker is the trusted trajectory V2 string followed
 
 The enum meanings and numeric codes are reused because their semantics are unchanged.
 V2 does not invent a new transition or closure code.
+
+### 7.5 Full collection record and envelope bytes
+
+The complete V2 collection-record canonical bytes are fixed independently from the
+public gameplay record projection and are named
+canonical_collection_decision_record_v2:
+
+1. trusted trajectory V2 schema string, exactly
+   ocgforge.trusted_trajectory.v2;
+2. raw canonical_public_decision_record_v2 bytes;
+3. raw existing canonical_policy_decision_attribution_bytes.
+
+The third field reuses the historical policy-provenance attribution codec exactly.
+It remains policy_provenance.v1 bytes and contains no trajectory-generation rewrite.
+
+The complete EpisodeEnvelopeV2 canonical bytes, named
+canonical_episode_envelope_v2, are:
+
+1. trusted trajectory V2 envelope schema string, exactly
+   ocgforge.trusted_trajectory.v2;
+2. raw canonical_episode_manifest_v2 bytes;
+3. record_count as u32be;
+4. each raw canonical_collection_decision_record_v2 in supplied record order;
+5. raw canonical_episode_closure_v2 bytes.
+
+The envelope validator must reject a record vector whose size exceeds the maximum
+representable u32 count. Its decoder must reject trailing bytes. Every successful
+decode must re-encode to byte-for-byte identical canonical bytes; a noncanonical
+decode/re-encode is rejected. These rules apply to both the collection-record and
+envelope decoders.
 
 ## 8. V2 validation rules
 

@@ -15,7 +15,7 @@
 | Slice | Files owned | Deliverable | Explicitly excluded |
 | --- | --- | --- | --- |
 | TTV2-A0 | docs/contracts/trusted-trajectory-v2.md, this plan | Contract and migration boundary freeze | all production and test implementation |
-| TTV2-A1 | include/ygo/trajectory/types.hpp, include/ygo/trajectory/codec.hpp, src/trajectory/codec.cpp, new V2 codec tests, CMakeLists.txt if registration is required | V2 logical values, candidate/frame/record/envelope canonical codec, V1/V2 rejection matrix | recorder, replay, admission, persistence, Runner |
+| TTV2-A1 | include/ygo/trajectory/types.hpp, include/ygo/trajectory/codec.hpp, src/trajectory/codec.cpp, include/ygo/trajectory/identity_resolver.hpp, src/trajectory/identity_resolver.cpp, new V2 codec tests, CMakeLists.txt if registration is required | V2 logical values, V3 identity resolver, candidate/frame/record/envelope canonical codec, V1/V2 rejection matrix | recorder, replay, admission, persistence, Runner |
 | TTV2-A2 | new V2 recorder files or repository-approved recorder successor files, identity tests, CMakeLists.txt if registration is required | V3 recorder, public gameplay identity V2, trajectory record identity V2 | admission, receipt, shard, dataset, Runner wiring |
 | TTV2-A3 | restricted replay successor files, admission successor files, receipt/shard boundary files only where separately authorized | V2 restricted replay and explicit downstream acceptance/rejection | model, Task7, training |
 | TTV2-A4 | TeacherRunnerV3 trajectory adapter and focused integration tests | explicit RunnerV3 to trusted trajectory V2 wiring | V1 Runner migration, model, Task7 |
@@ -129,6 +129,20 @@ episodic_environment_contract_id in the V2 manifest and frame. Preserve shared
 policy provenance, policy-RNG, public-observation, safe-state, and episode-identity
 types where their existing canonical bytes are unchanged.
 
+Add explicit V3 identity resolver entry points in
+include/ygo/trajectory/identity_resolver.hpp and
+src/trajectory/identity_resolver.cpp:
+
+~~~text
+decode_environment_identity_input_v3(...)
+decode_episode_identity_input_v3(...)
+is_current_certified_environment_v3(...)
+~~~
+
+The historical resolver functions remain V2-only. The V3 functions must validate
+environment_identity.v3, episodic_environment.v3, and canonical_v3() without widening
+the V1 resolver behavior.
+
 - [ ] **Step 2: Add V2 candidate canonicalization**
 
 Implement the exact order from the A0 contract:
@@ -165,6 +179,25 @@ Reuse transition, successor, and closure numeric meanings without renumbering.
 Separate the public record projection from the full collection record so that policy
 assignment and RNG provenance remain outside public gameplay identity.
 
+Implement the frozen full collection-record and envelope byte orders exactly:
+
+~~~text
+collection record:
+trusted_trajectory.v2 schema
+raw public decision record V2 bytes
+raw existing policy_provenance.v1 attribution bytes
+
+envelope:
+trusted_trajectory.v2 schema
+raw manifest V2 bytes
+record_count:u32be
+each raw collection record V2 in order
+raw closure V2 bytes
+~~~
+
+Reject a record count above u32 capacity, trailing bytes, and any decode whose
+canonical re-encoding differs from the supplied bytes.
+
 - [ ] **Step 5: Add focused tests**
 
 Cover TTV2-G01 through TTV2-G13:
@@ -183,6 +216,9 @@ duplicates rejected
 selected key occurs exactly once
 V2 domain digest recomputes
 V2 decision identity recomputes
+V3 environment and episode identity resolvers reject V2 bindings
+collection record outer schema and shared attribution bytes are exact
+envelope count, trailing-byte, and canonical re-encode rejection are exact
 ~~~
 
 - [ ] **Step 6: Run A1 gates**
@@ -246,7 +282,8 @@ internal semantic key, and private locator. Commit and stop for review.
 
 Decode the V2 manifest environment identity input, require
 CertifiedEnvironmentConfig::canonical_v3(), verify the V3 environment semantic ID,
-and decode the episode identity input against that environment identity.
+and decode the episode identity input against that environment identity. Reuse the
+accepted TTV2-A1 V3 identity resolver; do not add a second replay-local resolver.
 
 - [ ] **Step 2: Validate V2 evidence**
 
