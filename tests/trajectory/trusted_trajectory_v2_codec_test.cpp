@@ -244,8 +244,18 @@ void test_v2_frame_identity_and_domain_validation() {
     const auto frame = v2_frame();
     const auto request_bytes =
         canonical_public_environment_decision_request_bytes_v2(frame.request);
-    require(decode_public_environment_decision_request_v2(request_bytes),
+    const auto decoded_request =
+        decode_public_environment_decision_request_v2(request_bytes);
+    require(decoded_request,
             "V2 request did not decode");
+    require(decoded_request.value->candidates.size() == frame.request.candidates.size() &&
+                decoded_request.value->candidates[0].public_action_key ==
+                    frame.request.candidates[0].public_action_key &&
+                decoded_request.value->candidates[1].public_action_key ==
+                    frame.request.candidates[1].public_action_key &&
+                decoded_request.value->candidates[2].public_action_key ==
+                    frame.request.candidates[2].public_action_key,
+            "V2 request candidate order changed");
     const auto bytes = canonical_public_frame_snapshot_bytes_v2(frame);
     const auto decoded = decode_public_frame_snapshot_v2(bytes);
     require(decoded, "V2 frame did not decode");
@@ -295,6 +305,18 @@ void test_v2_record_manifest_and_envelope_round_trip() {
     const auto collection_bytes = canonical_collection_decision_record_bytes_v2(record);
     require(decode_collection_decision_record_v2(collection_bytes),
             "V2 collection decision record did not decode");
+    auto collection_trailing = collection_bytes;
+    collection_trailing.push_back(0);
+    require(!static_cast<bool>(decode_collection_decision_record_v2(collection_trailing)),
+            "V2 collection record accepted trailing bytes");
+
+    auto invalid_record = record;
+    PublicActionKeyInput absent_key;
+    absent_key.action_kind = "card_selection";
+    invalid_record.selected_public_action_key = public_action_key_v2(absent_key);
+    require_reject(
+        [&] { (void)canonical_public_decision_record_bytes_v2(invalid_record); },
+        "V2 record accepted a selected key absent from its domain");
 
     const auto manifest = v2_manifest();
     const auto manifest_bytes = canonical_episode_manifest_bytes_v2(manifest);
