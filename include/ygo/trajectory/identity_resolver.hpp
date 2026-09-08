@@ -7,11 +7,21 @@ namespace ygo::trajectory {
 DecodeResult<environment::CertifiedEnvironmentConfig> decode_environment_identity_input(
     const std::vector<std::uint8_t>& bytes) noexcept;
 
+DecodeResult<environment::CertifiedEnvironmentConfig> decode_environment_identity_input_v3(
+    const std::vector<std::uint8_t>& bytes) noexcept;
+
 DecodeResult<environment::EpisodeSpec> decode_episode_identity_input(
     const std::vector<std::uint8_t>& bytes,
     const environment::CertifiedEnvironmentConfig& config) noexcept;
 
+DecodeResult<environment::EpisodeSpec> decode_episode_identity_input_v3(
+    const std::vector<std::uint8_t>& bytes,
+    const environment::CertifiedEnvironmentConfig& config) noexcept;
+
 bool is_current_certified_environment(
+    const environment::CertifiedEnvironmentConfig& config) noexcept;
+
+bool is_current_certified_environment_v3(
     const environment::CertifiedEnvironmentConfig& config) noexcept;
 
 }  // namespace ygo::trajectory

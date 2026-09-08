@@ -122,6 +122,12 @@ std::vector<std::uint8_t> canonical_public_environment_action_candidate_bytes(
 DecodeResult<environment::EnvironmentActionCandidate>
 decode_public_environment_action_candidate(const std::vector<std::uint8_t>& bytes) noexcept;
 
+std::vector<std::uint8_t> canonical_public_environment_action_candidate_bytes_v2(
+    const environment::EnvironmentActionCandidate& value);
+DecodeResult<environment::EnvironmentActionCandidate>
+decode_public_environment_action_candidate_v2(
+    const std::vector<std::uint8_t>& bytes) noexcept;
+
 std::vector<std::uint8_t> canonical_public_environment_continuation_bytes(
     const environment::EnvironmentContinuationView& value);
 DecodeResult<environment::EnvironmentContinuationView> decode_public_environment_continuation(
@@ -132,12 +138,28 @@ std::vector<std::uint8_t> canonical_public_environment_decision_request_bytes(
 DecodeResult<environment::EnvironmentDecisionRequest> decode_public_environment_decision_request(
     const std::vector<std::uint8_t>& bytes) noexcept;
 
+std::vector<std::uint8_t> canonical_public_environment_decision_request_bytes_v2(
+    const environment::EnvironmentDecisionRequest& value);
+DecodeResult<environment::EnvironmentDecisionRequest>
+decode_public_environment_decision_request_v2(
+    const std::vector<std::uint8_t>& bytes) noexcept;
+
 std::vector<std::uint8_t> canonical_public_frame_snapshot_bytes(const PublicFrameSnapshot& value);
 DecodeResult<PublicFrameSnapshot> decode_public_frame_snapshot(
     const std::vector<std::uint8_t>& bytes) noexcept;
 
+std::vector<std::uint8_t> canonical_public_frame_snapshot_bytes_v2(
+    const PublicFrameSnapshotV2& value);
+DecodeResult<PublicFrameSnapshotV2> decode_public_frame_snapshot_v2(
+    const std::vector<std::uint8_t>& bytes) noexcept;
+
 std::vector<std::uint8_t> canonical_public_decision_record_bytes(const DecisionRecord& value);
 DecodeResult<DecisionRecord> decode_public_decision_record(
+    const std::vector<std::uint8_t>& bytes) noexcept;
+
+std::vector<std::uint8_t> canonical_public_decision_record_bytes_v2(
+    const DecisionRecordV2& value);
+DecodeResult<DecisionRecordV2> decode_public_decision_record_v2(
     const std::vector<std::uint8_t>& bytes) noexcept;
 
 std::vector<std::uint8_t> canonical_policy_decision_attribution_bytes(
@@ -154,13 +176,38 @@ DecodeResult<EpisodeManifest> decode_episode_manifest(
 std::vector<std::uint8_t> canonical_collection_decision_record_bytes(
     const DecisionRecord& value);
 
+std::vector<std::uint8_t> canonical_collection_decision_record_bytes_v2(
+    const DecisionRecordV2& value);
+DecodeResult<DecisionRecordV2> decode_collection_decision_record_v2(
+    const std::vector<std::uint8_t>& bytes) noexcept;
+
 std::vector<std::uint8_t> canonical_episode_envelope_bytes(const EpisodeEnvelope& value);
 DecodeResult<EpisodeEnvelope> decode_episode_envelope(
+    const std::vector<std::uint8_t>& bytes) noexcept;
+
+std::vector<std::uint8_t> canonical_episode_closure_bytes_v2(
+    const EpisodeClosureV2& value);
+DecodeResult<EpisodeClosureV2> decode_episode_closure_v2(
+    const std::vector<std::uint8_t>& bytes) noexcept;
+
+std::vector<std::uint8_t> canonical_episode_manifest_bytes_v2(
+    const EpisodeManifestV2& value);
+DecodeResult<EpisodeManifestV2> decode_episode_manifest_v2(
+    const std::vector<std::uint8_t>& bytes) noexcept;
+
+std::vector<std::uint8_t> canonical_episode_envelope_bytes_v2(
+    const EpisodeEnvelopeV2& value);
+DecodeResult<EpisodeEnvelopeV2> decode_episode_envelope_v2(
     const std::vector<std::uint8_t>& bytes) noexcept;
 
 std::vector<std::uint8_t> canonical_restricted_replay_evidence_bytes(
     const RestrictedReplayEvidence& value);
 DecodeResult<RestrictedReplayEvidence> decode_restricted_replay_evidence(
+    const std::vector<std::uint8_t>& bytes) noexcept;
+
+std::vector<std::uint8_t> canonical_restricted_replay_evidence_bytes_v2(
+    const RestrictedReplayEvidenceV2& value);
+DecodeResult<RestrictedReplayEvidenceV2> decode_restricted_replay_evidence_v2(
     const std::vector<std::uint8_t>& bytes) noexcept;
 
 std::string public_gameplay_trajectory_id(const EpisodeEnvelope& value);

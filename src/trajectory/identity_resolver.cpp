@@ -61,17 +61,18 @@ bool read_u64_vector(ByteReader& reader, std::array<std::uint64_t, 4>& words) no
     return true;
 }
 
-}  // namespace
-
-DecodeResult<environment::CertifiedEnvironmentConfig> decode_environment_identity_input(
-    const std::vector<std::uint8_t>& bytes) noexcept {
+DecodeResult<environment::CertifiedEnvironmentConfig> decode_environment_identity_input_impl(
+    const std::vector<std::uint8_t>& bytes,
+    const std::string_view schema_id,
+    const std::string_view contract_id) noexcept {
     try {
         ByteReader reader(bytes);
         environment::CertifiedEnvironmentConfig config;
         std::string schema;
-        if (!reader.string(schema) || schema != environment::kEnvironmentIdentityV2SchemaId ||
-            !reader.string(schema) || schema != environment::kEnvironmentIdentityV2SchemaId ||
-            !reader.string(config.contract_id) || !reader.string(config.decision_contract_id) ||
+        if (!reader.string(schema) || schema != schema_id ||
+            !reader.string(schema) || schema != schema_id ||
+            !reader.string(config.contract_id) || config.contract_id != contract_id ||
+            !reader.string(config.decision_contract_id) ||
             !reader.string(config.observation_contract_id) ||
             !reader.string(config.action_identity_schema_id) ||
             !reader.string(config.public_action_identity_schema_id) ||
@@ -95,11 +96,13 @@ DecodeResult<environment::CertifiedEnvironmentConfig> decode_environment_identit
             !reader.string(config.duel_mode) || !reader.u64be(config.duel_flags) ||
             !read_decks(reader, config.locked_decks) ||
             !reader.string(config.required_script_closure_identity) || !reader.at_end()) {
-            return error<environment::CertifiedEnvironmentConfig>("malformed environment identity input");
+            return error<environment::CertifiedEnvironmentConfig>(
+                "malformed environment identity input");
         }
         config.environment_semantic_id = environment::environment_semantic_id(config);
         if (environment::canonical_environment_identity_bytes(config) != bytes) {
-            return error<environment::CertifiedEnvironmentConfig>("noncanonical environment identity input");
+            return error<environment::CertifiedEnvironmentConfig>(
+                "noncanonical environment identity input");
         }
         return ok(std::move(config));
     } catch (const std::exception& exception) {
@@ -109,10 +112,14 @@ DecodeResult<environment::CertifiedEnvironmentConfig> decode_environment_identit
     }
 }
 
-DecodeResult<environment::EpisodeSpec> decode_episode_identity_input(
+DecodeResult<environment::EpisodeSpec> decode_episode_identity_input_impl(
     const std::vector<std::uint8_t>& bytes,
-    const environment::CertifiedEnvironmentConfig& config) noexcept {
+    const environment::CertifiedEnvironmentConfig& config,
+    const std::string_view contract_id) noexcept {
     try {
+        if (config.contract_id != contract_id) {
+            return error<environment::EpisodeSpec>("episode identity environment generation mismatch");
+        }
         ByteReader reader(bytes);
         environment::EpisodeSpec spec;
         std::string schema;
@@ -130,16 +137,18 @@ DecodeResult<environment::EpisodeSpec> decode_episode_identity_input(
         }
         if (environment_id != environment::environment_semantic_id(config) ||
             words != core::derive_seed_bundle(spec.root_seed).words) {
-            return error<environment::EpisodeSpec>("episode identity inputs disagree with environment");
+            return error<environment::EpisodeSpec>(
+                "episode identity inputs disagree with environment");
         }
-        spec.contract_id = std::string(environment::kEpisodicEnvironmentV2ContractId);
+        spec.contract_id = std::string(contract_id);
         spec.seat_assignment = static_cast<environment::SeatAssignment>(seat);
         std::vector<environment::CertifiedDeckIdentity> expected_decks = config.locked_decks;
         if (spec.seat_assignment == environment::SeatAssignment::Mirror) {
             std::swap(expected_decks[0], expected_decks[1]);
         }
         if (spec_decks.size() != expected_decks.size()) {
-            return error<environment::EpisodeSpec>("episode deck identity does not match seat assignment");
+            return error<environment::EpisodeSpec>(
+                "episode deck identity does not match seat assignment");
         }
         for (std::size_t index = 0; index < spec_decks.size(); ++index) {
             if (spec_decks[index].id != expected_decks[index].id ||
@@ -159,10 +168,57 @@ DecodeResult<environment::EpisodeSpec> decode_episode_identity_input(
     }
 }
 
+}  // namespace
+
+DecodeResult<environment::CertifiedEnvironmentConfig> decode_environment_identity_input(
+    const std::vector<std::uint8_t>& bytes) noexcept {
+    return decode_environment_identity_input_impl(
+        bytes, environment::kEnvironmentIdentityV2SchemaId,
+        environment::kEpisodicEnvironmentV2ContractId);
+}
+
+DecodeResult<environment::CertifiedEnvironmentConfig> decode_environment_identity_input_v3(
+    const std::vector<std::uint8_t>& bytes) noexcept {
+    return decode_environment_identity_input_impl(
+        bytes, environment::kEnvironmentIdentityV3SchemaId,
+        environment::kEpisodicEnvironmentV3ContractId);
+}
+
+DecodeResult<environment::EpisodeSpec> decode_episode_identity_input(
+    const std::vector<std::uint8_t>& bytes,
+    const environment::CertifiedEnvironmentConfig& config) noexcept {
+    return decode_episode_identity_input_impl(
+        bytes, config, environment::kEpisodicEnvironmentV2ContractId);
+}
+
+DecodeResult<environment::EpisodeSpec> decode_episode_identity_input_v3(
+    const std::vector<std::uint8_t>& bytes,
+    const environment::CertifiedEnvironmentConfig& config) noexcept {
+    return decode_episode_identity_input_impl(
+        bytes, config, environment::kEpisodicEnvironmentV3ContractId);
+}
+
 bool is_current_certified_environment(
     const environment::CertifiedEnvironmentConfig& config) noexcept {
     try {
+        if (config.contract_id != environment::kEpisodicEnvironmentV2ContractId) {
+            return false;
+        }
         const auto canonical = environment::CertifiedEnvironmentConfig::canonical();
+        return environment::canonical_environment_identity_bytes(config) ==
+               environment::canonical_environment_identity_bytes(canonical);
+    } catch (...) {
+        return false;
+    }
+}
+
+bool is_current_certified_environment_v3(
+    const environment::CertifiedEnvironmentConfig& config) noexcept {
+    try {
+        if (config.contract_id != environment::kEpisodicEnvironmentV3ContractId) {
+            return false;
+        }
+        const auto canonical = environment::CertifiedEnvironmentConfig::canonical_v3();
         return environment::canonical_environment_identity_bytes(config) ==
                environment::canonical_environment_identity_bytes(canonical);
     } catch (...) {
