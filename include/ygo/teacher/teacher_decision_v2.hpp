@@ -21,7 +21,6 @@ struct TeacherRankingResultV2 final {
     std::optional<std::string> selected_public_action_key;
     std::optional<ScoreVector> selected_score_vector;
     std::optional<TeacherFallbackLevel> fallback_level;
-    std::optional<TeacherDecisionExplanation> explanation;
     std::optional<TeacherStateDeltaV2> proposed_state_delta;
 };
 

@@ -6,7 +6,6 @@
 #include "ygo/teacher/goal_line_controller.hpp"
 #include "ygo/teacher/public_fact_registry.hpp"
 #include "ygo/teacher/salamangreat_profile.hpp"
-#include "ygo/teacher/goal_line_controller.hpp"
 #include "ygo/teacher/recovery_controller.hpp"
 #include "ygo/teacher/strategy_profile.hpp"
 #include "ygo/teacher/strategy_state.hpp"
@@ -14,7 +13,6 @@
 #include "ygo/teacher/teacher_core.hpp"
 #include "ygo/teacher/teacher_core_v2.hpp"
 
-#include <cstddef>
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
@@ -23,6 +21,7 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -30,6 +29,16 @@ namespace {
 
 using namespace ygo::environment;
 using namespace ygo::teacher;
+
+template <typename T, typename = void>
+struct has_v2_explanation_member : std::false_type {};
+
+template <typename T>
+struct has_v2_explanation_member<T, std::void_t<decltype(std::declval<T>().explanation)>>
+    : std::true_type {};
+
+static_assert(!has_v2_explanation_member<TeacherRankingResultV2>::value,
+              "TeacherRankingResultV2 must not expose a V1 diagnostic type");
 
 void require(const bool condition, const std::string& message) {
     if (!condition) {
@@ -511,16 +520,6 @@ void test_hiita_v2_commitment() {
     require(*initial.selected_public_action_key == material_a_select.public_action_key ||
                 *initial.selected_public_action_key == material_b_select.public_action_key,
             "initial Hiita material selection did not choose a legal material candidate");
-    auto invalid_explanation_result = initial;
-    TeacherDecisionExplanation invalid_explanation;
-    invalid_explanation.selected_public_action_key = *initial.selected_public_action_key;
-    invalid_explanation.selected_score_vector = *initial.selected_score_vector;
-    invalid_explanation.explanation_schema_id =
-        std::string(kTeacherDiagnosticContractId);
-    invalid_explanation_result.explanation = invalid_explanation;
-    require(!validate_teacher_ranking_result_v2(invalid_explanation_result),
-            "V2 result accepted an invalid explanation payload");
-
     validate_v2_fixture(scenarios[1]);
     const auto second = propose_v2(
         profile, scenarios[1].state, observation, scenarios[1].candidates);
@@ -678,6 +677,92 @@ void test_v2_paired_public_equivalence() {
     require_same_public_v2_result(left, right);
 }
 
+void test_selected_result_rejects_not_applicable() {
+    const auto candidate = make_card_candidate(
+        "p0:MONSTER_ZONE:0", PublicCardSelectionOperation::Select, true);
+    const auto other_candidate = make_card_candidate(
+        "p0:MONSTER_ZONE:1", PublicCardSelectionOperation::Select, true);
+    const auto make_result = [&](const CandidateEvaluationStatus status,
+                                 const bool evaluation_has_score,
+                                 const bool result_has_score,
+                                 const std::optional<TeacherFallbackLevel> fallback,
+                                 const std::optional<std::string> selected_key = std::nullopt,
+                                 const std::optional<std::string> evaluation_key = std::nullopt) {
+        TeacherRankingResultV2 result;
+        result.status = TeacherRankingStatus::Selected;
+        CandidateEvaluation evaluation;
+        evaluation.public_action_key = evaluation_key.value_or(candidate.public_action_key);
+        evaluation.status = status;
+        if (evaluation_has_score) {
+            evaluation.score = ScoreVector{};
+        }
+        result.evaluations.push_back(evaluation);
+        result.selected_public_action_key = selected_key.value_or(candidate.public_action_key);
+        if (result_has_score) {
+            result.selected_score_vector = ScoreVector{};
+        }
+        result.fallback_level = fallback;
+        return result;
+    };
+    const auto expect_rejected = [&](const TeacherRankingResultV2& result,
+                                     const std::string& label) {
+        const bool valid = validate_teacher_ranking_result_v2(result);
+        const auto selection = teacher_policy_selection_from_result_v2(result);
+        require(!valid && !selection.value.has_value(), label);
+    };
+
+    expect_rejected(make_result(CandidateEvaluationStatus::NotApplicable, false, false,
+                                std::nullopt),
+                    "Selected NotApplicable V2 result became actionable");
+    expect_rejected(make_result(CandidateEvaluationStatus::Unsupported, false, false,
+                                std::nullopt),
+                    "Selected Unsupported V2 result became actionable");
+    expect_rejected(make_result(CandidateEvaluationStatus::Invalid, false, false,
+                                std::nullopt),
+                    "Selected Invalid V2 result became actionable");
+    expect_rejected(make_result(static_cast<CandidateEvaluationStatus>(0xff), false, false,
+                                std::nullopt),
+                    "Selected unknown-status V2 result became actionable");
+    expect_rejected(make_result(CandidateEvaluationStatus::Supported, false, true,
+                                TeacherFallbackLevel::F0),
+                    "Selected V2 evaluation without a score was accepted");
+    expect_rejected(make_result(CandidateEvaluationStatus::Supported, true, false,
+                                TeacherFallbackLevel::F0),
+                    "Selected V2 result without a selected score was accepted");
+
+    auto mismatched_score = make_result(CandidateEvaluationStatus::Supported, true, true,
+                                        TeacherFallbackLevel::F0);
+    mismatched_score.selected_score_vector->values[0] = 1;
+    expect_rejected(mismatched_score, "Selected V2 score mismatch was accepted");
+    expect_rejected(make_result(CandidateEvaluationStatus::Supported, true, true,
+                                std::nullopt),
+                    "Selected V2 result without fallback was accepted");
+    expect_rejected(make_result(CandidateEvaluationStatus::Supported, true, true,
+                                static_cast<TeacherFallbackLevel>(0xff)),
+                    "Selected V2 result with unknown fallback was accepted");
+    expect_rejected(make_result(CandidateEvaluationStatus::Supported, true, true,
+                                TeacherFallbackLevel::F0, candidate.public_action_key,
+                                other_candidate.public_action_key),
+                    "Selected V2 key absent from evaluations was accepted");
+
+    auto duplicate = make_result(CandidateEvaluationStatus::Supported, true, true,
+                                 TeacherFallbackLevel::F0);
+    duplicate.evaluations.push_back(duplicate.evaluations.front());
+    expect_rejected(duplicate, "Selected V2 duplicate evaluation keys were accepted");
+    expect_rejected(make_result(CandidateEvaluationStatus::Supported, true, true,
+                                TeacherFallbackLevel::F0, "public_action.v2.malformed"),
+                    "Selected malformed V2 key was accepted");
+
+    const auto valid = make_result(CandidateEvaluationStatus::Supported, true, true,
+                                   TeacherFallbackLevel::F0);
+    require(validate_teacher_ranking_result_v2(valid),
+            "valid Supported V2 selected result was rejected");
+    const auto selection = teacher_policy_selection_from_result_v2(valid);
+    require(selection.value.has_value() &&
+                selection.value->public_action_key == candidate.public_action_key,
+            "valid Supported V2 selected result did not adapt to its action");
+}
+
 }  // namespace
 
 int main() {
@@ -690,6 +775,7 @@ int main() {
         test_generic_scoring_contract();
         test_select_progress_survives_unsupported_plan();
         test_v2_paired_public_equivalence();
+        test_selected_result_rejects_not_applicable();
         std::cout << "teacher_v3_hiita_commitment_test: PASS\n";
         return 0;
     } catch (const std::exception& error) {

@@ -74,11 +74,6 @@ bool validate_teacher_ranking_result_v2(
             set_diagnostic(diagnostic, "V2 teacher fallback level is unknown");
             return false;
         }
-        if (value.explanation.has_value()) {
-            set_diagnostic(diagnostic,
-                           "V2 Teacher diagnostic publication is not versioned in B1");
-            return false;
-        }
         if (value.proposed_state_delta.has_value() &&
             !validate_teacher_state_delta_v2(*value.proposed_state_delta)) {
             set_diagnostic(diagnostic, "V2 teacher state delta is invalid");
@@ -101,7 +96,7 @@ bool validate_teacher_ranking_result_v2(
         if (value.status != TeacherRankingStatus::Selected) {
             if (value.selected_public_action_key.has_value() ||
                 value.selected_score_vector.has_value() ||
-                value.fallback_level.has_value() || value.explanation.has_value() ||
+                value.fallback_level.has_value() ||
                 value.proposed_state_delta.has_value()) {
                 set_diagnostic(diagnostic,
                                "non-selected V2 result carries an actionable result");
@@ -135,16 +130,25 @@ bool validate_teacher_ranking_result_v2(
                            "selected V2 action is absent from evaluation records");
             return false;
         }
-        if (selected->status == CandidateEvaluationStatus::Unsupported ||
-            selected->status == CandidateEvaluationStatus::Invalid) {
+        if (selected->status != CandidateEvaluationStatus::Supported) {
             set_diagnostic(diagnostic,
-                           "selected V2 action has a non-actionable evaluation status");
+                           "selected V2 action is not Supported");
             return false;
         }
-        if (value.selected_score_vector.has_value() &&
-            (!selected->score.has_value() ||
-             *selected->score != *value.selected_score_vector)) {
+        if (!selected->score.has_value()) {
+            set_diagnostic(diagnostic, "selected V2 action has no score");
+            return false;
+        }
+        if (!value.selected_score_vector.has_value()) {
+            set_diagnostic(diagnostic, "selected V2 result has no selected score");
+            return false;
+        }
+        if (*selected->score != *value.selected_score_vector) {
             set_diagnostic(diagnostic, "selected V2 score does not match its evaluation");
+            return false;
+        }
+        if (!value.fallback_level.has_value()) {
+            set_diagnostic(diagnostic, "selected V2 result has no fallback level");
             return false;
         }
         return true;
