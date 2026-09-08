@@ -26,6 +26,11 @@ bool evaluate_candidate_domain(
     const CandidateEvaluator& evaluator,
     std::vector<CandidateEvaluation>& evaluations) noexcept;
 
+bool evaluate_candidate_domain_v2(
+    const std::vector<environment::EnvironmentActionCandidate>& candidates,
+    const CandidateEvaluator& evaluator,
+    std::vector<CandidateEvaluation>& evaluations) noexcept;
+
 // Adds one bounded i32 contribution to one existing i64 score component.
 // Invalid dimensions, out-of-range contributions, and overflow/underflow
 // leave score unchanged and return false. A false result is an INVALID

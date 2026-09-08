@@ -341,14 +341,17 @@ add_library(ygo_teacher STATIC
     src/teacher/strategy_profile.cpp
     src/teacher/strategy_profile_codec.cpp
     src/teacher/strategy_state.cpp
+    src/teacher/strategy_state_v2.cpp
     src/teacher/strategy_state_reconciler.cpp
     src/teacher/target_evaluator.cpp
     src/teacher/tactical_evaluator.cpp
     src/teacher/swordsoul_tenyi_profile.cpp
     src/teacher/teacher_core.cpp
+    src/teacher/teacher_core_v2.cpp
     src/teacher/teacher_explanation_codec.cpp
     src/teacher/teacher_policy_binding.cpp
     src/teacher/teacher_decision.cpp
+    src/teacher/teacher_decision_v2.cpp
     src/teacher/public_battle_snapshot.cpp
     src/teacher/provable_lethal.cpp
 )
@@ -368,6 +371,7 @@ add_library(ygo_policy STATIC
     src/policy/runner.cpp
     src/policy/runner_shared.cpp
     src/policy/teacher.cpp
+    src/policy/teacher_v2.cpp
     src/policy/teacher_runner.cpp
 )
 target_include_directories(ygo_policy PUBLIC "${CMAKE_SOURCE_DIR}/include")
@@ -478,6 +482,30 @@ add_test(NAME teacher_recovery_test COMMAND teacher_recovery_test)
 add_executable(teacher_fallback_test tests/teacher/teacher_fallback_test.cpp)
 target_link_libraries(teacher_fallback_test PRIVATE ygo_teacher)
 add_test(NAME teacher_fallback_test COMMAND teacher_fallback_test)
+
+add_executable(teacher_v3_hiita_commitment_test
+               tests/teacher/teacher_v3_hiita_commitment_test.cpp)
+target_link_libraries(teacher_v3_hiita_commitment_test PRIVATE ygo_teacher)
+add_test(NAME teacher_v3_hiita_commitment_test
+         COMMAND teacher_v3_hiita_commitment_test)
+
+add_executable(teacher_v3_strategy_state_test
+               tests/teacher/teacher_v3_strategy_state_test.cpp)
+target_link_libraries(teacher_v3_strategy_state_test PRIVATE ygo_teacher)
+add_test(NAME teacher_v3_strategy_state_test
+         COMMAND teacher_v3_strategy_state_test)
+
+add_executable(teacher_v3_source_of_truth_equivalence_test
+               tests/teacher/teacher_v3_source_of_truth_equivalence_test.cpp)
+target_link_libraries(teacher_v3_source_of_truth_equivalence_test PRIVATE ygo_teacher)
+add_test(NAME teacher_v3_source_of_truth_equivalence_test
+         COMMAND teacher_v3_source_of_truth_equivalence_test)
+
+add_executable(teacher_v3_provenance_test
+               tests/teacher/teacher_v3_provenance_test.cpp)
+target_link_libraries(teacher_v3_provenance_test PRIVATE ygo_policy)
+add_test(NAME teacher_v3_provenance_test
+         COMMAND teacher_v3_provenance_test)
 
 add_executable(teacher_explanation_test tests/teacher/teacher_explanation_test.cpp)
 target_link_libraries(teacher_explanation_test PRIVATE ygo_teacher)

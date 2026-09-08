@@ -36,4 +36,10 @@ TeacherRankingResult resolve_teacher_fallback(
     const std::vector<environment::EnvironmentActionCandidate>& candidates,
     const TeacherFallbackStageSet& stages) noexcept;
 
+struct TeacherRankingResultV2;
+
+TeacherRankingResultV2 resolve_teacher_fallback_v2(
+    const std::vector<environment::EnvironmentActionCandidate>& candidates,
+    const TeacherFallbackStageSet& stages) noexcept;
+
 }  // namespace ygo::teacher

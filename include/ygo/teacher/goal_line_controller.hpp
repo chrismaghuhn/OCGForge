@@ -12,6 +12,7 @@
 #include "ygo/teacher/public_fact_registry.hpp"
 #include "ygo/teacher/strategy_profile.hpp"
 #include "ygo/teacher/strategy_state.hpp"
+#include "ygo/teacher/strategy_state_v2.hpp"
 
 namespace ygo::teacher {
 
@@ -46,6 +47,10 @@ GoalLineSelection select_goal_and_line(const StrategyProfileV1& profile,
                                        const EpisodeLocalStrategyStateV1& state,
                                        const PublicFactSnapshot& public_facts) noexcept;
 
+GoalLineSelection select_goal_and_line_v2(const StrategyProfileV1& profile,
+                                          const EpisodeLocalStrategyStateV2& state,
+                                          const PublicFactSnapshot& public_facts) noexcept;
+
 PredicateEvaluationStatus match_candidate_intent_set(
     const StrategyProfileV1& profile,
     const std::vector<std::string>& intent_ids,
@@ -68,12 +73,41 @@ PredicateEvaluationStatus evaluate_goal_completion(
     std::uint8_t owning_participant,
     const StrategyProfileV1& profile) noexcept;
 
+PredicateEvaluationStatus evaluate_node_completion_v2(
+    const LineNode& node,
+    const environment::AcceptedActionTransition& accepted_transition,
+    const environment::PublicEnvironmentObservation& subsequent_observation,
+    std::uint8_t owning_participant,
+    const StrategyProfileV1& profile) noexcept;
+
+PredicateEvaluationStatus evaluate_goal_completion_v2(
+    const GoalDefinition& goal,
+    const environment::AcceptedActionTransition& accepted_transition,
+    const environment::PublicEnvironmentObservation& subsequent_observation,
+    std::uint8_t owning_participant,
+    const StrategyProfileV1& profile) noexcept;
+
 PublicEvaluatorOutcome evaluate_goal_line_progress(
     const StrategyProfileV1& profile,
     const GoalLineSelection& selection,
     const RecoverySelection& recovery,
     const environment::EnvironmentActionCandidate& candidate,
     const environment::PublicEnvironmentObservation& observation,
+    std::uint8_t owning_participant) noexcept;
+
+PublicEvaluatorOutcome evaluate_goal_line_progress_v2(
+    const StrategyProfileV1& profile,
+    const GoalLineSelection& selection,
+    const RecoverySelection& recovery,
+    const environment::EnvironmentActionCandidate& candidate,
+    const environment::PublicEnvironmentObservation& observation,
+    std::uint8_t owning_participant,
+    bool reconciled_continuation_commitment) noexcept;
+
+RecoverySelection select_recovery_edge_v2(
+    const StrategyProfileV1& profile,
+    const EpisodeLocalStrategyStateV2& pre_reconciliation_state,
+    const environment::PublicEnvironmentObservation& current_observation,
     std::uint8_t owning_participant) noexcept;
 
 }  // namespace ygo::teacher

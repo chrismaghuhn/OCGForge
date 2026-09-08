@@ -28,6 +28,8 @@ struct CandidateFeatures final {
     bool target_is_redacted = false;
     bool has_continuation_operation = false;
     bool submits_engine_response = true;
+    environment::PublicCardSelectionOperation card_selection_operation =
+        environment::PublicCardSelectionOperation::None;
 
     bool operator==(const CandidateFeatures& other) const noexcept {
         return public_action_key == other.public_action_key &&
@@ -41,7 +43,8 @@ struct CandidateFeatures final {
                target_is_visible == other.target_is_visible &&
                target_is_redacted == other.target_is_redacted &&
                has_continuation_operation == other.has_continuation_operation &&
-               submits_engine_response == other.submits_engine_response;
+               submits_engine_response == other.submits_engine_response &&
+               card_selection_operation == other.card_selection_operation;
     }
     bool operator!=(const CandidateFeatures& other) const noexcept {
         return !(*this == other);
@@ -80,6 +83,11 @@ struct PublicEvaluatorOutcome final {
 };
 
 bool extract_candidate_features(
+    const environment::EnvironmentActionCandidate& candidate,
+    const PublicFactSnapshot& public_facts,
+    CandidateFeatures& output) noexcept;
+
+bool extract_candidate_features_v2(
     const environment::EnvironmentActionCandidate& candidate,
     const PublicFactSnapshot& public_facts,
     CandidateFeatures& output) noexcept;

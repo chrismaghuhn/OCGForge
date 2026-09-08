@@ -125,10 +125,6 @@ void test_published_identities_and_assignments() {
     require(resolver.can_resolve(ProvenanceKind::ProducerImplementation,
                                  kTeacherProducerImplementationIdentity),
             "accepted Teacher producer registration is missing");
-    require(!resolver.can_resolve(
-                ProvenanceKind::ProducerImplementation,
-                "ocgforge.policy.teacher_core.v2"),
-            "unexpected Teacher v2 producer registration exists");
     const auto* sampling = resolver.sampling_contract_capabilities(
         kDeterministicLexicographicArgmaxSamplingContractIdentity);
     require(sampling != nullptr && sampling->complete && sampling->deterministic,
