@@ -284,6 +284,12 @@ target_link_libraries(phase6_task7_input_materialization_test PRIVATE ygo_phase6
 add_test(NAME phase6_task7_input_materialization_test
          COMMAND phase6_task7_input_materialization_test)
 
+add_executable(task7_v2_authority_provisioning_test
+               tests/phase6/phase6_task7_dataset_authority_provisioning_v2_test.cpp)
+target_link_libraries(task7_v2_authority_provisioning_test PRIVATE ygo_task7_v2)
+add_test(NAME task7_v2_authority_provisioning_test
+         COMMAND task7_v2_authority_provisioning_test)
+
 add_executable(phase6_task7_materialization_probe
                tools/phase6_task7_materialization_probe/main.cpp)
 target_link_libraries(phase6_task7_materialization_probe PRIVATE ygo_phase6)
@@ -391,6 +397,21 @@ if(MSVC)
 else()
     target_compile_options(ygo_policy PRIVATE -Wall -Wextra -Wpedantic)
 endif()
+
+add_library(ygo_task7_v2 STATIC
+    src/phase6/task7_dataset_authority_provisioning_v2.cpp
+)
+target_include_directories(ygo_task7_v2 PUBLIC "${CMAKE_SOURCE_DIR}/include")
+target_link_libraries(ygo_task7_v2 PUBLIC ygo_phase6 ygo_policy)
+if(MSVC)
+    target_compile_options(ygo_task7_v2 PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(ygo_task7_v2 PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+add_executable(phase6_task7_v2_provisioner
+               tools/phase6_task7_v2_provisioner/main.cpp)
+target_link_libraries(phase6_task7_v2_provisioner PRIVATE ygo_task7_v2)
 
 add_executable(trajectory_codec_test tests/trajectory/codec_test.cpp)
 target_link_libraries(trajectory_codec_test PRIVATE ygo_trajectory)
