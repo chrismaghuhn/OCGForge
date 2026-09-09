@@ -2,6 +2,9 @@
 
 #include "ygo/environment/public_environment_observation.hpp"
 #include "ygo/observation/player_observation.hpp"
+#include "ygo/policy/teacher.hpp"
+#include "ygo/policy/teacher_v2.hpp"
+#include "ygo/teacher/swordsoul_tenyi_profile.hpp"
 
 #include <array>
 #include <cstdint>
@@ -134,6 +137,7 @@ void test_job_episode_binding_is_exact() {
     envelope.manifest.episode_identity_input =
         ygo::environment::canonical_episode_identity_bytes(config, spec);
     envelope.manifest.episode_semantic_id = ygo::environment::episode_semantic_id(config, spec);
+    envelope.manifest.policy_provenance = make_task7_v2_policy_provenance(job);
     std::string error;
     require(validate_task7_v2_job_episode_binding(job, envelope, &error),
             "Task7 V2 job/episode identity fixture did not validate: " + error);
@@ -141,6 +145,23 @@ void test_job_episode_binding_is_exact() {
     wrong_job.root_seed += 1;
     require(!validate_task7_v2_job_episode_binding(wrong_job, envelope, &error),
             "Task7 V2 accepted an episode under the wrong job seed");
+
+    auto extra_artifact = envelope;
+    extra_artifact.manifest.policy_provenance.policy_artifacts.push_back(
+        ygo::policy::make_teacher_policy_artifact(
+            ygo::teacher::make_swordsoul_tenyi_profile()));
+    require(!validate_task7_v2_job_episode_binding(job, extra_artifact, &error),
+            "Task7 V2 accepted extra Teacher artifact provenance");
+
+    auto extra_assignment = envelope;
+    auto assignment = extra_assignment.manifest.policy_provenance.participant_assignments.front();
+    assignment.assignment_epoch = 1;
+    assignment.effective_from_decision_index = 1;
+    assignment.participant_policy_assignment_id =
+        ygo::trajectory::compute_participant_policy_assignment_id(assignment);
+    extra_assignment.manifest.policy_provenance.participant_assignments.push_back(assignment);
+    require(!validate_task7_v2_job_episode_binding(job, extra_assignment, &error),
+            "Task7 V2 accepted extra Teacher assignment provenance");
 }
 
 void test_authority_closure_rejects_detached_values() {

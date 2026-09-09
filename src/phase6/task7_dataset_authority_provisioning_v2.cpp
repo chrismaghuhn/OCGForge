@@ -189,6 +189,41 @@ void validate_schedule(const Task7CollectionScheduleV2& schedule) {
     }
 }
 
+struct Task7TeacherSetup final {
+    teacher::StrategyProfileV1 swordsoul_profile;
+    teacher::StrategyProfileV1 salamangreat_profile;
+    trajectory::PolicyArtifact swordsoul_artifact;
+    trajectory::PolicyArtifact salamangreat_artifact;
+    std::vector<trajectory::ParticipantPolicyAssignment> assignments;
+    trajectory::PolicyProvenanceEnvelope provenance;
+};
+
+Task7TeacherSetup make_task7_teacher_setup(const Task7CollectionJobV2& job) {
+    validate_job(job);
+    const auto config = environment::CertifiedEnvironmentConfig::canonical_v3();
+    Task7TeacherSetup setup;
+    setup.swordsoul_profile = teacher::make_swordsoul_tenyi_profile();
+    setup.salamangreat_profile = teacher::make_salamangreat_profile();
+    setup.swordsoul_artifact = policy::make_teacher_policy_artifact_v2(
+        setup.swordsoul_profile);
+    setup.salamangreat_artifact = policy::make_teacher_policy_artifact_v2(
+        setup.salamangreat_profile);
+    const std::array<trajectory::PolicyRole, 2> roles = {
+        trajectory::PolicyRole::Behavior, trajectory::PolicyRole::Opponent};
+    setup.assignments = policy::make_teacher_participant_assignments(
+        setup.swordsoul_artifact, setup.salamangreat_artifact, config,
+        job.seat_assignment, job.starting_player, roles);
+    setup.provenance.policy_artifacts = {
+        setup.swordsoul_artifact, setup.salamangreat_artifact};
+    std::sort(setup.provenance.policy_artifacts.begin(),
+              setup.provenance.policy_artifacts.end(),
+              [](const auto& left, const auto& right) {
+                  return left.policy_artifact_id < right.policy_artifact_id;
+              });
+    setup.provenance.participant_assignments = setup.assignments;
+    return setup;
+}
+
 bool eligible_run(const Task7CollectionJobV2& job,
                   const policy::TeacherRunnerV3TrajectoryRunResult& run,
                   std::string& error) {
@@ -384,6 +419,11 @@ bool derive_authority_values(const Task7CollectionScheduleV2& schedule,
 
 }  // namespace
 
+trajectory::PolicyProvenanceEnvelope make_task7_v2_policy_provenance(
+    const Task7CollectionJobV2& job) {
+    return make_task7_teacher_setup(job).provenance;
+}
+
 bool validate_task7_v2_job_episode_binding(
     const Task7CollectionJobV2& job,
     const trajectory::EpisodeEnvelopeV2& envelope,
@@ -407,6 +447,13 @@ bool validate_task7_v2_job_episode_binding(
             environment::episode_semantic_id(*environment_result.value, *episode_result.value) !=
                 envelope.manifest.episode_semantic_id) {
             throw std::invalid_argument("Task7 V2 job/episode identity mismatch");
+        }
+        const auto expected_provenance = make_task7_v2_policy_provenance(job);
+        if (trajectory::canonical_policy_provenance_envelope_bytes(
+                expected_provenance) !=
+            trajectory::canonical_policy_provenance_envelope_bytes(
+                envelope.manifest.policy_provenance)) {
+            throw std::invalid_argument("Task7 V2 job/Teacher provenance mismatch");
         }
         return true;
     } catch (const std::exception& exception) {
@@ -658,34 +705,19 @@ policy::TeacherRunnerV3TrajectoryRunResult run_task7_collection_job_v2(
     try {
         validate_job(job);
         const auto config = environment::CertifiedEnvironmentConfig::canonical_v3();
-        const auto swordsoul_profile = teacher::make_swordsoul_tenyi_profile();
-        const auto salamangreat_profile = teacher::make_salamangreat_profile();
-        const auto swordsoul_artifact = policy::make_teacher_policy_artifact_v2(swordsoul_profile);
-        const auto salamangreat_artifact = policy::make_teacher_policy_artifact_v2(salamangreat_profile);
-        const std::array<trajectory::PolicyRole, 2> roles = {
-            trajectory::PolicyRole::Behavior, trajectory::PolicyRole::Opponent};
-        auto assignments = policy::make_teacher_participant_assignments(
-            swordsoul_artifact, salamangreat_artifact, config, job.seat_assignment,
-            job.starting_player, roles);
-        trajectory::PolicyProvenanceEnvelope provenance;
-        provenance.policy_artifacts = {swordsoul_artifact, salamangreat_artifact};
-        std::sort(provenance.policy_artifacts.begin(), provenance.policy_artifacts.end(),
-                  [](const auto& left, const auto& right) {
-                      return left.policy_artifact_id < right.policy_artifact_id;
-                  });
-        provenance.participant_assignments = assignments;
+        const auto setup = make_task7_teacher_setup(job);
         policy::TeacherRunnerV3Config runner_config;
         for (std::uint8_t player = 0; player < 2; ++player) {
             const auto assignment_it = std::find_if(
-                assignments.begin(), assignments.end(),
+                setup.assignments.begin(), setup.assignments.end(),
                 [player](const auto& assignment) { return assignment.player == player; });
-            if (assignment_it == assignments.end()) {
+            if (assignment_it == setup.assignments.end()) {
                 result.diagnostic = "Task7 V2 assignment is missing a player";
                 return result;
             }
             const bool swordsoul = assignment_it->deck_role == trajectory::DeckRole::FirstLockedDeck;
-            const auto& profile = swordsoul ? swordsoul_profile : salamangreat_profile;
-            const auto& artifact = swordsoul ? swordsoul_artifact : salamangreat_artifact;
+            const auto& profile = swordsoul ? setup.swordsoul_profile : setup.salamangreat_profile;
+            const auto& artifact = swordsoul ? setup.swordsoul_artifact : setup.salamangreat_artifact;
             const auto binding = policy::make_teacher_policy_binding_v2(profile);
             auto session = policy::create_teacher_policy_session_v2(
                 profile, binding, artifact, *assignment_it);
@@ -709,7 +741,7 @@ policy::TeacherRunnerV3TrajectoryRunResult run_task7_collection_job_v2(
         run_control.cancellation.source = job.cancellation_source;
         auto created = policy::TeacherRunnerV3TrajectoryRunner::create(
             policy::TeacherRunnerV3TrajectoryConfig{
-                config, episode_spec, run_control, std::move(provenance),
+                config, episode_spec, run_control, setup.provenance,
                 std::move(runner_config)});
         if (!created) {
             result.error = created.error;

@@ -127,6 +127,9 @@ std::string task7_collection_schedule_identity_v2(
 policy::TeacherRunnerV3TrajectoryRunResult run_task7_collection_job_v2(
     const Task7CollectionJobV2& job) noexcept;
 
+trajectory::PolicyProvenanceEnvelope make_task7_v2_policy_provenance(
+    const Task7CollectionJobV2& job);
+
 bool validate_task7_v2_job_episode_binding(
     const Task7CollectionJobV2& job,
     const trajectory::EpisodeEnvelopeV2& envelope,
