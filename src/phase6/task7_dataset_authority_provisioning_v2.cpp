@@ -16,6 +16,7 @@
 #include "ygo/teacher/swordsoul_tenyi_profile.hpp"
 #include "ygo/trace/sha256.hpp"
 #include "ygo/trajectory/dataset_manifest_v2.hpp"
+#include "ygo/trajectory/identity_resolver.hpp"
 #include "ygo/trajectory/receipt_v2.hpp"
 #include "ygo/trajectory/restricted_evidence_v2.hpp"
 #include "ygo/trajectory/shard_v2.hpp"
@@ -188,11 +189,8 @@ void validate_schedule(const Task7CollectionScheduleV2& schedule) {
     }
 }
 
-void set_job_error(Task7V2ProvisioningResult& result, std::string message) {
-    if (!result.error.has_value()) result.error = std::move(message);
-}
-
-bool eligible_run(const policy::TeacherRunnerV3TrajectoryRunResult& run,
+bool eligible_run(const Task7CollectionJobV2& job,
+                  const policy::TeacherRunnerV3TrajectoryRunResult& run,
                   std::string& error) {
     if (run.error.has_value() || !run.envelope.has_value() || run.quarantined ||
         !run.candidate_shard.has_value() || !run.restricted_collection_evidence.has_value() ||
@@ -212,6 +210,12 @@ bool eligible_run(const policy::TeacherRunnerV3TrajectoryRunResult& run,
         return false;
     }
     try {
+        std::string binding_error;
+        if (!validate_task7_v2_job_episode_binding(job, *run.envelope,
+                                                    &binding_error)) {
+            error = std::move(binding_error);
+            return false;
+        }
         const auto envelope_bytes = trajectory::canonical_episode_envelope_bytes_v2(*run.envelope);
         const auto shard_bytes = trajectory::canonical_candidate_trajectory_shard_bytes_v2(
             *run.candidate_shard);
@@ -220,6 +224,8 @@ bool eligible_run(const policy::TeacherRunnerV3TrajectoryRunResult& run,
                 *run.restricted_collection_evidence);
         const auto receipt_bytes = trajectory::canonical_admission_receipt_bytes_v2(
             run.admission_receipt->receipt());
+        const auto shard_artifact_sha256 = ygo::trace::sha256_bytes(shard_bytes);
+        const auto evidence_artifact_sha256 = ygo::trace::sha256_bytes(evidence_bytes);
         (void)trajectory::dataset_v2::canonical_dataset_manifest_bytes_v2(*run.dataset_manifest);
         const auto decoded_receipt = trajectory::decode_admission_receipt_v2(receipt_bytes);
         if (!decoded_receipt ||
@@ -229,8 +235,14 @@ bool eligible_run(const policy::TeacherRunnerV3TrajectoryRunResult& run,
                               run.admission_receipt->receipt().entries) ||
             ygo::trace::sha256_bytes(envelope_bytes) !=
                 run.candidate_shard->entries.front().episode_envelope_sha256 ||
-            ygo::trace::sha256_bytes(shard_bytes) !=
-                run.admission_receipt->receipt().candidate_shard_artifact_sha256) {
+            shard_artifact_sha256 != run.admission_receipt->receipt().candidate_shard_artifact_sha256 ||
+            evidence_artifact_sha256 !=
+                run.admission_receipt->receipt().restricted_evidence_artifact_sha256 ||
+            run.restricted_collection_evidence->candidate_shard_artifact_sha256 !=
+                shard_artifact_sha256 ||
+            run.admission_verification->shard_artifact_sha256() != shard_artifact_sha256 ||
+            run.admission_verification->restricted_evidence_artifact_sha256() !=
+                evidence_artifact_sha256) {
             error = "Task7 V2 job artifact commitments are inconsistent";
             return false;
         }
@@ -266,7 +278,145 @@ std::optional<std::vector<std::uint8_t>> extract_safe_state_bytes(
     return safe_state;
 }
 
+struct DerivedAuthorityValues final {
+    trajectory::DatasetManifestV2 manifest;
+    TrainingDatasetSplitV1 split;
+    std::optional<model::CardVocabularyV1> vocabulary;
+};
+
+bool derive_authority_values(const Task7CollectionScheduleV2& schedule,
+                             const std::vector<Task7V2JobOutcome>& outcomes,
+                             DerivedAuthorityValues& derived,
+                             std::string& error) {
+    try {
+        validate_schedule(schedule);
+        if (outcomes.size() != schedule.jobs.size()) {
+            error = "Task7 V2 authority outcome count does not match schedule";
+            return false;
+        }
+        std::vector<trajectory::VerifiedAdmissionReceiptV2> receipts;
+        receipts.reserve(outcomes.size());
+        std::set<std::string> record_ids;
+        std::vector<environment::PublicEnvironmentObservation> observations;
+        std::vector<std::string> episode_ids;
+        for (std::size_t index = 0; index < outcomes.size(); ++index) {
+            const auto& outcome = outcomes[index];
+            if (task7_collection_job_identity_v2(outcome.job) !=
+                task7_collection_job_identity_v2(schedule.jobs[index])) {
+                error = "Task7 V2 authority outcome/job binding mismatch";
+                return false;
+            }
+            std::string job_error;
+            if (!eligible_run(outcome.job, outcome.run, job_error)) {
+                error = job_error;
+                return false;
+            }
+            receipts.push_back(*outcome.run.admission_receipt);
+            const auto& receipt = outcome.run.admission_receipt->receipt();
+            const auto receipt_id = trajectory::admission_receipt_id_v2(receipt);
+            for (const auto& entry : receipt.entries) {
+                if (!record_ids.insert(entry.trajectory_record_id).second) {
+                    error = "Task7 V2 authority contains a duplicate trajectory record ID";
+                    return false;
+                }
+                episode_ids.push_back(entry.episode_semantic_id);
+                derived.manifest.members.push_back({
+                    entry.trajectory_record_id, entry.public_gameplay_trajectory_id, receipt_id,
+                    receipt.candidate_shard_artifact_sha256, entry.episode_envelope_sha256});
+            }
+            for (const auto& record : outcome.run.envelope->records) {
+                observations.push_back(record.frame.public_observation);
+            }
+            if (const auto* terminal = std::get_if<trajectory::TerminalClosureV2>(
+                    &outcome.run.envelope->closure)) {
+                observations.push_back(terminal->terminal_view_player_0);
+                observations.push_back(terminal->terminal_view_player_1);
+            }
+        }
+        if (derived.manifest.members.size() != 16 || episode_ids.size() != 16) {
+            error = "Task7 V2 authority does not contain exactly 16 admitted members";
+            return false;
+        }
+        std::sort(derived.manifest.members.begin(), derived.manifest.members.end(),
+                  [](const auto& left, const auto& right) {
+                      return left.trajectory_record_id < right.trajectory_record_id;
+                  });
+        std::vector<std::string> record_id_vector;
+        record_id_vector.reserve(derived.manifest.members.size());
+        for (const auto& member : derived.manifest.members) {
+            record_id_vector.push_back(member.trajectory_record_id);
+        }
+        derived.manifest.dataset_semantic_id =
+            trajectory::dataset_v2::dataset_semantic_id_v2(record_id_vector);
+        std::string manifest_error;
+        if (!trajectory::dataset_v2::validate_dataset_manifest_v2(
+                derived.manifest, receipts, &manifest_error)) {
+            error = "Task7 V2 DatasetManifest validation failed: " + manifest_error;
+            return false;
+        }
+        std::sort(episode_ids.begin(), episode_ids.end());
+        if (std::adjacent_find(episode_ids.begin(), episode_ids.end()) != episode_ids.end()) {
+            error = "Task7 V2 authority contains a duplicate episode semantic ID";
+            return false;
+        }
+        const auto split = derive_training_dataset_split_v1_from_v2(
+            derived.manifest.dataset_semantic_id, episode_ids);
+        if (!split || !split.value.has_value()) {
+            error = "Task7 V2 split derivation failed";
+            return false;
+        }
+        derived.split = *split.value;
+        const auto vocabulary = derive_card_vocabulary_v1_from_public_observations(observations);
+        if (!vocabulary || !vocabulary.value.has_value()) {
+            error = "Task7 V2 vocabulary derivation failed";
+            return false;
+        }
+        derived.vocabulary = *vocabulary.value;
+        return true;
+    } catch (const std::exception& exception) {
+        error = exception.what();
+        return false;
+    } catch (...) {
+        error = "Task7 V2 authority derivation threw";
+        return false;
+    }
+}
+
 }  // namespace
+
+bool validate_task7_v2_job_episode_binding(
+    const Task7CollectionJobV2& job,
+    const trajectory::EpisodeEnvelopeV2& envelope,
+    std::string* error) noexcept {
+    try {
+        const auto environment_result = trajectory::decode_environment_identity_input_v3(
+            envelope.manifest.environment_identity_input);
+        if (!environment_result ||
+            environment_result.value->contract_id != job.environment_contract_id ||
+            !trajectory::is_current_certified_environment_v3(*environment_result.value) ||
+            environment_result.value->environment_semantic_id !=
+                envelope.manifest.environment_semantic_id) {
+            throw std::invalid_argument("Task7 V2 job/environment identity mismatch");
+        }
+        const auto episode_result = trajectory::decode_episode_identity_input_v3(
+            envelope.manifest.episode_identity_input, *environment_result.value);
+        if (!episode_result || episode_result.value->contract_id != job.environment_contract_id ||
+            episode_result.value->root_seed != job.root_seed ||
+            episode_result.value->seat_assignment != job.seat_assignment ||
+            episode_result.value->starting_player != job.starting_player ||
+            environment::episode_semantic_id(*environment_result.value, *episode_result.value) !=
+                envelope.manifest.episode_semantic_id) {
+            throw std::invalid_argument("Task7 V2 job/episode identity mismatch");
+        }
+        return true;
+    } catch (const std::exception& exception) {
+        if (error != nullptr) *error = exception.what();
+        return false;
+    } catch (...) {
+        if (error != nullptr) *error = "Task7 V2 job identity validation threw";
+        return false;
+    }
+}
 
 Task7CollectionScheduleV2 make_task7_collection_schedule_v2(
     std::string collector_source_commit) {
@@ -591,7 +741,7 @@ Task7V2ProvisioningResult provision_task7_dataset_authority_v2(
         for (const auto& job : schedule.jobs) {
             auto run = executor(job);
             std::string error;
-            if (!eligible_run(run, error)) {
+            if (!eligible_run(job, run, error)) {
                 failed = true;
                 if (first_error.empty()) first_error = error;
             }
@@ -602,64 +752,15 @@ Task7V2ProvisioningResult provision_task7_dataset_authority_v2(
             result.error = first_error.empty() ? "Task7 V2 collection is unusable" : first_error;
             return result;
         }
-        std::vector<trajectory::VerifiedAdmissionReceiptV2> receipts;
-        receipts.reserve(outcomes.size());
-        trajectory::DatasetManifestV2 manifest;
-        std::set<std::string> record_ids;
-        std::vector<environment::PublicEnvironmentObservation> observations;
-        for (const auto& outcome : outcomes) {
-            const auto& run = outcome.run;
-            receipts.push_back(*run.admission_receipt);
-            const auto& receipt = run.admission_receipt->receipt();
-            const auto receipt_id = trajectory::admission_receipt_id_v2(receipt);
-            for (const auto& entry : receipt.entries) {
-                if (!record_ids.insert(entry.trajectory_record_id).second) {
-                    throw std::invalid_argument("Task7 V2 collection has a duplicate record ID");
-                }
-                manifest.members.push_back({entry.trajectory_record_id,
-                                            entry.public_gameplay_trajectory_id, receipt_id,
-                                            receipt.candidate_shard_artifact_sha256,
-                                            entry.episode_envelope_sha256});
-            }
-            for (const auto& record : run.envelope->records) {
-                observations.push_back(record.frame.public_observation);
-            }
-            if (const auto* terminal = std::get_if<trajectory::TerminalClosureV2>(
-                    &run.envelope->closure)) {
-                observations.push_back(terminal->terminal_view_player_0);
-                observations.push_back(terminal->terminal_view_player_1);
-            }
+        DerivedAuthorityValues derived;
+        std::string derivation_error;
+        if (!derive_authority_values(schedule, outcomes, derived, derivation_error)) {
+            result.error = std::move(derivation_error);
+            return result;
         }
-        if (manifest.members.size() != 16) {
-            throw std::invalid_argument("Task7 V2 collection did not produce exactly 16 members");
-        }
-        std::sort(manifest.members.begin(), manifest.members.end(),
-                  [](const auto& left, const auto& right) {
-                      return left.trajectory_record_id < right.trajectory_record_id;
-                  });
-        std::vector<std::string> record_id_vector;
-        std::vector<std::string> episode_ids;
-        for (const auto& receipt : receipts) {
-            for (const auto& entry : receipt.receipt().entries) {
-                episode_ids.push_back(entry.episode_semantic_id);
-            }
-        }
-        std::sort(episode_ids.begin(), episode_ids.end());
-        episode_ids.erase(std::unique(episode_ids.begin(), episode_ids.end()), episode_ids.end());
-        for (const auto& member : manifest.members) record_id_vector.push_back(member.trajectory_record_id);
-        manifest.dataset_semantic_id = trajectory::dataset_v2::dataset_semantic_id_v2(record_id_vector);
-        std::string manifest_error;
-        if (!trajectory::dataset_v2::validate_dataset_manifest_v2(
-                manifest, receipts, &manifest_error)) {
-            throw std::invalid_argument("Task7 V2 DatasetManifest validation failed: " + manifest_error);
-        }
-        const auto split = derive_training_dataset_split_v1_from_v2(
-            manifest.dataset_semantic_id, episode_ids);
-        if (!split) throw std::invalid_argument("Task7 V2 split derivation failed");
-        const auto vocabulary = derive_card_vocabulary_v1_from_public_observations(observations);
-        if (!vocabulary) throw std::invalid_argument("Task7 V2 vocabulary derivation failed");
-        result.value = Task7V2DatasetAuthority{schedule, std::move(outcomes), std::move(manifest),
-                                               *split.value, *vocabulary.value};
+        result.value = Task7V2DatasetAuthority{
+            schedule, std::move(outcomes), std::move(derived.manifest),
+            std::move(derived.split), std::move(*derived.vocabulary)};
         return result;
     } catch (const std::exception& exception) {
         if (!result.error.has_value()) result.error = exception.what();
@@ -736,21 +837,54 @@ model::CardVocabularyResult derive_card_vocabulary_v1_from_public_observations(
     }
 }
 
+bool validate_task7_v2_authority(
+    const Task7V2DatasetAuthority& authority,
+    std::string* error) noexcept {
+    try {
+        validate_schedule(authority.schedule);
+        if (authority.outcomes.size() != authority.schedule.jobs.size()) {
+            throw std::invalid_argument("Task7 V2 authority outcome count is invalid");
+        }
+        for (std::size_t index = 0; index < authority.outcomes.size(); ++index) {
+            if (task7_collection_job_identity_v2(authority.outcomes[index].job) !=
+                task7_collection_job_identity_v2(authority.schedule.jobs[index])) {
+                throw std::invalid_argument("Task7 V2 authority outcome order is invalid");
+            }
+        }
+        DerivedAuthorityValues derived;
+        std::string derivation_error;
+        if (!derive_authority_values(authority.schedule, authority.outcomes, derived,
+                                     derivation_error)) {
+            throw std::invalid_argument(derivation_error);
+        }
+        if (trajectory::dataset_v2::canonical_dataset_manifest_bytes_v2(
+                authority.dataset_manifest) !=
+                trajectory::dataset_v2::canonical_dataset_manifest_bytes_v2(
+                    derived.manifest) ||
+            canonical_phase6_split_identity_bytes(authority.split) !=
+                canonical_phase6_split_identity_bytes(derived.split) ||
+            !derived.vocabulary.has_value() ||
+            authority.vocabulary.canonical_bytes() != derived.vocabulary->canonical_bytes()) {
+            throw std::invalid_argument("Task7 V2 authority detached derived values");
+        }
+        return true;
+    } catch (const std::exception& exception) {
+        if (error != nullptr) *error = exception.what();
+        return false;
+    } catch (...) {
+        if (error != nullptr) *error = "Task7 V2 authority validation threw";
+        return false;
+    }
+}
+
 std::vector<std::uint8_t> canonical_task7_v2_authority_bytes(
     const Task7V2DatasetAuthority& authority) {
-    validate_schedule(authority.schedule);
-    if (authority.outcomes.size() != authority.schedule.jobs.size()) {
-        throw std::invalid_argument("Task7 V2 authority outcome count is invalid");
+    std::string validation_error;
+    if (!validate_task7_v2_authority(authority, &validation_error)) {
+        throw std::invalid_argument("Task7 V2 authority closure failed: " + validation_error);
     }
-    for (std::size_t index = 0; index < authority.outcomes.size(); ++index) {
-        if (task7_collection_job_identity_v2(authority.outcomes[index].job) !=
-            task7_collection_job_identity_v2(authority.schedule.jobs[index])) {
-            throw std::invalid_argument("Task7 V2 authority outcome order is invalid");
-        }
-    }
-    (void)trajectory::dataset_v2::canonical_dataset_manifest_bytes_v2(
+    const auto manifest_bytes = trajectory::dataset_v2::canonical_dataset_manifest_bytes_v2(
         authority.dataset_manifest);
-    (void)canonical_phase6_split_identity_bytes(authority.split);
     const auto vocabulary_bytes = authority.vocabulary.canonical_bytes();
     trajectory::ByteWriter writer;
     writer.string(kTask7V2AuthoritySchemaId);
@@ -760,7 +894,7 @@ std::vector<std::uint8_t> canonical_task7_v2_authority_bytes(
     for (const auto& outcome : authority.outcomes) {
         const auto job_id = task7_collection_job_identity_v2(outcome.job);
         std::string error;
-        if (!eligible_run(outcome.run, error)) {
+        if (!eligible_run(outcome.job, outcome.run, error)) {
             throw std::invalid_argument("Task7 V2 authority contains an ineligible job: " + error);
         }
         writer.string(job_id);
@@ -772,8 +906,7 @@ std::vector<std::uint8_t> canonical_task7_v2_authority_bytes(
         writer.bytes(trajectory::canonical_admission_receipt_bytes_v2(
             outcome.run.admission_receipt->receipt()));
     }
-    writer.bytes(trajectory::dataset_v2::canonical_dataset_manifest_bytes_v2(
-        authority.dataset_manifest));
+    writer.bytes(manifest_bytes);
     writer.bytes(canonical_phase6_split_identity_bytes(authority.split));
     writer.bytes(vocabulary_bytes);
     return std::move(writer).take();

@@ -114,6 +114,47 @@ void test_fixed_schedule_fails_closed_without_complete_jobs() {
     require(rejected, "Task7 V2 schedule accepted a V1 environment contract");
 }
 
+void test_job_episode_binding_is_exact() {
+    const auto schedule = make_task7_collection_schedule_v2(std::string(kBaseCommit));
+    const auto& job = schedule.jobs.front();
+    const auto config = ygo::environment::CertifiedEnvironmentConfig::canonical_v3();
+    ygo::environment::EpisodeSpec spec;
+    spec.contract_id = std::string(ygo::environment::kEpisodicEnvironmentV3ContractId);
+    spec.root_seed = job.root_seed;
+    spec.seat_assignment = job.seat_assignment;
+    spec.starting_player = job.starting_player;
+    ygo::trajectory::EpisodeEnvelopeV2 envelope;
+    envelope.manifest.trusted_trajectory_contract_id =
+        std::string(ygo::trajectory::kTrustedTrajectoryV2ContractId);
+    envelope.manifest.episodic_environment_contract_id =
+        std::string(ygo::environment::kEpisodicEnvironmentV3ContractId);
+    envelope.manifest.environment_identity_input =
+        ygo::environment::canonical_environment_identity_bytes(config);
+    envelope.manifest.environment_semantic_id = ygo::environment::environment_semantic_id(config);
+    envelope.manifest.episode_identity_input =
+        ygo::environment::canonical_episode_identity_bytes(config, spec);
+    envelope.manifest.episode_semantic_id = ygo::environment::episode_semantic_id(config, spec);
+    std::string error;
+    require(validate_task7_v2_job_episode_binding(job, envelope, &error),
+            "Task7 V2 job/episode identity fixture did not validate: " + error);
+    auto wrong_job = job;
+    wrong_job.root_seed += 1;
+    require(!validate_task7_v2_job_episode_binding(wrong_job, envelope, &error),
+            "Task7 V2 accepted an episode under the wrong job seed");
+}
+
+void test_authority_closure_rejects_detached_values() {
+    const auto schedule = make_task7_collection_schedule_v2(std::string(kBaseCommit));
+    const auto vocabulary = ygo::model::CardVocabularyV1::from_ascending_passcodes({100});
+    require(static_cast<bool>(vocabulary), "Task7 V2 detached-authority vocabulary fixture failed");
+    Task7V2DatasetAuthority detached{
+        schedule, {}, ygo::trajectory::DatasetManifestV2{}, TrainingDatasetSplitV1{},
+        *vocabulary.value};
+    std::string error;
+    require(!validate_task7_v2_authority(detached, &error),
+            "Task7 V2 detached authority passed closure validation");
+}
+
 void test_split_v1_and_public_vocabulary_v1() {
     std::vector<std::string> episode_ids;
     bool has_train = false;
@@ -142,6 +183,11 @@ void test_split_v1_and_public_vocabulary_v1() {
                 !split.value->validation_episode_ids.empty() &&
                 !split.value->test_episode_ids.empty(),
             "Task7 V2 split did not fail/produce the required nonempty partitions");
+    auto duplicate_episode_ids = episode_ids;
+    duplicate_episode_ids[1] = duplicate_episode_ids[0];
+    require(!derive_training_dataset_split_v1_from_v2(
+                 std::string(64, 'a'), duplicate_episode_ids),
+            "Task7 V2 split accepted duplicate episode IDs");
 
     ygo::observation::PlayerObservation source;
     source.perspective_player = 0;
@@ -168,6 +214,8 @@ int main() {
     try {
         test_exact_schedule_and_identity();
         test_fixed_schedule_fails_closed_without_complete_jobs();
+        test_job_episode_binding_is_exact();
+        test_authority_closure_rejects_detached_values();
         test_split_v1_and_public_vocabulary_v1();
         std::cout << "phase6_task7_dataset_authority_provisioning_v2_test: PASS\n";
         return 0;

@@ -127,6 +127,11 @@ std::string task7_collection_schedule_identity_v2(
 policy::TeacherRunnerV3TrajectoryRunResult run_task7_collection_job_v2(
     const Task7CollectionJobV2& job) noexcept;
 
+bool validate_task7_v2_job_episode_binding(
+    const Task7CollectionJobV2& job,
+    const trajectory::EpisodeEnvelopeV2& envelope,
+    std::string* error = nullptr) noexcept;
+
 Task7V2ProvisioningResult provision_task7_dataset_authority_v2(
     const Task7CollectionScheduleV2& schedule,
     const Task7V2JobExecutor& executor);
@@ -140,6 +145,10 @@ Phase6SplitResult derive_training_dataset_split_v1_from_v2(
 
 model::CardVocabularyResult derive_card_vocabulary_v1_from_public_observations(
     const std::vector<environment::PublicEnvironmentObservation>& observations) noexcept;
+
+bool validate_task7_v2_authority(
+    const Task7V2DatasetAuthority& authority,
+    std::string* error = nullptr) noexcept;
 
 std::vector<std::uint8_t> canonical_task7_v2_authority_bytes(
     const Task7V2DatasetAuthority& authority);
