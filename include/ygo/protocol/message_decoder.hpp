@@ -19,6 +19,8 @@ struct DecodedMessage {
 };
 
 DecodedMessage decode_messages(const std::vector<std::uint8_t>& bytes, std::uint64_t engine_step_index = 0);
+DecodedMessage decode_messages_v4(const std::vector<std::uint8_t>& bytes,
+                                  std::uint64_t engine_step_index = 0);
 std::string action_kind_name(ActionKind kind);
 std::string decision_kind_name(DecisionRequestKind kind);
 void validate_candidate_set(const DecisionRequest& request);

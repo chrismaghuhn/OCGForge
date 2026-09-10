@@ -965,6 +965,12 @@ add_executable(decision_family_test tests/protocol/decision_family_test.cpp)
 target_link_libraries(decision_family_test PRIVATE ygo_m0)
 add_test(NAME decision_family_test COMMAND decision_family_test)
 
+add_executable(select_unselect_operation_successor_test
+               tests/protocol/select_unselect_operation_successor_test.cpp)
+target_link_libraries(select_unselect_operation_successor_test PRIVATE ygo_m0)
+add_test(NAME select_unselect_operation_successor_test
+         COMMAND select_unselect_operation_successor_test)
+
 add_executable(continuation_oracle_test tests/protocol/continuation_oracle_test.cpp)
 target_link_libraries(continuation_oracle_test PRIVATE ygo_m0)
 add_test(NAME continuation_oracle_test COMMAND continuation_oracle_test)

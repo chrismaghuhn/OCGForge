@@ -816,7 +816,8 @@ DecisionRequest decode_ordering(const std::vector<std::uint8_t>& frame, bool cha
     return request;
 }
 
-DecisionRequest decode_unselect(const std::vector<std::uint8_t>& frame) {
+DecisionRequest decode_unselect_impl(const std::vector<std::uint8_t>& frame,
+                                     const bool corrected_operation_mapping) {
     ByteReader reader(frame);
     if (reader.u8() != MSG_SELECT_UNSELECT_CARD) {
         throw ProtocolError(ProtocolErrorCode::MalformedMessage,
@@ -838,7 +839,9 @@ DecisionRequest decode_unselect(const std::vector<std::uint8_t>& frame) {
         const auto item = read_card_item(reader, index, true, false, false);
         ActionCandidate candidate;
         candidate.action_kind = ActionKind::CardSelection;
-        candidate.card_selection_operation = CardSelectionOperation::Unselect;
+        candidate.card_selection_operation = corrected_operation_mapping
+                                                 ? CardSelectionOperation::Select
+                                                 : CardSelectionOperation::Unselect;
         candidate.semantic_key = "unselect.selected." + std::to_string(item.source_index) + "." +
                                  std::to_string(item.card.code) + "." + std::to_string(item.card.controller) + "." +
                                  std::to_string(item.card.location) + "." + std::to_string(item.card.sequence);
@@ -860,7 +863,9 @@ DecisionRequest decode_unselect(const std::vector<std::uint8_t>& frame) {
         const auto item = read_card_item(reader, index, true, false, false);
         ActionCandidate candidate;
         candidate.action_kind = ActionKind::CardSelection;
-        candidate.card_selection_operation = CardSelectionOperation::Select;
+        candidate.card_selection_operation = corrected_operation_mapping
+                                                 ? CardSelectionOperation::Unselect
+                                                 : CardSelectionOperation::Select;
         candidate.semantic_key = "unselect.unselected." + std::to_string(item.source_index) + "." +
                                  std::to_string(item.card.code) + "." + std::to_string(item.card.controller) + "." +
                                  std::to_string(item.card.location) + "." + std::to_string(item.card.sequence);
@@ -886,6 +891,14 @@ DecisionRequest decode_unselect(const std::vector<std::uint8_t>& frame) {
     }
     validate_candidate_set(request);
     return request;
+}
+
+DecisionRequest decode_unselect(const std::vector<std::uint8_t>& frame) {
+    return decode_unselect_impl(frame, false);
+}
+
+DecisionRequest decode_unselect_v4(const std::vector<std::uint8_t>& frame) {
+    return decode_unselect_impl(frame, true);
 }
 
 DecisionRequest decode_announce_number(const std::vector<std::uint8_t>& frame) {
@@ -1098,7 +1111,12 @@ std::vector<std::uint8_t> read_frame(const std::vector<std::uint8_t>& bytes, std
 
 }  // namespace
 
-DecodedMessage decode_messages(const std::vector<std::uint8_t>& bytes, std::uint64_t engine_step_index) {
+namespace {
+
+DecodedMessage decode_messages_with_unselect_decoder(
+    const std::vector<std::uint8_t>& bytes,
+    const std::uint64_t engine_step_index,
+    DecisionRequest (*unselect_decoder)(const std::vector<std::uint8_t>&)) {
     DecodedMessage decoded;
     std::size_t offset = 0;
     while (offset < bytes.size()) {
@@ -1194,7 +1212,8 @@ DecodedMessage decode_messages(const std::vector<std::uint8_t>& bytes, std::uint
             continue;
         }
         if (type == MSG_SELECT_UNSELECT_CARD) {
-            decoded.decisions.push_back(finalize_request(decode_unselect(frame), frame, engine_step_index));
+            decoded.decisions.push_back(
+                finalize_request(unselect_decoder(frame), frame, engine_step_index));
             decoded.interactive = true;
             continue;
         }
@@ -1222,6 +1241,18 @@ DecodedMessage decode_messages(const std::vector<std::uint8_t>& bytes, std::uint
         }
     }
     return decoded;
+}
+
+}  // namespace
+
+DecodedMessage decode_messages(const std::vector<std::uint8_t>& bytes,
+                               const std::uint64_t engine_step_index) {
+    return decode_messages_with_unselect_decoder(bytes, engine_step_index, decode_unselect);
+}
+
+DecodedMessage decode_messages_v4(const std::vector<std::uint8_t>& bytes,
+                                  const std::uint64_t engine_step_index) {
+    return decode_messages_with_unselect_decoder(bytes, engine_step_index, decode_unselect_v4);
 }
 
 std::string action_kind_name(ActionKind kind) {
