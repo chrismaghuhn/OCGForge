@@ -1,5 +1,11 @@
 #pragma once
 
+#include <cstdint>
+#include <optional>
+#include <string>
+#include <vector>
+
+#include "ygo/teacher/candidate_features.hpp"
 #include "ygo/teacher/strategy_profile.hpp"
 #include "ygo/teacher/strategy_state_v2.hpp"
 #include "ygo/teacher/teacher_decision_v2.hpp"
@@ -10,6 +16,35 @@ struct PolicyInput;
 
 namespace ygo::teacher {
 
+// Non-authoritative diagnostic data for a single V2 proposal. This type is
+// never serialized into policy, trajectory, replay, or dataset contracts.
+struct TeacherCandidateEvaluationDiagnosticsV2 final {
+    std::string public_action_key;
+    CandidateEvaluationStatus status = CandidateEvaluationStatus::Invalid;
+    std::optional<ScoreVector> score;
+    std::vector<EvaluatorScoreContribution> score_contributions;
+    std::vector<std::string> matched_intent_ids;
+    std::vector<std::string> matched_goal_ids;
+    std::vector<std::string> matched_line_ids;
+    std::vector<std::string> matched_node_ids;
+    std::vector<std::string> reason_ids;
+};
+
+struct TeacherRankingDiagnosticsV2 final {
+    TeacherRankingStatus status = TeacherRankingStatus::InvalidInput;
+    std::optional<std::string> effective_goal_id;
+    std::optional<std::string> effective_line_id;
+    std::vector<std::string> ready_node_ids;
+    bool native_unselect = false;
+    bool reconciled_continuation_commitment = false;
+    bool f0_applicable = false;
+    bool f1_applicable = false;
+    std::optional<TeacherFallbackLevel> fallback_level;
+    std::optional<std::string> selected_public_action_key;
+    std::optional<ScoreVector> selected_score_vector;
+    std::vector<TeacherCandidateEvaluationDiagnosticsV2> evaluations;
+};
+
 class TeacherCoreV2 final {
 public:
     TeacherCoreV2() = default;
@@ -17,7 +52,8 @@ public:
     TeacherRankingResultV2 propose(
         const ygo::policy::PolicyInput& input,
         const StrategyProfileV1& profile,
-        const EpisodeLocalStrategyStateV2& state) const;
+        const EpisodeLocalStrategyStateV2& state,
+        TeacherRankingDiagnosticsV2* diagnostics = nullptr) const;
 };
 
 }  // namespace ygo::teacher

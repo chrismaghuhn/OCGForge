@@ -3,9 +3,11 @@
 #include <algorithm>
 #include <array>
 #include <iostream>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "ygo/environment/public_action_identity.hpp"
 #include "ygo/policy/teacher.hpp"
@@ -51,13 +53,14 @@ const ParticipantPolicyAssignment& assignment_for_player(
 Fixture fixture(const std::uint64_t root_seed = 2,
                 const std::uint64_t semantic_action_budget = 1,
                 const SeatAssignment seat_assignment = SeatAssignment::Normal,
-                const std::uint8_t starting_player = 0) {
+                const std::uint8_t starting_player = 0,
+                const std::uint64_t engine_process_budget = 512) {
     Fixture result;
     result.episode_spec.contract_id = std::string(kEpisodicEnvironmentV3ContractId);
     result.episode_spec.root_seed = root_seed;
     result.episode_spec.seat_assignment = seat_assignment;
     result.episode_spec.starting_player = starting_player;
-    result.run_control.engine_process_budget = 512;
+    result.run_control.engine_process_budget = engine_process_budget;
     result.run_control.semantic_action_budget = semantic_action_budget;
     result.run_control.cancellation.reason = "ADMINISTRATIVE_CANCEL";
     result.run_control.cancellation.source = "a4-teacher-runner";
@@ -229,6 +232,260 @@ void test_diagnostics_preserve_bounded_trajectory_semantics() {
                 trajectory_record_id_v2(*observed.envelope) ==
                     trajectory_record_id_v2(baseline.envelope),
             "diagnostics changed bounded V2 trajectory identities");
+}
+
+void print_hiita_diagnostic_detail(
+    const char* label,
+    const ygo::diagnostics::Task7DiagnosticEvent& event) {
+    std::cout << "HIITA_DETAIL label=" << label
+              << " decision=" << event.decision_index
+              << " request=" << event.request_kind
+              << " state=" << event.public_current_state_fingerprint
+              << " fallback=" << static_cast<unsigned>(event.fallback_level)
+              << " ranking_status="
+              << static_cast<unsigned>(event.teacher_ranking_status)
+              << " effective_goal="
+              << (event.teacher_effective_goal_id.has_value()
+                      ? *event.teacher_effective_goal_id
+                      : "NONE")
+              << " effective_line="
+              << (event.teacher_effective_line_id.has_value()
+                      ? *event.teacher_effective_line_id
+                      : "NONE")
+              << " native_unselect=" << event.teacher_native_unselect
+              << " continuation_commitment="
+              << event.teacher_reconciled_continuation_commitment
+              << " f0=" << event.teacher_f0_applicable
+              << " f1=" << event.teacher_f1_applicable
+              << " selected_count=" << event.continuation_selected_count
+              << " remaining_count=" << event.continuation_remaining_count
+              << " min=" << event.continuation_min_count
+              << " max=" << event.continuation_max_count
+              << " can_finish=" << event.continuation_can_finish
+              << " can_cancel=" << event.continuation_can_cancel << '\n';
+    std::cout << "HIITA_READY_NODES=";
+    for (std::size_t index = 0; index < event.teacher_ready_node_ids.size(); ++index) {
+        if (index != 0) std::cout << ',';
+        std::cout << event.teacher_ready_node_ids[index];
+    }
+    std::cout << '\n';
+    std::cout << "HIITA_DOMAIN_COUNT=" << event.teacher_candidate_public_action_keys.size()
+              << '\n';
+    for (std::size_t index = 0; index < event.teacher_candidate_evaluations.size(); ++index) {
+        const auto& candidate = event.teacher_candidate_evaluations[index];
+        std::cout << "HIITA_CANDIDATE index=" << index
+                  << " key=" << candidate.public_action_key
+                  << " action_kind=" << static_cast<unsigned>(candidate.action_kind)
+                  << " operation="
+                  << static_cast<unsigned>(candidate.card_selection_operation)
+                  << " source=" << candidate.source_reference
+                  << " continuation=" << candidate.continuation_operation
+                  << " status=" << static_cast<unsigned>(candidate.status)
+                  << " score=";
+        for (std::size_t dimension = 0; dimension < candidate.score_values.size(); ++dimension) {
+            if (dimension != 0) std::cout << ',';
+            std::cout << candidate.score_values[dimension];
+        }
+        std::cout << " contributions=";
+        for (std::size_t contribution = 0;
+             contribution < candidate.score_contributions.size(); ++contribution) {
+            if (contribution != 0) std::cout << ',';
+            std::cout << static_cast<unsigned>(
+                             candidate.score_contributions[contribution].dimension)
+                      << ':' << candidate.score_contributions[contribution].value;
+        }
+        std::cout << " intents=";
+        for (std::size_t match = 0; match < candidate.matched_intent_ids.size(); ++match) {
+            if (match != 0) std::cout << ',';
+            std::cout << candidate.matched_intent_ids[match];
+        }
+        std::cout << " goals=";
+        for (std::size_t match = 0; match < candidate.matched_goal_ids.size(); ++match) {
+            if (match != 0) std::cout << ',';
+            std::cout << candidate.matched_goal_ids[match];
+        }
+        std::cout << " lines=";
+        for (std::size_t match = 0; match < candidate.matched_line_ids.size(); ++match) {
+            if (match != 0) std::cout << ',';
+            std::cout << candidate.matched_line_ids[match];
+        }
+        std::cout << " nodes=";
+        for (std::size_t match = 0; match < candidate.matched_node_ids.size(); ++match) {
+            if (match != 0) std::cout << ',';
+            std::cout << candidate.matched_node_ids[match];
+        }
+        std::cout << '\n';
+    }
+}
+
+void test_hiita_cancel_cycle_trigger_characterization() {
+    auto value = fixture(4, 20000, SeatAssignment::Normal, 0, 20000);
+    value.run_control.cancellation.source =
+        "phase6-task7-v2-diagnostic-hiita-cycle";
+    std::vector<ygo::diagnostics::Task7DiagnosticEvent> detail_events;
+    TeacherRunnerV3TrajectoryConfig config{
+        value.environment_config,
+        value.episode_spec,
+        value.run_control,
+        value.policy_provenance,
+        std::move(value.runner_config)};
+    config.diagnostic_observer = [&detail_events](
+        const ygo::diagnostics::Task7DiagnosticEvent& event) {
+        if (event.teacher_ranking_detail_present) detail_events.push_back(event);
+    };
+    auto created = TeacherRunnerV3TrajectoryRunner::create(std::move(config));
+    require(static_cast<bool>(created), "Hiita characterization runner creation failed");
+    const auto result = ygo::policy::detail::TeacherRunnerV3TrajectoryTestAccess::
+        run_until_decision(*created.value, 240);
+    require(result.envelope.has_value() && result.replay_evidence.has_value(),
+            "Hiita characterization did not close its bounded diagnostic prefix");
+    require(std::holds_alternative<InterruptedClosureV2>(result.envelope->closure),
+            "Hiita characterization did not end at an interrupted boundary");
+
+    const auto find_detail = [&detail_events](const std::uint64_t decision_index) {
+        const auto it = std::find_if(
+            detail_events.begin(), detail_events.end(),
+            [decision_index](const auto& event) {
+                return event.decision_index == decision_index;
+            });
+        return it == detail_events.end() ? nullptr : &*it;
+    };
+    const auto* idle_before = find_detail(234);
+    const auto* unselect = find_detail(235);
+    const auto* idle_after = find_detail(236);
+    require(idle_before != nullptr && unselect != nullptr && idle_after != nullptr,
+            "Hiita characterization window did not capture decisions 234..236");
+    require(idle_before->public_current_state_fingerprint ==
+                unselect->public_current_state_fingerprint &&
+                unselect->public_current_state_fingerprint ==
+                    idle_after->public_current_state_fingerprint,
+            "public current state changed across Hiita/Cancel transition");
+
+    const auto score_better = [](const auto& left, const auto& right) {
+        for (std::size_t index = 0; index < left.score_values.size(); ++index) {
+            if (left.score_values[index] != right.score_values[index]) {
+                return left.score_values[index] > right.score_values[index];
+            }
+        }
+        return left.public_action_key < right.public_action_key;
+    };
+
+    require(idle_before->teacher_candidate_public_action_keys.size() ==
+                idle_before->candidate_count &&
+                idle_before->teacher_candidate_evaluations.size() ==
+                    idle_before->candidate_count,
+            "Hiita candidate domain was not captured completely");
+    for (std::size_t index = 0; index < idle_before->candidate_count; ++index) {
+        require(idle_before->teacher_candidate_public_action_keys[index] ==
+                    idle_before->teacher_candidate_evaluations[index].public_action_key,
+                "Hiita candidate domain order was not preserved");
+    }
+    require(idle_before->teacher_effective_goal_id ==
+                std::optional<std::string>{"goal.main1.salamangreat"} &&
+                idle_before->teacher_effective_line_id ==
+                    std::optional<std::string>{"line.main1.salamangreat"},
+            "Hiita ranking did not expose the effective main1 goal/line");
+    require(std::find(idle_before->teacher_ready_node_ids.begin(),
+                      idle_before->teacher_ready_node_ids.end(),
+                      "node.main1.board_breaker") != idle_before->teacher_ready_node_ids.end(),
+            "Hiita ranking did not expose the board-breaker node");
+    const auto hiita = std::find_if(
+        idle_before->teacher_candidate_evaluations.begin(),
+        idle_before->teacher_candidate_evaluations.end(), [](const auto& candidate) {
+            return candidate.source_reference == "p1:EXTRA_DECK:public:48815792:0";
+        });
+    require(hiita != idle_before->teacher_candidate_evaluations.end(),
+            "Hiita was absent from the complete idle candidate domain");
+    require(idle_before->selected_public_action_key == hiita->public_action_key &&
+                std::find(hiita->matched_intent_ids.begin(), hiita->matched_intent_ids.end(),
+                          "intent.board.breaker") != hiita->matched_intent_ids.end() &&
+                std::find(hiita->matched_goal_ids.begin(), hiita->matched_goal_ids.end(),
+                          "goal.main1.salamangreat") != hiita->matched_goal_ids.end() &&
+                std::find(hiita->matched_line_ids.begin(), hiita->matched_line_ids.end(),
+                          "line.main1.salamangreat") != hiita->matched_line_ids.end() &&
+                std::find(hiita->matched_node_ids.begin(), hiita->matched_node_ids.end(),
+                          "node.main1.board_breaker") != hiita->matched_node_ids.end(),
+            "Hiita ranking evidence did not expose its public intent/goal/line/node matches");
+    require(hiita->score_contributions.size() == 1 &&
+                hiita->score_contributions.front().dimension ==
+                    static_cast<std::uint8_t>(
+                        ScoreDimension::ActiveGoalLineOrValidatedRecoveryProgress) &&
+                hiita->score_contributions.front().value == 3,
+            "Hiita ranking did not expose its active-line score contribution");
+    require(idle_before->teacher_ranking_status ==
+                static_cast<std::uint8_t>(TeacherRankingStatus::Selected) &&
+                hiita->score_present && idle_before->teacher_selected_score_present &&
+                hiita->score_values == idle_before->teacher_selected_score_values,
+            "Hiita ranking did not expose a consistent selected score");
+    for (const auto& candidate : idle_before->teacher_candidate_evaluations) {
+        require(candidate.status ==
+                    static_cast<std::uint8_t>(CandidateEvaluationStatus::Supported) &&
+                    candidate.score_present,
+                "Hiita ranking did not expose a supported scored legal candidate");
+        if (candidate.public_action_key != hiita->public_action_key) {
+            require(score_better(*hiita, candidate),
+                    "Hiita did not outrank a legal idle candidate");
+        }
+    }
+
+    require(unselect->teacher_candidate_public_action_keys.size() == unselect->candidate_count &&
+                unselect->teacher_candidate_evaluations.size() == unselect->candidate_count,
+            "Unselect candidate domain was not captured completely");
+    for (std::size_t index = 0; index < unselect->candidate_count; ++index) {
+        require(unselect->teacher_candidate_public_action_keys[index] ==
+                    unselect->teacher_candidate_evaluations[index].public_action_key,
+                "Unselect candidate domain order was not preserved");
+    }
+    require(unselect->fallback_level == 4 &&
+                unselect->selected_public_action_key.find("63616e63656c") != std::string::npos,
+            "Cancel was not selected through the observed F4 path");
+    const auto cancel = std::find_if(
+        unselect->teacher_candidate_evaluations.begin(),
+        unselect->teacher_candidate_evaluations.end(), [](const auto& candidate) {
+            return candidate.action_kind ==
+                   static_cast<std::uint8_t>(EnvironmentActionKind::Cancel);
+        });
+    require(cancel != unselect->teacher_candidate_evaluations.end() &&
+                cancel->public_action_key == unselect->selected_public_action_key,
+            "Unselect domain did not identify the selected Cancel candidate");
+    require(unselect->teacher_ranking_status ==
+                static_cast<std::uint8_t>(TeacherRankingStatus::Selected) &&
+                unselect->teacher_selected_score_present,
+            "Cancel ranking did not expose a selected F4 score");
+    for (const auto& candidate : unselect->teacher_candidate_evaluations) {
+        require(candidate.status ==
+                    static_cast<std::uint8_t>(CandidateEvaluationStatus::Supported) &&
+                    candidate.score_present &&
+                    candidate.score_values == unselect->teacher_selected_score_values,
+                "F4 Cancel ranking did not expose equal candidate scores");
+        if (candidate.public_action_key != cancel->public_action_key) {
+            require(score_better(*cancel, candidate),
+                    "Cancel was not the deterministic F4 lexicographic choice");
+        }
+    }
+    if (!unselect->continuation_present) {
+        require(unselect->continuation_kind.empty() && unselect->continuation_step == 0 &&
+                    unselect->continuation_selected_count == 0 &&
+                    unselect->continuation_remaining_count == 0 &&
+                    unselect->continuation_min_count == 0 &&
+                    unselect->continuation_max_count == 0 &&
+                    !unselect->continuation_can_finish &&
+                    !unselect->continuation_can_cancel,
+                "native Unselect carried malformed continuation metadata");
+    }
+    for (const auto& candidate : unselect->teacher_candidate_evaluations) {
+        if (candidate.action_kind ==
+            static_cast<std::uint8_t>(EnvironmentActionKind::CardSelection)) {
+            require(candidate.card_selection_operation != 0,
+                    "Unselect CardSelection candidate lost operation metadata");
+        } else {
+            require(candidate.card_selection_operation == 0,
+                    "non-CardSelection candidate carried selection operation metadata");
+        }
+    }
+    print_hiita_diagnostic_detail("IDLE_234", *idle_before);
+    print_hiita_diagnostic_detail("UNSELECT_235", *unselect);
+    print_hiita_diagnostic_detail("IDLE_236", *idle_after);
 }
 
 void test_adapter_boundary_harness() {
@@ -463,6 +720,7 @@ int main() {
         test_runner_v3_records_and_replays_v2();
         test_fresh_runs_are_byte_and_identity_deterministic();
         test_diagnostics_preserve_bounded_trajectory_semantics();
+        test_hiita_cancel_cycle_trigger_characterization();
         test_adapter_boundary_harness();
         test_v3_boundary_and_historical_boundary_are_explicit();
         test_recorder_step_rejected_and_terminal_boundaries();

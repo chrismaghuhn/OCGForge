@@ -62,6 +62,27 @@ std::string json_escape(const std::string_view value) {
     return output.str();
 }
 
+void write_string_array(std::ostream& output,
+                        const std::vector<std::string>& values) {
+    output << '[';
+    for (std::size_t index = 0; index < values.size(); ++index) {
+        if (index != 0) output << ',';
+        output << json_escape(values[index]);
+    }
+    output << ']';
+}
+
+void write_score_array(
+    std::ostream& output,
+    const std::array<std::int64_t, diagnostics::kTask7DiagnosticScoreDimensionCount>& values) {
+    output << '[';
+    for (std::size_t index = 0; index < values.size(); ++index) {
+        if (index != 0) output << ',';
+        output << values[index];
+    }
+    output << ']';
+}
+
 std::string diagnostic_event_json(const diagnostics::Task7DiagnosticEvent& event) {
     std::ostringstream output;
     output << "{\"phase\":" << json_escape(event.phase)
@@ -101,12 +122,102 @@ std::string diagnostic_event_json(const diagnostics::Task7DiagnosticEvent& event
            << (event.continuation_present ? "true" : "false")
            << ",\"continuation_kind\":" << json_escape(event.continuation_kind)
            << ",\"continuation_step\":" << event.continuation_step
+           << ",\"continuation_selected_count\":"
+           << event.continuation_selected_count
+           << ",\"continuation_remaining_count\":"
+           << event.continuation_remaining_count
+           << ",\"continuation_min_count\":" << event.continuation_min_count
+           << ",\"continuation_max_count\":" << event.continuation_max_count
+           << ",\"continuation_can_finish\":"
+           << (event.continuation_can_finish ? "true" : "false")
+           << ",\"continuation_can_cancel\":"
+           << (event.continuation_can_cancel ? "true" : "false")
            << ",\"supported_evaluations\":" << event.supported_evaluations
            << ",\"not_applicable_evaluations\":"
            << event.not_applicable_evaluations
            << ",\"unsupported_evaluations\":" << event.unsupported_evaluations
-           << ",\"invalid_evaluations\":" << event.invalid_evaluations
-           << "}\n";
+           << ",\"invalid_evaluations\":" << event.invalid_evaluations;
+    if (event.teacher_ranking_detail_present) {
+        output << ",\"teacher_ranking_detail\":{\"status\":"
+               << static_cast<unsigned>(event.teacher_ranking_status)
+               << ",\"effective_goal_id\":";
+        if (event.teacher_effective_goal_id.has_value()) {
+            output << json_escape(*event.teacher_effective_goal_id);
+        } else {
+            output << "null";
+        }
+        output << ",\"effective_line_id\":";
+        if (event.teacher_effective_line_id.has_value()) {
+            output << json_escape(*event.teacher_effective_line_id);
+        } else {
+            output << "null";
+        }
+        output << ",\"ready_node_ids\":";
+        write_string_array(output, event.teacher_ready_node_ids);
+        output << ",\"native_unselect\":"
+               << (event.teacher_native_unselect ? "true" : "false")
+               << ",\"reconciled_continuation_commitment\":"
+               << (event.teacher_reconciled_continuation_commitment ? "true" : "false")
+               << ",\"f0_applicable\":"
+               << (event.teacher_f0_applicable ? "true" : "false")
+               << ",\"f1_applicable\":"
+               << (event.teacher_f1_applicable ? "true" : "false")
+               << ",\"selected_score\":";
+        if (event.teacher_selected_score_present) {
+            write_score_array(output, event.teacher_selected_score_values);
+        } else {
+            output << "null";
+        }
+        output << ",\"candidate_public_action_keys\":";
+        write_string_array(output, event.teacher_candidate_public_action_keys);
+        output << ",\"candidate_evaluations\":[";
+        for (std::size_t index = 0; index < event.teacher_candidate_evaluations.size(); ++index) {
+            if (index != 0) output << ',';
+            const auto& candidate = event.teacher_candidate_evaluations[index];
+            output << "{\"public_action_key\":"
+                   << json_escape(candidate.public_action_key)
+                   << ",\"action_kind\":"
+                   << static_cast<unsigned>(candidate.action_kind)
+                   << ",\"card_selection_operation\":"
+                   << static_cast<unsigned>(candidate.card_selection_operation)
+                   << ",\"source_reference\":"
+                   << json_escape(candidate.source_reference)
+                   << ",\"target_reference\":"
+                   << json_escape(candidate.target_reference)
+                   << ",\"continuation_operation\":"
+                   << json_escape(candidate.continuation_operation)
+                   << ",\"submits_engine_response\":"
+                   << (candidate.submits_engine_response ? "true" : "false")
+                   << ",\"status\":" << static_cast<unsigned>(candidate.status)
+                   << ",\"score\":";
+            if (candidate.score_present) {
+                write_score_array(output, candidate.score_values);
+            } else {
+                output << "null";
+            }
+            output << ",\"score_contributions\":[";
+            for (std::size_t contribution = 0;
+                 contribution < candidate.score_contributions.size(); ++contribution) {
+                if (contribution != 0) output << ',';
+                const auto& value = candidate.score_contributions[contribution];
+                output << "{\"dimension\":" << static_cast<unsigned>(value.dimension)
+                       << ",\"value\":" << value.value << '}';
+            }
+            output << "],\"matched_intent_ids\":";
+            write_string_array(output, candidate.matched_intent_ids);
+            output << ",\"matched_goal_ids\":";
+            write_string_array(output, candidate.matched_goal_ids);
+            output << ",\"matched_line_ids\":";
+            write_string_array(output, candidate.matched_line_ids);
+            output << ",\"matched_node_ids\":";
+            write_string_array(output, candidate.matched_node_ids);
+            output << ",\"reason_ids\":";
+            write_string_array(output, candidate.reason_ids);
+            output << '}';
+        }
+        output << "]}";
+    }
+    output << "}\n";
     return output.str();
 }
 

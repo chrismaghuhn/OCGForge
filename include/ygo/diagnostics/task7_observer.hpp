@@ -1,8 +1,12 @@
 #pragma once
 
+#include <array>
+#include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <optional>
 #include <string>
+#include <vector>
 
 namespace ygo::diagnostics {
 
@@ -10,6 +14,34 @@ namespace ygo::diagnostics {
 // gameplay, trajectory, replay, admission, or dataset identity path.
 inline constexpr char kTask7ForensicDiagnosticsSchemaId[] =
     "ocgforge.phase6.task7.forensic_performance_diagnostics.v1";
+
+inline constexpr std::size_t kTask7DiagnosticScoreDimensionCount = 9;
+
+struct Task7DiagnosticScoreContribution final {
+    std::uint8_t dimension = 0;
+    std::int32_t value = 0;
+};
+
+// This is a non-authoritative, public-safe copy of one V2 Teacher evaluation.
+// It is populated only for the bounded trigger-characterization window.
+struct Task7DiagnosticCandidateEvaluation final {
+    std::string public_action_key;
+    std::uint8_t action_kind = 255;
+    std::uint8_t card_selection_operation = 0;
+    std::string source_reference;
+    std::string target_reference;
+    std::string continuation_operation;
+    bool submits_engine_response = true;
+    std::uint8_t status = 255;
+    bool score_present = false;
+    std::array<std::int64_t, kTask7DiagnosticScoreDimensionCount> score_values{};
+    std::vector<Task7DiagnosticScoreContribution> score_contributions;
+    std::vector<std::string> matched_intent_ids;
+    std::vector<std::string> matched_goal_ids;
+    std::vector<std::string> matched_line_ids;
+    std::vector<std::string> matched_node_ids;
+    std::vector<std::string> reason_ids;
+};
 
 struct Task7DiagnosticEvent final {
     std::string phase;
@@ -70,6 +102,29 @@ struct Task7DiagnosticEvent final {
     bool continuation_present = false;
     std::string continuation_kind;
     std::uint32_t continuation_step = 0;
+    std::uint64_t continuation_selected_count = 0;
+    std::uint64_t continuation_remaining_count = 0;
+    std::uint32_t continuation_min_count = 0;
+    std::uint32_t continuation_max_count = 0;
+    bool continuation_can_finish = false;
+    bool continuation_can_cancel = false;
+
+    // Detailed Teacher ranking evidence is diagnostic-only and intentionally
+    // absent outside the narrow trigger-characterization window.
+    bool teacher_ranking_detail_present = false;
+    std::uint8_t teacher_ranking_status = 255;
+    std::optional<std::string> teacher_effective_goal_id;
+    std::optional<std::string> teacher_effective_line_id;
+    std::vector<std::string> teacher_ready_node_ids;
+    bool teacher_native_unselect = false;
+    bool teacher_reconciled_continuation_commitment = false;
+    bool teacher_f0_applicable = false;
+    bool teacher_f1_applicable = false;
+    bool teacher_selected_score_present = false;
+    std::array<std::int64_t, kTask7DiagnosticScoreDimensionCount>
+        teacher_selected_score_values{};
+    std::vector<std::string> teacher_candidate_public_action_keys;
+    std::vector<Task7DiagnosticCandidateEvaluation> teacher_candidate_evaluations;
     std::string closure_kind;
     std::string failure_code;
     std::string failure_stage;

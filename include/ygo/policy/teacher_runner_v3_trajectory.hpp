@@ -22,6 +22,8 @@ enum class TeacherRunnerV3TrajectoryTestScenario : std::uint8_t {
     Continuation = 1,
     Terminal = 2,
     Failure = 3,
+    // TestAccess-only bounded prefix; never a collection authority path.
+    DiagnosticPrefix = 4,
 };
 
 struct TeacherRunnerV3TrajectoryTestAccess;
@@ -84,7 +86,8 @@ private:
     static TeacherRunnerV3TrajectoryRunResult failure(
         std::string message, std::optional<PolicyError> policy_error = std::nullopt) noexcept;
     TeacherRunnerV3TrajectoryRunResult run_impl(
-        std::optional<detail::TeacherRunnerV3TrajectoryTestScenario> scenario) noexcept;
+        std::optional<detail::TeacherRunnerV3TrajectoryTestScenario> scenario,
+        std::optional<std::uint64_t> decision_limit = std::nullopt) noexcept;
 
     TeacherRunnerV3TrajectoryConfig config_;
     TeacherRunnerV3 runner_;
@@ -108,7 +111,14 @@ struct TeacherRunnerV3TrajectoryTestAccess final {
     static TeacherRunnerV3TrajectoryRunResult run_with_scenario(
         TeacherRunnerV3TrajectoryRunner& runner,
         const TeacherRunnerV3TrajectoryTestScenario scenario) {
-        return runner.run_impl(scenario);
+        return runner.run_impl(scenario, std::nullopt);
+    }
+
+    static TeacherRunnerV3TrajectoryRunResult run_until_decision(
+        TeacherRunnerV3TrajectoryRunner& runner,
+        const std::uint64_t decision_limit) {
+        return runner.run_impl(TeacherRunnerV3TrajectoryTestScenario::DiagnosticPrefix,
+                               decision_limit);
     }
 };
 

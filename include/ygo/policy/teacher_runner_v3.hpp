@@ -38,6 +38,9 @@ public:
     TeacherRunnerV3& operator=(TeacherRunnerV3&&) = default;
 
     PolicySelection select(const environment::DecisionFrame& frame) noexcept;
+    PolicySelection select_with_diagnostics(
+        const environment::DecisionFrame& frame,
+        teacher::TeacherRankingDiagnosticsV2& diagnostics) noexcept;
     TeacherRunnerV3ActionResult select_action(
         const environment::DecisionFrame& frame) noexcept;
     bool commit(const environment::StepAccepted& accepted) noexcept;
@@ -56,6 +59,9 @@ private:
         : config_(std::move(config)) {}
 
     static PolicySelection failure(PolicyErrorCode code, std::string message) noexcept;
+    PolicySelection select_impl(
+        const environment::DecisionFrame& frame,
+        teacher::TeacherRankingDiagnosticsV2* diagnostics) noexcept;
 
     TeacherRunnerV3Config config_;
     std::optional<std::uint8_t> pending_player_;

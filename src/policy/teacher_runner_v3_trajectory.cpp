@@ -21,6 +21,14 @@ namespace {
 
 using DiagnosticClock = std::chrono::steady_clock;
 
+constexpr std::uint64_t kHiitaDiagnosticWindowFirst = 220;
+constexpr std::uint64_t kHiitaDiagnosticWindowLast = 240;
+
+bool in_hiita_diagnostic_window(const std::uint64_t decision_index) noexcept {
+    return decision_index >= kHiitaDiagnosticWindowFirst &&
+           decision_index <= kHiitaDiagnosticWindowLast;
+}
+
 std::uint64_t diagnostic_elapsed_us(const DiagnosticClock::time_point start,
                                     const DiagnosticClock::time_point end) noexcept {
     return static_cast<std::uint64_t>(
@@ -88,7 +96,8 @@ void add_ranking_diagnostics(diagnostics::Task7DiagnosticEvent& event,
 void add_public_frame_diagnostics(
     diagnostics::Task7DiagnosticEvent& event,
     const environment::DecisionFrame& frame,
-    const std::optional<PolicySelectionResult>& selection) {
+    const std::optional<PolicySelectionResult>& selection,
+    const bool include_detail = false) {
     event.decision_index = frame.decision_index;
     event.engine_step_index = frame.engine_step_index;
     event.engine_process_count = frame.engine_step_index + 1;
@@ -111,6 +120,22 @@ void add_public_frame_diagnostics(
         event.continuation_present = true;
         event.continuation_kind = frame.request.continuation->continuation_kind;
         event.continuation_step = frame.request.continuation->continuation_step;
+        event.continuation_selected_count =
+            frame.request.continuation->selected_indices.size();
+        event.continuation_remaining_count =
+            frame.request.continuation->remaining_indices.size();
+        event.continuation_min_count = frame.request.continuation->min_count;
+        event.continuation_max_count = frame.request.continuation->max_count;
+        event.continuation_can_finish = frame.request.continuation->can_finish;
+        event.continuation_can_cancel = frame.request.continuation->can_cancel;
+    }
+    if (include_detail) {
+        event.teacher_ranking_detail_present = true;
+        event.teacher_candidate_public_action_keys.reserve(frame.request.candidates.size());
+        for (const auto& candidate : frame.request.candidates) {
+            event.teacher_candidate_public_action_keys.push_back(
+                candidate.public_action_key);
+        }
     }
     const auto safe = environment::decode_canonical_public_safe_state(
         frame.public_observation.canonical_safe_state_bytes());
@@ -132,6 +157,73 @@ void add_public_frame_diagnostics(
     event.public_entity_count = safe.value->entities().size();
     event.public_visible_event_count = safe.value->visible_events().size();
     event.public_chain_length = safe.value->chain().length;
+}
+
+void add_teacher_ranking_detail(
+    diagnostics::Task7DiagnosticEvent& event,
+    const environment::DecisionFrame& frame,
+    const teacher::TeacherRankingDiagnosticsV2& ranking_diagnostics) {
+    event.teacher_ranking_detail_present = true;
+    event.teacher_ranking_status = static_cast<std::uint8_t>(ranking_diagnostics.status);
+    event.teacher_effective_goal_id = ranking_diagnostics.effective_goal_id;
+    event.teacher_effective_line_id = ranking_diagnostics.effective_line_id;
+    event.teacher_ready_node_ids = ranking_diagnostics.ready_node_ids;
+    event.teacher_native_unselect = ranking_diagnostics.native_unselect;
+    event.teacher_reconciled_continuation_commitment =
+        ranking_diagnostics.reconciled_continuation_commitment;
+    event.teacher_f0_applicable = ranking_diagnostics.f0_applicable;
+    event.teacher_f1_applicable = ranking_diagnostics.f1_applicable;
+    event.teacher_selected_score_present = ranking_diagnostics.selected_score_vector.has_value();
+    if (ranking_diagnostics.selected_score_vector.has_value()) {
+        event.teacher_selected_score_values = ranking_diagnostics.selected_score_vector->values;
+    }
+
+    if (event.teacher_candidate_public_action_keys.empty()) {
+        event.teacher_candidate_public_action_keys.reserve(frame.request.candidates.size());
+        for (const auto& candidate : frame.request.candidates) {
+            event.teacher_candidate_public_action_keys.push_back(
+                candidate.public_action_key);
+        }
+    }
+    event.teacher_candidate_evaluations.reserve(ranking_diagnostics.evaluations.size());
+    for (const auto& evaluation : ranking_diagnostics.evaluations) {
+        diagnostics::Task7DiagnosticCandidateEvaluation detail;
+        detail.public_action_key = evaluation.public_action_key;
+        detail.status = static_cast<std::uint8_t>(evaluation.status);
+        if (evaluation.score.has_value()) {
+            detail.score_present = true;
+            detail.score_values = evaluation.score->values;
+        }
+        detail.score_contributions.reserve(evaluation.score_contributions.size());
+        for (const auto& contribution : evaluation.score_contributions) {
+            detail.score_contributions.push_back({
+                static_cast<std::uint8_t>(contribution.dimension), contribution.value});
+        }
+        detail.matched_intent_ids = evaluation.matched_intent_ids;
+        detail.matched_goal_ids = evaluation.matched_goal_ids;
+        detail.matched_line_ids = evaluation.matched_line_ids;
+        detail.matched_node_ids = evaluation.matched_node_ids;
+        detail.reason_ids = evaluation.reason_ids;
+        const auto candidate = std::find_if(
+            frame.request.candidates.begin(), frame.request.candidates.end(),
+            [&](const auto& value) {
+                return value.public_action_key == evaluation.public_action_key;
+            });
+        if (candidate != frame.request.candidates.end()) {
+            detail.action_kind = static_cast<std::uint8_t>(candidate->action_kind);
+            detail.card_selection_operation = static_cast<std::uint8_t>(
+                candidate->card_selection_operation);
+            if (candidate->source_reference.has_value()) {
+                detail.source_reference = candidate->source_reference->observation_locator;
+            }
+            if (candidate->target_reference.has_value()) {
+                detail.target_reference = candidate->target_reference->observation_locator;
+            }
+            detail.continuation_operation = candidate->continuation_operation;
+            detail.submits_engine_response = candidate->submits_engine_response;
+        }
+        event.teacher_candidate_evaluations.push_back(std::move(detail));
+    }
 }
 
 using Boundary = std::variant<environment::DecisionFrame, environment::EpisodeTerminal,
@@ -470,7 +562,8 @@ TeacherRunnerV3TrajectoryRunResult TeacherRunnerV3TrajectoryRunner::failure(
 }
 
 TeacherRunnerV3TrajectoryRunResult TeacherRunnerV3TrajectoryRunner::run_impl(
-    const std::optional<detail::TeacherRunnerV3TrajectoryTestScenario> test_scenario) noexcept {
+    const std::optional<detail::TeacherRunnerV3TrajectoryTestScenario> test_scenario,
+    const std::optional<std::uint64_t> decision_limit) noexcept {
     if (has_run_) {
         return failure("V3 trajectory runner can only execute one run");
     }
@@ -589,7 +682,14 @@ TeacherRunnerV3TrajectoryRunResult TeacherRunnerV3TrajectoryRunner::run_impl(
             }
 
             const auto teacher_start = DiagnosticClock::now();
-            const auto selection = runner_.select(*frame);
+            const bool capture_teacher_detail =
+                config_.diagnostic_observer != nullptr &&
+                in_hiita_diagnostic_window(frame->decision_index);
+            teacher::TeacherRankingDiagnosticsV2 teacher_ranking_diagnostics;
+            const auto selection = capture_teacher_detail
+                                       ? runner_.select_with_diagnostics(
+                                             *frame, teacher_ranking_diagnostics)
+                                       : runner_.select(*frame);
             const auto teacher_elapsed = diagnostic_elapsed_us(
                 teacher_start, DiagnosticClock::now());
             if (!selection) {
@@ -616,10 +716,15 @@ TeacherRunnerV3TrajectoryRunResult TeacherRunnerV3TrajectoryRunner::run_impl(
                 diagnostics::Task7DiagnosticEvent event;
                 event.phase = "TEACHER";
                 event.duration_us = teacher_elapsed;
-                add_public_frame_diagnostics(event, *frame, selection.value);
+                add_public_frame_diagnostics(event, *frame, selection.value,
+                                             capture_teacher_detail);
                 if (const auto ranking = session->policy.pending_ranking_result();
                     ranking.has_value()) {
                     add_ranking_diagnostics(event, *ranking);
+                }
+                if (capture_teacher_detail) {
+                    add_teacher_ranking_detail(event, *frame,
+                                               teacher_ranking_diagnostics);
                 }
                 accepted_teacher_event = std::move(event);
             }
@@ -729,6 +834,31 @@ TeacherRunnerV3TrajectoryRunResult TeacherRunnerV3TrajectoryRunner::run_impl(
                     // Diagnostics are strictly non-authoritative.
                 }
             }
+            if (decision_limit.has_value() &&
+                std::holds_alternative<environment::DecisionFrame>(accepted->next) &&
+                frame->decision_index + 1 >= *decision_limit) {
+                const auto interrupted = environment_->interrupt(environment::InterruptRequest{
+                    std::string(environment::kEpisodicEnvironmentV3ContractId),
+                    environment::InterruptionReason::AdministrativeCancel});
+                const auto* accepted_interrupt =
+                    std::get_if<environment::InterruptAccepted>(&interrupted);
+                const auto* pending_frame =
+                    std::get_if<environment::DecisionFrame>(&accepted->next);
+                if (accepted_interrupt == nullptr || pending_frame == nullptr ||
+                    !recorder_->on_interrupt_accepted(
+                        std::optional<environment::DecisionFrame>{*pending_frame},
+                        *accepted_interrupt, &recorder_error)) {
+                    return failure("V2 diagnostic prefix could not close: " + recorder_error);
+                }
+                TeacherRunnerV3TrajectoryRunResult result;
+                result.envelope = recorder_->seal(&recorder_error);
+                result.replay_evidence = evidence_for_interruption(
+                    accepted_interrupt->interruption);
+                if (!result.envelope.has_value()) {
+                    return failure("V2 diagnostic prefix could not seal: " + recorder_error);
+                }
+                return finish(std::move(result));
+            }
             if (const auto* interrupted =
                     std::get_if<environment::EpisodeInterrupted>(&accepted->next)) {
                 if (recorder_->lifecycle() != trajectory::RecorderLifecycle::Closed) {
@@ -760,7 +890,7 @@ TeacherRunnerV3TrajectoryRunResult TeacherRunnerV3TrajectoryRunner::run_impl(
 }
 
 TeacherRunnerV3TrajectoryRunResult TeacherRunnerV3TrajectoryRunner::run() noexcept {
-    return run_impl(std::nullopt);
+    return run_impl(std::nullopt, std::nullopt);
 }
 
 }  // namespace ygo::policy

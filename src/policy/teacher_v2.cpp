@@ -212,7 +212,20 @@ PolicySelection DeterministicTeacherPolicyV2::failure(
 }
 
 PolicySelection DeterministicTeacherPolicyV2::select(const PolicyInput& input) noexcept {
+    return select_impl(input, nullptr);
+}
+
+PolicySelection DeterministicTeacherPolicyV2::select_with_diagnostics(
+    const PolicyInput& input,
+    teacher::TeacherRankingDiagnosticsV2& diagnostics) noexcept {
+    return select_impl(input, &diagnostics);
+}
+
+PolicySelection DeterministicTeacherPolicyV2::select_impl(
+    const PolicyInput& input,
+    teacher::TeacherRankingDiagnosticsV2* diagnostics) noexcept {
     try {
+        if (diagnostics != nullptr) *diagnostics = {};
         if (pending_.has_value()) {
             return failure(PolicyErrorCode::LifecycleFailure,
                            "V2 Teacher has an unresolved pending proposal");
@@ -227,7 +240,7 @@ PolicySelection DeterministicTeacherPolicyV2::select(const PolicyInput& input) n
         }
 
         teacher::TeacherCoreV2 core;
-        auto ranking = core.propose(input, profile_, state_);
+        auto ranking = core.propose(input, profile_, state_, diagnostics);
         auto selection = teacher::teacher_policy_selection_from_result_v2(ranking);
         if (!selection) {
             return selection;

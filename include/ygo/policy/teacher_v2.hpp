@@ -31,6 +31,9 @@ public:
     DeterministicTeacherPolicyV2& operator=(DeterministicTeacherPolicyV2&&) = default;
 
     PolicySelection select(const PolicyInput& input) noexcept;
+    PolicySelection select_with_diagnostics(
+        const PolicyInput& input,
+        teacher::TeacherRankingDiagnosticsV2& diagnostics) noexcept;
     bool commit(const environment::AcceptedActionTransition& accepted_transition) noexcept;
     void reject_pending_proposal() noexcept;
 
@@ -50,7 +53,6 @@ public:
         }
         return pending_->ranking;
     }
-
 private:
     struct PendingProposal final {
         environment::PublicEnvironmentObservation observation;
@@ -64,6 +66,9 @@ private:
                                  std::string participant_policy_assignment_id);
 
     static PolicySelection failure(PolicyErrorCode code, std::string message) noexcept;
+    PolicySelection select_impl(
+        const PolicyInput& input,
+        teacher::TeacherRankingDiagnosticsV2* diagnostics) noexcept;
 
     teacher::StrategyProfileV1 profile_;
     teacher::TeacherPolicyBindingV1 policy_binding_;

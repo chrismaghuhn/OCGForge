@@ -78,6 +78,18 @@ TeacherRunnerV3CreateResult TeacherRunnerV3::create(
 }
 
 PolicySelection TeacherRunnerV3::select(const environment::DecisionFrame& frame) noexcept {
+    return select_impl(frame, nullptr);
+}
+
+PolicySelection TeacherRunnerV3::select_with_diagnostics(
+    const environment::DecisionFrame& frame,
+    teacher::TeacherRankingDiagnosticsV2& diagnostics) noexcept {
+    return select_impl(frame, &diagnostics);
+}
+
+PolicySelection TeacherRunnerV3::select_impl(
+    const environment::DecisionFrame& frame,
+    teacher::TeacherRankingDiagnosticsV2* diagnostics) noexcept {
     if (pending_player_.has_value()) {
         return failure(PolicyErrorCode::LifecycleFailure,
                        "V3 Teacher runner has an unresolved pending proposal");
@@ -89,8 +101,14 @@ PolicySelection TeacherRunnerV3::select(const environment::DecisionFrame& frame)
                        "V3 Teacher runner received an invalid V3 public frame");
     }
     auto& session = *config_.sessions[frame.acting_player];
-    const auto selection = session.policy.select(
-        PolicyInput{frame.public_observation, frame.request.candidates});
+    const auto selection = diagnostics == nullptr
+                               ? session.policy.select(
+                                     PolicyInput{frame.public_observation,
+                                                 frame.request.candidates})
+                               : session.policy.select_with_diagnostics(
+                                     PolicyInput{frame.public_observation,
+                                                 frame.request.candidates},
+                                     *diagnostics);
     if (selection) {
         pending_player_ = frame.acting_player;
         pending_episode_semantic_id_ = frame.episode_semantic_id;

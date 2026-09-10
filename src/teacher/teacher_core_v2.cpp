@@ -124,6 +124,56 @@ struct StageEvidence final {
     bool matched = false;
 };
 
+std::vector<std::string> matched_node_ids_for(
+    const StrategyProfileV1& profile,
+    const GoalLineSelection& selection,
+    const std::vector<std::string>& matched_intent_ids) {
+    std::vector<std::string> result;
+    if (!selection.line_id.has_value() || matched_intent_ids.empty()) return result;
+    const auto line = std::find_if(
+        profile.lines.begin(), profile.lines.end(), [&](const auto& value) {
+            return value.line_id == *selection.line_id;
+        });
+    if (line == profile.lines.end()) return result;
+    for (const auto& node_id : selection.ready_node_ids) {
+        const auto node = std::find_if(
+            line->nodes.begin(), line->nodes.end(), [&](const auto& value) {
+                return value.node_id == node_id;
+            });
+        if (node == line->nodes.end()) continue;
+        if (std::any_of(node->candidate_intent_ids.begin(),
+                        node->candidate_intent_ids.end(), [&](const auto& intent_id) {
+                            return std::find(matched_intent_ids.begin(),
+                                             matched_intent_ids.end(), intent_id) !=
+                                   matched_intent_ids.end();
+                        })) {
+            result.push_back(node_id);
+        }
+    }
+    return result;
+}
+
+void append_diagnostic_evaluation(
+    TeacherRankingDiagnosticsV2* diagnostics,
+    const environment::EnvironmentActionCandidate& candidate,
+    const CandidateEvaluation& evaluation,
+    const PublicEvaluatorOutcome* outcome,
+    std::vector<std::string> matched_node_ids) {
+    if (diagnostics == nullptr) return;
+    TeacherCandidateEvaluationDiagnosticsV2 value;
+    value.public_action_key = evaluation.public_action_key;
+    value.status = evaluation.status;
+    value.score = evaluation.score;
+    value.matched_intent_ids = evaluation.matched_intent_ids;
+    value.matched_goal_ids = evaluation.matched_goal_ids;
+    value.matched_line_ids = evaluation.matched_line_ids;
+    value.matched_node_ids = std::move(matched_node_ids);
+    value.reason_ids = evaluation.reason_ids;
+    if (outcome != nullptr) value.score_contributions = outcome->contributions;
+    diagnostics->evaluations.push_back(std::move(value));
+    (void)candidate;
+}
+
 void append_stage_value(StageEvidence& stage,
                         const environment::EnvironmentActionCandidate& candidate,
                         const PublicEvaluatorOutcome& outcome) {
@@ -243,8 +293,10 @@ std::optional<EpisodeLocalStrategyStateV2> apply_public_completion_v2(
 TeacherRankingResultV2 TeacherCoreV2::propose(
     const ygo::policy::PolicyInput& input,
     const StrategyProfileV1& profile,
-    const EpisodeLocalStrategyStateV2& state) const {
+    const EpisodeLocalStrategyStateV2& state,
+    TeacherRankingDiagnosticsV2* diagnostics) const {
     try {
+        if (diagnostics != nullptr) *diagnostics = {};
         const auto invalid = [&](const char*) {
             return invalid_result_v2(TeacherRankingStatus::InvalidInput, input.candidates);
         };
@@ -299,6 +351,22 @@ TeacherRankingResultV2 TeacherCoreV2::propose(
         const RecoverySelection proven_recovery =
             recovery.status == PredicateEvaluationStatus::True ? recovery : RecoverySelection{};
 
+        if (diagnostics != nullptr) {
+            diagnostics->effective_goal_id = completed->active_goal_id.has_value()
+                                                 ? completed->active_goal_id
+                                                 : selection.goal_id;
+            diagnostics->effective_line_id = completed->active_line_id.has_value()
+                                                 ? completed->active_line_id
+                                                 : selection.line_id;
+            diagnostics->ready_node_ids = selection.ready_node_ids;
+            diagnostics->native_unselect = native_unselect;
+            diagnostics->reconciled_continuation_commitment =
+                reconciled_continuation_commitment;
+            diagnostics->f0_applicable = f0_applicable;
+            diagnostics->f1_applicable = f1_applicable;
+            diagnostics->evaluations.reserve(input.candidates.size());
+        }
+
         StageEvidence f0_evidence;
         StageEvidence f1_evidence;
         if (f0_applicable) {
@@ -329,6 +397,7 @@ TeacherRankingResultV2 TeacherCoreV2::propose(
                     CandidateEvaluation invalid;
                     invalid.public_action_key = candidate.public_action_key;
                     invalid.status = CandidateEvaluationStatus::Invalid;
+                    append_diagnostic_evaluation(diagnostics, candidate, invalid, nullptr, {});
                     return invalid;
                 }
 
@@ -365,6 +434,12 @@ TeacherRankingResultV2 TeacherCoreV2::propose(
                     if (!callback_valid) {
                         evaluation.status = CandidateEvaluationStatus::Invalid;
                     }
+                    append_diagnostic_evaluation(
+                        diagnostics, candidate, evaluation, &active_outcome,
+                        diagnostics == nullptr
+                            ? std::vector<std::string>{}
+                            : matched_node_ids_for(profile, selection,
+                                                   active_outcome.matched_intent_ids));
                     return evaluation;
                 }
                 if (f1_applicable) {
@@ -373,6 +448,12 @@ TeacherRankingResultV2 TeacherCoreV2::propose(
                     if (!callback_valid) {
                         evaluation.status = CandidateEvaluationStatus::Invalid;
                     }
+                    append_diagnostic_evaluation(
+                        diagnostics, candidate, evaluation, &f1_outcome,
+                        diagnostics == nullptr
+                            ? std::vector<std::string>{}
+                            : matched_node_ids_for(profile, selection,
+                                                   f1_outcome.matched_intent_ids));
                     return evaluation;
                 }
 
@@ -380,6 +461,7 @@ TeacherRankingResultV2 TeacherCoreV2::propose(
                 evaluation.public_action_key = candidate.public_action_key;
                 evaluation.status = CandidateEvaluationStatus::Supported;
                 evaluation.score = ScoreVector{};
+                append_diagnostic_evaluation(diagnostics, candidate, evaluation, nullptr, {});
                 return evaluation;
             },
             authoritative_evaluations);
@@ -410,6 +492,13 @@ TeacherRankingResultV2 TeacherCoreV2::propose(
         }
 
         const auto result_before_delta = resolve_teacher_fallback_v2(input.candidates, stages);
+        if (diagnostics != nullptr) {
+            diagnostics->status = result_before_delta.status;
+            diagnostics->fallback_level = result_before_delta.fallback_level;
+            diagnostics->selected_public_action_key =
+                result_before_delta.selected_public_action_key;
+            diagnostics->selected_score_vector = result_before_delta.selected_score_vector;
+        }
         if (result_before_delta.status != TeacherRankingStatus::Selected ||
             !result_before_delta.selected_public_action_key.has_value()) {
             return result_before_delta;
