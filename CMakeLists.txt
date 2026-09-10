@@ -206,6 +206,9 @@ add_library(ygo_trajectory STATIC
     src/trajectory/trajectory_identity_v2.cpp
     src/trajectory/policy_provenance.cpp
     src/trajectory/identity_resolver.cpp
+    src/trajectory/codec_v3.cpp
+    src/trajectory/recorder_v3.cpp
+    src/trajectory/trajectory_identity_v3.cpp
     src/trajectory/replay_v2.cpp
     src/trajectory/admission_v2.cpp
     src/trajectory/shard_v2.cpp
@@ -402,6 +405,8 @@ add_library(ygo_policy STATIC
     src/policy/teacher.cpp
     src/policy/teacher_v2.cpp
     src/policy/teacher_v3.cpp
+    src/policy/teacher_runner_v4.cpp
+    src/policy/teacher_runner_v4_trajectory.cpp
     src/policy/teacher_runner.cpp
     src/policy/teacher_runner_v3.cpp
     src/policy/teacher_runner_v3_trajectory.cpp
@@ -509,6 +514,20 @@ target_include_directories(trajectory_privacy_test PRIVATE
                            "${CMAKE_SOURCE_DIR}/src/environment")
 target_link_libraries(trajectory_privacy_test PRIVATE ygo_trajectory)
 add_test(NAME trajectory_privacy_test COMMAND trajectory_privacy_test)
+
+add_executable(trusted_trajectory_v3_codec_test
+               tests/trajectory/trusted_trajectory_v3_codec_test.cpp)
+target_include_directories(trusted_trajectory_v3_codec_test PRIVATE
+                           "${CMAKE_SOURCE_DIR}/tests/trajectory")
+target_link_libraries(trusted_trajectory_v3_codec_test PRIVATE ygo_trajectory)
+add_test(NAME trusted_trajectory_v3_codec_test
+         COMMAND trusted_trajectory_v3_codec_test)
+
+add_executable(trusted_trajectory_v3_recorder_test
+               tests/trajectory/trusted_trajectory_v3_recorder_test.cpp)
+target_link_libraries(trusted_trajectory_v3_recorder_test PRIVATE ygo_policy)
+add_test(NAME trusted_trajectory_v3_recorder_test
+         COMMAND trusted_trajectory_v3_recorder_test)
 
 add_executable(strategy_profile_codec_test tests/teacher/strategy_profile_codec_test.cpp)
 target_link_libraries(strategy_profile_codec_test PRIVATE ygo_teacher)
@@ -656,6 +675,12 @@ add_executable(teacher_runner_trajectory_test
                tests/teacher/teacher_runner_trajectory_test.cpp)
 target_link_libraries(teacher_runner_trajectory_test PRIVATE ygo_policy)
 add_test(NAME teacher_runner_trajectory_test COMMAND teacher_runner_trajectory_test)
+
+add_executable(teacher_runner_v4_trajectory_test
+               tests/teacher/teacher_runner_v4_trajectory_test.cpp)
+target_link_libraries(teacher_runner_v4_trajectory_test PRIVATE ygo_policy)
+add_test(NAME teacher_runner_v4_trajectory_test
+         COMMAND teacher_runner_v4_trajectory_test)
 
 add_executable(phase4b_teacher_identity_regression_test
                tests/teacher/phase4b_teacher_identity_regression_test.cpp)
