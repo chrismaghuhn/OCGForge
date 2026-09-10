@@ -355,7 +355,7 @@ evidence only.
 | Candidate-domain identity | public_candidate_domain.v2 | Yes, V3 | V2 remains historical | Public identity | Domain members change from V2 keys to corrected V3 keys. |
 | Public decision identity | public_semantic_decision_identity.v2 | Yes, V3 | V2 remains historical | Public identity | It commits to the corrected domain identity and generation. |
 | EpisodicEnvironment projection | episodic_environment.v3 | Yes, V4 | Public observation child values may be reused | Environment | The environment identity commits to changed public identity schemas. |
-| Environment identity | environment_identity.v3 | Yes, V4 | V3 remains historical | Environment identity resolver | A same-ID re-encode would change canonical identity bytes. |
+| include/ygo/trajectory/identity_resolver.hpp and src/trajectory/identity_resolver.cpp | environment_identity.v3 resolver and V3 episode resolver | Yes, V4 entry points | Historical V1/V3 resolver APIs remain generation-pure | Environment identity resolver | A same-ID re-encode would change canonical identity bytes; no old resolver may be widened. |
 | episode_identity.v1 | Shared episode codec | No | Yes | Environment identity/replay | Seed, seat, deck, and episode semantics are unchanged. |
 | Public observation/safe state | V1 contracts | No | Yes | Observation | No current public state semantics change. |
 | EpisodeLocalStrategyStateV2 / TeacherStateDeltaV2 | Explicit V2 public-key validators | Yes, V3 | V2 remains historical | Teacher | Existing state fields reject V3 keys; V2 must not be widened. |
