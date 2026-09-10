@@ -871,6 +871,13 @@ target_include_directories(public_action_identity_test PRIVATE
 target_link_libraries(public_action_identity_test PRIVATE ygo_m4)
 add_test(NAME public_action_identity_test COMMAND public_action_identity_test)
 
+add_executable(public_action_identity_v3_test
+               tests/episodic/public_action_identity_v3_test.cpp)
+target_include_directories(public_action_identity_v3_test PRIVATE
+                           "${CMAKE_SOURCE_DIR}/src/environment")
+target_link_libraries(public_action_identity_v3_test PRIVATE ygo_m4)
+add_test(NAME public_action_identity_v3_test COMMAND public_action_identity_v3_test)
+
 add_executable(public_safe_state_test tests/environment/public_safe_state_test.cpp)
 target_link_libraries(public_safe_state_test PRIVATE ygo_m4)
 target_compile_definitions(public_safe_state_test PRIVATE
