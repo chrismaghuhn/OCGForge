@@ -90,6 +90,8 @@ void add_public_frame_diagnostics(
     const std::optional<PolicySelectionResult>& selection) {
     event.decision_index = frame.decision_index;
     event.engine_step_index = frame.engine_step_index;
+    event.engine_process_count = frame.engine_step_index + 1;
+    event.semantic_action_count = frame.decision_index;
     event.acting_player = frame.acting_player;
     event.candidate_count = frame.request.candidates.size();
     event.request_kind = std::string(

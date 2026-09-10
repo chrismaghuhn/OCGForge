@@ -656,8 +656,12 @@ private:
         std::uint64_t no_structural_progress = 0;
         std::uint64_t max_no_structural_progress = 0;
         std::uint64_t max_no_structural_progress_processes = 0;
+        std::uint64_t max_no_structural_progress_start = 0;
+        std::uint64_t max_no_structural_progress_end = 0;
         std::uint64_t last_progress_index = 0;
         std::uint64_t last_progress_process = 0;
+        std::uint64_t longest_selected_action_streak = 1;
+        std::uint64_t selected_action_streak = 1;
         std::set<std::uint32_t> distinct_turns;
 
         for (std::size_t index = 0; index < decisions.size(); ++index) {
@@ -676,6 +680,13 @@ private:
             }
             if (index != 0) {
                 const auto& previous = decisions[index - 1];
+                if (previous.selected_public_action_key == event.selected_public_action_key) {
+                    ++selected_action_streak;
+                    longest_selected_action_streak =
+                        (std::max)(longest_selected_action_streak, selected_action_streak);
+                } else {
+                    selected_action_streak = 1;
+                }
                 if (previous.public_observation_digest == event.public_observation_digest) {
                     ++same_observation_streak;
                     ++unchanged_public_state;
@@ -693,11 +704,15 @@ private:
                 } else {
                     same_turn_phase_streak = 1;
                     if (no_structural_progress != 0) {
-                        max_no_structural_progress =
-                            (std::max)(max_no_structural_progress, no_structural_progress);
-                        max_no_structural_progress_processes =
-                            (std::max)(max_no_structural_progress_processes,
-                                       event.engine_process_count - last_progress_process);
+                        if (no_structural_progress > max_no_structural_progress) {
+                            max_no_structural_progress = no_structural_progress;
+                            max_no_structural_progress_start =
+                                decisions[last_progress_index].decision_index + 1;
+                            max_no_structural_progress_end =
+                                decisions[index - 1].decision_index;
+                            max_no_structural_progress_processes =
+                                event.engine_process_count - last_progress_process;
+                        }
                     }
                     no_structural_progress = 0;
                     last_progress_index = index;
@@ -733,11 +748,14 @@ private:
         }
         f4_streak_max = (std::max)(f4_streak_max, f4_streak);
         if (no_structural_progress != 0) {
-            max_no_structural_progress =
-                (std::max)(max_no_structural_progress, no_structural_progress);
-            max_no_structural_progress_processes =
-                (std::max)(max_no_structural_progress_processes,
-                           decisions.back().engine_process_count - last_progress_process);
+            if (no_structural_progress > max_no_structural_progress) {
+                max_no_structural_progress = no_structural_progress;
+                max_no_structural_progress_start =
+                    decisions[last_progress_index].decision_index + 1;
+                max_no_structural_progress_end = decisions.back().decision_index;
+                max_no_structural_progress_processes =
+                    decisions.back().engine_process_count - last_progress_process;
+            }
         }
 
         std::vector<std::string> tuple_keys;
@@ -775,13 +793,20 @@ private:
             if (result.size() > 10) result.resize(10);
             return result;
         }();
+        std::uint64_t total_engine_processes = 0;
+        std::uint64_t total_semantic_actions = 0;
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            total_engine_processes = workload_.engine_process_calls;
+            total_semantic_actions = workload_.semantic_actions;
+        }
         std::ofstream analysis(options_.output_directory / "semantic-analysis.json",
                                std::ios::out | std::ios::trunc);
         analysis << "{\"diagnostic_schema_id\":"
                  << json_escape(diagnostics::kTask7ForensicDiagnosticsSchemaId)
                  << ",\"total_decisions\":" << decisions.size()
-                 << ",\"total_engine_processes\":"
-                 << decisions.back().engine_process_count
+                 << ",\"total_engine_processes\":" << total_engine_processes
+                 << ",\"total_semantic_actions\":" << total_semantic_actions
                  << ",\"total_turns_observed\":" << distinct_turns.size()
                  << ",\"distinct_public_observation_digests\":" << observations.size()
                  << ",\"distinct_public_semantic_decision_ids\":" << public_decisions.size()
@@ -793,6 +818,12 @@ private:
                  << max_no_structural_progress
                  << ",\"max_engine_processes_without_structural_progress\":"
                  << max_no_structural_progress_processes
+                 << ",\"max_structural_gap_start_decision\":"
+                 << max_no_structural_progress_start
+                 << ",\"max_structural_gap_end_decision\":"
+                 << max_no_structural_progress_end
+                 << ",\"longest_repeated_selected_action_streak\":"
+                 << longest_selected_action_streak
                  << ",\"longest_repeated_cycle_length\":" << best_cycle_length
                  << ",\"longest_repeated_cycle_count\":" << best_cycle_repeats
                  << ",\"cycle_start_decision\":"
