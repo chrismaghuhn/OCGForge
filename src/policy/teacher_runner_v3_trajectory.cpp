@@ -10,6 +10,7 @@
 
 #include "runner_shared.hpp"
 #include "ygo/environment/public_action_identity.hpp"
+#include "ygo/environment/public_safe_state.hpp"
 #include "ygo/policy/production_provenance.hpp"
 #include "ygo/trace/sha256.hpp"
 #include "ygo/trajectory/identity_resolver.hpp"
@@ -62,6 +63,7 @@ void add_ranking_diagnostics(diagnostics::Task7DiagnosticEvent& event,
         }
     }
     if (ranking.fallback_level.has_value()) {
+        event.fallback_level = static_cast<std::uint8_t>(*ranking.fallback_level);
         switch (*ranking.fallback_level) {
         case teacher::TeacherFallbackLevel::F0:
             ++event.f0_count;
@@ -80,6 +82,48 @@ void add_ranking_diagnostics(diagnostics::Task7DiagnosticEvent& event,
             break;
         }
     }
+}
+
+void add_public_frame_diagnostics(
+    diagnostics::Task7DiagnosticEvent& event,
+    const environment::DecisionFrame& frame,
+    const std::optional<PolicySelectionResult>& selection) {
+    event.decision_index = frame.decision_index;
+    event.engine_step_index = frame.engine_step_index;
+    event.acting_player = frame.acting_player;
+    event.candidate_count = frame.request.candidates.size();
+    event.request_kind = std::string(
+        environment::environment_decision_kind_name(frame.request.kind));
+    event.decision_family = event.request_kind;
+    event.public_observation_digest = frame.public_observation_digest;
+    event.public_candidate_domain_digest = frame.public_candidate_domain_digest;
+    event.public_semantic_decision_id = frame.public_semantic_decision_id;
+    if (selection.has_value()) {
+        event.selected_public_action_key = selection->public_action_key;
+    }
+    if (frame.request.continuation.has_value()) {
+        event.continuation_present = true;
+        event.continuation_kind = frame.request.continuation->continuation_kind;
+        event.continuation_step = frame.request.continuation->continuation_step;
+    }
+    const auto safe = environment::decode_canonical_public_safe_state(
+        frame.public_observation.canonical_safe_state_bytes());
+    if (!safe) return;
+    const auto& globals = safe.value->globals();
+    if (globals.turn_count.has_value()) {
+        event.public_turn_count_present = true;
+        event.public_turn_count = *globals.turn_count;
+    }
+    if (globals.turn_player.has_value()) event.public_turn_player = *globals.turn_player;
+    if (globals.phase.has_value()) event.public_phase = std::to_string(*globals.phase);
+    if (globals.life_points.size() >= 2) {
+        event.public_life_points_present = true;
+        event.public_life_points_p0 = globals.life_points[0];
+        event.public_life_points_p1 = globals.life_points[1];
+    }
+    event.public_entity_count = safe.value->entities().size();
+    event.public_visible_event_count = safe.value->visible_events().size();
+    event.public_chain_length = safe.value->chain().length;
 }
 
 using Boundary = std::variant<environment::DecisionFrame, environment::EpisodeTerminal,
@@ -547,18 +591,21 @@ TeacherRunnerV3TrajectoryRunResult TeacherRunnerV3TrajectoryRunner::run_impl(
                     diagnostics::Task7DiagnosticEvent event;
                     event.phase = "TEACHER";
                     event.duration_us = teacher_elapsed;
-                    event.candidate_count = frame->request.candidates.size();
-                    event.decision_index = frame->decision_index;
-                    event.engine_step_index = frame->engine_step_index;
-                    event.acting_player = frame->acting_player;
+                    add_public_frame_diagnostics(event, *frame, selection.value);
                     add_ranking_diagnostics(event, *ranking);
                     try {
                         config_.diagnostic_observer(event);
                     } catch (...) {
                     }
                 } else {
-                    emit_diagnostic(config_.diagnostic_observer, "TEACHER",
-                                    teacher_elapsed);
+                    diagnostics::Task7DiagnosticEvent event;
+                    event.phase = "TEACHER";
+                    event.duration_us = teacher_elapsed;
+                    add_public_frame_diagnostics(event, *frame, selection.value);
+                    try {
+                        config_.diagnostic_observer(event);
+                    } catch (...) {
+                    }
                 }
             } else {
                 emit_diagnostic(config_.diagnostic_observer, "TEACHER",

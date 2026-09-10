@@ -61,6 +61,52 @@ std::string json_escape(const std::string_view value) {
     return output.str();
 }
 
+std::string diagnostic_event_json(const diagnostics::Task7DiagnosticEvent& event) {
+    std::ostringstream output;
+    output << "{\"phase\":" << json_escape(event.phase)
+           << ",\"decision_index\":" << event.decision_index
+           << ",\"engine_step_index\":" << event.engine_step_index
+           << ",\"engine_process_count\":" << event.engine_process_count
+           << ",\"semantic_action_count\":" << event.semantic_action_count
+           << ",\"acting_player\":" << static_cast<unsigned>(event.acting_player)
+           << ",\"request_kind\":" << json_escape(event.request_kind)
+           << ",\"candidate_count\":" << event.candidate_count
+           << ",\"public_candidate_domain_digest\":"
+           << json_escape(event.public_candidate_domain_digest)
+           << ",\"public_semantic_decision_id\":"
+           << json_escape(event.public_semantic_decision_id)
+           << ",\"public_observation_digest\":"
+           << json_escape(event.public_observation_digest)
+           << ",\"selected_public_action_key\":"
+           << json_escape(event.selected_public_action_key)
+           << ",\"fallback_level\":" << static_cast<unsigned>(event.fallback_level)
+           << ",\"public_turn_count_present\":"
+           << (event.public_turn_count_present ? "true" : "false")
+           << ",\"public_turn_count\":" << event.public_turn_count
+           << ",\"public_turn_player\":"
+           << static_cast<unsigned>(event.public_turn_player)
+           << ",\"public_phase\":" << json_escape(event.public_phase)
+           << ",\"public_life_points_present\":"
+           << (event.public_life_points_present ? "true" : "false")
+           << ",\"public_life_points_p0\":" << event.public_life_points_p0
+           << ",\"public_life_points_p1\":" << event.public_life_points_p1
+           << ",\"public_entity_count\":" << event.public_entity_count
+           << ",\"public_visible_event_count\":"
+           << event.public_visible_event_count
+           << ",\"public_chain_length\":" << event.public_chain_length
+           << ",\"continuation_present\":"
+           << (event.continuation_present ? "true" : "false")
+           << ",\"continuation_kind\":" << json_escape(event.continuation_kind)
+           << ",\"continuation_step\":" << event.continuation_step
+           << ",\"supported_evaluations\":" << event.supported_evaluations
+           << ",\"not_applicable_evaluations\":"
+           << event.not_applicable_evaluations
+           << ",\"unsupported_evaluations\":" << event.unsupported_evaluations
+           << ",\"invalid_evaluations\":" << event.invalid_evaluations
+           << "}\n";
+    return output.str();
+}
+
 std::string placement_name(const environment::SeatAssignment placement) {
     switch (placement) {
     case environment::SeatAssignment::Normal: return "NORMAL";
@@ -232,7 +278,8 @@ public:
         std::filesystem::create_directories(options_.output_directory);
         progress_.open(options_.output_directory / "progress.jsonl", std::ios::out);
         jobs_.open(options_.output_directory / "jobs.jsonl", std::ios::out);
-        if (!progress_ || !jobs_) {
+        decisions_.open(options_.output_directory / "decisions.jsonl", std::ios::out);
+        if (!progress_ || !jobs_ || !decisions_) {
             throw std::runtime_error("diagnostic output files could not be opened");
         }
         emit_progress("RUN_START", std::nullopt, "START");
@@ -259,6 +306,7 @@ public:
             job_phase_stats_.clear();
             job_workload_ = {};
             reported_phases_.clear();
+            decisions_for_job_.clear();
         }
         emit_progress("JOB_START", index, "JOB_SETUP");
         std::cout << "JOB_START index=" << index << " seed=" << job.root_seed
@@ -320,6 +368,7 @@ public:
             completed_jobs_ = std::max(completed_jobs_, index + 1);
         }
         emit_progress("JOB_END", index, inspection.eligible ? "ELIGIBLE" : "INELIGIBLE");
+        write_semantic_analysis();
         std::cout << "JOB_END index=" << index << " eligible="
                   << (inspection.eligible ? "YES" : "NO")
                   << " closure=" << closure_name(run)
@@ -455,6 +504,11 @@ public:
             };
             update(phase_stats_, workload_);
             update(job_phase_stats_, job_workload_);
+            if (event.phase == "TEACHER") {
+                decisions_for_job_.push_back(event);
+                decisions_ << diagnostic_event_json(event);
+                decisions_.flush();
+            }
         }
         if (report_phase) {
             emit_progress("PHASE_CHANGE", job_index, event.phase);
@@ -532,6 +586,270 @@ private:
         if (heartbeat_.joinable()) heartbeat_.join();
     }
 
+    static std::string semantic_tuple_key(
+        const diagnostics::Task7DiagnosticEvent& event) {
+        std::ostringstream key;
+        key << static_cast<unsigned>(event.acting_player) << '\x1f'
+            << event.public_turn_count_present << '\x1f' << event.public_turn_count << '\x1f'
+            << static_cast<unsigned>(event.public_turn_player) << '\x1f'
+            << event.public_phase << '\x1f' << event.request_kind << '\x1f'
+            << event.public_observation_digest << '\x1f'
+            << event.public_candidate_domain_digest << '\x1f'
+            << event.selected_public_action_key << '\x1f'
+            << static_cast<unsigned>(event.fallback_level);
+        return key.str();
+    }
+
+    static std::string structural_progress_key(
+        const diagnostics::Task7DiagnosticEvent& event) {
+        std::ostringstream key;
+        key << event.public_turn_count_present << '\x1f' << event.public_turn_count << '\x1f'
+            << static_cast<unsigned>(event.public_turn_player) << '\x1f'
+            << event.public_phase << '\x1f' << event.public_life_points_present << '\x1f'
+            << event.public_life_points_p0 << '\x1f' << event.public_life_points_p1 << '\x1f'
+            << event.public_entity_count << '\x1f' << event.public_chain_length;
+        return key.str();
+    }
+
+    static void write_count_map(std::ostream& output,
+                                const std::map<std::string, std::uint64_t>& values) {
+        output << '{';
+        bool first = true;
+        for (const auto& [key, value] : values) {
+            if (!first) output << ',';
+            first = false;
+            output << json_escape(key) << ':' << value;
+        }
+        output << '}';
+    }
+
+    void write_semantic_analysis() {
+        std::vector<diagnostics::Task7DiagnosticEvent> decisions;
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            decisions = decisions_for_job_;
+        }
+        if (decisions.empty()) return;
+
+        std::set<std::string> observations;
+        std::set<std::string> public_decisions;
+        std::set<std::string> selected_actions;
+        std::map<std::string, std::uint64_t> request_counts;
+        std::map<std::string, std::uint64_t> selected_action_counts;
+        std::map<std::string, std::uint64_t> turn_counts;
+        std::map<std::string, std::uint64_t> fallback_counts;
+        std::map<std::string, std::uint64_t> request_transitions;
+        std::map<std::string, std::uint64_t> fallback_transitions;
+        std::uint64_t unchanged_public_state = 0;
+        std::uint64_t changed_public_state = 0;
+        std::uint64_t f4_unchanged = 0;
+        std::uint64_t f4_changed = 0;
+        std::uint64_t f4_streak = 0;
+        std::uint64_t f4_streak_max = 0;
+        std::uint64_t f4_to_f4 = 0;
+        std::uint64_t f0_to_f4 = 0;
+        std::uint64_t f4_to_f0 = 0;
+        std::uint64_t same_observation_streak = 1;
+        std::uint64_t same_observation_streak_max = 1;
+        std::uint64_t same_turn_phase_streak = 1;
+        std::uint64_t same_turn_phase_streak_max = 1;
+        std::uint64_t no_structural_progress = 0;
+        std::uint64_t max_no_structural_progress = 0;
+        std::uint64_t max_no_structural_progress_processes = 0;
+        std::uint64_t last_progress_index = 0;
+        std::uint64_t last_progress_process = 0;
+        std::set<std::uint32_t> distinct_turns;
+
+        for (std::size_t index = 0; index < decisions.size(); ++index) {
+            const auto& event = decisions[index];
+            observations.insert(event.public_observation_digest);
+            public_decisions.insert(event.public_semantic_decision_id);
+            selected_actions.insert(event.selected_public_action_key);
+            ++request_counts[event.request_kind];
+            ++selected_action_counts[event.selected_public_action_key];
+            if (event.fallback_level != 255) {
+                ++fallback_counts[std::to_string(event.fallback_level)];
+            }
+            if (event.public_turn_count_present) {
+                distinct_turns.insert(event.public_turn_count);
+                ++turn_counts[std::to_string(event.public_turn_count)];
+            }
+            if (index != 0) {
+                const auto& previous = decisions[index - 1];
+                if (previous.public_observation_digest == event.public_observation_digest) {
+                    ++same_observation_streak;
+                    ++unchanged_public_state;
+                } else {
+                    same_observation_streak = 1;
+                    ++changed_public_state;
+                }
+                same_observation_streak_max =
+                    (std::max)(same_observation_streak_max, same_observation_streak);
+                const auto previous_turn_phase = structural_progress_key(previous);
+                const auto current_turn_phase = structural_progress_key(event);
+                if (previous_turn_phase == current_turn_phase) {
+                    ++same_turn_phase_streak;
+                    ++no_structural_progress;
+                } else {
+                    same_turn_phase_streak = 1;
+                    if (no_structural_progress != 0) {
+                        max_no_structural_progress =
+                            (std::max)(max_no_structural_progress, no_structural_progress);
+                        max_no_structural_progress_processes =
+                            (std::max)(max_no_structural_progress_processes,
+                                       event.engine_process_count - last_progress_process);
+                    }
+                    no_structural_progress = 0;
+                    last_progress_index = index;
+                    last_progress_process = event.engine_process_count;
+                }
+                same_turn_phase_streak_max =
+                    (std::max)(same_turn_phase_streak_max, same_turn_phase_streak);
+                if (previous.request_kind != event.request_kind) {
+                    ++request_transitions[previous.request_kind + "->" + event.request_kind];
+                }
+                if (previous.fallback_level != event.fallback_level) {
+                    ++fallback_transitions[
+                        std::to_string(previous.fallback_level) + "->" +
+                        std::to_string(event.fallback_level)];
+                }
+                if (previous.fallback_level == 4 && event.fallback_level == 4) ++f4_to_f4;
+                if (previous.fallback_level == 0 && event.fallback_level == 4) ++f0_to_f4;
+                if (previous.fallback_level == 4 && event.fallback_level == 0) ++f4_to_f0;
+            }
+            if (event.fallback_level == 4) {
+                ++f4_streak;
+                if (index != 0 &&
+                    decisions[index - 1].public_observation_digest ==
+                        event.public_observation_digest) {
+                    ++f4_unchanged;
+                } else if (index != 0) {
+                    ++f4_changed;
+                }
+            } else {
+                f4_streak_max = (std::max)(f4_streak_max, f4_streak);
+                f4_streak = 0;
+            }
+        }
+        f4_streak_max = (std::max)(f4_streak_max, f4_streak);
+        if (no_structural_progress != 0) {
+            max_no_structural_progress =
+                (std::max)(max_no_structural_progress, no_structural_progress);
+            max_no_structural_progress_processes =
+                (std::max)(max_no_structural_progress_processes,
+                           decisions.back().engine_process_count - last_progress_process);
+        }
+
+        std::vector<std::string> tuple_keys;
+        tuple_keys.reserve(decisions.size());
+        for (const auto& decision : decisions) tuple_keys.push_back(semantic_tuple_key(decision));
+        std::uint64_t best_cycle_length = 0;
+        std::uint64_t best_cycle_repeats = 0;
+        std::size_t best_cycle_start = 0;
+        std::size_t best_cycle_end = 0;
+        for (std::size_t period = 1; period <= 256 && period * 2 <= tuple_keys.size(); ++period) {
+            for (std::size_t start = 0; start + period * 2 <= tuple_keys.size(); ++start) {
+                std::size_t span = 0;
+                while (start + span + period < tuple_keys.size() &&
+                       tuple_keys[start + span] == tuple_keys[start + span + period]) {
+                    ++span;
+                }
+                if (span < period) continue;
+                const auto repeats = static_cast<std::uint64_t>(span / period) + 1;
+                if (repeats > best_cycle_repeats) {
+                    best_cycle_length = period;
+                    best_cycle_repeats = repeats;
+                    best_cycle_start = start;
+                    best_cycle_end = start + span + period - 1;
+                }
+            }
+        }
+
+        const auto top_turns = [&turn_counts] {
+            std::vector<std::pair<std::string, std::uint64_t>> result(
+                turn_counts.begin(), turn_counts.end());
+            std::sort(result.begin(), result.end(),
+                      [](const auto& left, const auto& right) {
+                          return left.second > right.second;
+                      });
+            if (result.size() > 10) result.resize(10);
+            return result;
+        }();
+        std::ofstream analysis(options_.output_directory / "semantic-analysis.json",
+                               std::ios::out | std::ios::trunc);
+        analysis << "{\"diagnostic_schema_id\":"
+                 << json_escape(diagnostics::kTask7ForensicDiagnosticsSchemaId)
+                 << ",\"total_decisions\":" << decisions.size()
+                 << ",\"total_engine_processes\":"
+                 << decisions.back().engine_process_count
+                 << ",\"total_turns_observed\":" << distinct_turns.size()
+                 << ",\"distinct_public_observation_digests\":" << observations.size()
+                 << ",\"distinct_public_semantic_decision_ids\":" << public_decisions.size()
+                 << ",\"distinct_selected_public_action_keys\":" << selected_actions.size()
+                 << ",\"longest_identical_public_observation_streak\":"
+                 << same_observation_streak_max
+                 << ",\"longest_same_turn_phase_streak\":" << same_turn_phase_streak_max
+                 << ",\"max_decisions_without_structural_progress\":"
+                 << max_no_structural_progress
+                 << ",\"max_engine_processes_without_structural_progress\":"
+                 << max_no_structural_progress_processes
+                 << ",\"longest_repeated_cycle_length\":" << best_cycle_length
+                 << ",\"longest_repeated_cycle_count\":" << best_cycle_repeats
+                 << ",\"cycle_start_decision\":"
+                 << (best_cycle_repeats == 0 ? -1LL
+                                               : static_cast<long long>(decisions[best_cycle_start].decision_index))
+                 << ",\"cycle_end_decision\":"
+                 << (best_cycle_repeats == 0 ? -1LL
+                                               : static_cast<long long>(decisions[best_cycle_end].decision_index))
+                 << ",\"public_observation_changed_count\":" << changed_public_state
+                 << ",\"public_observation_unchanged_count\":" << unchanged_public_state
+                 << ",\"f4_longest_consecutive_streak\":" << f4_streak_max
+                 << ",\"f4_to_f4_transitions\":" << f4_to_f4
+                 << ",\"f0_to_f4_transitions\":" << f0_to_f4
+                 << ",\"f4_to_f0_transitions\":" << f4_to_f0
+                 << ",\"f4_with_unchanged_public_observation_count\":" << f4_unchanged
+                 << ",\"f4_with_changed_public_observation_count\":" << f4_changed
+                 << ",\"fallback_level_counts\":";
+        write_count_map(analysis, fallback_counts);
+        analysis << ",\"request_family_counts\":";
+        write_count_map(analysis, request_counts);
+        analysis << ",\"selected_action_key_counts\":";
+        write_count_map(analysis, selected_action_counts);
+        analysis << ",\"fallback_transition_counts\":";
+        write_count_map(analysis, fallback_transitions);
+        analysis << ",\"request_family_transition_counts\":";
+        write_count_map(analysis, request_transitions);
+        analysis << ",\"top_turns_by_decision_count\":[";
+        for (std::size_t index = 0; index < top_turns.size(); ++index) {
+            if (index != 0) analysis << ',';
+            analysis << "{\"turn\":" << json_escape(top_turns[index].first)
+                     << ",\"decisions\":" << top_turns[index].second << '}';
+        }
+        analysis << "],\"cycle_tuple_fields\":[\"acting_player\",\"turn_count\","
+                    "\"turn_player\",\"phase\",\"request_kind\","
+                    "\"public_observation_digest\",\"public_candidate_domain_digest\","
+                    "\"selected_public_action_key\",\"fallback_level\"]}\n";
+
+        std::ofstream tail(options_.output_directory / "semantic-tail-256.jsonl",
+                           std::ios::out | std::ios::trunc);
+        const auto tail_start = decisions.size() > 256 ? decisions.size() - 256 : 0;
+        for (std::size_t index = tail_start; index < decisions.size(); ++index) {
+            tail << diagnostic_event_json(decisions[index]);
+        }
+        std::ofstream cycle(options_.output_directory / "first-cycle.json",
+                            std::ios::out | std::ios::trunc);
+        cycle << "{\"cycle_found\":" << (best_cycle_repeats == 0 ? "false" : "true");
+        if (best_cycle_repeats != 0) {
+            cycle << ",\"cycle_start_decision\":"
+                  << decisions[best_cycle_start].decision_index
+                  << ",\"cycle_end_decision\":"
+                  << decisions[best_cycle_end].decision_index
+                  << ",\"cycle_length\":" << best_cycle_length
+                  << ",\"repeat_count\":" << best_cycle_repeats;
+        }
+        cycle << "}\n";
+    }
+
     void write_perf_summary() {
         std::map<std::string, PhaseStats> phases;
         WorkloadStats workload;
@@ -602,6 +920,7 @@ private:
     const std::string schedule_id_;
     std::ofstream progress_;
     std::ofstream jobs_;
+    std::ofstream decisions_;
     mutable std::mutex mutex_;
     std::map<std::string, PhaseStats> phase_stats_;
     std::map<std::string, PhaseStats> job_phase_stats_;
@@ -611,6 +930,7 @@ private:
     std::optional<std::string> current_job_id_;
     std::string current_phase_ = "START";
     std::set<std::string> reported_phases_;
+    std::vector<diagnostics::Task7DiagnosticEvent> decisions_for_job_;
     std::optional<std::size_t> first_failure_index_;
     std::optional<std::string> first_failure_id_;
     std::size_t completed_jobs_ = 0;

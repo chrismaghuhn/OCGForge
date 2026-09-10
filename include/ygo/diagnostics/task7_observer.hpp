@@ -44,6 +44,25 @@ struct Task7DiagnosticEvent final {
     std::uint64_t f4_count = 0;
 
     std::string decision_family;
+    std::string request_kind;
+    std::string public_observation_digest;
+    std::string public_candidate_domain_digest;
+    std::string public_semantic_decision_id;
+    std::string selected_public_action_key;
+    std::uint8_t fallback_level = 255;
+    bool public_turn_count_present = false;
+    std::uint32_t public_turn_count = 0;
+    std::uint8_t public_turn_player = 255;
+    std::string public_phase;
+    bool public_life_points_present = false;
+    std::uint64_t public_life_points_p0 = 0;
+    std::uint64_t public_life_points_p1 = 0;
+    std::uint64_t public_entity_count = 0;
+    std::uint64_t public_visible_event_count = 0;
+    std::uint64_t public_chain_length = 0;
+    bool continuation_present = false;
+    std::string continuation_kind;
+    std::uint32_t continuation_step = 0;
     std::string closure_kind;
     std::string failure_code;
     std::string failure_stage;
