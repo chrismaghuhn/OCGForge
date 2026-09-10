@@ -184,6 +184,36 @@ void test_fresh_runs_are_byte_and_identity_deterministic() {
             "fresh V3 runner runs produced different V2 identities");
 }
 
+void test_diagnostics_preserve_bounded_trajectory_semantics() {
+    const auto baseline = collect_bounded_run();
+    auto value = fixture();
+    std::size_t diagnostic_events = 0;
+    TeacherRunnerV3TrajectoryConfig config{
+        value.environment_config,
+        value.episode_spec,
+        value.run_control,
+        value.policy_provenance,
+        std::move(value.runner_config)};
+    config.diagnostic_observer =
+        [&diagnostic_events](const ygo::diagnostics::Task7DiagnosticEvent&) {
+            ++diagnostic_events;
+        };
+    auto created = TeacherRunnerV3TrajectoryRunner::create(std::move(config));
+    require(static_cast<bool>(created), "diagnostic bounded runner creation failed");
+    const auto observed = created.value->run();
+    require(observed.envelope.has_value(),
+            "diagnostic bounded runner did not seal an envelope");
+    require(diagnostic_events != 0, "diagnostic bounded runner emitted no events");
+    require(canonical_episode_envelope_bytes_v2(*observed.envelope) ==
+                canonical_episode_envelope_bytes_v2(baseline.envelope),
+            "diagnostics changed bounded V2 trajectory bytes");
+    require(public_gameplay_trajectory_id_v2(*observed.envelope) ==
+                public_gameplay_trajectory_id_v2(baseline.envelope) &&
+                trajectory_record_id_v2(*observed.envelope) ==
+                    trajectory_record_id_v2(baseline.envelope),
+            "diagnostics changed bounded V2 trajectory identities");
+}
+
 void test_adapter_boundary_harness() {
     const auto run_scenario = [](const ygo::policy::detail::TeacherRunnerV3TrajectoryTestScenario scenario) {
         auto value = fixture();
@@ -415,6 +445,7 @@ int main() {
     try {
         test_runner_v3_records_and_replays_v2();
         test_fresh_runs_are_byte_and_identity_deterministic();
+        test_diagnostics_preserve_bounded_trajectory_semantics();
         test_adapter_boundary_harness();
         test_v3_boundary_and_historical_boundary_are_explicit();
         test_recorder_step_rejected_and_terminal_boundaries();
