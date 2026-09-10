@@ -231,7 +231,8 @@ bool certified_resources_match(const CertifiedEnvironmentConfig& config) {
 }
 
 EpisodeDriverConfig make_driver_config(const CertifiedEnvironmentConfig& config,
-                                       const EpisodeSpec& spec, const RunControl& control) {
+                                       const EpisodeSpec& spec, const RunControl& control,
+                                       const diagnostics::Task7DiagnosticObserver& observer) {
     const auto decks = load_certified_decks();
     if (config.locked_decks.size() != 2 || decks.size() != 2 ||
         decks[0].sha256 != config.locked_decks[0].sha256 ||
@@ -262,7 +263,9 @@ EpisodeDriverConfig make_driver_config(const CertifiedEnvironmentConfig& config,
     driver.build_full_observation = true;
     driver.required_script_codes = core::canonical_required_script_codes(seat_decks[0], seat_decks[1]);
     driver.fixture_setup_script.clear();
-    driver.instrumentation = false;
+    driver.instrumentation = static_cast<bool>(observer);
+    driver.diagnostic_observer = observer;
+    driver.diagnostic_process_interval = observer == nullptr ? 0 : 128;
     return driver;
 }
 
@@ -1148,6 +1151,15 @@ struct EpisodicEnvironment::Impl final {
     std::array<std::optional<PublicEnvironmentObservation>, 2> terminal_views;
     std::vector<detail::PublicActionBinding> current_bindings;
     bool force_next_reset_failure_for_test = false;
+    diagnostics::Task7DiagnosticObserver diagnostic_observer;
+    std::optional<DriverMetrics> last_diagnostic_metrics;
+
+    void capture_diagnostic_metrics() noexcept {
+        if (driver != nullptr && diagnostic_observer) {
+            driver->publish_diagnostic_summary();
+            last_diagnostic_metrics = driver->metrics();
+        }
+    }
 
     StepRejected rejected(const ActionSelection& selection, const RejectionCode code) const {
         StepRejected result;
@@ -1429,6 +1441,7 @@ struct EpisodicEnvironment::Impl final {
     NextBoundary close_failure(const FailureCode code, const FailureStage stage,
                                const bool mutation_may_have_occurred) {
         const auto value = make_failure(code, stage, mutation_may_have_occurred);
+        capture_diagnostic_metrics();
         driver.reset();
         current_frame.reset();
         current_bindings.clear();
@@ -1444,6 +1457,7 @@ struct EpisodicEnvironment::Impl final {
     NextBoundary close_driver_failure(const DriverFailure& driver_failure,
                                       const bool accepted_action) {
         const auto value = make_driver_failure(driver_failure, accepted_action);
+        capture_diagnostic_metrics();
         driver.reset();
         current_frame.reset();
         current_bindings.clear();
@@ -1486,6 +1500,7 @@ struct EpisodicEnvironment::Impl final {
                 *reached_terminal->player_zero_observation, public_decision_index);
             terminal_views[1] = project_public_observation_for_index(
                 *reached_terminal->player_one_observation, public_decision_index);
+            capture_diagnostic_metrics();
             driver.reset();
             current_frame.reset();
             current_bindings.clear();
@@ -1497,6 +1512,7 @@ struct EpisodicEnvironment::Impl final {
         }
         if (std::holds_alternative<DriverProcessBudgetExceeded>(boundary)) {
             auto value = make_interrupted(InterruptionReason::EngineProcessBudget);
+            capture_diagnostic_metrics();
             driver.reset();
             current_frame.reset();
             current_bindings.clear();
@@ -1510,6 +1526,7 @@ struct EpisodicEnvironment::Impl final {
         }
         if (std::holds_alternative<DriverSemanticActionBudgetExceeded>(boundary)) {
             auto value = make_interrupted(InterruptionReason::SemanticActionBudget);
+            capture_diagnostic_metrics();
             driver.reset();
             current_frame.reset();
             current_bindings.clear();
@@ -1523,6 +1540,7 @@ struct EpisodicEnvironment::Impl final {
         }
         if (std::holds_alternative<DriverAdministrativeInterrupt>(boundary)) {
             auto value = make_interrupted(InterruptionReason::AdministrativeCancel);
+            capture_diagnostic_metrics();
             driver.reset();
             current_frame.reset();
             current_bindings.clear();
@@ -1570,7 +1588,7 @@ struct EpisodicEnvironment::Impl final {
         std::string next_episode_id;
         try {
             next_episode_id = episode_semantic_id(config, spec);
-            driver_config = make_driver_config(config, spec, control);
+            driver_config = make_driver_config(config, spec, control, diagnostic_observer);
         } catch (const BoundaryError&) {
             return ResetRejected{ResetRejectionCode::ResourceIdentityMismatch, lifecycle_state};
         } catch (const std::invalid_argument&) {
@@ -1778,6 +1796,11 @@ StepResult EpisodicEnvironment::step(const ActionSelection& selection) {
 
 InterruptResult EpisodicEnvironment::interrupt(const InterruptRequest& request) {
     return impl_->interrupt(request);
+}
+
+void EpisodicEnvironment::set_diagnostic_observer(
+    diagnostics::Task7DiagnosticObserver observer) noexcept {
+    impl_->diagnostic_observer = std::move(observer);
 }
 
 std::optional<PublicEnvironmentObservation> EpisodicEnvironment::perspective_terminal_view(

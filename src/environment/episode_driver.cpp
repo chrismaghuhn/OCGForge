@@ -44,6 +44,16 @@ void add_timing(std::uint64_t& bucket, const Clock::time_point start, const Cloc
     }
 }
 
+void add_timing_with_max(std::uint64_t& bucket, std::uint64_t& maximum,
+                         const Clock::time_point start, const Clock::time_point end,
+                         const bool enabled) {
+    if (enabled) {
+        const auto elapsed = elapsed_us(start, end);
+        bucket += elapsed;
+        maximum = std::max(maximum, elapsed);
+    }
+}
+
 std::string json_escape(const std::string& value) {
     std::ostringstream result;
     result << '"';
@@ -239,6 +249,63 @@ struct EpisodeDriver::Impl final {
     Lifecycle lifecycle = Lifecycle::Advancing;
     std::uint64_t next_process_index = 0;
     std::uint32_t trace_decision_index = 0;
+    bool diagnostic_summary_published = false;
+    std::string diagnostic_last_phase;
+
+    bool diagnostic_enabled() const noexcept {
+        return config.instrumentation && static_cast<bool>(config.diagnostic_observer);
+    }
+
+    void emit_diagnostic(std::string_view phase, const bool completed = true,
+                         const std::uint64_t duration_us = 0,
+                         const std::uint64_t call_count = 1,
+                         const std::uint64_t max_single_call_us = 0) noexcept {
+        if (!diagnostic_enabled()) return;
+        try {
+            diagnostics::Task7DiagnosticEvent event;
+            event.phase = std::string(phase);
+            event.completed = completed;
+            event.duration_us = duration_us;
+            event.call_count = call_count;
+            event.max_single_call_us = max_single_call_us;
+            event.engine_process_count = driver_metrics.process_call_count;
+            event.semantic_action_count = driver_metrics.semantic_action_count;
+            event.decision_index = trace_decision_index;
+            event.engine_step_index = next_process_index == 0 ? 0 : next_process_index - 1;
+            event.candidate_total = driver_metrics.operations.candidate_total;
+            event.candidate_max = driver_metrics.operations.candidate_max;
+            event.observation_count = driver_metrics.operations.observations;
+            event.continuation_action_count = driver_metrics.continuation_intermediate_steps;
+            if (current_request.has_value()) {
+                event.engine_step_index = current_request->engine_step_index;
+                event.acting_player = current_request->player;
+                event.candidate_count = current_request->candidates.size();
+                event.decision_family = protocol::decision_kind_name(current_request->kind);
+            }
+            diagnostic_last_phase = event.phase;
+            config.diagnostic_observer(event);
+        } catch (...) {
+            config.diagnostic_observer = nullptr;
+        }
+    }
+
+    void publish_diagnostic_summary() noexcept {
+        if (!diagnostic_enabled() || diagnostic_summary_published) return;
+        diagnostic_summary_published = true;
+        emit_diagnostic("ENGINE_PROCESS_SUMMARY", true, driver_metrics.timing.core_process_us,
+                        driver_metrics.process_call_count,
+                        driver_metrics.timing.core_process_us_max);
+        emit_diagnostic("OBSERVATION_SUMMARY", true, driver_metrics.timing.observation_us,
+                        driver_metrics.operations.observations,
+                        driver_metrics.timing.observation_us_max);
+        emit_diagnostic("DECISION_AND_CANDIDATES_SUMMARY", true,
+                        driver_metrics.timing.protocol_candidate_us,
+                        driver_metrics.operations.candidate_sets,
+                        driver_metrics.timing.protocol_candidate_us_max);
+        emit_diagnostic("CONTINUATION_SUMMARY", true, driver_metrics.timing.continuation_us,
+                        driver_metrics.continuation_intermediate_steps,
+                        driver_metrics.timing.continuation_us_max);
+    }
 
     void refresh_derived_metrics() noexcept {
         driver_metrics.turns = 0;
@@ -307,6 +374,8 @@ struct EpisodeDriver::Impl final {
         failure_stage = std::move(stage);
         failure_may_have_occurred = mutation_may_have_occurred;
         refresh_host_metrics();
+        emit_diagnostic("DRIVER_FAILURE");
+        publish_diagnostic_summary();
         current_request.reset();
         current_observation.reset();
         current_raw_message.clear();
@@ -342,6 +411,7 @@ struct EpisodeDriver::Impl final {
         if (!current_request.has_value()) {
             throw std::logic_error("driver has no request to publish");
         }
+        emit_diagnostic("DECISION_AND_CANDIDATES", false);
         protocol::validate_candidate_set(*current_request);
         driver_metrics.operations.candidate_total += current_request->candidates.size();
         driver_metrics.operations.candidate_max =
@@ -401,8 +471,13 @@ struct EpisodeDriver::Impl final {
                         current_request->engine_message_type, current_request->player);
                 }
             }
-            add_timing(driver_metrics.timing.observation_us, observation_start, Clock::now(), config.instrumentation);
+            add_timing_with_max(driver_metrics.timing.observation_us,
+                                driver_metrics.timing.observation_us_max,
+                                observation_start, Clock::now(), config.instrumentation);
+            emit_diagnostic("OBSERVATION", true, driver_metrics.timing.observation_us,
+                            1, driver_metrics.timing.observation_us_max);
         }
+        emit_diagnostic("DECISION_AND_CANDIDATES", true, 0, 1, 0);
         lifecycle = Lifecycle::AwaitingDecision;
     }
 
@@ -433,7 +508,9 @@ struct EpisodeDriver::Impl final {
             result.observation_hash != observation::observation_hash(result)) {
             throw std::runtime_error("terminal observation failed perspective/hash validation");
         }
-        add_timing(driver_metrics.timing.observation_us, observation_start, Clock::now(), config.instrumentation);
+        add_timing_with_max(driver_metrics.timing.observation_us,
+                            driver_metrics.timing.observation_us_max,
+                            observation_start, Clock::now(), config.instrumentation);
         driver_metrics.observation_entity_total += result.entities.size();
         driver_metrics.observation_event_total += result.visible_events.size();
         ++driver_metrics.operations.observations;
@@ -511,13 +588,25 @@ struct EpisodeDriver::Impl final {
             }
             const auto engine_step = next_process_index++;
             current_raw_message = process_result.message;
-            add_timing(driver_metrics.timing.core_process_us, process_start, Clock::now(), config.instrumentation);
+            const auto process_end = Clock::now();
+            add_timing_with_max(driver_metrics.timing.core_process_us,
+                                driver_metrics.timing.core_process_us_max,
+                                process_start, process_end, config.instrumentation);
+            if (diagnostic_enabled() && config.diagnostic_process_interval != 0 &&
+                next_process_index % config.diagnostic_process_interval == 0) {
+                emit_diagnostic("ENGINE_PROCESS", true,
+                                elapsed_us(process_start, process_end), 1,
+                                elapsed_us(process_start, process_end));
+            }
             try {
                 const auto protocol_start = Clock::now();
                 observation_sessions[0]->ingest(current_raw_message, engine_step);
                 observation_sessions[1]->ingest(current_raw_message, engine_step);
                 const auto decoded = protocol::decode_messages(current_raw_message, engine_step);
-                add_timing(driver_metrics.timing.protocol_candidate_us, protocol_start, Clock::now(), config.instrumentation);
+                const auto protocol_end = Clock::now();
+                add_timing_with_max(driver_metrics.timing.protocol_candidate_us,
+                                    driver_metrics.timing.protocol_candidate_us_max,
+                                    protocol_start, protocol_end, config.instrumentation);
                 if (decoded.retry) {
                     ++driver_metrics.errors.retries;
                     return close_with_failure("retry", "pinned core emitted MSG_RETRY after a submitted response");
@@ -630,8 +719,12 @@ struct EpisodeDriver::Impl final {
                 driver_metrics.response_build_time_us_total += continuation_response_time;
                 driver_metrics.response_build_time_us_max =
                     std::max(driver_metrics.response_build_time_us_max, continuation_response_time);
-                add_timing(driver_metrics.timing.continuation_us, continuation_response_start,
-                           continuation_response_end, config.instrumentation);
+                add_timing_with_max(driver_metrics.timing.continuation_us,
+                                    driver_metrics.timing.continuation_us_max,
+                                    continuation_response_start,
+                                    continuation_response_end, config.instrumentation);
+                emit_diagnostic("CONTINUATION", true, continuation_response_time, 1,
+                                continuation_response_time);
                 const auto trace_suffix_start = Clock::now();
                 step.engine_advanced = transition.engine_advanced;
                 if (!transition.engine_response.empty()) {
@@ -734,6 +827,8 @@ struct EpisodeDriver::Impl final {
         current_raw_message.clear();
         lifecycle = Lifecycle::Interrupted;
         refresh_host_metrics();
+        emit_diagnostic("ADMINISTRATIVE_INTERRUPT");
+        publish_diagnostic_summary();
         const DriverAdministrativeInterrupt result{driver_metrics.process_call_count,
                                                    driver_metrics.semantic_action_count};
         host.reset();
@@ -760,5 +855,9 @@ DriverBoundary EpisodeDriver::administrative_interrupt() {
 const trace::EngineTrace& EpisodeDriver::trace() const noexcept { return impl_->trace_state; }
 
 const DriverMetrics& EpisodeDriver::metrics() const noexcept { return impl_->driver_metrics; }
+
+void EpisodeDriver::publish_diagnostic_summary() noexcept {
+    impl_->publish_diagnostic_summary();
+}
 
 }  // namespace ygo::environment

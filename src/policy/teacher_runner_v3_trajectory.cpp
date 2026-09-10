@@ -1,7 +1,8 @@
 #include "ygo/policy/teacher_runner_v3_trajectory.hpp"
 
-#include <exception>
 #include <algorithm>
+#include <chrono>
+#include <exception>
 #include <string>
 #include <utility>
 #include <variant>
@@ -15,6 +16,71 @@
 
 namespace ygo::policy {
 namespace {
+
+using DiagnosticClock = std::chrono::steady_clock;
+
+std::uint64_t diagnostic_elapsed_us(const DiagnosticClock::time_point start,
+                                    const DiagnosticClock::time_point end) noexcept {
+    return static_cast<std::uint64_t>(
+        std::chrono::duration_cast<std::chrono::microseconds>(end - start).count());
+}
+
+void emit_diagnostic(const diagnostics::Task7DiagnosticObserver& observer,
+                     std::string_view phase, const std::uint64_t duration_us,
+                     const std::uint64_t call_count = 1,
+                     const std::uint64_t max_single_call_us = 0) noexcept {
+    if (!observer) return;
+    try {
+        diagnostics::Task7DiagnosticEvent event;
+        event.phase = std::string(phase);
+        event.duration_us = duration_us;
+        event.call_count = call_count;
+        event.max_single_call_us = max_single_call_us;
+        observer(event);
+    } catch (...) {
+        // Diagnostics are strictly non-authoritative. Observer failures must
+        // never affect the production trajectory path.
+    }
+}
+
+void add_ranking_diagnostics(diagnostics::Task7DiagnosticEvent& event,
+                             const teacher::TeacherRankingResultV2& ranking) {
+    for (const auto& evaluation : ranking.evaluations) {
+        switch (evaluation.status) {
+        case teacher::CandidateEvaluationStatus::Supported:
+            ++event.supported_evaluations;
+            break;
+        case teacher::CandidateEvaluationStatus::NotApplicable:
+            ++event.not_applicable_evaluations;
+            break;
+        case teacher::CandidateEvaluationStatus::Unsupported:
+            ++event.unsupported_evaluations;
+            break;
+        case teacher::CandidateEvaluationStatus::Invalid:
+            ++event.invalid_evaluations;
+            break;
+        }
+    }
+    if (ranking.fallback_level.has_value()) {
+        switch (*ranking.fallback_level) {
+        case teacher::TeacherFallbackLevel::F0:
+            ++event.f0_count;
+            break;
+        case teacher::TeacherFallbackLevel::F1:
+            ++event.f1_count;
+            break;
+        case teacher::TeacherFallbackLevel::F2:
+            ++event.f2_count;
+            break;
+        case teacher::TeacherFallbackLevel::F3:
+            ++event.f3_count;
+            break;
+        case teacher::TeacherFallbackLevel::F4:
+            ++event.f4_count;
+            break;
+        }
+    }
+}
 
 using Boundary = std::variant<environment::DecisionFrame, environment::EpisodeTerminal,
                               environment::EpisodeInterrupted, environment::EpisodeFailure>;
@@ -87,12 +153,19 @@ TeacherRunnerV3TrajectoryRunResult finalize_v2_collection(
         return result;
     }
     try {
+        const auto finalization_start = DiagnosticClock::now();
         const auto envelope_bytes = trajectory::canonical_episode_envelope_bytes_v2(
             *result.envelope);
+        emit_diagnostic(config.diagnostic_observer, "EPISODE_FINALIZATION",
+                        diagnostic_elapsed_us(finalization_start, DiagnosticClock::now()));
+        const auto shard_start = DiagnosticClock::now();
         trajectory::CandidateTrajectoryShardV2 shard;
         shard.entries.push_back({trace::sha256_bytes(envelope_bytes), envelope_bytes});
         const auto shard_id = trajectory::candidate_shard_artifact_sha256_v2(shard);
+        emit_diagnostic(config.diagnostic_observer, "SHARD_CONSTRUCTION",
+                        diagnostic_elapsed_us(shard_start, DiagnosticClock::now()));
 
+        const auto evidence_start = DiagnosticClock::now();
         trajectory::RestrictedCollectionEvidenceBundleV2 evidence;
         evidence.candidate_shard_artifact_sha256 = shard_id;
         if (std::holds_alternative<trajectory::InterruptedClosureV2>(result.envelope->closure)) {
@@ -104,6 +177,8 @@ TeacherRunnerV3TrajectoryRunResult finalize_v2_collection(
         }
         const auto evidence_id =
             trajectory::restricted_collection_evidence_artifact_sha256_v2(evidence);
+        emit_diagnostic(config.diagnostic_observer, "REPLAY_OR_RESTRICTED_EVIDENCE",
+                        diagnostic_elapsed_us(evidence_start, DiagnosticClock::now()));
 
         trajectory::replay_v2::ReplayOptions replay_options;
         if (std::holds_alternative<trajectory::TerminalClosureV2>(result.envelope->closure)) {
@@ -112,13 +187,19 @@ TeacherRunnerV3TrajectoryRunResult finalize_v2_collection(
             replay_options.cancellation_source = config.run_control.cancellation.source;
         }
         std::string error;
+        const auto admission_start = DiagnosticClock::now();
         const auto verification = trajectory::admission_v2::verify_collection_for_admission_v2(
             shard, evidence, shard_id, evidence_id, replay_options,
             make_production_policy_provenance_resolver(), &error);
+        emit_diagnostic(config.diagnostic_observer, "ADMISSION_VERIFICATION",
+                        diagnostic_elapsed_us(admission_start, DiagnosticClock::now()));
         if (!verification.has_value()) {
             return failed_result("V2 collection admission failed: " + error);
         }
+        const auto receipt_start = DiagnosticClock::now();
         auto receipt = trajectory::issue_admission_receipt_v2(*verification, &error);
+        emit_diagnostic(config.diagnostic_observer, "ADMISSION_RECEIPT",
+                        diagnostic_elapsed_us(receipt_start, DiagnosticClock::now()));
         if (!receipt.has_value()) {
             return failed_result("V2 admission receipt issuance failed: " + error);
         }
@@ -141,11 +222,14 @@ TeacherRunnerV3TrajectoryRunResult finalize_v2_collection(
             record_ids.push_back(member.trajectory_record_id);
         }
         manifest.dataset_semantic_id = trajectory::dataset_v2::dataset_semantic_id_v2(record_ids);
+        const auto manifest_start = DiagnosticClock::now();
         if (!trajectory::dataset_v2::validate_dataset_manifest_v2(
                 manifest, std::vector<trajectory::VerifiedAdmissionReceiptV2>{*receipt},
                 &error)) {
             return failed_result("V2 dataset manifest validation failed: " + error);
         }
+        emit_diagnostic(config.diagnostic_observer, "DATASET_MANIFEST",
+                        diagnostic_elapsed_us(manifest_start, DiagnosticClock::now()));
         result.candidate_shard = std::move(shard);
         result.restricted_collection_evidence = std::move(evidence);
         result.admission_verification = *verification;
@@ -309,6 +393,7 @@ TeacherRunnerV3TrajectoryCreateResult TeacherRunnerV3TrajectoryRunner::create(
                     PolicyError{PolicyErrorCode::LifecycleFailure,
                                 "V3 environment factory rejected the environment"}};
         }
+        (*environment_value)->set_diagnostic_observer(config.diagnostic_observer);
         auto recorder = std::make_unique<trajectory::TrajectoryRecorderV2>(
             config.environment_config, config.episode_spec, config.policy_provenance, resolver);
         return {std::optional<TeacherRunnerV3TrajectoryRunner>(
@@ -339,7 +424,10 @@ TeacherRunnerV3TrajectoryRunResult TeacherRunnerV3TrajectoryRunner::run_impl(
     }
     has_run_ = true;
     try {
+        const auto reset_start = DiagnosticClock::now();
         const auto reset = environment_->reset(config_.episode_spec, config_.run_control);
+        emit_diagnostic(config_.diagnostic_observer, "ENVIRONMENT_RESET",
+                        diagnostic_elapsed_us(reset_start, DiagnosticClock::now()));
         const auto* reset_accepted = std::get_if<environment::ResetAccepted>(&reset);
         if (reset_accepted == nullptr) {
             return failure("V3 reset was rejected");
@@ -369,12 +457,21 @@ TeacherRunnerV3TrajectoryRunResult TeacherRunnerV3TrajectoryRunner::run_impl(
                        ? result
                        : finalize_v2_collection(std::move(result), config_);
         };
-        if (!recorder_->on_reset_accepted(recording_reset, terminal_views, &recorder_error)) {
+        const auto recorder_reset_start = DiagnosticClock::now();
+        const bool recorded_reset = recorder_->on_reset_accepted(
+            recording_reset, terminal_views, &recorder_error);
+        emit_diagnostic(config_.diagnostic_observer, "TRAJECTORY_RECORDING",
+                        diagnostic_elapsed_us(recorder_reset_start,
+                                              DiagnosticClock::now()));
+        if (!recorded_reset) {
             return failure("V2 recorder rejected V3 reset: " + recorder_error);
         }
         if (recorder_->lifecycle() == trajectory::RecorderLifecycle::Closed) {
             TeacherRunnerV3TrajectoryRunResult result;
+            const auto seal_start = DiagnosticClock::now();
             result.envelope = recorder_->seal(&recorder_error);
+            emit_diagnostic(config_.diagnostic_observer, "EPISODE_FINALIZATION",
+                            diagnostic_elapsed_us(seal_start, DiagnosticClock::now()));
             result.quarantined = recorder_->manifest().collection_disposition.kind !=
                                  trajectory::CollectionDispositionKind::Clean;
             if (!result.envelope.has_value()) {
@@ -439,7 +536,34 @@ TeacherRunnerV3TrajectoryRunResult TeacherRunnerV3TrajectoryRunner::run_impl(
                 return finish(std::move(result));
             }
 
+            const auto teacher_start = DiagnosticClock::now();
             const auto selection = runner_.select(*frame);
+            const auto teacher_elapsed = diagnostic_elapsed_us(
+                teacher_start, DiagnosticClock::now());
+            if (const auto* selected_session = runner_.session(frame->acting_player);
+                selected_session != nullptr) {
+                if (const auto ranking = selected_session->policy.pending_ranking_result();
+                    ranking.has_value() && config_.diagnostic_observer) {
+                    diagnostics::Task7DiagnosticEvent event;
+                    event.phase = "TEACHER";
+                    event.duration_us = teacher_elapsed;
+                    event.candidate_count = frame->request.candidates.size();
+                    event.decision_index = frame->decision_index;
+                    event.engine_step_index = frame->engine_step_index;
+                    event.acting_player = frame->acting_player;
+                    add_ranking_diagnostics(event, *ranking);
+                    try {
+                        config_.diagnostic_observer(event);
+                    } catch (...) {
+                    }
+                } else {
+                    emit_diagnostic(config_.diagnostic_observer, "TEACHER",
+                                    teacher_elapsed);
+                }
+            } else {
+                emit_diagnostic(config_.diagnostic_observer, "TEACHER",
+                                teacher_elapsed);
+            }
             if (!selection) {
                 return failure(
                     selection.error.has_value() ? selection.error->message
@@ -491,9 +615,14 @@ TeacherRunnerV3TrajectoryRunResult TeacherRunnerV3TrajectoryRunner::run_impl(
                 synthetic.next = test_failure(*frame);
                 stepped = std::move(synthetic);
             } else {
+                const auto environment_step_start = DiagnosticClock::now();
                 stepped = environment_->step(action);
+                emit_diagnostic(config_.diagnostic_observer, "ENVIRONMENT_STEP",
+                                diagnostic_elapsed_us(environment_step_start,
+                                                      DiagnosticClock::now()));
             }
             if (const auto* rejected = std::get_if<environment::StepRejected>(&stepped)) {
+                emit_diagnostic(config_.diagnostic_observer, "STEP_REJECTED", 0);
                 if (!runner_.reject_pending_proposal() ||
                     !recorder_->on_step_rejected(*rejected, true, &recorder_error)) {
                     return failure("V2 StepRejected handling failed: " + recorder_error);
@@ -522,7 +651,11 @@ TeacherRunnerV3TrajectoryRunResult TeacherRunnerV3TrajectoryRunner::run_impl(
             }
 
             const auto* accepted = std::get_if<environment::StepAccepted>(&stepped);
-            if (accepted == nullptr || !runner_.commit(*accepted)) {
+            const auto commit_start = DiagnosticClock::now();
+            const bool committed = accepted != nullptr && runner_.commit(*accepted);
+            emit_diagnostic(config_.diagnostic_observer, "TEACHER_COMMIT",
+                            diagnostic_elapsed_us(commit_start, DiagnosticClock::now()));
+            if (!committed) {
                 return failure("V3 accepted step did not commit the pending V2 proposal");
             }
             terminal_views.reset();
@@ -539,8 +672,12 @@ TeacherRunnerV3TrajectoryRunResult TeacherRunnerV3TrajectoryRunner::run_impl(
             }
             const auto attribution = detail::make_policy_rng_attribution(
                 *frame, session->execution_binding(), *selection.value);
-            if (!recorder_->on_step_accepted(*accepted, attribution, terminal_views,
-                                              &recorder_error)) {
+            const auto recorder_start = DiagnosticClock::now();
+            const bool recorded = recorder_->on_step_accepted(
+                *accepted, attribution, terminal_views, &recorder_error);
+            emit_diagnostic(config_.diagnostic_observer, "TRAJECTORY_RECORDING",
+                            diagnostic_elapsed_us(recorder_start, DiagnosticClock::now()));
+            if (!recorded) {
                 return failure("V2 recorder rejected accepted V3 step: " + recorder_error);
             }
             if (const auto* interrupted =

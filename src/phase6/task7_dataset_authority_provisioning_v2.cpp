@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cstddef>
 #include <exception>
 #include <limits>
@@ -23,6 +24,26 @@
 
 namespace ygo::phase6 {
 namespace {
+
+using DiagnosticClock = std::chrono::steady_clock;
+
+void emit_diagnostic(const diagnostics::Task7DiagnosticObserver& observer,
+                     std::string_view phase, const std::uint64_t duration_us) noexcept {
+    if (!observer) return;
+    try {
+        diagnostics::Task7DiagnosticEvent event;
+        event.phase = std::string(phase);
+        event.duration_us = duration_us;
+        observer(event);
+    } catch (...) {
+    }
+}
+
+std::uint64_t diagnostic_elapsed_us(const DiagnosticClock::time_point start,
+                                    const DiagnosticClock::time_point end) noexcept {
+    return static_cast<std::uint64_t>(
+        std::chrono::duration_cast<std::chrono::microseconds>(end - start).count());
+}
 
 constexpr std::string_view kRulesBundleId =
     "3adfe6b4cfe2c2805e50b389fc0eb4e70a3b0b6107436614d328fddc865e585f";
@@ -227,75 +248,21 @@ Task7TeacherSetup make_task7_teacher_setup(const Task7CollectionJobV2& job) {
 bool eligible_run(const Task7CollectionJobV2& job,
                   const policy::TeacherRunnerV3TrajectoryRunResult& run,
                   std::string& error) {
-    if (run.error.has_value() || !run.envelope.has_value() || run.quarantined ||
-        !run.candidate_shard.has_value() || !run.restricted_collection_evidence.has_value() ||
-        !run.admission_verification.has_value() || !run.admission_receipt.has_value() ||
-        !run.dataset_manifest.has_value()) {
+    const auto inspection = inspect_task7_v2_job_run(job, run);
+    if (inspection.eligible) return true;
+    if (!inspection.diagnostic.empty()) {
+        error = inspection.diagnostic;
+    } else if (inspection.first_failed_condition == "NON_TERMINAL_CLOSURE" ||
+               inspection.first_failed_condition == "NON_CLEAN_COLLECTION_DISPOSITION" ||
+               inspection.first_failed_condition == "CANDIDATE_SHARD_MEMBER_COUNT_NOT_ONE" ||
+               inspection.first_failed_condition == "ADMISSION_RECEIPT_MEMBER_COUNT_NOT_ONE" ||
+               inspection.first_failed_condition == "DATASET_MANIFEST_MEMBER_COUNT_NOT_ONE") {
+        error = "Task7 V2 job was not a clean terminal single-member admission";
+    } else {
         error = run.diagnostic.empty() ? "Task7 V2 job did not produce complete A5 output"
                                        : run.diagnostic;
-        return false;
     }
-    if (!std::holds_alternative<trajectory::TerminalClosureV2>(run.envelope->closure) ||
-        run.envelope->manifest.collection_disposition.kind !=
-            trajectory::CollectionDispositionKind::Clean ||
-        run.candidate_shard->entries.size() != 1 ||
-        run.admission_receipt->receipt().entries.size() != 1 ||
-        run.dataset_manifest->members.size() != 1) {
-        error = "Task7 V2 job was not a clean terminal single-member admission";
-        return false;
-    }
-    try {
-        std::string binding_error;
-        if (!validate_task7_v2_job_episode_binding(job, *run.envelope,
-                                                    &binding_error)) {
-            error = std::move(binding_error);
-            return false;
-        }
-        const auto envelope_bytes = trajectory::canonical_episode_envelope_bytes_v2(*run.envelope);
-        const auto shard_bytes = trajectory::canonical_candidate_trajectory_shard_bytes_v2(
-            *run.candidate_shard);
-        const auto evidence_bytes =
-            trajectory::canonical_restricted_collection_evidence_bundle_bytes_v2(
-                *run.restricted_collection_evidence);
-        const auto receipt_bytes = trajectory::canonical_admission_receipt_bytes_v2(
-            run.admission_receipt->receipt());
-        const auto shard_artifact_sha256 = ygo::trace::sha256_bytes(shard_bytes);
-        const auto evidence_artifact_sha256 = ygo::trace::sha256_bytes(evidence_bytes);
-        (void)trajectory::dataset_v2::canonical_dataset_manifest_bytes_v2(*run.dataset_manifest);
-        const auto decoded_receipt = trajectory::decode_admission_receipt_v2(receipt_bytes);
-        if (!decoded_receipt ||
-            !same_commitments(decoded_receipt.value->entries,
-                              run.admission_receipt->receipt().entries) ||
-            !same_commitments(run.admission_verification->entries(),
-                              run.admission_receipt->receipt().entries) ||
-            ygo::trace::sha256_bytes(envelope_bytes) !=
-                run.candidate_shard->entries.front().episode_envelope_sha256 ||
-            shard_artifact_sha256 != run.admission_receipt->receipt().candidate_shard_artifact_sha256 ||
-            evidence_artifact_sha256 !=
-                run.admission_receipt->receipt().restricted_evidence_artifact_sha256 ||
-            run.restricted_collection_evidence->candidate_shard_artifact_sha256 !=
-                shard_artifact_sha256 ||
-            run.admission_verification->shard_artifact_sha256() != shard_artifact_sha256 ||
-            run.admission_verification->restricted_evidence_artifact_sha256() !=
-                evidence_artifact_sha256) {
-            error = "Task7 V2 job artifact commitments are inconsistent";
-            return false;
-        }
-        std::string dataset_error;
-        if (!trajectory::dataset_v2::validate_dataset_manifest_v2(
-                *run.dataset_manifest,
-                std::vector<trajectory::VerifiedAdmissionReceiptV2>{
-                    *run.admission_receipt},
-                &dataset_error)) {
-            error = "Task7 V2 job DatasetManifest validation failed: " + dataset_error;
-            return false;
-        }
-        (void)evidence_bytes;
-    } catch (const std::exception& exception) {
-        error = exception.what();
-        return false;
-    }
-    return true;
+    return false;
 }
 
 std::optional<std::vector<std::uint8_t>> extract_safe_state_bytes(
@@ -418,6 +385,141 @@ bool derive_authority_values(const Task7CollectionScheduleV2& schedule,
 }
 
 }  // namespace
+
+Task7V2EligibilityInspection inspect_task7_v2_job_run(
+    const Task7CollectionJobV2& job,
+    const policy::TeacherRunnerV3TrajectoryRunResult& run) noexcept {
+    Task7V2EligibilityInspection result;
+    const auto fail = [&result](const std::string_view condition) {
+        result.failed_conditions.emplace_back(condition);
+        if (result.first_failed_condition.empty()) {
+            result.first_failed_condition = std::string(condition);
+        }
+    };
+    result.run_error_present = run.error.has_value();
+    result.envelope_present = run.envelope.has_value();
+    result.quarantined = run.quarantined;
+    result.replay_evidence_present = run.replay_evidence.has_value();
+    result.candidate_shard_present = run.candidate_shard.has_value();
+    result.restricted_collection_evidence_present =
+        run.restricted_collection_evidence.has_value();
+    result.admission_verification_present = run.admission_verification.has_value();
+    result.admission_receipt_present = run.admission_receipt.has_value();
+    result.dataset_manifest_present = run.dataset_manifest.has_value();
+
+    if (result.run_error_present) fail("RUN_ERROR_PRESENT");
+    if (!result.envelope_present) fail("ENVELOPE_ABSENT");
+    if (result.quarantined) fail("QUARANTINED");
+    if (!result.candidate_shard_present) fail("CANDIDATE_SHARD_ABSENT");
+    if (!result.restricted_collection_evidence_present) {
+        fail("RESTRICTED_EVIDENCE_ABSENT");
+    }
+    if (!result.admission_verification_present) fail("ADMISSION_VERIFICATION_ABSENT");
+    if (!result.admission_receipt_present) fail("ADMISSION_RECEIPT_ABSENT");
+    if (!result.dataset_manifest_present) fail("DATASET_MANIFEST_ABSENT");
+
+    if (!result.envelope_present || !result.candidate_shard_present ||
+        !result.admission_receipt_present || !result.dataset_manifest_present ||
+        !result.restricted_collection_evidence_present ||
+        !result.admission_verification_present || result.quarantined ||
+        result.run_error_present) {
+        result.diagnostic = run.diagnostic;
+        result.eligible = false;
+        return result;
+    }
+
+    result.terminal_closure = std::holds_alternative<trajectory::TerminalClosureV2>(
+        run.envelope->closure);
+    result.clean_collection_disposition =
+        run.envelope->manifest.collection_disposition.kind ==
+        trajectory::CollectionDispositionKind::Clean;
+    result.candidate_shard_entry_count = run.candidate_shard->entries.size();
+    result.admission_receipt_entry_count = run.admission_receipt->receipt().entries.size();
+    result.dataset_manifest_member_count = run.dataset_manifest->members.size();
+    if (!result.terminal_closure) fail("NON_TERMINAL_CLOSURE");
+    if (!result.clean_collection_disposition) {
+        fail("NON_CLEAN_COLLECTION_DISPOSITION");
+    }
+    if (result.candidate_shard_entry_count != 1) {
+        fail("CANDIDATE_SHARD_MEMBER_COUNT_NOT_ONE");
+    }
+    if (result.admission_receipt_entry_count != 1) {
+        fail("ADMISSION_RECEIPT_MEMBER_COUNT_NOT_ONE");
+    }
+    if (result.dataset_manifest_member_count != 1) {
+        fail("DATASET_MANIFEST_MEMBER_COUNT_NOT_ONE");
+    }
+    if (!result.failed_conditions.empty()) {
+        result.eligible = false;
+        return result;
+    }
+
+    try {
+        std::string binding_error;
+        if (!validate_task7_v2_job_episode_binding(job, *run.envelope,
+                                                    &binding_error)) {
+            fail("JOB_EPISODE_BINDING_MISMATCH");
+            result.diagnostic = std::move(binding_error);
+            return result;
+        }
+        const auto envelope_bytes = trajectory::canonical_episode_envelope_bytes_v2(
+            *run.envelope);
+        const auto shard_bytes = trajectory::canonical_candidate_trajectory_shard_bytes_v2(
+            *run.candidate_shard);
+        const auto evidence_bytes =
+            trajectory::canonical_restricted_collection_evidence_bundle_bytes_v2(
+                *run.restricted_collection_evidence);
+        const auto receipt_bytes = trajectory::canonical_admission_receipt_bytes_v2(
+            run.admission_receipt->receipt());
+        const auto shard_artifact_sha256 = ygo::trace::sha256_bytes(shard_bytes);
+        const auto evidence_artifact_sha256 = ygo::trace::sha256_bytes(evidence_bytes);
+        (void)trajectory::dataset_v2::canonical_dataset_manifest_bytes_v2(
+            *run.dataset_manifest);
+        const auto decoded_receipt = trajectory::decode_admission_receipt_v2(receipt_bytes);
+        if (!decoded_receipt ||
+            !same_commitments(decoded_receipt.value->entries,
+                              run.admission_receipt->receipt().entries) ||
+            !same_commitments(run.admission_verification->entries(),
+                              run.admission_receipt->receipt().entries) ||
+            ygo::trace::sha256_bytes(envelope_bytes) !=
+                run.candidate_shard->entries.front().episode_envelope_sha256 ||
+            shard_artifact_sha256 !=
+                run.admission_receipt->receipt().candidate_shard_artifact_sha256 ||
+            evidence_artifact_sha256 !=
+                run.admission_receipt->receipt().restricted_evidence_artifact_sha256 ||
+            run.restricted_collection_evidence->candidate_shard_artifact_sha256 !=
+                shard_artifact_sha256 ||
+            run.admission_verification->shard_artifact_sha256() !=
+                shard_artifact_sha256 ||
+            run.admission_verification->restricted_evidence_artifact_sha256() !=
+                evidence_artifact_sha256) {
+            fail("ARTIFACT_COMMITMENT_MISMATCH");
+            result.diagnostic = "Task7 V2 job artifact commitments are inconsistent";
+            return result;
+        }
+        std::string dataset_error;
+        if (!trajectory::dataset_v2::validate_dataset_manifest_v2(
+                *run.dataset_manifest,
+                std::vector<trajectory::VerifiedAdmissionReceiptV2>{
+                    *run.admission_receipt},
+                &dataset_error)) {
+            fail("DATASET_MANIFEST_INVALID");
+            result.diagnostic = "Task7 V2 job DatasetManifest validation failed: " +
+                                dataset_error;
+            return result;
+        }
+        result.eligible = true;
+        return result;
+    } catch (const std::exception& exception) {
+        fail("ELIGIBILITY_INSPECTION_EXCEPTION");
+        result.diagnostic = exception.what();
+        return result;
+    } catch (...) {
+        fail("ELIGIBILITY_INSPECTION_EXCEPTION");
+        result.diagnostic = "Task7 V2 eligibility inspection threw";
+        return result;
+    }
+}
 
 trajectory::PolicyProvenanceEnvelope make_task7_v2_policy_provenance(
     const Task7CollectionJobV2& job) {
@@ -700,12 +802,16 @@ std::string task7_collection_schedule_identity_v2(
 }
 
 policy::TeacherRunnerV3TrajectoryRunResult run_task7_collection_job_v2(
-    const Task7CollectionJobV2& job) noexcept {
+    const Task7CollectionJobV2& job,
+    const diagnostics::Task7DiagnosticObserver& diagnostic_observer) noexcept {
     policy::TeacherRunnerV3TrajectoryRunResult result;
     try {
         validate_job(job);
         const auto config = environment::CertifiedEnvironmentConfig::canonical_v3();
+        const auto setup_start = DiagnosticClock::now();
         const auto setup = make_task7_teacher_setup(job);
+        emit_diagnostic(diagnostic_observer, "JOB_SETUP",
+                        diagnostic_elapsed_us(setup_start, DiagnosticClock::now()));
         policy::TeacherRunnerV3Config runner_config;
         for (std::uint8_t player = 0; player < 2; ++player) {
             const auto assignment_it = std::find_if(
@@ -739,10 +845,14 @@ policy::TeacherRunnerV3TrajectoryRunResult run_task7_collection_job_v2(
         run_control.semantic_action_budget = job.semantic_action_budget;
         run_control.cancellation.reason = job.cancellation_reason;
         run_control.cancellation.source = job.cancellation_source;
+        const auto runner_create_start = DiagnosticClock::now();
         auto created = policy::TeacherRunnerV3TrajectoryRunner::create(
             policy::TeacherRunnerV3TrajectoryConfig{
                 config, episode_spec, run_control, setup.provenance,
-                std::move(runner_config)});
+                std::move(runner_config), diagnostic_observer});
+        emit_diagnostic(diagnostic_observer, "RUNNER_CREATE",
+                        diagnostic_elapsed_us(runner_create_start,
+                                              DiagnosticClock::now()));
         if (!created) {
             result.error = created.error;
             result.diagnostic = created.error.has_value() ? created.error->message :
@@ -757,6 +867,11 @@ policy::TeacherRunnerV3TrajectoryRunResult run_task7_collection_job_v2(
         result.diagnostic = "Task7 V2 job execution threw";
         return result;
     }
+}
+
+policy::TeacherRunnerV3TrajectoryRunResult run_task7_collection_job_v2(
+    const Task7CollectionJobV2& job) noexcept {
+    return run_task7_collection_job_v2(job, {});
 }
 
 Task7V2ProvisioningResult provision_task7_dataset_authority_v2(
@@ -805,7 +920,11 @@ Task7V2ProvisioningResult provision_task7_dataset_authority_v2(
 
 Task7V2ProvisioningResult provision_task7_dataset_authority_v2(
     const Task7CollectionScheduleV2& schedule) {
-    return provision_task7_dataset_authority_v2(schedule, run_task7_collection_job_v2);
+    return provision_task7_dataset_authority_v2(
+        schedule,
+        [](const Task7CollectionJobV2& job) {
+            return run_task7_collection_job_v2(job);
+        });
 }
 
 Phase6SplitResult derive_training_dataset_split_v1_from_v2(

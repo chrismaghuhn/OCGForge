@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "ygo/core/rules_bundle.hpp"
+#include "ygo/diagnostics/task7_observer.hpp"
 #include "ygo/observation/player_observation.hpp"
 #include "ygo/trace/engine_trace.hpp"
 
@@ -35,6 +36,8 @@ struct EpisodeDriverConfig final {
     std::vector<std::uint32_t> required_script_codes;
     std::filesystem::path fixture_setup_script;
     bool instrumentation = false;
+    diagnostics::Task7DiagnosticObserver diagnostic_observer;
+    std::uint64_t diagnostic_process_interval = 0;
     bool force_unsupported_for_test = false;
 #ifdef YGO_M4_PERFORMANCE_AUDIT
     observation::PerformanceAuditCollector* performance_audit = nullptr;
@@ -88,10 +91,15 @@ struct DriverFailure final {
 
 struct DriverTimingMetrics final {
     std::uint64_t core_process_us = 0;
+    std::uint64_t core_process_us_max = 0;
     std::uint64_t protocol_candidate_us = 0;
+    std::uint64_t protocol_candidate_us_max = 0;
     std::uint64_t continuation_us = 0;
+    std::uint64_t continuation_us_max = 0;
     std::uint64_t observation_us = 0;
+    std::uint64_t observation_us_max = 0;
     std::uint64_t trace_hash_us = 0;
+    std::uint64_t trace_hash_us_max = 0;
 };
 
 struct DriverOperationMetrics final {
@@ -160,6 +168,7 @@ public:
 
     const trace::EngineTrace& trace() const noexcept;
     const DriverMetrics& metrics() const noexcept;
+    void publish_diagnostic_summary() noexcept;
 
 private:
     struct Impl;

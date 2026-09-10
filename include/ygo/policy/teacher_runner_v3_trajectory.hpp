@@ -5,6 +5,7 @@
 #include <optional>
 #include <string>
 
+#include "ygo/diagnostics/task7_observer.hpp"
 #include "ygo/policy/teacher_runner_v3.hpp"
 #include "ygo/trajectory/admission_v2.hpp"
 #include "ygo/trajectory/dataset_manifest_v2.hpp"
@@ -32,6 +33,7 @@ struct TeacherRunnerV3TrajectoryConfig final {
     environment::RunControl run_control;
     trajectory::PolicyProvenanceEnvelope policy_provenance;
     TeacherRunnerV3Config runner_config;
+    diagnostics::Task7DiagnosticObserver diagnostic_observer;
 };
 
 struct TeacherRunnerV3TrajectoryRunResult final {

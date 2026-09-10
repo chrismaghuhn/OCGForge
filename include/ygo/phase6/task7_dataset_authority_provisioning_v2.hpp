@@ -8,6 +8,7 @@
 #include <string_view>
 #include <vector>
 
+#include "ygo/diagnostics/task7_observer.hpp"
 #include "ygo/model/card_vocabulary.hpp"
 #include "ygo/phase6/supervision_dataset.hpp"
 #include "ygo/policy/teacher_runner_v3_trajectory.hpp"
@@ -103,6 +104,27 @@ using Task7V2JobExecutor =
     std::function<policy::TeacherRunnerV3TrajectoryRunResult(
         const Task7CollectionJobV2&)>;
 
+struct Task7V2EligibilityInspection final {
+    bool eligible = false;
+    bool run_error_present = false;
+    bool envelope_present = false;
+    bool quarantined = false;
+    bool replay_evidence_present = false;
+    bool candidate_shard_present = false;
+    bool restricted_collection_evidence_present = false;
+    bool admission_verification_present = false;
+    bool admission_receipt_present = false;
+    bool dataset_manifest_present = false;
+    bool terminal_closure = false;
+    bool clean_collection_disposition = false;
+    std::size_t candidate_shard_entry_count = 0;
+    std::size_t admission_receipt_entry_count = 0;
+    std::size_t dataset_manifest_member_count = 0;
+    std::vector<std::string> failed_conditions;
+    std::string first_failed_condition;
+    std::string diagnostic;
+};
+
 // The executor overload is a bounded test/controlled-integration seam. The
 // production provisioning entry point below always uses
 // run_task7_collection_job_v2(), which calls TeacherRunnerV3TrajectoryRunner.
@@ -126,6 +148,14 @@ std::string task7_collection_schedule_identity_v2(
 
 policy::TeacherRunnerV3TrajectoryRunResult run_task7_collection_job_v2(
     const Task7CollectionJobV2& job) noexcept;
+
+policy::TeacherRunnerV3TrajectoryRunResult run_task7_collection_job_v2(
+    const Task7CollectionJobV2& job,
+    const diagnostics::Task7DiagnosticObserver& diagnostic_observer) noexcept;
+
+Task7V2EligibilityInspection inspect_task7_v2_job_run(
+    const Task7CollectionJobV2& job,
+    const policy::TeacherRunnerV3TrajectoryRunResult& run) noexcept;
 
 trajectory::PolicyProvenanceEnvelope make_task7_v2_policy_provenance(
     const Task7CollectionJobV2& job);
