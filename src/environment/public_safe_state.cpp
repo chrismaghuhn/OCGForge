@@ -1373,6 +1373,24 @@ std::vector<std::uint8_t> canonical_public_safe_state_bytes(
     return encode_view(view);
 }
 
+std::vector<std::uint8_t> diagnostic_public_current_state_bytes(
+    const PublicSafeStateView& view) {
+    // This projection intentionally reuses the validated public state fields
+    // and omits visible_events(), whose contents are event history rather than
+    // the current public gameplay state. It is diagnostic-only and is not an
+    // authoritative identity or persistence format.
+    std::vector<std::uint8_t> bytes;
+    bytes.reserve(256 + view.entities().size() * 96);
+    append_string(bytes, "ocgforge.diagnostic.public_current_state.v1");
+    append_globals(bytes, view.globals());
+    append_zones(bytes, view.zones());
+    append_entities(bytes, view.entities());
+    append_relationships(bytes, view.relationships());
+    append_chain(bytes, view.chain());
+    append_match_context(bytes, view.match_context());
+    return bytes;
+}
+
 std::vector<std::uint8_t> canonical_public_safe_state_bytes(
     const ygo::observation::PlayerObservation& observation) {
     validate_observation(observation);

@@ -188,6 +188,10 @@ void test_diagnostics_preserve_bounded_trajectory_semantics() {
     const auto baseline = collect_bounded_run();
     auto value = fixture();
     std::size_t diagnostic_events = 0;
+    bool accepted_teacher_event_seen = false;
+    std::uint64_t accepted_teacher_decision_index = 0;
+    std::uint64_t accepted_teacher_action_count = 0;
+    std::string accepted_teacher_state_fingerprint;
     TeacherRunnerV3TrajectoryConfig config{
         value.environment_config,
         value.episode_spec,
@@ -195,8 +199,17 @@ void test_diagnostics_preserve_bounded_trajectory_semantics() {
         value.policy_provenance,
         std::move(value.runner_config)};
     config.diagnostic_observer =
-        [&diagnostic_events](const ygo::diagnostics::Task7DiagnosticEvent&) {
+        [&diagnostic_events, &accepted_teacher_event_seen,
+         &accepted_teacher_decision_index, &accepted_teacher_action_count,
+         &accepted_teacher_state_fingerprint](
+            const ygo::diagnostics::Task7DiagnosticEvent& event) {
             ++diagnostic_events;
+            if (!accepted_teacher_event_seen && event.phase == "TEACHER") {
+                accepted_teacher_event_seen = true;
+                accepted_teacher_decision_index = event.decision_index;
+                accepted_teacher_action_count = event.semantic_action_count;
+                accepted_teacher_state_fingerprint = event.public_current_state_fingerprint;
+            }
         };
     auto created = TeacherRunnerV3TrajectoryRunner::create(std::move(config));
     require(static_cast<bool>(created), "diagnostic bounded runner creation failed");
@@ -204,6 +217,10 @@ void test_diagnostics_preserve_bounded_trajectory_semantics() {
     require(observed.envelope.has_value(),
             "diagnostic bounded runner did not seal an envelope");
     require(diagnostic_events != 0, "diagnostic bounded runner emitted no events");
+    require(accepted_teacher_event_seen &&
+                accepted_teacher_action_count == accepted_teacher_decision_index + 1 &&
+                !accepted_teacher_state_fingerprint.empty(),
+            "accepted Teacher diagnostic event did not expose exact action/state semantics");
     require(canonical_episode_envelope_bytes_v2(*observed.envelope) ==
                 canonical_episode_envelope_bytes_v2(baseline.envelope),
             "diagnostics changed bounded V2 trajectory bytes");

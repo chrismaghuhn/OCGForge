@@ -20,6 +20,9 @@ struct Task7DiagnosticEvent final {
 
     // Public/audit-safe workload counters only.
     std::uint64_t engine_process_count = 0;
+    // For accepted TEACHER events this includes the selected action. The
+    // event is emitted only after the corresponding environment step and
+    // recorder commit succeed.
     std::uint64_t semantic_action_count = 0;
     std::uint64_t decision_index = 0;
     std::uint64_t engine_step_index = 0;
@@ -46,6 +49,10 @@ struct Task7DiagnosticEvent final {
     std::string decision_family;
     std::string request_kind;
     std::string public_observation_digest;
+    // Diagnostic-only current-state fingerprint. Unlike the observation
+    // digest, this excludes decision/history identity and visible-event
+    // history; it is never an authoritative gameplay identity.
+    std::string public_current_state_fingerprint;
     std::string public_candidate_domain_digest;
     std::string public_semantic_decision_id;
     std::string selected_public_action_key;

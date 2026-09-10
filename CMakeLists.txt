@@ -296,6 +296,12 @@ target_link_libraries(task7_v2_forensic_diagnostics_test PRIVATE ygo_task7_v2)
 add_test(NAME task7_v2_forensic_diagnostics_test
          COMMAND task7_v2_forensic_diagnostics_test)
 
+add_executable(task7_v2_localization_analysis_test
+               tests/phase6/phase6_task7_v2_localization_analysis_test.cpp)
+target_link_libraries(task7_v2_localization_analysis_test PRIVATE ygo_task7_v2)
+add_test(NAME task7_v2_localization_analysis_test
+         COMMAND task7_v2_localization_analysis_test)
+
 add_executable(phase6_task7_materialization_probe
                tools/phase6_task7_materialization_probe/main.cpp)
 target_link_libraries(phase6_task7_materialization_probe PRIVATE ygo_phase6)
@@ -406,6 +412,7 @@ endif()
 
 add_library(ygo_task7_v2 STATIC
     src/phase6/task7_dataset_authority_provisioning_v2.cpp
+    src/phase6/task7_localization_analysis.cpp
     src/phase6/task7_v2_forensic_diagnostics.cpp
 )
 target_include_directories(ygo_task7_v2 PUBLIC "${CMAKE_SOURCE_DIR}/include")

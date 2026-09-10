@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <chrono>
 #include <exception>
+#include <limits>
 #include <string>
 #include <utility>
 #include <variant>
@@ -91,7 +92,10 @@ void add_public_frame_diagnostics(
     event.decision_index = frame.decision_index;
     event.engine_step_index = frame.engine_step_index;
     event.engine_process_count = frame.engine_step_index + 1;
-    event.semantic_action_count = frame.decision_index;
+    event.semantic_action_count =
+        frame.decision_index == (std::numeric_limits<std::uint64_t>::max)()
+            ? frame.decision_index
+            : frame.decision_index + 1;
     event.acting_player = frame.acting_player;
     event.candidate_count = frame.request.candidates.size();
     event.request_kind = std::string(
@@ -111,6 +115,8 @@ void add_public_frame_diagnostics(
     const auto safe = environment::decode_canonical_public_safe_state(
         frame.public_observation.canonical_safe_state_bytes());
     if (!safe) return;
+    event.public_current_state_fingerprint = trace::sha256_bytes(
+        environment::diagnostic_public_current_state_bytes(*safe.value));
     const auto& globals = safe.value->globals();
     if (globals.turn_count.has_value()) {
         event.public_turn_count_present = true;
@@ -586,34 +592,9 @@ TeacherRunnerV3TrajectoryRunResult TeacherRunnerV3TrajectoryRunner::run_impl(
             const auto selection = runner_.select(*frame);
             const auto teacher_elapsed = diagnostic_elapsed_us(
                 teacher_start, DiagnosticClock::now());
-            if (const auto* selected_session = runner_.session(frame->acting_player);
-                selected_session != nullptr) {
-                if (const auto ranking = selected_session->policy.pending_ranking_result();
-                    ranking.has_value() && config_.diagnostic_observer) {
-                    diagnostics::Task7DiagnosticEvent event;
-                    event.phase = "TEACHER";
-                    event.duration_us = teacher_elapsed;
-                    add_public_frame_diagnostics(event, *frame, selection.value);
-                    add_ranking_diagnostics(event, *ranking);
-                    try {
-                        config_.diagnostic_observer(event);
-                    } catch (...) {
-                    }
-                } else {
-                    diagnostics::Task7DiagnosticEvent event;
-                    event.phase = "TEACHER";
-                    event.duration_us = teacher_elapsed;
-                    add_public_frame_diagnostics(event, *frame, selection.value);
-                    try {
-                        config_.diagnostic_observer(event);
-                    } catch (...) {
-                    }
-                }
-            } else {
+            if (!selection) {
                 emit_diagnostic(config_.diagnostic_observer, "TEACHER",
                                 teacher_elapsed);
-            }
-            if (!selection) {
                 return failure(
                     selection.error.has_value() ? selection.error->message
                                                 : "V3 Teacher returned no selection",
@@ -629,6 +610,18 @@ TeacherRunnerV3TrajectoryRunResult TeacherRunnerV3TrajectoryRunner::run_impl(
             if (session == nullptr || selection.value->public_action_key.empty() ||
                 !environment::is_public_action_key_v2(selection.value->public_action_key)) {
                 return failure("V3 trajectory runner lacks the acting V2 session");
+            }
+            std::optional<diagnostics::Task7DiagnosticEvent> accepted_teacher_event;
+            if (config_.diagnostic_observer) {
+                diagnostics::Task7DiagnosticEvent event;
+                event.phase = "TEACHER";
+                event.duration_us = teacher_elapsed;
+                add_public_frame_diagnostics(event, *frame, selection.value);
+                if (const auto ranking = session->policy.pending_ranking_result();
+                    ranking.has_value()) {
+                    add_ranking_diagnostics(event, *ranking);
+                }
+                accepted_teacher_event = std::move(event);
             }
             const auto action = environment::ActionSelection{
                 std::string(environment::kEpisodicEnvironmentV3ContractId),
@@ -728,6 +721,13 @@ TeacherRunnerV3TrajectoryRunResult TeacherRunnerV3TrajectoryRunner::run_impl(
                             diagnostic_elapsed_us(recorder_start, DiagnosticClock::now()));
             if (!recorded) {
                 return failure("V2 recorder rejected accepted V3 step: " + recorder_error);
+            }
+            if (accepted_teacher_event.has_value()) {
+                try {
+                    config_.diagnostic_observer(*accepted_teacher_event);
+                } catch (...) {
+                    // Diagnostics are strictly non-authoritative.
+                }
             }
             if (const auto* interrupted =
                     std::get_if<environment::EpisodeInterrupted>(&accepted->next)) {

@@ -101,4 +101,10 @@ PublicSafeStateDecodeResult decode_canonical_public_safe_state(
 std::vector<std::uint8_t> canonical_public_safe_state_bytes(
     const PublicSafeStateView& view);
 
+// Diagnostic-only projection of the current public state. It deliberately
+// excludes visible event history and contains no observation/control identity.
+// The result is not a gameplay, replay, trajectory, or dataset identity.
+std::vector<std::uint8_t> diagnostic_public_current_state_bytes(
+    const PublicSafeStateView& view);
+
 }  // namespace ygo::environment
