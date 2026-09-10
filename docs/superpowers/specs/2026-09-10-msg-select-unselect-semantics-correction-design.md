@@ -142,6 +142,16 @@ with the historical decoder. This selector is routing metadata, not a new
 public Decision Protocol identity and not a version union inside a historical
 DTO.
 
+Ownership is split at this boundary:
+
+~~~text
+Task 1 = private corrected leaf + public decode_messages_v4 full decoder
+Task 3 = EpisodicEnvironment V4 → EpisodeDriver decode-profile routing
+~~~
+
+Task 3 does not implement or alter protocol decoding. The Task 1 successor
+test calls decode_messages_v4 directly; it does not use a TestAccess seam.
+
 ## Characterized causal chain
 
 The accepted public-safe characterization proves the following Job0 pattern:

@@ -82,7 +82,7 @@ task may modify an earlier generation to accept a later value.
 - [ ] **Step 1: Freeze the corrected mapping test**
 
 Construct the existing four-field MSG_SELECT_UNSELECT_CARD fixture with one
-card in each wire list and call the new successor helper. Assert:
+card in each wire list and call protocol::decode_messages_v4. Assert:
 
 ~~~cpp
 request.candidates[0].card_selection_operation ==
@@ -113,10 +113,35 @@ candidate.card_selection_operation = CardSelectionOperation::Unselect;
 ~~~
 
 The enum, request schema, semantic keys, source indices, and response encoding
-remain shared internal protocol values. Task 3 exposes only the full
+remain shared internal protocol values. Task 1 exposes only the full
 decode_messages_v4 entry point, which is the sole corrected runtime decoder.
 
-- [ ] **Step 3: Run protocol compatibility gates**
+- [ ] **Step 3: Add the reachable full decoder successor**
+
+Keep the historical full entry point unchanged:
+
+~~~cpp
+DecodedMessage decode_messages(
+    const std::vector<std::uint8_t>& bytes,
+    std::uint64_t engine_step_index = 0);
+~~~
+
+Add the public full successor entry point in the same protocol header:
+
+~~~cpp
+DecodedMessage decode_messages_v4(
+    const std::vector<std::uint8_t>& bytes,
+    std::uint64_t engine_step_index = 0);
+~~~
+
+Implement decode_messages_v4 by reusing the existing full-dispatch parsers for
+every message family. Only MSG_SELECT_UNSELECT_CARD dispatches to the private
+corrected leaf from Step 2. For every other message family, compare the two
+full decoder outputs and require equal request family, candidate membership,
+candidate order, source indices, and exact response bytes. Do not call the
+historical full decoder and patch its result after decoding.
+
+- [ ] **Step 4: Run protocol compatibility gates**
 
 Run:
 
@@ -127,8 +152,22 @@ ctest --preset dev-windows -R "^(decision_family_test|select_unselect_operation_
 ~~~
 
 Require historical operation expectations, corrected first Select/second
-Unselect, unchanged candidate order, unchanged response bytes, and no
-environment or Teacher use of the successor helper before Task 3.
+Unselect, unchanged candidate order, unchanged response bytes, and a public
+decode_messages_v4 entry point that is independently buildable before any
+Environment work begins. The test must not use a TestAccess seam.
+
+Task 1 closes this ownership gate:
+
+~~~text
+TASK1_CORRECTED_TEST_ENTRYPOINT=protocol::decode_messages_v4
+TASK1_PRIVATE_LEAF_DIRECTLY_TESTED=NO
+FULL_CORRECTED_DECODER_IMPLEMENTED_IN_TASK1=YES
+EPISODE_DRIVER_ROUTING_IMPLEMENTED_IN_TASK3=YES
+HISTORICAL_DECODE_MESSAGES_UNCHANGED=YES
+TASK1_HAS_NO_ENVIRONMENT_CHANGE=YES
+TASK3_HAS_NO_PROTOCOL_SEMANTIC_IMPLEMENTATION=YES
+TASK1_INDEPENDENTLY_BUILDABLE_AND_TESTABLE=YES
+~~~
 
 ## Task 2: Implement public identity V3
 
@@ -243,41 +282,10 @@ canonical configuration, binds public identity V3, uses environment identity
 V4, and recomputes the V4 environment semantic ID. Mixed contract fields
 reject.
 
-- [ ] **Step 2: Add the reachable full decoder seam**
+- [ ] **Step 2: Bind EpisodeDriver routing to the validated environment**
 
-Keep the existing full decoder entry point unchanged:
-
-~~~cpp
-DecodedMessage decode_messages(
-    const std::vector<std::uint8_t>& bytes,
-    std::uint64_t engine_step_index = 0);
-~~~
-
-Add the explicit successor entry point:
-
-~~~cpp
-DecodedMessage decode_messages_v4(
-    const std::vector<std::uint8_t>& bytes,
-    std::uint64_t engine_step_index = 0);
-~~~
-
-Both full decoders use the same existing parsers for all message families.
-Only the successor MSG_SELECT_UNSELECT_CARD parser calls the corrected leaf
-mapping:
-
-~~~cpp
-first wire list  -> CardSelectionOperation::Select;
-second wire list -> CardSelectionOperation::Unselect;
-~~~
-
-For every non-MSG_SELECT_UNSELECT_CARD message, decode_messages_v4 must produce
-the same request family, candidate membership/order, source indices, and exact
-response bytes as decode_messages. V4 public projection uses only V3 public
-identity functions; V2/V3 projection remains unchanged.
-
-- [ ] **Step 3: Bind EpisodeDriver routing to the validated environment**
-
-Add a private driver decode profile with exactly two values:
+The full decoder successor is already implemented and independently tested by
+Task 1. Add a private driver decode profile with exactly two values:
 
 ~~~cpp
 enum class EpisodeDriverDecodeProfile : std::uint8_t {
@@ -303,9 +311,10 @@ const auto decoded =
 The profile is not a public EpisodeDriverConfig field, callback, CLI option, or
 caller-provided independent authority. V2/V3 environment construction always
 uses Historical; V4 construction always uses CorrectedV4. A direct historical
-EpisodeDriver caller cannot select the corrected profile.
+EpisodeDriver caller cannot select the corrected profile. This task does not
+modify protocol decoding or the corrected leaf implementation.
 
-- [ ] **Step 4: Add V4 resolver entry points**
+- [ ] **Step 3: Add V4 resolver entry points**
 
 Expose the same value-owned argument shapes as the accepted V3 resolver:
 
@@ -327,7 +336,7 @@ canonical field order, hashes and re-encodes the input, and compares bytes
 exactly. The V4 episode decoder accepts only a V4 parent environment and sets
 the V4 episode contract. Historical resolver functions remain generation-pure.
 
-- [ ] **Step 5: Test the V4 public boundary and routing**
+- [ ] **Step 4: Test the V4 public boundary and routing**
 
 Prove:
 
