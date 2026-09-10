@@ -9,6 +9,7 @@
 
 #include "ygo/environment/public_action_identity.hpp"
 #include "ygo/teacher/teacher_decision_v2.hpp"
+#include "ygo/teacher/teacher_decision_v3.hpp"
 #include "ygo/teacher/teacher_explanation_codec.hpp"
 #include "strategy_state_common.hpp"
 #include "teacher_validation.hpp"
@@ -348,6 +349,17 @@ TeacherRankingResultV2 resolve_teacher_fallback_v2(
             return environment::is_public_action_key_v2(key);
         },
         [](TeacherRankingResultV2&) noexcept {});
+}
+
+TeacherRankingResultV3 resolve_teacher_fallback_v3(
+    const std::vector<environment::EnvironmentActionCandidate>& candidates,
+    const TeacherFallbackStageSet& stages) noexcept {
+    return resolve_teacher_fallback_impl<TeacherRankingResultV3>(
+        candidates, stages,
+        [](const std::string& key) noexcept {
+            return environment::is_public_action_key_v3(key);
+        },
+        [](TeacherRankingResultV3&) noexcept {});
 }
 
 }  // namespace ygo::teacher

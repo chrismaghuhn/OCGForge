@@ -92,6 +92,11 @@ bool extract_candidate_features_v2(
     const PublicFactSnapshot& public_facts,
     CandidateFeatures& output) noexcept;
 
+bool extract_candidate_features_v3(
+    const environment::EnvironmentActionCandidate& candidate,
+    const PublicFactSnapshot& public_facts,
+    CandidateFeatures& output) noexcept;
+
 // Applies one evaluator's contributions transactionally through the accepted
 // Task-4 helper. Unsupported/not-applicable outcomes never invent a score;
 // arithmetic failure leaves score unchanged and marks the aggregate INVALID.

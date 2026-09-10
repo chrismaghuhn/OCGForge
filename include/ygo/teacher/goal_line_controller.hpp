@@ -13,6 +13,7 @@
 #include "ygo/teacher/strategy_profile.hpp"
 #include "ygo/teacher/strategy_state.hpp"
 #include "ygo/teacher/strategy_state_v2.hpp"
+#include "ygo/teacher/strategy_state_v3.hpp"
 
 namespace ygo::teacher {
 
@@ -51,6 +52,10 @@ GoalLineSelection select_goal_and_line_v2(const StrategyProfileV1& profile,
                                           const EpisodeLocalStrategyStateV2& state,
                                           const PublicFactSnapshot& public_facts) noexcept;
 
+GoalLineSelection select_goal_and_line_v3(const StrategyProfileV1& profile,
+                                          const EpisodeLocalStrategyStateV3& state,
+                                          const PublicFactSnapshot& public_facts) noexcept;
+
 PredicateEvaluationStatus match_candidate_intent_set(
     const StrategyProfileV1& profile,
     const std::vector<std::string>& intent_ids,
@@ -80,7 +85,21 @@ PredicateEvaluationStatus evaluate_node_completion_v2(
     std::uint8_t owning_participant,
     const StrategyProfileV1& profile) noexcept;
 
+PredicateEvaluationStatus evaluate_node_completion_v3(
+    const LineNode& node,
+    const environment::AcceptedActionTransition& accepted_transition,
+    const environment::PublicEnvironmentObservation& subsequent_observation,
+    std::uint8_t owning_participant,
+    const StrategyProfileV1& profile) noexcept;
+
 PredicateEvaluationStatus evaluate_goal_completion_v2(
+    const GoalDefinition& goal,
+    const environment::AcceptedActionTransition& accepted_transition,
+    const environment::PublicEnvironmentObservation& subsequent_observation,
+    std::uint8_t owning_participant,
+    const StrategyProfileV1& profile) noexcept;
+
+PredicateEvaluationStatus evaluate_goal_completion_v3(
     const GoalDefinition& goal,
     const environment::AcceptedActionTransition& accepted_transition,
     const environment::PublicEnvironmentObservation& subsequent_observation,
@@ -104,9 +123,24 @@ PublicEvaluatorOutcome evaluate_goal_line_progress_v2(
     std::uint8_t owning_participant,
     bool reconciled_continuation_commitment) noexcept;
 
+PublicEvaluatorOutcome evaluate_goal_line_progress_v3(
+    const StrategyProfileV1& profile,
+    const GoalLineSelection& selection,
+    const RecoverySelection& recovery,
+    const environment::EnvironmentActionCandidate& candidate,
+    const environment::PublicEnvironmentObservation& observation,
+    std::uint8_t owning_participant,
+    bool reconciled_continuation_commitment) noexcept;
+
 RecoverySelection select_recovery_edge_v2(
     const StrategyProfileV1& profile,
     const EpisodeLocalStrategyStateV2& pre_reconciliation_state,
+    const environment::PublicEnvironmentObservation& current_observation,
+    std::uint8_t owning_participant) noexcept;
+
+RecoverySelection select_recovery_edge_v3(
+    const StrategyProfileV1& profile,
+    const EpisodeLocalStrategyStateV3& pre_reconciliation_state,
     const environment::PublicEnvironmentObservation& current_observation,
     std::uint8_t owning_participant) noexcept;
 

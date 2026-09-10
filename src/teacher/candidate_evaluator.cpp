@@ -8,6 +8,7 @@
 
 #include "ygo/environment/public_action_identity.hpp"
 #include "ygo/teacher/teacher_decision_v2.hpp"
+#include "ygo/teacher/teacher_decision_v3.hpp"
 
 namespace ygo::teacher {
 namespace {
@@ -52,6 +53,24 @@ bool valid_candidate_domain_v2(
     return true;
 }
 
+bool valid_candidate_domain_v3(
+    const std::vector<environment::EnvironmentActionCandidate>& candidates) noexcept {
+    if (candidates.empty()) {
+        return false;
+    }
+    for (std::size_t index = 0; index < candidates.size(); ++index) {
+        if (!environment::is_public_action_key_v3(candidates[index].public_action_key)) {
+            return false;
+        }
+        for (std::size_t previous = 0; previous < index; ++previous) {
+            if (candidates[previous].public_action_key == candidates[index].public_action_key) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
 CandidateEvaluation invalid_evaluation(
     const environment::EnvironmentActionCandidate& candidate) {
     CandidateEvaluation result;
@@ -73,6 +92,14 @@ bool valid_evaluator_evaluation_v2(const CandidateEvaluation& evaluation) {
     validation.status = TeacherRankingStatus::InvalidInput;
     validation.evaluations.push_back(evaluation);
     return validate_teacher_ranking_result_v2(validation) &&
+           evaluation.status != CandidateEvaluationStatus::Invalid;
+}
+
+bool valid_evaluator_evaluation_v3(const CandidateEvaluation& evaluation) {
+    TeacherRankingResultV3 validation;
+    validation.status = TeacherRankingStatus::InvalidInput;
+    validation.evaluations.push_back(evaluation);
+    return validate_teacher_ranking_result_v3(validation) &&
            evaluation.status != CandidateEvaluationStatus::Invalid;
 }
 
@@ -140,6 +167,43 @@ bool evaluate_candidate_domain_v2(
             if (evaluator_failed ||
                 evaluation.public_action_key != candidate.public_action_key ||
                 !valid_evaluator_evaluation_v2(evaluation)) {
+                evaluations.push_back(invalid_evaluation(candidate));
+            } else {
+                evaluations.push_back(std::move(evaluation));
+            }
+        }
+        return true;
+    } catch (...) {
+        evaluations.clear();
+        return false;
+    }
+}
+
+bool evaluate_candidate_domain_v3(
+    const std::vector<environment::EnvironmentActionCandidate>& candidates,
+    const CandidateEvaluator& evaluator,
+    std::vector<CandidateEvaluation>& evaluations) noexcept {
+    evaluations.clear();
+    try {
+        if (!evaluator || !valid_candidate_domain_v3(candidates)) {
+            return false;
+        }
+
+        evaluations.reserve(candidates.size());
+        for (const auto& candidate : candidates) {
+            CandidateEvaluation evaluation;
+            bool evaluator_failed = false;
+            try {
+                evaluation = evaluator(candidate);
+            } catch (const std::bad_alloc&) {
+                throw;
+            } catch (...) {
+                evaluator_failed = true;
+            }
+
+            if (evaluator_failed ||
+                evaluation.public_action_key != candidate.public_action_key ||
+                !valid_evaluator_evaluation_v3(evaluation)) {
                 evaluations.push_back(invalid_evaluation(candidate));
             } else {
                 evaluations.push_back(std::move(evaluation));

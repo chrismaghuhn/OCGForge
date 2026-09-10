@@ -37,8 +37,13 @@ TeacherRankingResult resolve_teacher_fallback(
     const TeacherFallbackStageSet& stages) noexcept;
 
 struct TeacherRankingResultV2;
+struct TeacherRankingResultV3;
 
 TeacherRankingResultV2 resolve_teacher_fallback_v2(
+    const std::vector<environment::EnvironmentActionCandidate>& candidates,
+    const TeacherFallbackStageSet& stages) noexcept;
+
+TeacherRankingResultV3 resolve_teacher_fallback_v3(
     const std::vector<environment::EnvironmentActionCandidate>& candidates,
     const TeacherFallbackStageSet& stages) noexcept;
 

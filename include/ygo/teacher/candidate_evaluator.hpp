@@ -10,6 +10,8 @@
 
 namespace ygo::teacher {
 
+struct TeacherRankingResultV3;
+
 inline constexpr std::int32_t kTeacherScoreContributionMinimum = -1'000'000;
 inline constexpr std::int32_t kTeacherScoreContributionMaximum = 1'000'000;
 
@@ -27,6 +29,11 @@ bool evaluate_candidate_domain(
     std::vector<CandidateEvaluation>& evaluations) noexcept;
 
 bool evaluate_candidate_domain_v2(
+    const std::vector<environment::EnvironmentActionCandidate>& candidates,
+    const CandidateEvaluator& evaluator,
+    std::vector<CandidateEvaluation>& evaluations) noexcept;
+
+bool evaluate_candidate_domain_v3(
     const std::vector<environment::EnvironmentActionCandidate>& candidates,
     const CandidateEvaluator& evaluator,
     std::vector<CandidateEvaluation>& evaluations) noexcept;

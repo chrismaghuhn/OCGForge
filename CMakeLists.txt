@@ -368,6 +368,7 @@ add_library(ygo_teacher STATIC
     src/teacher/strategy_profile_codec.cpp
     src/teacher/strategy_state.cpp
     src/teacher/strategy_state_v2.cpp
+    src/teacher/strategy_state_v3.cpp
     src/teacher/strategy_state_reconciler.cpp
     src/teacher/target_evaluator.cpp
     src/teacher/tactical_evaluator.cpp
@@ -378,6 +379,8 @@ add_library(ygo_teacher STATIC
     src/teacher/teacher_policy_binding.cpp
     src/teacher/teacher_decision.cpp
     src/teacher/teacher_decision_v2.cpp
+    src/teacher/teacher_decision_v3.cpp
+    src/teacher/teacher_core_v3.cpp
     src/teacher/public_battle_snapshot.cpp
     src/teacher/provable_lethal.cpp
 )
@@ -398,6 +401,7 @@ add_library(ygo_policy STATIC
     src/policy/runner_shared.cpp
     src/policy/teacher.cpp
     src/policy/teacher_v2.cpp
+    src/policy/teacher_v3.cpp
     src/policy/teacher_runner.cpp
     src/policy/teacher_runner_v3.cpp
     src/policy/teacher_runner_v3_trajectory.cpp
@@ -571,6 +575,18 @@ add_executable(teacher_v3_strategy_state_test
 target_link_libraries(teacher_v3_strategy_state_test PRIVATE ygo_teacher)
 add_test(NAME teacher_v3_strategy_state_test
          COMMAND teacher_v3_strategy_state_test)
+
+add_executable(teacher_v3_state_successor_test
+               tests/teacher/teacher_v3_state_successor_test.cpp)
+target_link_libraries(teacher_v3_state_successor_test PRIVATE ygo_teacher)
+add_test(NAME teacher_v3_state_successor_test
+         COMMAND teacher_v3_state_successor_test)
+
+add_executable(teacher_v3_public_action_successor_test
+               tests/teacher/teacher_v3_public_action_successor_test.cpp)
+target_link_libraries(teacher_v3_public_action_successor_test PRIVATE ygo_policy)
+add_test(NAME teacher_v3_public_action_successor_test
+         COMMAND teacher_v3_public_action_successor_test)
 
 add_executable(teacher_v3_source_of_truth_equivalence_test
                tests/teacher/teacher_v3_source_of_truth_equivalence_test.cpp)
