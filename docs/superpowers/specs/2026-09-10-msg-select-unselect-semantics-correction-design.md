@@ -90,6 +90,58 @@ docs/contracts/public-action-identity-v2.md and
 docs/contracts/episodic-environment-v3.md. Correcting the mapping under those
 IDs would change an accepted contract's meaning.
 
+## Full runtime decode seam
+
+The environment facade does not decode core messages itself. The live runtime
+path is:
+
+~~~text
+EpisodeDriver::advance_until_boundary()
+  → protocol::decode_messages(current_raw_message, engine_step_index)
+  → DriverDecisionBoundary
+  → EpisodicEnvironment public projection
+~~~
+
+The successor must therefore add a complete decoder entry point rather than an
+unreachable leaf helper:
+
+~~~text
+protocol::decode_messages(raw_message_bytes, engine_step_index)
+    = historical full decoder, unchanged
+
+protocol::decode_messages_v4(raw_message_bytes, engine_step_index)
+    = corrected full decoder
+~~~
+
+decode_messages_v4 uses the existing parsers for every message family and
+differs only in the MSG_SELECT_UNSELECT_CARD list-to-operation mapping. It
+must preserve candidate membership, candidate order, source indices, request
+families, and exact response bytes for all families.
+
+EpisodeDriver receives an internal, non-caller-selectable decode profile from
+the already validated environment facade. The public EpisodeDriverConfig does
+not expose an independent version switch:
+
+~~~text
+validated episodic_environment.v2 or episodic_environment.v3
+    → historical decode profile
+    → protocol::decode_messages(current_raw_message, engine_step_index)
+
+validated episodic_environment.v4
+    → corrected decode profile
+    → protocol::decode_messages_v4(current_raw_message, engine_step_index)
+~~~
+
+The profile is created only by the V2/V3/V4 environment construction path and
+is private to the driver/facade boundary. The public EpisodeDriver constructor
+continues to create the historical profile. The V4 facade uses a private or
+friend-only constructor path that accepts the corrected profile only after
+the V4 environment configuration has passed identity validation. A caller
+cannot pair a V3 environment with the corrected decoder or a V4 environment
+with the historical decoder. This selector is routing metadata, not a new
+public Decision Protocol identity and not a version union inside a historical
+DTO.
+
 ## Characterized causal chain
 
 The accepted public-safe characterization proves the following Job0 pattern:
@@ -350,7 +402,8 @@ evidence only.
 | Component | Current binding | Corrected successor required? | Reuse allowed? | Future owner | Reason |
 | --- | --- | --- | --- | --- | --- |
 | include/ygo/protocol/action_candidate.hpp | Internal CardSelectionOperation enum | No | Yes | Protocol | Numeric meanings already match the pinned runtime. |
-| src/protocol/message_decoder.cpp | First list Unselect, second list Select | Yes, generation-specific decode entry point | Historical decoder remains | Protocol / Decision Protocol adapter | The current wire projection is inverted; protocol identity and response bytes remain unchanged. |
+| src/protocol/message_decoder.cpp | decode_messages is historical; its MSG_SELECT_UNSELECT_CARD leaf is inverted | Yes, corrected decode_messages_v4 | Historical full decoder remains | Protocol / Decision Protocol adapter | The full runtime entry point must reach the corrected leaf without changing other message families. |
+| include/ygo/environment/episode_driver.hpp and src/environment/episode_driver.cpp | advance_until_boundary calls the historical full decoder | Yes, private generation-bound decode profile | Historical direct constructor remains historical | EpisodeDriver / Environment | The live environment path owns decoder selection; a public caller must not choose a mismatched decoder. |
 | include/ygo/environment/public_action_identity.hpp and .cpp | public_action_identity.v2 and public_action.v2.* | Yes, V3 API and namespace | V2 remains historical | Public identity | Operation metadata changes the public meaning and key generation. |
 | Candidate-domain identity | public_candidate_domain.v2 | Yes, V3 | V2 remains historical | Public identity | Domain members change from V2 keys to corrected V3 keys. |
 | Public decision identity | public_semantic_decision_identity.v2 | Yes, V3 | V2 remains historical | Public identity | It commits to the corrected domain identity and generation. |
@@ -403,14 +456,29 @@ No old expected hash may be edited to make a corrected implementation pass.
 
 ## Cross-version rejection matrix
 
-Every successor boundary rejects before mutation:
+Every successor boundary rejects before mutation. The two historical rows are
+accepted intentionally:
+
+~~~
+episodic_environment.v2 + public identity V1 + trusted trajectory V1 → accept historical
+episodic_environment.v3 + public identity V2 + trusted trajectory V2 → accept historical
+episodic_environment.v4 + public identity V3 + trusted trajectory V3 → accept corrected
+episodic_environment.v4 + public identity V2                         → reject
+episodic_environment.v3 + public identity V3                         → reject
+episodic_environment.v2 + public identity V2 or V3                   → reject
+~~~
+
+The remaining boundaries reject:
 
 ~~~
 V2 public action key in V3 public domain       → reject
 V3 public action key in V2 public domain       → reject
-V3 environment with V2 public identities      → reject
 V4 environment with V2 Teacher state          → reject
-V3 Teacher state with V2 environment           → reject
+corrected Teacher V3 state with V2 environment → reject
+corrected Teacher V3 state with V3 environment → reject
+TeacherRunnerV4 with environment V2 or V3     → reject
+TeacherRunnerV4 with Teacher V1 or V2         → reject
+historical TeacherRunnerV3 with environment V4 → reject
 V2 trajectory in V3 replay/admission           → reject
 V3 trajectory in V2 replay/admission           → reject
 V2 envelope in V3 shard                        → reject
@@ -429,6 +497,12 @@ PINNED_CORE_WIRE_SEMANTICS=PROVEN
 PINNED_CARDSCRIPTS_LINK_SEMANTICS=PROVEN
 CURRENT_DECODER_INVERSION=PROVEN
 CURRENT_PUBLIC_V2_CONTRACT_INVERSION=PROVEN
+EPISODE_DRIVER_DECODE_OWNER_INVENTORIED=YES
+HISTORICAL_FULL_DECODER_ENTRY=EXACT
+CORRECTED_FULL_DECODER_ENTRY=EXACT
+V4_DRIVER_ROUTING_SEAM=EXACT
+V3_ENVIRONMENT_USES_HISTORICAL_DECODER=YES
+V4_ENVIRONMENT_USES_CORRECTED_DECODER=YES
 AFFECTED_CONTRACT_IDS_INVENTORIED=PASS
 AFFECTED_GOLDENS_INVENTORIED=PASS
 AFFECTED_REPLAY_TRAJECTORY_IDENTITIES_INVENTORIED=PASS

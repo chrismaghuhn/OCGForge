@@ -12,11 +12,23 @@
 
 ## Frozen source and non-goals
 
-All implementation tasks start from:
+The accepted design has one frozen root. Implementation is sequential; every
+task starts from the independently reviewed and accepted head of the previous
+task:
 
 ~~~
-5dbe4651bed25615b759ebfde4328018605fe6ea
+FROZEN_ROOT_BASE=5dbe4651bed25615b759ebfde4328018605fe6ea
+TASK_0_DESIGN_HEAD=ACCEPTED_DESIGN_HEAD
+IMPLEMENTATION_TASK_1_BASE=ACCEPTED_DESIGN_HEAD
+IMPLEMENTATION_TASK_N_BASE=ACCEPTED_TASK_N_MINUS_1_HEAD
+NEXT_TASK_AUTHORIZATION=NO_UNTIL_PREVIOUS_TASK_REVIEW_PASS
+NO_PARALLEL_SEMANTIC_MIGRATION_SLICES=YES
 ~~~
+
+The root is never rebased or rewritten. The symbolic task-base values are
+resolved to the exact accepted commit before each implementation task begins;
+an implementation task cannot start from the root while omitting an accepted
+predecessor.
 
 Pinned semantic evidence:
 
@@ -85,15 +97,12 @@ Also assert candidate count, source order, source indices, and exact response
 bytes equal the historical decoder output. The test must call an explicit
 successor entry point; it must not change historical expectations.
 
-- [ ] **Step 2: Add an explicit corrected decoder entry point**
+- [ ] **Step 2: Implement the corrected private leaf parser**
 
-Expose:
-
-~~~cpp
-DecisionRequest decode_unselect_v4(const std::vector<std::uint8_t>& frame);
-~~~
-
-Its loops use wire-semantic names and mappings:
+Keep decode_unselect unchanged for the historical path. Add a private
+decode_unselect_v4 helper in src/protocol/message_decoder.cpp; do not export
+the leaf helper as an independent public decoder authority. Its loops use
+wire-semantic names and mappings:
 
 ~~~cpp
 read select_list_count;
@@ -103,9 +112,9 @@ read unselect_list_count;
 candidate.card_selection_operation = CardSelectionOperation::Unselect;
 ~~~
 
-Keep decode_unselect unchanged for the historical path. The enum, request
-schema, semantic keys, source indices, and response encoding remain shared
-internal protocol values.
+The enum, request schema, semantic keys, source indices, and response encoding
+remain shared internal protocol values. Task 3 exposes only the full
+decode_messages_v4 entry point, which is the sole corrected runtime decoder.
 
 - [ ] **Step 3: Run protocol compatibility gates**
 
@@ -207,9 +216,12 @@ bytes.
 
 - Modify: include/ygo/environment/episodic_environment.hpp
 - Modify: src/environment/episodic_environment.cpp
+- Modify: include/ygo/environment/episode_driver.hpp
+- Modify: src/environment/episode_driver.cpp
 - Modify: include/ygo/trajectory/identity_resolver.hpp
 - Modify: src/trajectory/identity_resolver.cpp
 - Test: tests/episodic/episodic_identity_test.cpp
+- Create: tests/episodic/episode_driver_v4_decode_routing_test.cpp
 - Create: tests/episodic/episodic_environment_v4_public_operation_test.cpp
 - Create: tests/episodic/episodic_environment_v4_identity_test.cpp
 
@@ -231,20 +243,69 @@ canonical configuration, binds public identity V3, uses environment identity
 V4, and recomputes the V4 environment semantic ID. Mixed contract fields
 reject.
 
-- [ ] **Step 2: Route only V4 through corrected decoding**
+- [ ] **Step 2: Add the reachable full decoder seam**
 
-The V4 reset/step path calls the explicit corrected protocol decoder and
-projects:
+Keep the existing full decoder entry point unchanged:
 
 ~~~cpp
-first wire list  -> PublicCardSelectionOperation::Select;
-second wire list -> PublicCardSelectionOperation::Unselect;
+DecodedMessage decode_messages(
+    const std::vector<std::uint8_t>& bytes,
+    std::uint64_t engine_step_index = 0);
 ~~~
 
-Every other request family requires None. V4 uses only V3 public identity
-functions. V2 and V3 paths remain unchanged.
+Add the explicit successor entry point:
 
-- [ ] **Step 3: Add V4 resolver entry points**
+~~~cpp
+DecodedMessage decode_messages_v4(
+    const std::vector<std::uint8_t>& bytes,
+    std::uint64_t engine_step_index = 0);
+~~~
+
+Both full decoders use the same existing parsers for all message families.
+Only the successor MSG_SELECT_UNSELECT_CARD parser calls the corrected leaf
+mapping:
+
+~~~cpp
+first wire list  -> CardSelectionOperation::Select;
+second wire list -> CardSelectionOperation::Unselect;
+~~~
+
+For every non-MSG_SELECT_UNSELECT_CARD message, decode_messages_v4 must produce
+the same request family, candidate membership/order, source indices, and exact
+response bytes as decode_messages. V4 public projection uses only V3 public
+identity functions; V2/V3 projection remains unchanged.
+
+- [ ] **Step 3: Bind EpisodeDriver routing to the validated environment**
+
+Add a private driver decode profile with exactly two values:
+
+~~~cpp
+enum class EpisodeDriverDecodeProfile : std::uint8_t {
+    Historical,
+    CorrectedV4,
+};
+~~~
+
+The existing public EpisodeDriver(EpisodeDriverConfig) constructor delegates
+to Historical. The V4 EpisodicEnvironment construction path alone may use a
+private/friend-only EpisodeDriver constructor carrying CorrectedV4, and it may
+do so only after validating CertifiedEnvironmentConfig::canonical_v4(). The
+profile is stored in EpisodeDriver::Impl and selects the complete decoder at
+the single live call site:
+
+~~~cpp
+const auto decoded =
+    decode_profile == EpisodeDriverDecodeProfile::Historical
+        ? protocol::decode_messages(current_raw_message, engine_step)
+        : protocol::decode_messages_v4(current_raw_message, engine_step);
+~~~
+
+The profile is not a public EpisodeDriverConfig field, callback, CLI option, or
+caller-provided independent authority. V2/V3 environment construction always
+uses Historical; V4 construction always uses CorrectedV4. A direct historical
+EpisodeDriver caller cannot select the corrected profile.
+
+- [ ] **Step 4: Add V4 resolver entry points**
 
 Expose the same value-owned argument shapes as the accepted V3 resolver:
 
@@ -266,7 +327,7 @@ canonical field order, hashes and re-encodes the input, and compares bytes
 exactly. The V4 episode decoder accepts only a V4 parent environment and sets
 the V4 episode contract. Historical resolver functions remain generation-pure.
 
-- [ ] **Step 4: Test the V4 public boundary**
+- [ ] **Step 5: Test the V4 public boundary and routing**
 
 Prove:
 
@@ -278,13 +339,18 @@ candidate membership/order equal the historical projection
 exact response bytes are equal
 V2/V3 identity values are rejected by V4
 V4 values are rejected by V2/V3 paths
+V3 environment uses decode_messages
+V4 environment uses decode_messages_v4
+V3 environment cannot use decode_messages_v4
+V4 environment cannot use decode_messages
+non-UNSELECT message families are semantically equal across full decoders
 ~~~
 
 Run:
 
 ~~~powershell
-cmake --build --preset dev-windows --target episodic_environment_v4_public_operation_test episodic_environment_v4_identity_test --parallel
-ctest --preset dev-windows -R "^(episodic_environment_v4_public_operation_test|episodic_environment_v4_identity_test|episodic_identity_test)$" --output-on-failure
+cmake --build --preset dev-windows --target episode_driver_v4_decode_routing_test episodic_environment_v4_public_operation_test episodic_environment_v4_identity_test --parallel
+ctest --preset dev-windows -R "^(episode_driver_v4_decode_routing_test|episodic_environment_v4_public_operation_test|episodic_environment_v4_identity_test|episodic_identity_test)$" --output-on-failure
 ~~~
 
 ## Task 4: Implement Teacher V3 state and policy surfaces
@@ -712,9 +778,17 @@ candidate membership and order unchanged
 exact engine response bytes unchanged
 V2 key in V3 domain rejected
 V3 key in V2 domain rejected
-V4 environment with V2 public IDs rejected
+episodic_environment.v2 + public identity V1 = accept historical
+episodic_environment.v3 + public identity V2 = accept historical
+episodic_environment.v4 + public identity V3 = accept corrected
+episodic_environment.v4 + public identity V2 = reject
+episodic_environment.v3 + public identity V3 = reject
 V4 environment with V2 Teacher state rejected
-V3 Teacher state with V2 environment rejected
+corrected Teacher V3 state with V2 environment rejected
+corrected Teacher V3 state with V3 environment rejected
+TeacherRunnerV4 with environment V2 or V3 rejected
+TeacherRunnerV4 with Teacher V1 or V2 rejected
+historical TeacherRunnerV3 with environment V4 rejected
 V2 trajectory in V3 replay/admission rejected
 V3 trajectory in V2 replay/admission rejected
 mixed collection generations rejected
