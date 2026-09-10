@@ -819,6 +819,26 @@ target_link_libraries(episodic_environment_v3_public_operation_test PRIVATE ygo_
 add_test(NAME episodic_environment_v3_public_operation_test
          COMMAND episodic_environment_v3_public_operation_test)
 
+add_executable(episodic_environment_v4_public_operation_test
+               tests/episodic/episodic_environment_v4_public_operation_test.cpp)
+target_include_directories(episodic_environment_v4_public_operation_test PRIVATE
+                           "${CMAKE_SOURCE_DIR}/src/environment")
+target_link_libraries(episodic_environment_v4_public_operation_test PRIVATE ygo_m4)
+add_test(NAME episodic_environment_v4_public_operation_test
+         COMMAND episodic_environment_v4_public_operation_test)
+
+add_executable(episodic_environment_v4_identity_test
+               tests/episodic/episodic_environment_v4_identity_test.cpp)
+target_link_libraries(episodic_environment_v4_identity_test PRIVATE ygo_trajectory)
+add_test(NAME episodic_environment_v4_identity_test
+         COMMAND episodic_environment_v4_identity_test)
+
+add_executable(episode_driver_v4_decode_routing_test
+               tests/episodic/episode_driver_v4_decode_routing_test.cpp)
+target_link_libraries(episode_driver_v4_decode_routing_test PRIVATE ygo_m4)
+add_test(NAME episode_driver_v4_decode_routing_test
+         COMMAND episode_driver_v4_decode_routing_test)
+
 add_executable(episodic_paired_world_test tests/episodic/episodic_paired_world_test.cpp)
 target_link_libraries(episodic_paired_world_test PRIVATE ygo_m4)
 target_include_directories(episodic_paired_world_test PRIVATE

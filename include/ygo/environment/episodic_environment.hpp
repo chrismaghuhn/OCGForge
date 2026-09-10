@@ -21,10 +21,14 @@ inline constexpr std::string_view kEpisodicEnvironmentContractId =
     kEpisodicEnvironmentV2ContractId;
 inline constexpr std::string_view kEpisodicEnvironmentV3ContractId =
     "ocgforge.episodic_environment.v3";
+inline constexpr std::string_view kEpisodicEnvironmentV4ContractId =
+    "ocgforge.episodic_environment.v4";
 inline constexpr std::string_view kEnvironmentIdentitySchemaId =
     kEnvironmentIdentityV2SchemaId;
 inline constexpr std::string_view kEnvironmentIdentityV3SchemaId =
     "ocgforge.environment_identity.v3";
+inline constexpr std::string_view kEnvironmentIdentityV4SchemaId =
+    "ocgforge.environment_identity.v4";
 inline constexpr std::string_view kEpisodeIdentitySchemaId =
     "ocgforge.episode_identity.v1";
 inline constexpr std::string_view kSemanticDecisionIdentitySchemaId =
@@ -74,6 +78,7 @@ struct CertifiedEnvironmentConfig final {
 
     static CertifiedEnvironmentConfig canonical();
     static CertifiedEnvironmentConfig canonical_v3();
+    static CertifiedEnvironmentConfig canonical_v4();
 };
 
 enum class SeatAssignment : std::uint8_t {

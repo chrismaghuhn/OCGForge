@@ -18,6 +18,7 @@
 #include "ygo/core/core_error.hpp"
 #include "ygo/core/rules_bundle.hpp"
 #include "ygo/environment/episode_driver.hpp"
+#include "episode_driver_internal.hpp"
 #include "episodic_environment_test_access.hpp"
 #include "public_action_identity_internal.hpp"
 #include "ygo/core/seed_bundle.hpp"
@@ -151,8 +152,24 @@ bool equal_deck_identity(const CertifiedDeckIdentity& left, const CertifiedDeckI
     return left.id == right.id && left.sha256 == right.sha256;
 }
 
-bool is_v3_contract(const std::string_view contract_id) noexcept {
-    return contract_id == kEpisodicEnvironmentV3ContractId;
+enum class PublicIdentityGeneration : std::uint8_t {
+    V1,
+    V2,
+    V3,
+};
+
+PublicIdentityGeneration public_identity_generation_for_contract(
+    const std::string_view contract_id) {
+    if (contract_id == kEpisodicEnvironmentV2ContractId) {
+        return PublicIdentityGeneration::V1;
+    }
+    if (contract_id == kEpisodicEnvironmentV3ContractId) {
+        return PublicIdentityGeneration::V2;
+    }
+    if (contract_id == kEpisodicEnvironmentV4ContractId) {
+        return PublicIdentityGeneration::V3;
+    }
+    throw std::invalid_argument("unknown episodic environment contract");
 }
 
 std::string_view environment_identity_schema_for(
@@ -162,6 +179,9 @@ std::string_view environment_identity_schema_for(
     }
     if (config.contract_id == kEpisodicEnvironmentV3ContractId) {
         return kEnvironmentIdentityV3SchemaId;
+    }
+    if (config.contract_id == kEpisodicEnvironmentV4ContractId) {
+        return kEnvironmentIdentityV4SchemaId;
     }
     throw std::invalid_argument("unknown episodic environment contract");
 }
@@ -632,6 +652,20 @@ CertifiedEnvironmentConfig CertifiedEnvironmentConfig::canonical_v3() {
     return config;
 }
 
+CertifiedEnvironmentConfig CertifiedEnvironmentConfig::canonical_v4() {
+    auto config = CertifiedEnvironmentConfig::canonical();
+    config.contract_id = std::string(kEpisodicEnvironmentV4ContractId);
+    config.public_action_identity_schema_id =
+        std::string(kPublicActionIdentityV3SchemaId);
+    config.public_candidate_digest_schema_id =
+        std::string(kPublicCandidateDomainV3SchemaId);
+    config.public_decision_identity_schema_id =
+        std::string(kPublicSemanticDecisionIdentityV3SchemaId);
+    config.environment_semantic_id =
+        ::ygo::environment::environment_semantic_id(config);
+    return config;
+}
+
 std::vector<std::uint8_t> canonical_environment_identity_bytes(
     const CertifiedEnvironmentConfig& config) {
     std::vector<std::uint8_t> bytes;
@@ -959,15 +993,16 @@ std::string project_continuation_operation(const protocol::ActionCandidate& cand
 }
 
 PublicCardSelectionOperation project_card_selection_operation(
-    const bool v3, const protocol::DecisionRequest& request,
+    const bool has_public_operation_metadata, const protocol::DecisionRequest& request,
     const protocol::ActionCandidate& candidate) {
     const auto internal_operation = candidate.card_selection_operation;
     const auto is_unselect_card_candidate =
         request.kind == protocol::DecisionRequestKind::UnselectCard &&
         candidate.action_kind == protocol::ActionKind::CardSelection;
-    if (!v3) {
-        // The historical V2 public contract has no operation field. Keep its
-        // public DTO/key bytes unchanged; only V3 projects this new metadata.
+    if (!has_public_operation_metadata) {
+        // Historical public contracts have no operation field. Keep their
+        // public DTO/key bytes unchanged; successor generations project this
+        // metadata explicitly.
         return PublicCardSelectionOperation::None;
     }
     if (!is_unselect_card_candidate) {
@@ -998,7 +1033,7 @@ struct ProjectedCandidate final {
 ProjectedCandidate project_candidate(const protocol::DecisionRequest& request,
                                      const protocol::ActionCandidate& candidate,
                                      const observation::PlayerObservation& current,
-                                     const bool v3) {
+                                     const PublicIdentityGeneration generation) {
     if (!safe_key_shape(request, candidate)) {
         throw BoundaryError(FailureCode::PublicFrameInvariant, FailureStage::Projection,
                             "internal semantic action key is not coupled to its request family");
@@ -1011,7 +1046,8 @@ ProjectedCandidate project_candidate(const protocol::DecisionRequest& request,
                             "internal action kind has no public representation");
     }
     result.public_candidate.card_selection_operation =
-        project_card_selection_operation(v3, request, candidate);
+        project_card_selection_operation(generation != PublicIdentityGeneration::V1,
+                                         request, candidate);
 
     if (candidate.source_card != 0) {
         result.public_candidate.source_reference = project_card_reference(
@@ -1080,8 +1116,17 @@ ProjectedCandidate project_candidate(const protocol::DecisionRequest& request,
     result.public_candidate.continuation_operation = continuation_operation;
     result.public_candidate.submits_engine_response = candidate.submits_engine_response;
     try {
-        result.public_candidate.public_action_key =
-            v3 ? public_action_key_v2(key) : public_action_key(key);
+        switch (generation) {
+        case PublicIdentityGeneration::V1:
+            result.public_candidate.public_action_key = public_action_key(key);
+            break;
+        case PublicIdentityGeneration::V2:
+            result.public_candidate.public_action_key = public_action_key_v2(key);
+            break;
+        case PublicIdentityGeneration::V3:
+            result.public_candidate.public_action_key = public_action_key_v3(key);
+            break;
+        }
     } catch (const std::exception&) {
         throw BoundaryError(FailureCode::PublicFrameInvariant, FailureStage::Projection,
                             "candidate cannot be encoded as a canonical public action key");
@@ -1367,9 +1412,10 @@ struct EpisodicEnvironment::Impl final {
         public_request.candidates.reserve(request.candidates.size());
         std::vector<detail::PublicActionBinding> bindings;
         bindings.reserve(request.candidates.size());
-        const auto v3 = is_v3_contract(config.contract_id);
+        const auto public_generation =
+            public_identity_generation_for_contract(config.contract_id);
         for (const auto& candidate : request.candidates) {
-            auto projected = project_candidate(request, candidate, current, v3);
+            auto projected = project_candidate(request, candidate, current, public_generation);
             keys.push_back(projected.public_candidate.public_action_key);
             bindings.push_back(std::move(projected.binding));
             public_request.candidates.push_back(std::move(projected.public_candidate));
@@ -1381,23 +1427,24 @@ struct EpisodicEnvironment::Impl final {
 
         std::string public_candidate_digest;
         try {
-            public_candidate_digest =
-                v3 ? public_candidate_domain_digest_v2(
-                         environment_decision_kind_name(public_kind), keys)
-                    : public_candidate_domain_digest(
-                          environment_decision_kind_name(public_kind), keys);
+            switch (public_generation) {
+            case PublicIdentityGeneration::V1:
+                public_candidate_digest = public_candidate_domain_digest(
+                    environment_decision_kind_name(public_kind), keys);
+                break;
+            case PublicIdentityGeneration::V2:
+                public_candidate_digest = public_candidate_domain_digest_v2(
+                    environment_decision_kind_name(public_kind), keys);
+                break;
+            case PublicIdentityGeneration::V3:
+                public_candidate_digest = public_candidate_domain_digest_v3(
+                    environment_decision_kind_name(public_kind), keys);
+                break;
+            }
         } catch (const std::exception&) {
             throw BoundaryError(FailureCode::PublicFrameInvariant, FailureStage::Projection,
                                 "public candidate domain is not canonical or unique");
         }
-
-        PublicSemanticDecisionIdentityInput public_identity;
-        public_identity.episode_semantic_id = current_episode_id;
-        public_identity.decision_index = decision_index;
-        public_identity.acting_player = request.player;
-        public_identity.request_kind = std::string(environment_decision_kind_name(public_kind));
-        public_identity.public_observation_digest = public_observation_hash;
-        public_identity.public_candidate_domain_digest = public_candidate_digest;
 
         ProjectedFrame result;
         result.frame.contract_id = config.contract_id;
@@ -1410,9 +1457,32 @@ struct EpisodicEnvironment::Impl final {
         result.frame.public_observation_digest = public_observation_hash;
         result.frame.public_candidate_domain_digest = public_candidate_digest;
         try {
-            result.frame.public_semantic_decision_id =
-                v3 ? public_semantic_decision_id_v2(public_identity)
-                    : public_semantic_decision_id(public_identity);
+            if (public_generation == PublicIdentityGeneration::V3) {
+                PublicSemanticDecisionIdentityInputV3 public_identity;
+                public_identity.episode_semantic_id = current_episode_id;
+                public_identity.decision_index = decision_index;
+                public_identity.acting_player = request.player;
+                public_identity.request_kind =
+                    std::string(environment_decision_kind_name(public_kind));
+                public_identity.public_observation_digest = public_observation_hash;
+                public_identity.public_candidate_domain_digest = public_candidate_digest;
+                public_identity.public_action_keys = keys;
+                result.frame.public_semantic_decision_id =
+                    public_semantic_decision_id_v3(public_identity);
+            } else {
+                PublicSemanticDecisionIdentityInput public_identity;
+                public_identity.episode_semantic_id = current_episode_id;
+                public_identity.decision_index = decision_index;
+                public_identity.acting_player = request.player;
+                public_identity.request_kind =
+                    std::string(environment_decision_kind_name(public_kind));
+                public_identity.public_observation_digest = public_observation_hash;
+                public_identity.public_candidate_domain_digest = public_candidate_digest;
+                result.frame.public_semantic_decision_id =
+                    public_generation == PublicIdentityGeneration::V2
+                        ? public_semantic_decision_id_v2(public_identity)
+                        : public_semantic_decision_id(public_identity);
+            }
         } catch (const std::exception&) {
             throw BoundaryError(FailureCode::PublicFrameInvariant, FailureStage::Projection,
                                 "public semantic decision identity is not canonical");
@@ -1614,7 +1684,12 @@ struct EpisodicEnvironment::Impl final {
         terminal_views[1].reset();
         driver.reset();
         try {
-            driver = std::make_unique<EpisodeDriver>(std::move(driver_config));
+            if (config.contract_id == kEpisodicEnvironmentV4ContractId) {
+                driver = detail::EpisodicEnvironmentDriverAccess::make_v4(
+                    std::move(driver_config));
+            } else {
+                driver = std::make_unique<EpisodeDriver>(std::move(driver_config));
+            }
             const auto boundary = driver->advance_until_boundary();
             auto next = consume_boundary(boundary, false);
             return ResetAccepted{std::move(next)};
@@ -1654,12 +1729,23 @@ struct EpisodicEnvironment::Impl final {
         if (current_bindings.size() != current_frame->request.candidates.size()) {
             return rejected(selection, RejectionCode::PublicActionDomainDivergence);
         }
-        const auto internal_key =
-            is_v3_contract(config.contract_id)
-                ? detail::resolve_public_action_key_v2(
-                      current_bindings, selection.public_action_key)
-                : detail::resolve_public_action_key(
-                      current_bindings, selection.public_action_key);
+        const auto public_generation =
+            public_identity_generation_for_contract(config.contract_id);
+        std::optional<std::string> internal_key;
+        switch (public_generation) {
+        case PublicIdentityGeneration::V1:
+            internal_key = detail::resolve_public_action_key(
+                current_bindings, selection.public_action_key);
+            break;
+        case PublicIdentityGeneration::V2:
+            internal_key = detail::resolve_public_action_key_v2(
+                current_bindings, selection.public_action_key);
+            break;
+        case PublicIdentityGeneration::V3:
+            internal_key = detail::resolve_public_action_key_v3(
+                current_bindings, selection.public_action_key);
+            break;
+        }
         if (!internal_key.has_value()) {
             return rejected(selection, RejectionCode::PublicActionDomainDivergence);
         }
@@ -1768,8 +1854,10 @@ EnvironmentFactoryResult EpisodicEnvironment::create(CertifiedEnvironmentConfig 
     try {
         const auto canonical_v2 = CertifiedEnvironmentConfig::canonical();
         const auto canonical_v3 = CertifiedEnvironmentConfig::canonical_v3();
+        const auto canonical_v4 = CertifiedEnvironmentConfig::canonical_v4();
         if (!equal_config(config, canonical_v2) &&
-            !equal_config(config, canonical_v3)) {
+            !equal_config(config, canonical_v3) &&
+            !equal_config(config, canonical_v4)) {
             return EnvironmentFactoryRejected{ResetRejectionCode::InvalidEnvironmentId};
         }
         if (!certified_resources_match(config)) {

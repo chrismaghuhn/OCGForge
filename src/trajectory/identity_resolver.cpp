@@ -184,6 +184,13 @@ DecodeResult<environment::CertifiedEnvironmentConfig> decode_environment_identit
         environment::kEpisodicEnvironmentV3ContractId);
 }
 
+DecodeResult<environment::CertifiedEnvironmentConfig> decode_environment_identity_input_v4(
+    const std::vector<std::uint8_t>& bytes) noexcept {
+    return decode_environment_identity_input_impl(
+        bytes, environment::kEnvironmentIdentityV4SchemaId,
+        environment::kEpisodicEnvironmentV4ContractId);
+}
+
 DecodeResult<environment::EpisodeSpec> decode_episode_identity_input(
     const std::vector<std::uint8_t>& bytes,
     const environment::CertifiedEnvironmentConfig& config) noexcept {
@@ -196,6 +203,13 @@ DecodeResult<environment::EpisodeSpec> decode_episode_identity_input_v3(
     const environment::CertifiedEnvironmentConfig& config) noexcept {
     return decode_episode_identity_input_impl(
         bytes, config, environment::kEpisodicEnvironmentV3ContractId);
+}
+
+DecodeResult<environment::EpisodeSpec> decode_episode_identity_input_v4(
+    const std::vector<std::uint8_t>& bytes,
+    const environment::CertifiedEnvironmentConfig& config) noexcept {
+    return decode_episode_identity_input_impl(
+        bytes, config, environment::kEpisodicEnvironmentV4ContractId);
 }
 
 bool is_current_certified_environment(
@@ -219,6 +233,20 @@ bool is_current_certified_environment_v3(
             return false;
         }
         const auto canonical = environment::CertifiedEnvironmentConfig::canonical_v3();
+        return environment::canonical_environment_identity_bytes(config) ==
+               environment::canonical_environment_identity_bytes(canonical);
+    } catch (...) {
+        return false;
+    }
+}
+
+bool is_current_certified_environment_v4(
+    const environment::CertifiedEnvironmentConfig& config) noexcept {
+    try {
+        if (config.contract_id != environment::kEpisodicEnvironmentV4ContractId) {
+            return false;
+        }
+        const auto canonical = environment::CertifiedEnvironmentConfig::canonical_v4();
         return environment::canonical_environment_identity_bytes(config) ==
                environment::canonical_environment_identity_bytes(canonical);
     } catch (...) {

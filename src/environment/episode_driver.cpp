@@ -1,5 +1,7 @@
 #include "ygo/environment/episode_driver.hpp"
 
+#include "episode_driver_internal.hpp"
+
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -195,7 +197,8 @@ struct EpisodeDriver::Impl final {
         Failed,
     };
 
-    explicit Impl(EpisodeDriverConfig value) : config(std::move(value)) {
+    explicit Impl(EpisodeDriverConfig value, const DecodeProfile profile_value)
+        : config(std::move(value)), decode_profile(profile_value) {
         core::CoreHostConfig host_config;
         host_config.rules = config.rules;
         host_config.duel_flags = config.duel_flags;
@@ -239,6 +242,7 @@ struct EpisodeDriver::Impl final {
     }
 
     EpisodeDriverConfig config;
+    DecodeProfile decode_profile = DecodeProfile::Historical;
     std::unique_ptr<core::CoreHost> host;
     std::array<std::unique_ptr<observation::ObservationSession>, 2> observation_sessions;
     std::vector<std::uint8_t> current_raw_message;
@@ -251,6 +255,15 @@ struct EpisodeDriver::Impl final {
     std::uint32_t trace_decision_index = 0;
     bool diagnostic_summary_published = false;
     std::string diagnostic_last_phase;
+
+    protocol::DecodedMessage decode_current_message(
+        const std::vector<std::uint8_t>& bytes,
+        const std::uint64_t engine_step_index) const {
+        if (decode_profile == DecodeProfile::CorrectedV4) {
+            return protocol::decode_messages_v4(bytes, engine_step_index);
+        }
+        return protocol::decode_messages(bytes, engine_step_index);
+    }
 
     bool diagnostic_enabled() const noexcept {
         return config.instrumentation && static_cast<bool>(config.diagnostic_observer);
@@ -561,7 +574,7 @@ struct EpisodeDriver::Impl final {
             const std::vector<std::uint8_t> raw_message = {3, 0, 0, 0, MSG_SELECT_OPTION, 0, 0};
             current_raw_message = raw_message;
             try {
-                (void)protocol::decode_messages(raw_message);
+                (void)decode_current_message(raw_message, 0);
                 return close_with_failure("simulation_error", "forced unsupported probe unexpectedly decoded successfully");
             } catch (const protocol::ProtocolError& error) {
                 emit_protocol_diagnostic(error);
@@ -602,7 +615,7 @@ struct EpisodeDriver::Impl final {
                 const auto protocol_start = Clock::now();
                 observation_sessions[0]->ingest(current_raw_message, engine_step);
                 observation_sessions[1]->ingest(current_raw_message, engine_step);
-                const auto decoded = protocol::decode_messages(current_raw_message, engine_step);
+                const auto decoded = decode_current_message(current_raw_message, engine_step);
                 const auto protocol_end = Clock::now();
                 add_timing_with_max(driver_metrics.timing.protocol_candidate_us,
                                     driver_metrics.timing.protocol_candidate_us_max,
@@ -838,7 +851,11 @@ struct EpisodeDriver::Impl final {
     }
 };
 
-EpisodeDriver::EpisodeDriver(EpisodeDriverConfig config) : impl_(std::make_unique<Impl>(std::move(config))) {}
+EpisodeDriver::EpisodeDriver(EpisodeDriverConfig config)
+    : EpisodeDriver(std::move(config), DecodeProfile::Historical) {}
+
+EpisodeDriver::EpisodeDriver(EpisodeDriverConfig config, const DecodeProfile profile)
+    : impl_(std::make_unique<Impl>(std::move(config), profile)) {}
 
 EpisodeDriver::~EpisodeDriver() = default;
 
@@ -858,6 +875,12 @@ const DriverMetrics& EpisodeDriver::metrics() const noexcept { return impl_->dri
 
 void EpisodeDriver::publish_diagnostic_summary() noexcept {
     impl_->publish_diagnostic_summary();
+}
+
+std::unique_ptr<EpisodeDriver>
+detail::EpisodicEnvironmentDriverAccess::make_v4(EpisodeDriverConfig config) {
+    return std::unique_ptr<EpisodeDriver>(
+        new EpisodeDriver(std::move(config), EpisodeDriver::DecodeProfile::CorrectedV4));
 }
 
 }  // namespace ygo::environment

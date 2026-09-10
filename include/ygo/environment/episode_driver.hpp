@@ -152,6 +152,10 @@ struct DriverApplyResult final {
     DriverBoundary next;
 };
 
+namespace detail {
+struct EpisodicEnvironmentDriverAccess;
+}
+
 class EpisodeDriver final {
 public:
     explicit EpisodeDriver(EpisodeDriverConfig config);
@@ -171,6 +175,14 @@ public:
     void publish_diagnostic_summary() noexcept;
 
 private:
+    enum class DecodeProfile : std::uint8_t {
+        Historical,
+        CorrectedV4,
+    };
+
+    explicit EpisodeDriver(EpisodeDriverConfig config, DecodeProfile profile);
+    friend struct detail::EpisodicEnvironmentDriverAccess;
+
     struct Impl;
     std::unique_ptr<Impl> impl_;
 };
