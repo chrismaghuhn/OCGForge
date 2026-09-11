@@ -165,6 +165,16 @@ policy::TeacherRunnerV4TrajectoryRunResult run_task7_collection_job_v3(
     const Task7CollectionJobV3& job,
     const diagnostics::Task7DiagnosticObserver& diagnostic_observer) noexcept;
 
+// Diagnostic-only bounded execution. The decision limit is an execution
+// control outside Task7CollectionJobV3 and is never part of job/schedule
+// canonical bytes or identities. The normal collection overloads above are
+// unchanged and always run without a diagnostic decision bound.
+policy::TeacherRunnerV4TrajectoryRunResult
+run_task7_collection_job_v3_bounded_for_diagnostics(
+    const Task7CollectionJobV3& job,
+    std::uint64_t decision_limit,
+    const diagnostics::Task7DiagnosticObserver& diagnostic_observer = {}) noexcept;
+
 Task7V3EligibilityInspection inspect_task7_v3_job_run(
     const Task7CollectionJobV3& job,
     const Task7V3JobOutcome& outcome) noexcept;

@@ -310,6 +310,12 @@ target_link_libraries(task7_v3_authority_provisioning_test PRIVATE ygo_task7_v2)
 add_test(NAME task7_v3_authority_provisioning_test
          COMMAND task7_v3_authority_provisioning_test)
 
+add_executable(phase6_task9a_bounded_job0_diagnostic_test
+               tests/phase6/phase6_task9a_bounded_job0_diagnostic_test.cpp)
+target_link_libraries(phase6_task9a_bounded_job0_diagnostic_test PRIVATE ygo_task7_v3)
+add_test(NAME phase6_task9a_bounded_job0_diagnostic_test
+         COMMAND phase6_task9a_bounded_job0_diagnostic_test)
+
 add_executable(task7_v2_forensic_diagnostics_test
                tests/phase6/phase6_task7_v2_forensic_diagnostics_test.cpp)
 target_link_libraries(task7_v2_forensic_diagnostics_test PRIVATE ygo_task7_v2)

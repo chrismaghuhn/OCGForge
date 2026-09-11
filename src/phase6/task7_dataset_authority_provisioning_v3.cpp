@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <exception>
 #include <limits>
+#include <optional>
 #include <set>
 #include <stdexcept>
 #include <utility>
@@ -821,9 +822,10 @@ std::string task7_collection_schedule_identity_v3(
            trace::sha256_bytes(canonical_task7_collection_schedule_bytes_v3(schedule));
 }
 
-policy::TeacherRunnerV4TrajectoryRunResult run_task7_collection_job_v3(
+policy::TeacherRunnerV4TrajectoryRunResult run_task7_collection_job_v3_impl(
     const Task7CollectionJobV3& job,
-    const diagnostics::Task7DiagnosticObserver& diagnostic_observer) noexcept {
+    const diagnostics::Task7DiagnosticObserver& diagnostic_observer,
+    const std::optional<std::uint64_t> decision_limit) noexcept {
     policy::TeacherRunnerV4TrajectoryRunResult result;
     try {
         validate_job(job);
@@ -879,6 +881,10 @@ policy::TeacherRunnerV4TrajectoryRunResult run_task7_collection_job_v3(
                                                               "Task7 V3 runner creation failed";
             return result;
         }
+        if (decision_limit.has_value()) {
+            return policy::detail::TeacherRunnerV4TrajectoryTestAccess::run_until_decision(
+                *created.value, *decision_limit);
+        }
         return created.value->run();
     } catch (const std::exception& exception) {
         result.diagnostic = exception.what();
@@ -887,6 +893,21 @@ policy::TeacherRunnerV4TrajectoryRunResult run_task7_collection_job_v3(
         result.diagnostic = "Task7 V3 job execution threw";
         return result;
     }
+}
+
+policy::TeacherRunnerV4TrajectoryRunResult run_task7_collection_job_v3(
+    const Task7CollectionJobV3& job,
+    const diagnostics::Task7DiagnosticObserver& diagnostic_observer) noexcept {
+    return run_task7_collection_job_v3_impl(job, diagnostic_observer, std::nullopt);
+}
+
+policy::TeacherRunnerV4TrajectoryRunResult
+run_task7_collection_job_v3_bounded_for_diagnostics(
+    const Task7CollectionJobV3& job,
+    const std::uint64_t decision_limit,
+    const diagnostics::Task7DiagnosticObserver& diagnostic_observer) noexcept {
+    return run_task7_collection_job_v3_impl(
+        job, diagnostic_observer, std::optional<std::uint64_t>{decision_limit});
 }
 
 policy::TeacherRunnerV4TrajectoryRunResult run_task7_collection_job_v3(
