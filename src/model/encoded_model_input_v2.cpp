@@ -753,6 +753,8 @@ void validate_logical(const LogicalModelInputV2& logical) {
     if (logical.schema_id != kLogicalModelInputV2SchemaId ||
         !valid_digest(logical.public_observation_digest) || logical.perspective_player > 1 ||
         logical.candidate_features.empty() ||
+        !logical.public_observation_context_kind.has_value() ||
+        !logical.public_candidate_domain_digest.has_value() ||
         !fits_u32_count(logical.referenced_public_entities.size()) ||
         !fits_u32_count(logical.public_locator_table.size()) ||
         !fits_u32_count(logical.candidate_features.size()) ||
@@ -923,13 +925,21 @@ void validate_logical(const LogicalModelInputV2& logical) {
     for (std::size_t index = 0; index < logical.candidate_features.size(); ++index) {
         const auto& candidate = logical.candidate_features[index];
         const auto& key_value = logical.candidate_routing[index].public_action_key;
+        const bool operation_valid =
+            logical.public_observation_context_kind == std::optional<std::string>{"unselect_card"} &&
+                    candidate.action_kind ==
+                        ygo::environment::EnvironmentActionKind::CardSelection
+                ? candidate.card_selection_operation ==
+                          ygo::environment::PublicCardSelectionOperation::Select ||
+                      candidate.card_selection_operation ==
+                          ygo::environment::PublicCardSelectionOperation::Unselect
+                : candidate.card_selection_operation ==
+                      ygo::environment::PublicCardSelectionOperation::None;
         if (!ygo::environment::is_public_action_key_v3(key_value) ||
             std::find(keys.begin(), keys.end(), key_value) != keys.end() ||
             !valid_action_kind(candidate.action_kind) ||
             static_cast<std::uint8_t>(candidate.card_selection_operation) > 2 ||
-            (candidate.action_kind != ygo::environment::EnvironmentActionKind::CardSelection &&
-             candidate.card_selection_operation !=
-                 ygo::environment::PublicCardSelectionOperation::None) ||
+            !operation_valid ||
             (candidate.choice.has_value() && !valid_choice(*candidate.choice)) ||
             !valid_continuation(candidate.continuation_operation)) {
             fail_logical();
@@ -1466,6 +1476,8 @@ void validate_encoded(const EncodedModelInputV2& encoded) {
     if (encoded.schema_id != kEncodedModelInputV2SchemaId ||
         !valid_digest(encoded.public_observation_digest) || encoded.perspective_player > 1 ||
         encoded.candidate_features.empty() ||
+        !encoded.public_observation_context_kind_code.has_value() ||
+        !encoded.public_candidate_domain_digest.has_value() ||
         !fits_u32_count(encoded.public_locator_table.size()) ||
         !fits_u32_count(encoded.observation_context_reference_ordinals.size()) ||
         !fits_u32_count(encoded.globals.life_points.size()) ||
@@ -1593,8 +1605,15 @@ void validate_encoded(const EncodedModelInputV2& encoded) {
 
     for (std::size_t index = 0; index < encoded.candidate_features.size(); ++index) {
         const auto& candidate = encoded.candidate_features[index];
+        const bool operation_valid =
+            *encoded.public_observation_context_kind_code == 12 &&
+                    candidate.action_kind_code == 5
+                ? candidate.card_selection_operation_code == 1 ||
+                      candidate.card_selection_operation_code == 2
+                : candidate.card_selection_operation_code == 0;
         if (candidate.action_kind_code == 0 || candidate.action_kind_code > 13 ||
             candidate.card_selection_operation_code > 2 ||
+            !operation_valid ||
             candidate.choice.has_value() && candidate.choice->kind_code == 0 ||
             candidate.choice.has_value() && candidate.choice->kind_code > 5 ||
             candidate.source_reference.has_value() && candidate.source_reference->kind_code > 1 ||

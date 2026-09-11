@@ -463,6 +463,7 @@ Task7V3EligibilityInspection inspect_task7_v3_job_run(
     result.envelope_present = run.envelope.has_value();
     result.quarantined = run.quarantined;
     result.replay_evidence_present = outcome.replay_evidence.has_value();
+    if (result.replay_evidence_present) fail("UNEXPECTED_REPLAY_EVIDENCE");
     result.candidate_shard_present = outcome.candidate_shard.has_value();
     result.restricted_collection_evidence_present = outcome.restricted_collection_evidence.has_value();
     result.admission_verification_present = outcome.admission_verification.has_value();

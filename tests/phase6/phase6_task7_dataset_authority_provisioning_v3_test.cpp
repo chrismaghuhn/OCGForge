@@ -148,6 +148,54 @@ void test_model_v2_select_unselect_contract() {
     require(!ygo::model::project_logical_model_input_v2(
                  observation, historical_candidates),
             "LogicalModelInputV2 accepted a V2 public action key");
+
+    auto invalid_none = candidates;
+    invalid_none[0] = model_card_candidate(
+        ygo::environment::PublicCardSelectionOperation::None);
+    require(!ygo::model::project_logical_model_input_v2(observation, invalid_none),
+            "unselect_card accepted CardSelection with None operation");
+
+    auto card_selection_observation = observation;
+    card_selection_observation.decision_context.kind = "card_selection";
+    require(!ygo::model::project_logical_model_input_v2(
+                 card_selection_observation, candidates),
+            "card_selection accepted Select/Unselect operations");
+
+    auto idle_observation = observation;
+    idle_observation.decision_context.kind = "idle_command";
+    auto idle_candidates = std::vector<ygo::environment::EnvironmentActionCandidate>{
+        model_card_candidate(ygo::environment::PublicCardSelectionOperation::Unselect)};
+    require(!ygo::model::project_logical_model_input_v2(idle_observation, idle_candidates),
+            "idle_command accepted a CardSelection operation");
+
+    auto missing_context_observation = observation;
+    missing_context_observation.decision_context.kind.reset();
+    require(!ygo::model::project_logical_model_input_v2(
+                 missing_context_observation, candidates),
+            "nonempty domain accepted a missing request kind");
+
+    auto invalid_logical = *logical.value;
+    invalid_logical.candidate_features[0].card_selection_operation =
+        ygo::environment::PublicCardSelectionOperation::None;
+    invalid_logical.candidate_routing[0].public_action_key =
+        model_card_candidate(ygo::environment::PublicCardSelectionOperation::None)
+            .public_action_key;
+    std::vector<std::string> invalid_keys;
+    for (const auto& routing : invalid_logical.candidate_routing) {
+        invalid_keys.push_back(routing.public_action_key);
+    }
+    invalid_logical.public_candidate_domain_digest =
+        ygo::environment::public_candidate_domain_digest_v3(
+            "unselect_card", invalid_keys);
+    require(!ygo::model::encode_model_input_v2(invalid_logical, *vocabulary.value),
+            "Logical-to-encoded validation accepted matching None semantics");
+
+    auto missing_logical_context = *logical.value;
+    missing_logical_context.public_observation_context_kind.reset();
+    missing_logical_context.public_candidate_domain_digest.reset();
+    require(!ygo::model::encode_model_input_v2(
+                 missing_logical_context, *vocabulary.value),
+            "Logical-to-encoded validation accepted missing request kind");
 }
 
 void test_task7_v3_generation_matrix() {
@@ -347,6 +395,46 @@ void test_v3_supervision_materialization() {
                  fixture.envelope, fixture.receipt, 0, tampered, *encoded.value,
                  fixture.vocabulary),
             "V2 supervision materialization accepted detached V3 routing input");
+
+    auto tampered_manifest = fixture.manifest;
+    tampered_manifest.members.front().candidate_shard_artifact_sha256 =
+        std::string(64, '0');
+    require(!materialize_phase6_sample_v2(
+                 tampered_manifest,
+                 std::vector<ygo::trajectory::VerifiedAdmissionReceiptV3>{fixture.receipt},
+                 fixture.envelope, 0, fixture.vocabulary),
+            "single-sample materialization accepted a detached shard digest");
+    require(!materialize_phase6_sample_v2(
+                 fixture.manifest, {}, fixture.envelope, 0, fixture.vocabulary),
+            "single-sample materialization accepted an unknown receipt");
+    require(!materialize_phase6_sample_v2(
+                 fixture.manifest,
+                 std::vector<ygo::trajectory::VerifiedAdmissionReceiptV3>{
+                     fixture.receipt, fixture.receipt},
+                 fixture.envelope, 0, fixture.vocabulary),
+            "single-sample materialization accepted duplicate receipt identities");
+
+    auto mismatched_member = fixture.manifest;
+    mismatched_member.members.front().public_gameplay_trajectory_id =
+        "public_gameplay_trajectory.v3." + std::string(64, '0');
+    require(!materialize_phase6_sample_v2(
+                 mismatched_member,
+                 std::vector<ygo::trajectory::VerifiedAdmissionReceiptV3>{fixture.receipt},
+                 fixture.envelope, 0, fixture.vocabulary),
+            "single-sample materialization accepted a receipt/member mismatch");
+}
+
+void test_task7_v3_rejects_unexpected_replay_evidence() {
+    const auto schedule = make_task7_collection_schedule_v3(std::string(kBaseCommit));
+    Task7V3JobOutcome outcome;
+    outcome.job = schedule.jobs.front();
+    outcome.replay_evidence = ygo::trajectory::RestrictedReplayEvidenceV3{};
+    const auto inspection = inspect_task7_v3_job_run(outcome.job, outcome);
+    require(!inspection.eligible,
+            "Task7 V3 inspection accepted unexpected terminal replay evidence");
+    require(std::find(inspection.failed_conditions.begin(), inspection.failed_conditions.end(),
+                      "UNEXPECTED_REPLAY_EVIDENCE") != inspection.failed_conditions.end(),
+            "Task7 V3 inspection did not classify unexpected replay evidence");
 }
 
 void test_exact_schedule_and_identity() {
@@ -563,6 +651,7 @@ int main() {
         test_split_v1_and_public_vocabulary_v1();
         test_model_v2_select_unselect_contract();
         test_v3_supervision_materialization();
+        test_task7_v3_rejects_unexpected_replay_evidence();
         test_task7_v3_generation_matrix();
         std::cout << "phase6_task7_dataset_authority_provisioning_v3_test: PASS\n";
         return 0;

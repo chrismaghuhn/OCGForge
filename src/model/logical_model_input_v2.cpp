@@ -290,6 +290,19 @@ bool valid_action_kind(
     return false;
 }
 
+bool valid_operation_for_context(
+    const ygo::environment::EnvironmentActionKind action_kind,
+    const ygo::environment::PublicCardSelectionOperation operation,
+    const std::optional<std::string>& request_kind) noexcept {
+    if (!request_kind.has_value()) return false;
+    if (*request_kind == "unselect_card" &&
+        action_kind == ygo::environment::EnvironmentActionKind::CardSelection) {
+        return operation == ygo::environment::PublicCardSelectionOperation::Select ||
+               operation == ygo::environment::PublicCardSelectionOperation::Unselect;
+    }
+    return operation == ygo::environment::PublicCardSelectionOperation::None;
+}
+
 std::string_view action_kind_name(
     const ygo::environment::EnvironmentActionKind kind) noexcept {
     switch (kind) {
@@ -546,11 +559,9 @@ void copy_candidates(
     keys.reserve(candidates.size());
     for (const auto& source : candidates) {
         validate_candidate(source);
-        if (output.public_observation_context_kind == std::optional<std::string>{"unselect_card"} &&
-            (source.action_kind == ygo::environment::EnvironmentActionKind::Cancel ||
-             source.action_kind == ygo::environment::EnvironmentActionKind::Finish) &&
-            source.card_selection_operation !=
-                ygo::environment::PublicCardSelectionOperation::None) {
+        if (!valid_operation_for_context(
+                source.action_kind, source.card_selection_operation,
+                output.public_observation_context_kind)) {
             fail(LogicalModelProjectionErrorCodeV2::InvalidPublicCandidateDescriptor);
         }
         if (std::find(keys.begin(), keys.end(), source.public_action_key) !=
@@ -581,14 +592,17 @@ void copy_candidates(
         output.candidate_routing.push_back({source.public_action_key});
     }
 
-    if (output.public_observation_context_kind.has_value()) {
-        try {
-            output.public_candidate_domain_digest =
-                ygo::environment::public_candidate_domain_digest_v3(
-                    *output.public_observation_context_kind, keys);
-        } catch (...) {
+    try {
+        if (!output.public_observation_context_kind.has_value()) {
             fail(LogicalModelProjectionErrorCodeV2::CandidateDomainDigestFailure);
         }
+        output.public_candidate_domain_digest =
+            ygo::environment::public_candidate_domain_digest_v3(
+                *output.public_observation_context_kind, keys);
+    } catch (const ProjectionFailure&) {
+        throw;
+    } catch (...) {
+        fail(LogicalModelProjectionErrorCodeV2::CandidateDomainDigestFailure);
     }
 }
 
@@ -627,6 +641,9 @@ LogicalModelProjectionResultV2 project_logical_model_input_v2(
     try {
         if (candidates.empty()) {
             fail(LogicalModelProjectionErrorCodeV2::EmptyCandidateDomain);
+        }
+        if (!observation.decision_context.kind.has_value()) {
+            fail(LogicalModelProjectionErrorCodeV2::InvalidPublicObservation);
         }
 
         std::optional<ygo::environment::PublicSafeStateView> safe_state;

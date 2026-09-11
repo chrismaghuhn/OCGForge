@@ -125,6 +125,11 @@ Phase6SampleResultV2 materialize_phase6_sample_v2(
     const std::size_t record_index,
     const model::CardVocabularyV1& vocabulary) noexcept {
     try {
+        std::string manifest_error;
+        if (!trajectory::dataset_v3::validate_dataset_manifest_v3(
+                manifest, receipts, &manifest_error)) {
+            fail(Phase6DataErrorCode::InvalidDatasetManifest);
+        }
         std::string record_id;
         validate_manifest_envelope(manifest, receipts, envelope, record_id);
         if (record_index >= envelope.records.size()) fail(Phase6DataErrorCode::InvalidDecisionRecord);
