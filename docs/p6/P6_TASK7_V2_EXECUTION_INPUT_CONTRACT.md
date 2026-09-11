@@ -196,6 +196,43 @@ other V1 column is removed, renamed, reordered, or given a new meaning. This
 explicit delta is part of the V2 configuration bytes and therefore its
 configuration identity.
 
+### 2.1 Configuration known-answer test
+
+The V2 configuration KAT is derived from the byte grammar above. As a
+derivation check, the same encoder shape reproduces the accepted V1 KAT before
+applying the declared V2 changes:
+
+```text
+V1_CONFIG_CANONICAL_BYTES_LENGTH=8133
+V1_CONFIG_CANONICAL_BYTES_SHA256=20f394c888e959446fa263c3520f3dd3b1f48b3a23e58373da7153a691ab1e7a
+```
+
+The resulting V2 KAT is normative:
+
+```text
+CONFIG_CANONICAL_BYTES_LENGTH=8317
+CONFIG_CANONICAL_BYTES_SHA256=ce39fdd472614f4fa9e622d93fb5628549dd3705e501e9d287e679fa307063b9
+CONFIGURATION_IDENTITY=phase6_task7_input_materialization_config.v2.ce39fdd472614f4fa9e622d93fb5628549dd3705e501e9d287e679fa307063b9
+CONFIG_CANONICAL_BYTES_PREFIX_HEX=000000356f6367666f7267652e7068617365362e7461736b372e696e7075745f6d6174657269616c697a6174696f6e5f
+CONFIG_CANONICAL_BYTES_SUFFIX_HEX=495354494e435400000019636861696e5f73746174655f6c656e6774685f736f757263650000000844495354494e4354
+```
+
+The prefix and suffix are each exactly 48 bytes. Their equality with the
+corresponding V1 prefix/suffix is expected: the V2 changes occur after the
+shared initial fields and before the unchanged terminal rule descriptor.
+
+The candidate-column position is explicit and zero-based:
+
+```text
+V2_DESCRIPTOR_ORDER_CHANGED=NO_EXCEPT_DECLARED_CANDIDATE_COLUMN_INSERTION
+CARD_SELECTION_OPERATION_COLUMN_INDEX=1
+CARD_SELECTION_OPERATION_COLUMN_INDEX_ZERO_BASED=1
+CARD_SELECTION_OPERATION_COLUMN_INDEX_ONE_BASED=2
+```
+
+No other table, column, token meaning, order, or padding rule changes between
+the accepted V1 descriptor vector and this V2 descriptor vector.
+
 The V2 layout is:
 
 ```text
