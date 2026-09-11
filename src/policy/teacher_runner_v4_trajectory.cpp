@@ -1,18 +1,90 @@
 #include "ygo/policy/teacher_runner_v4_trajectory.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <exception>
+#include <limits>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <variant>
 
 #include "runner_shared.hpp"
 #include "teacher_v3_internal.hpp"
+#include "ygo/environment/public_safe_state.hpp"
 #include "ygo/policy/production_provenance.hpp"
+#include "ygo/trace/sha256.hpp"
 #include "ygo/trajectory/identity_resolver.hpp"
 
 namespace ygo::policy {
 namespace {
+
+using DiagnosticClock = std::chrono::steady_clock;
+
+std::uint64_t diagnostic_elapsed_us(const DiagnosticClock::time_point start,
+                                    const DiagnosticClock::time_point end) noexcept {
+    return static_cast<std::uint64_t>(
+        std::chrono::duration_cast<std::chrono::microseconds>(end - start).count());
+}
+
+void add_public_frame_diagnostics_v4(
+    diagnostics::Task7DiagnosticEvent& event,
+    const environment::DecisionFrame& frame,
+    const std::string_view selected_public_action_key) {
+    event.decision_index = frame.decision_index;
+    event.engine_step_index = frame.engine_step_index;
+    event.engine_process_count =
+        frame.engine_step_index == (std::numeric_limits<std::uint64_t>::max)()
+            ? frame.engine_step_index
+            : frame.engine_step_index + 1;
+    event.semantic_action_count =
+        frame.decision_index == (std::numeric_limits<std::uint64_t>::max)()
+            ? frame.decision_index
+            : frame.decision_index + 1;
+    event.acting_player = frame.acting_player;
+    event.candidate_count = frame.request.candidates.size();
+    event.request_kind = std::string(
+        environment::environment_decision_kind_name(frame.request.kind));
+    event.decision_family = event.request_kind;
+    event.public_observation_digest = frame.public_observation_digest;
+    event.public_candidate_domain_digest = frame.public_candidate_domain_digest;
+    event.public_semantic_decision_id = frame.public_semantic_decision_id;
+    event.selected_public_action_key = std::string(selected_public_action_key);
+    if (frame.request.continuation.has_value()) {
+        event.continuation_present = true;
+        event.continuation_kind = frame.request.continuation->continuation_kind;
+        event.continuation_step = frame.request.continuation->continuation_step;
+        event.continuation_selected_count =
+            frame.request.continuation->selected_indices.size();
+        event.continuation_remaining_count =
+            frame.request.continuation->remaining_indices.size();
+        event.continuation_min_count = frame.request.continuation->min_count;
+        event.continuation_max_count = frame.request.continuation->max_count;
+        event.continuation_can_finish = frame.request.continuation->can_finish;
+        event.continuation_can_cancel = frame.request.continuation->can_cancel;
+    }
+
+    const auto safe = environment::decode_canonical_public_safe_state(
+        frame.public_observation.canonical_safe_state_bytes());
+    if (!safe) return;
+    event.public_current_state_fingerprint = trace::sha256_bytes(
+        environment::diagnostic_public_current_state_bytes(*safe.value));
+    const auto& globals = safe.value->globals();
+    if (globals.turn_count.has_value()) {
+        event.public_turn_count_present = true;
+        event.public_turn_count = *globals.turn_count;
+    }
+    if (globals.turn_player.has_value()) event.public_turn_player = *globals.turn_player;
+    if (globals.phase.has_value()) event.public_phase = std::to_string(*globals.phase);
+    if (globals.life_points.size() >= 2) {
+        event.public_life_points_present = true;
+        event.public_life_points_p0 = globals.life_points[0];
+        event.public_life_points_p1 = globals.life_points[1];
+    }
+    event.public_entity_count = safe.value->entities().size();
+    event.public_visible_event_count = safe.value->visible_events().size();
+    event.public_chain_length = safe.value->chain().length;
+}
 
 const trajectory::ParticipantPolicyAssignment* assignment_for_player(
     const trajectory::PolicyProvenanceEnvelope& provenance,
@@ -237,7 +309,10 @@ TeacherRunnerV4TrajectoryRunResult TeacherRunnerV4TrajectoryRunner::run_impl(
             if (session == nullptr) {
                 return failure("V4 trajectory runner lacks the acting V3 session");
             }
+            const auto teacher_start = DiagnosticClock::now();
             const auto action = runner_.select_action(*frame);
+            const auto teacher_elapsed = diagnostic_elapsed_us(
+                teacher_start, DiagnosticClock::now());
             if (!action || !action.value.has_value()) {
                 return failure(
                     action.error.has_value() ? action.error->message
@@ -286,6 +361,17 @@ TeacherRunnerV4TrajectoryRunResult TeacherRunnerV4TrajectoryRunner::run_impl(
                     *accepted, attribution, terminal_views, &recorder_error)) {
                 return failure("V3 recorder rejected accepted V4 step: " +
                                recorder_error);
+            }
+            if (config_.diagnostic_observer) {
+                try {
+                    diagnostics::Task7DiagnosticEvent event;
+                    event.phase = "TEACHER";
+                    event.duration_us = teacher_elapsed;
+                    add_public_frame_diagnostics_v4(event, *frame, selection);
+                    config_.diagnostic_observer(event);
+                } catch (...) {
+                    // Diagnostics are strictly non-authoritative.
+                }
             }
             if (recorder_->lifecycle() == trajectory::RecorderLifecycle::Closed) {
                 return seal();
