@@ -476,6 +476,10 @@ add_executable(phase6_task7_v2_provisioner
                tools/phase6_task7_v2_provisioner/main.cpp)
 target_link_libraries(phase6_task7_v2_provisioner PRIVATE ygo_task7_v2)
 
+add_executable(phase6_task7_v3_provisioner
+               tools/phase6_task7_v3_provisioner/main.cpp)
+target_link_libraries(phase6_task7_v3_provisioner PRIVATE ygo_task7_v3)
+
 add_executable(phase6_task7_v2_diagnostic
                tools/phase6_task7_v2_diagnostic/main.cpp)
 target_link_libraries(phase6_task7_v2_diagnostic PRIVATE ygo_task7_v2)
