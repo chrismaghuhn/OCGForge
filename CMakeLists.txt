@@ -194,6 +194,7 @@ add_library(ygo_model STATIC
     src/model/logical_model_input_v2.cpp
     src/model/encoded_model_input_v2.cpp
     src/model/model_supervision_sample_v2.cpp
+    src/model/model_batch_layout_v2.cpp
 )
 target_include_directories(ygo_model PUBLIC "${CMAKE_SOURCE_DIR}/include")
 target_link_libraries(ygo_model PUBLIC ygo_m4)
@@ -247,6 +248,7 @@ add_library(ygo_phase6 STATIC
     src/phase6/bc_candidate_scorer.cpp
     src/phase6/task7_input_materialization.cpp
     src/phase6/supervision_dataset_v2.cpp
+    src/phase6/task7_input_materialization_v2.cpp
 )
 target_include_directories(ygo_phase6 PUBLIC "${CMAKE_SOURCE_DIR}/include")
 target_link_libraries(ygo_phase6 PUBLIC ygo_model)
@@ -309,6 +311,13 @@ target_link_libraries(task7_v3_authority_provisioning_test PRIVATE ygo_task7_v3)
 target_link_libraries(task7_v3_authority_provisioning_test PRIVATE ygo_task7_v2)
 add_test(NAME task7_v3_authority_provisioning_test
          COMMAND task7_v3_authority_provisioning_test)
+
+add_executable(phase6_task7_v2_execution_input_test
+               tests/phase6/phase6_task7_v2_execution_input_test.cpp)
+target_link_libraries(phase6_task7_v2_execution_input_test PRIVATE ygo_task7_v3)
+target_link_libraries(phase6_task7_v2_execution_input_test PRIVATE ygo_task7_v2)
+add_test(NAME phase6_task7_v2_execution_input_test
+         COMMAND phase6_task7_v2_execution_input_test)
 
 add_executable(phase6_task9a_bounded_job0_diagnostic_test
                tests/phase6/phase6_task9a_bounded_job0_diagnostic_test.cpp)

@@ -3,6 +3,7 @@
 #include <array>
 #include <cstdint>
 #include <functional>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -110,6 +111,26 @@ struct Task7V3ProvisioningResult final {
     explicit operator bool() const noexcept {
         return value.has_value() && !error.has_value();
     }
+};
+
+// Library-issued capability for a structurally canonical and semantically
+// validated Task7 V3 authority. The contained authority is immutable to
+// consumers and is the only accepted source for the Task7 V2 execution path.
+class VerifiedTask7V3Authority final {
+public:
+    const Task7V3DatasetAuthority& value() const noexcept;
+    const std::string& identity() const noexcept { return identity_; }
+
+private:
+    explicit VerifiedTask7V3Authority(
+        std::shared_ptr<const Task7V3DatasetAuthority> value,
+        std::string identity);
+
+    friend trajectory::DecodeResult<VerifiedTask7V3Authority>
+    decode_task7_v3_authority(const std::vector<std::uint8_t>& bytes) noexcept;
+
+    std::shared_ptr<const Task7V3DatasetAuthority> value_;
+    std::string identity_;
 };
 
 struct Task7V3BoundedDiagnosticResult final {
@@ -221,5 +242,8 @@ std::vector<std::uint8_t> canonical_task7_v3_authority_bytes(
     const Task7V3DatasetAuthority& authority);
 std::string task7_v3_authority_identity(
     const Task7V3DatasetAuthority& authority);
+
+trajectory::DecodeResult<VerifiedTask7V3Authority> decode_task7_v3_authority(
+    const std::vector<std::uint8_t>& bytes) noexcept;
 
 }  // namespace ygo::phase6

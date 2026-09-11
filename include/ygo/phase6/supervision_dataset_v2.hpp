@@ -17,6 +17,8 @@
 
 namespace ygo::phase6 {
 
+class VerifiedTask7V3Authority;
+
 inline constexpr std::string_view kPhase6BcSampleIdentityDomainV2 =
     "ocgforge.phase6.bc_sample_identity.v2";
 inline constexpr std::string_view kPhase6BcSampleIdentityPrefixV2 =
@@ -76,6 +78,9 @@ Phase6DatasetResultV2 materialize_phase6_dataset_v2(
     const std::vector<trajectory::VerifiedAdmissionReceiptV3>& verified_receipts,
     const std::vector<trajectory::EpisodeEnvelopeV3>& admitted_envelopes,
     const model::CardVocabularyV1& vocabulary) noexcept;
+
+Phase6DatasetResultV2 materialize_phase6_dataset_v2(
+    const VerifiedTask7V3Authority& authority) noexcept;
 
 std::vector<std::uint8_t> canonical_phase6_sample_identity_bytes_v2(
     const Phase6BcSampleV2& sample);

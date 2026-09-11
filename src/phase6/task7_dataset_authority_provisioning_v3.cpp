@@ -14,6 +14,7 @@
 #include "ygo/policy/production_provenance.hpp"
 #include "ygo/policy/teacher.hpp"
 #include "ygo/policy/teacher_v3.hpp"
+#include "ygo/phase6/task7_input_materialization_v2.hpp"
 #include "ygo/teacher/salamangreat_profile.hpp"
 #include "ygo/teacher/swordsoul_tenyi_profile.hpp"
 #include "ygo/trace/sha256.hpp"
@@ -447,6 +448,129 @@ bool derive_authority_values(const Task7CollectionScheduleV3& schedule,
         error = "Task7 V3 authority derivation threw";
         return false;
     }
+}
+
+trajectory::DecodeResult<TrainingDatasetSplitV1> decode_phase6_split_v1(
+    const std::vector<std::uint8_t>& bytes) noexcept {
+    try {
+        trajectory::ByteReader reader(bytes);
+        TrainingDatasetSplitV1 split;
+        std::string domain;
+        std::string schema;
+        if (!reader.string(domain) || domain != kPhase6DatasetSplitIdentityDomain ||
+            !reader.string(schema) || schema != kPhase6DatasetSplitIdentityDomain ||
+            !reader.string(split.source_dataset_identity) ||
+            !reader.string(split.split_contract_identity) ||
+            !reader.string(split.split_seed_or_partition_identity)) {
+            return decode_failure<TrainingDatasetSplitV1>("malformed Task7 V2 split header");
+        }
+        const auto read_group = [&reader](std::vector<std::string>& output) {
+            std::uint32_t count = 0;
+            if (!reader.u32be(count) || count > reader.remaining() / 4) return false;
+            output.reserve(count);
+            for (std::uint32_t index = 0; index < count; ++index) {
+                std::string value;
+                if (!reader.string(value)) return false;
+                output.push_back(std::move(value));
+            }
+            return true;
+        };
+        if (!read_group(split.train_episode_ids) ||
+            !read_group(split.validation_episode_ids) ||
+            !read_group(split.test_episode_ids) || !reader.at_end() ||
+            canonical_phase6_split_identity_bytes(split) != bytes) {
+            return decode_failure<TrainingDatasetSplitV1>("noncanonical Task7 V2 split");
+        }
+        split.split_identity = phase6_split_identity(split);
+        return decode_success(std::move(split));
+    } catch (const std::exception& exception) {
+        return decode_failure<TrainingDatasetSplitV1>(exception.what());
+    } catch (...) {
+        return decode_failure<TrainingDatasetSplitV1>("Task7 V2 split decode threw");
+    }
+}
+
+trajectory::DecodeResult<model::CardVocabularyV1> decode_card_vocabulary_v1(
+    const std::vector<std::uint8_t>& bytes) noexcept {
+    try {
+        trajectory::ByteReader reader(bytes);
+        std::string domain;
+        std::string schema;
+        std::string mapping;
+        std::uint32_t count = 0;
+        if (!reader.string(domain) || domain != model::kCardVocabularySchemaId ||
+            !reader.string(schema) || schema != model::kCardVocabularySchemaId ||
+            !reader.string(mapping) || !reader.u32be(count) ||
+            count > reader.remaining() / 4) {
+            return decode_failure<model::CardVocabularyV1>(
+                "malformed Task7 V2 vocabulary header");
+        }
+        std::vector<std::uint32_t> passcodes;
+        passcodes.reserve(count);
+        for (std::uint32_t index = 0; index < count; ++index) {
+            std::uint32_t passcode = 0;
+            if (!reader.u32be(passcode)) {
+                return decode_failure<model::CardVocabularyV1>(
+                    "truncated Task7 V2 vocabulary");
+            }
+            passcodes.push_back(passcode);
+        }
+        if (!reader.at_end()) {
+            return decode_failure<model::CardVocabularyV1>(
+                "Task7 V2 vocabulary has trailing bytes");
+        }
+        const auto vocabulary = model::CardVocabularyV1::from_ascending_passcodes(
+            std::move(passcodes));
+        if (!vocabulary || vocabulary.value->canonical_bytes() != bytes) {
+            return decode_failure<model::CardVocabularyV1>(
+                "noncanonical Task7 V2 vocabulary");
+        }
+        return decode_success(std::move(*vocabulary.value));
+    } catch (const std::exception& exception) {
+        return decode_failure<model::CardVocabularyV1>(exception.what());
+    } catch (...) {
+        return decode_failure<model::CardVocabularyV1>("Task7 V2 vocabulary decode threw");
+    }
+}
+
+trajectory::replay_v3::ReplayOptions replay_options_for_task7_job(
+    const Task7CollectionJobV3& job) {
+    trajectory::replay_v3::ReplayOptions options;
+    environment::RunControl control;
+    control.engine_process_budget = job.engine_process_budget;
+    control.semantic_action_budget = job.semantic_action_budget;
+    control.cancellation.reason = job.cancellation_reason;
+    control.cancellation.source = job.cancellation_source;
+    options.terminal_run_control = std::move(control);
+    return options;
+}
+
+trajectory::dataset_v3::DatasetManifestV3 make_single_member_manifest(
+    const trajectory::admission_v3::AdmissionVerification& verification,
+    const trajectory::VerifiedAdmissionReceiptV3& verified_receipt,
+    const std::string_view shard_id) {
+    const auto& receipt = verified_receipt.receipt();
+    trajectory::dataset_v3::DatasetManifestV3 manifest;
+    std::vector<std::string> record_ids;
+    for (const auto& entry : verification.entries()) {
+        record_ids.push_back(entry.trajectory_record_id);
+        manifest.members.push_back({
+            entry.trajectory_record_id,
+            entry.public_gameplay_trajectory_id,
+            trajectory::admission_receipt_id_v3(receipt),
+            std::string(shard_id),
+            entry.episode_envelope_sha256});
+    }
+    manifest.dataset_semantic_id = trajectory::dataset_v3::dataset_semantic_id_v3(record_ids);
+    std::string error;
+    if (!trajectory::dataset_v3::validate_dataset_manifest_v3(
+            manifest,
+            std::vector<trajectory::VerifiedAdmissionReceiptV3>{
+                verified_receipt},
+            &error)) {
+        throw std::invalid_argument("Task7 V3 authority member manifest is invalid: " + error);
+    }
+    return manifest;
 }
 
 }  // namespace
@@ -1134,6 +1258,253 @@ std::string task7_v3_authority_identity(
     const Task7V3DatasetAuthority& authority) {
     return "phase6_task7_dataset_authority.v3." +
            trace::sha256_bytes(canonical_task7_v3_authority_bytes(authority));
+}
+
+VerifiedTask7V3Authority::VerifiedTask7V3Authority(
+    std::shared_ptr<const Task7V3DatasetAuthority> value,
+    std::string identity)
+    : value_(std::move(value)), identity_(std::move(identity)) {
+    if (!value_) throw std::invalid_argument("Task7 V3 authority capability is empty");
+}
+
+const Task7V3DatasetAuthority& VerifiedTask7V3Authority::value() const noexcept {
+    return *value_;
+}
+
+trajectory::DecodeResult<VerifiedTask7V3Authority> decode_task7_v3_authority(
+    const std::vector<std::uint8_t>& bytes) noexcept {
+    try {
+        trajectory::ByteReader reader(bytes);
+        std::string domain;
+        std::string schema;
+        std::vector<std::uint8_t> schedule_bytes;
+        std::uint32_t outcome_count = 0;
+        if (!reader.string(domain) || domain != kTask7V3AuthoritySchemaId ||
+            !reader.string(schema) || schema != kTask7V3AuthoritySchemaId ||
+            !reader.bytes(schedule_bytes) || !reader.u32be(outcome_count) ||
+            outcome_count > 16) {
+            return decode_failure<VerifiedTask7V3Authority>(
+                "malformed Task7 V3 authority header");
+        }
+        const auto schedule = decode_task7_collection_schedule_v3(schedule_bytes);
+        if (!schedule || schedule.value->jobs.size() != outcome_count) {
+            return decode_failure<VerifiedTask7V3Authority>(
+                "Task7 V3 authority schedule/count mismatch");
+        }
+
+        std::vector<Task7V3JobOutcome> outcomes;
+        outcomes.reserve(outcome_count);
+        for (std::uint32_t index = 0; index < outcome_count; ++index) {
+            std::string job_id;
+            std::vector<std::uint8_t> envelope_bytes;
+            std::vector<std::uint8_t> shard_bytes;
+            std::vector<std::uint8_t> evidence_bytes;
+            std::vector<std::uint8_t> receipt_bytes;
+            if (!reader.string(job_id) || !reader.bytes(envelope_bytes) ||
+                !reader.bytes(shard_bytes) || !reader.bytes(evidence_bytes) ||
+                !reader.bytes(receipt_bytes)) {
+                return decode_failure<VerifiedTask7V3Authority>(
+                    "truncated Task7 V3 authority outcome");
+            }
+            const auto& job = schedule.value->jobs[index];
+            if (job_id != task7_collection_job_identity_v3(job)) {
+                return decode_failure<VerifiedTask7V3Authority>(
+                    "Task7 V3 authority job identity mismatch");
+            }
+            const auto envelope = trajectory::decode_episode_envelope_v3(envelope_bytes);
+            const auto shard = trajectory::decode_candidate_trajectory_shard_v3(shard_bytes);
+            const auto evidence =
+                trajectory::decode_restricted_collection_evidence_bundle_v3(evidence_bytes);
+            const auto receipt = trajectory::decode_admission_receipt_v3(receipt_bytes);
+            if (!envelope || !shard || !evidence || !receipt ||
+                !std::holds_alternative<trajectory::TerminalClosureV3>(envelope.value->closure) ||
+                !evidence.value->interrupted_episodes.empty()) {
+                return decode_failure<VerifiedTask7V3Authority>(
+                    "Task7 V3 authority outcome is not a clean terminal record");
+            }
+            const auto shard_id = trajectory::candidate_shard_artifact_sha256_v3(*shard.value);
+            const auto evidence_id =
+                trajectory::restricted_collection_evidence_artifact_sha256_v3(*evidence.value);
+            trajectory::replay_v3::ReplayOptions replay_options =
+                replay_options_for_task7_job(job);
+            std::string admission_error;
+            const auto verification =
+                trajectory::admission_v3::verify_collection_for_admission_v3(
+                    *shard.value, *evidence.value, shard_id, evidence_id,
+                    replay_options, policy::make_production_policy_provenance_resolver(),
+                    &admission_error);
+            if (!verification.has_value()) {
+                return decode_failure<VerifiedTask7V3Authority>(
+                    "Task7 V3 authority replay/admission failed: " + admission_error);
+            }
+            const auto verified_receipt =
+                trajectory::issue_admission_receipt_v3(*verification, &admission_error);
+            if (!verified_receipt.has_value() ||
+                trajectory::canonical_admission_receipt_bytes_v3(
+                    verified_receipt->receipt()) != receipt_bytes ||
+                !same_commitments(verified_receipt->receipt().entries,
+                                  receipt.value->entries)) {
+                return decode_failure<VerifiedTask7V3Authority>(
+                    "Task7 V3 authority receipt commitment mismatch");
+            }
+            Task7V3JobOutcome outcome;
+            outcome.job = job;
+            outcome.run.envelope = *envelope.value;
+            outcome.candidate_shard = *shard.value;
+            outcome.restricted_collection_evidence = *evidence.value;
+            outcome.admission_verification = *verification;
+            outcome.admission_receipt = *verified_receipt;
+            outcome.dataset_manifest = make_single_member_manifest(
+                *verification, *verified_receipt, shard_id);
+            outcomes.push_back(std::move(outcome));
+        }
+
+        std::vector<std::uint8_t> manifest_bytes;
+        std::vector<std::uint8_t> split_bytes;
+        std::vector<std::uint8_t> vocabulary_bytes;
+        if (!reader.bytes(manifest_bytes) || !reader.bytes(split_bytes) ||
+            !reader.bytes(vocabulary_bytes) || !reader.at_end()) {
+            return decode_failure<VerifiedTask7V3Authority>(
+                "malformed Task7 V3 authority derived values");
+        }
+        const auto manifest =
+            trajectory::dataset_v3::decode_dataset_manifest_v3(manifest_bytes);
+        const auto split = decode_phase6_split_v1(split_bytes);
+        const auto vocabulary = decode_card_vocabulary_v1(vocabulary_bytes);
+        if (!manifest || !split || !vocabulary) {
+            return decode_failure<VerifiedTask7V3Authority>(
+                "Task7 V3 authority derived value decode failed");
+        }
+        Task7V3DatasetAuthority authority{
+            *schedule.value,
+            std::move(outcomes),
+            *manifest.value,
+            *split.value,
+            *vocabulary.value};
+        std::string validation_error;
+        if (!validate_task7_v3_authority(authority, &validation_error) ||
+            canonical_task7_v3_authority_bytes(authority) != bytes) {
+            return decode_failure<VerifiedTask7V3Authority>(
+                "Task7 V3 authority closure or canonical bytes failed: " +
+                validation_error);
+        }
+        const auto identity = task7_v3_authority_identity(authority);
+        return decode_success(VerifiedTask7V3Authority(
+            std::make_shared<const Task7V3DatasetAuthority>(std::move(authority)), identity));
+    } catch (const std::exception& exception) {
+        return decode_failure<VerifiedTask7V3Authority>(exception.what());
+    } catch (...) {
+        return decode_failure<VerifiedTask7V3Authority>(
+            "Task7 V3 authority decode threw");
+    }
+}
+
+Phase6DatasetResultV2 materialize_phase6_dataset_v2(
+    const VerifiedTask7V3Authority& authority) noexcept {
+    try {
+        const auto& source = authority.value();
+        if (task7_v3_authority_identity(source) != authority.identity()) {
+            return {std::nullopt,
+                    Phase6DataError{Phase6DataErrorCode::InvalidDatasetManifest,
+                                    "Task7 V3 authority identity does not recompute"}};
+        }
+        std::string error;
+        if (!validate_task7_v3_authority(source, &error)) {
+            return {std::nullopt,
+                    Phase6DataError{Phase6DataErrorCode::InvalidDatasetManifest,
+                                    "Task7 V3 authority is not valid: " + error}};
+        }
+        std::vector<trajectory::VerifiedAdmissionReceiptV3> receipts;
+        std::vector<trajectory::EpisodeEnvelopeV3> envelopes;
+        receipts.reserve(source.outcomes.size());
+        envelopes.reserve(source.outcomes.size());
+        for (const auto& outcome : source.outcomes) {
+            if (!outcome.admission_receipt.has_value() ||
+                !outcome.run.envelope.has_value()) {
+                return {std::nullopt,
+                        Phase6DataError{Phase6DataErrorCode::InvalidDatasetManifest,
+                                        "Task7 V3 authority outcome is incomplete"}};
+            }
+            receipts.push_back(*outcome.admission_receipt);
+            envelopes.push_back(*outcome.run.envelope);
+        }
+        return materialize_phase6_dataset_v2(
+            source.dataset_manifest, receipts, envelopes, source.vocabulary);
+    } catch (const std::exception& exception) {
+        return {std::nullopt,
+                Phase6DataError{Phase6DataErrorCode::InternalFailure, exception.what()}};
+    } catch (...) {
+        return {std::nullopt,
+                Phase6DataError{Phase6DataErrorCode::InternalFailure,
+                                "Task7 V3 authority dataset materialization threw"}};
+    }
+}
+
+Task7MaterializationResultV2 materialize_task7_input_v2(
+    const VerifiedTask7V3Authority& authority) noexcept {
+    try {
+        const auto dataset = materialize_phase6_dataset_v2(authority);
+        if (!dataset || !dataset.value.has_value()) {
+            Task7MaterializationResultV2 result;
+            result.error = Task7MaterializationErrorV2{
+                Task7MaterializationErrorCodeV2::InvalidDatasetBinding,
+                "Task7 V3 authority could not produce a validated V2 dataset"};
+            return result;
+        }
+        const auto& authority_value = authority.value();
+        const auto manifest_bytes =
+            trajectory::dataset_v3::canonical_dataset_manifest_bytes_v3(
+                authority_value.dataset_manifest);
+        detail::Task7MaterializationSourceBatchV2 source;
+        source.vocabulary = &authority_value.vocabulary;
+        source.source_task7_authority_identity = authority.identity();
+        source.source_dataset_manifest_identity =
+            std::string(kTask7V2DatasetManifestIdentityPrefix) +
+            trace::sha256_bytes(manifest_bytes);
+        source.source_dataset_semantic_identity =
+            authority_value.dataset_manifest.dataset_semantic_id;
+        source.source_training_dataset_split_identity =
+            authority_value.split.split_identity;
+        source.source_card_vocabulary_identity = authority_value.vocabulary.identity();
+
+        std::vector<model::EncodedModelInputV2> encoded;
+        const auto add_samples = [&](const std::vector<Phase6BcSampleV2>& samples) {
+            for (const auto& sample : samples) {
+                encoded.push_back(sample.encoded_model_input);
+                source.samples.push_back({
+                    &sample,
+                    source.source_task7_authority_identity,
+                    source.source_dataset_manifest_identity,
+                    source.source_dataset_semantic_identity,
+                    source.source_training_dataset_split_identity,
+                    source.source_card_vocabulary_identity});
+            }
+        };
+        add_samples(dataset.value->train_samples);
+        add_samples(dataset.value->validation_samples);
+        add_samples(dataset.value->test_samples);
+        const auto ragged = model::make_ragged_model_batch_v2(encoded);
+        if (!ragged || !ragged.value.has_value()) {
+            Task7MaterializationResultV2 result;
+            result.error = Task7MaterializationErrorV2{
+                Task7MaterializationErrorCodeV2::InvalidBatch,
+                "Task7 V2 ragged batch construction failed"};
+            return result;
+        }
+        source.ragged = &*ragged.value;
+        return detail::materialize_task7_input_v2(source);
+    } catch (const std::exception& exception) {
+        Task7MaterializationResultV2 result;
+        result.error = Task7MaterializationErrorV2{
+            Task7MaterializationErrorCodeV2::InternalFailure, exception.what()};
+        return result;
+    } catch (...) {
+        Task7MaterializationResultV2 result;
+        result.error = Task7MaterializationErrorV2{
+            Task7MaterializationErrorCodeV2::InternalFailure,
+            "Task7 V3 authority physical materialization threw"};
+        return result;
+    }
 }
 
 }  // namespace ygo::phase6
