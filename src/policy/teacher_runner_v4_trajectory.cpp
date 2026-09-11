@@ -144,7 +144,9 @@ TeacherRunnerV4TrajectoryRunResult TeacherRunnerV4TrajectoryRunner::failure(
 }
 
 TeacherRunnerV4TrajectoryRunResult TeacherRunnerV4TrajectoryRunner::run_impl(
-    const std::optional<std::uint64_t> decision_limit) noexcept {
+    const std::optional<std::uint64_t> decision_limit,
+    std::optional<trajectory::RestrictedReplayEvidenceV3>*
+        restricted_replay_evidence) noexcept {
     if (has_run_) {
         return failure("V4 trajectory runner can only execute one run");
     }
@@ -210,6 +212,23 @@ TeacherRunnerV4TrajectoryRunResult TeacherRunnerV4TrajectoryRunner::run_impl(
                         *accepted_interrupt, &recorder_error)) {
                     return failure("V3 diagnostic prefix could not close: " +
                                    recorder_error);
+                }
+                if (restricted_replay_evidence != nullptr) {
+                    const auto& interruption = accepted_interrupt->interruption;
+                    trajectory::RestrictedReplayEvidenceV3 evidence;
+                    evidence.episode_semantic_id = frame->episode_semantic_id;
+                    evidence.interruption_reason = interruption.reason;
+                    evidence.engine_process_budget =
+                        interruption.run_control_evidence.engine_process_budget;
+                    evidence.semantic_action_budget =
+                        interruption.run_control_evidence.semantic_action_budget;
+                    evidence.observed_engine_process_count =
+                        interruption.run_control_evidence.engine_process_count;
+                    evidence.observed_semantic_action_count =
+                        interruption.run_control_evidence.semantic_action_count;
+                    evidence.final_engine_step_index =
+                        interruption.final_engine_step_index;
+                    *restricted_replay_evidence = std::move(evidence);
                 }
                 return seal();
             }
@@ -281,7 +300,7 @@ TeacherRunnerV4TrajectoryRunResult TeacherRunnerV4TrajectoryRunner::run_impl(
 }
 
 TeacherRunnerV4TrajectoryRunResult TeacherRunnerV4TrajectoryRunner::run() noexcept {
-    return run_impl(std::nullopt);
+    return run_impl(std::nullopt, nullptr);
 }
 
 }  // namespace ygo::policy

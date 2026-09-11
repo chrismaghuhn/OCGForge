@@ -8,6 +8,7 @@
 #include "ygo/diagnostics/task7_observer.hpp"
 #include "ygo/policy/teacher_runner_v4.hpp"
 #include "ygo/trajectory/recorder_v3.hpp"
+#include "ygo/trajectory/restricted_evidence_v3.hpp"
 
 namespace ygo::policy {
 
@@ -29,6 +30,12 @@ struct TeacherRunnerV4TrajectoryRunResult final {
     explicit operator bool() const noexcept {
         return envelope.has_value() && !error.has_value();
     }
+};
+
+struct TeacherRunnerV4TrajectoryBoundedDiagnosticResult final {
+    TeacherRunnerV4TrajectoryRunResult run;
+    std::optional<trajectory::RestrictedReplayEvidenceV3>
+        restricted_replay_evidence;
 };
 
 struct TeacherRunnerV4TrajectoryCreateResult;
@@ -67,7 +74,9 @@ private:
         std::string message,
         std::optional<PolicyError> policy_error = std::nullopt) noexcept;
     TeacherRunnerV4TrajectoryRunResult run_impl(
-        std::optional<std::uint64_t> decision_limit = std::nullopt) noexcept;
+        std::optional<std::uint64_t> decision_limit,
+        std::optional<trajectory::RestrictedReplayEvidenceV3>*
+            restricted_replay_evidence) noexcept;
 
     TeacherRunnerV4TrajectoryConfig config_;
     TeacherRunnerV4 runner_;
@@ -91,7 +100,17 @@ struct TeacherRunnerV4TrajectoryTestAccess final {
     static TeacherRunnerV4TrajectoryRunResult run_until_decision(
         TeacherRunnerV4TrajectoryRunner& runner,
         const std::uint64_t decision_limit) {
-        return runner.run_impl(decision_limit);
+        return runner.run_impl(decision_limit, nullptr);
+    }
+
+    static TeacherRunnerV4TrajectoryBoundedDiagnosticResult
+    run_until_decision_with_replay_evidence(
+        TeacherRunnerV4TrajectoryRunner& runner,
+        const std::uint64_t decision_limit) {
+        TeacherRunnerV4TrajectoryBoundedDiagnosticResult result;
+        result.run = runner.run_impl(
+            decision_limit, &result.restricted_replay_evidence);
+        return result;
     }
 };
 

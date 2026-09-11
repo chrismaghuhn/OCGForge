@@ -112,6 +112,12 @@ struct Task7V3ProvisioningResult final {
     }
 };
 
+struct Task7V3BoundedDiagnosticResult final {
+    policy::TeacherRunnerV4TrajectoryRunResult run;
+    std::optional<trajectory::RestrictedReplayEvidenceV3>
+        restricted_replay_evidence;
+};
+
 using Task7V3JobExecutor =
     std::function<policy::TeacherRunnerV4TrajectoryRunResult(
         const Task7CollectionJobV3&)>;
@@ -171,6 +177,12 @@ policy::TeacherRunnerV4TrajectoryRunResult run_task7_collection_job_v3(
 // unchanged and always run without a diagnostic decision bound.
 policy::TeacherRunnerV4TrajectoryRunResult
 run_task7_collection_job_v3_bounded_for_diagnostics(
+    const Task7CollectionJobV3& job,
+    std::uint64_t decision_limit,
+    const diagnostics::Task7DiagnosticObserver& diagnostic_observer = {}) noexcept;
+
+Task7V3BoundedDiagnosticResult
+run_task7_collection_job_v3_bounded_with_replay_evidence(
     const Task7CollectionJobV3& job,
     std::uint64_t decision_limit,
     const diagnostics::Task7DiagnosticObserver& diagnostic_observer = {}) noexcept;

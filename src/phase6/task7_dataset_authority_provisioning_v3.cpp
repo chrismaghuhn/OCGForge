@@ -825,7 +825,9 @@ std::string task7_collection_schedule_identity_v3(
 policy::TeacherRunnerV4TrajectoryRunResult run_task7_collection_job_v3_impl(
     const Task7CollectionJobV3& job,
     const diagnostics::Task7DiagnosticObserver& diagnostic_observer,
-    const std::optional<std::uint64_t> decision_limit) noexcept {
+    const std::optional<std::uint64_t> decision_limit,
+    std::optional<trajectory::RestrictedReplayEvidenceV3>*
+        restricted_replay_evidence) noexcept {
     policy::TeacherRunnerV4TrajectoryRunResult result;
     try {
         validate_job(job);
@@ -882,6 +884,15 @@ policy::TeacherRunnerV4TrajectoryRunResult run_task7_collection_job_v3_impl(
             return result;
         }
         if (decision_limit.has_value()) {
+            if (restricted_replay_evidence != nullptr) {
+                auto bounded =
+                    policy::detail::TeacherRunnerV4TrajectoryTestAccess::
+                        run_until_decision_with_replay_evidence(
+                            *created.value, *decision_limit);
+                *restricted_replay_evidence =
+                    std::move(bounded.restricted_replay_evidence);
+                return std::move(bounded.run);
+            }
             return policy::detail::TeacherRunnerV4TrajectoryTestAccess::run_until_decision(
                 *created.value, *decision_limit);
         }
@@ -898,7 +909,8 @@ policy::TeacherRunnerV4TrajectoryRunResult run_task7_collection_job_v3_impl(
 policy::TeacherRunnerV4TrajectoryRunResult run_task7_collection_job_v3(
     const Task7CollectionJobV3& job,
     const diagnostics::Task7DiagnosticObserver& diagnostic_observer) noexcept {
-    return run_task7_collection_job_v3_impl(job, diagnostic_observer, std::nullopt);
+    return run_task7_collection_job_v3_impl(
+        job, diagnostic_observer, std::nullopt, nullptr);
 }
 
 policy::TeacherRunnerV4TrajectoryRunResult
@@ -907,7 +919,19 @@ run_task7_collection_job_v3_bounded_for_diagnostics(
     const std::uint64_t decision_limit,
     const diagnostics::Task7DiagnosticObserver& diagnostic_observer) noexcept {
     return run_task7_collection_job_v3_impl(
-        job, diagnostic_observer, std::optional<std::uint64_t>{decision_limit});
+        job, diagnostic_observer, std::optional<std::uint64_t>{decision_limit}, nullptr);
+}
+
+Task7V3BoundedDiagnosticResult
+run_task7_collection_job_v3_bounded_with_replay_evidence(
+    const Task7CollectionJobV3& job,
+    const std::uint64_t decision_limit,
+    const diagnostics::Task7DiagnosticObserver& diagnostic_observer) noexcept {
+    Task7V3BoundedDiagnosticResult result;
+    result.run = run_task7_collection_job_v3_impl(
+        job, diagnostic_observer, std::optional<std::uint64_t>{decision_limit},
+        &result.restricted_replay_evidence);
+    return result;
 }
 
 policy::TeacherRunnerV4TrajectoryRunResult run_task7_collection_job_v3(
