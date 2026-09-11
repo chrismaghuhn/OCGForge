@@ -209,6 +209,12 @@ add_library(ygo_trajectory STATIC
     src/trajectory/codec_v3.cpp
     src/trajectory/recorder_v3.cpp
     src/trajectory/trajectory_identity_v3.cpp
+    src/trajectory/replay_v3.cpp
+    src/trajectory/admission_v3.cpp
+    src/trajectory/shard_v3.cpp
+    src/trajectory/restricted_evidence_v3.cpp
+    src/trajectory/receipt_v3.cpp
+    src/trajectory/dataset_manifest_v3.cpp
     src/trajectory/replay_v2.cpp
     src/trajectory/admission_v2.cpp
     src/trajectory/shard_v2.cpp
@@ -528,6 +534,22 @@ add_executable(trusted_trajectory_v3_recorder_test
 target_link_libraries(trusted_trajectory_v3_recorder_test PRIVATE ygo_policy)
 add_test(NAME trusted_trajectory_v3_recorder_test
          COMMAND trusted_trajectory_v3_recorder_test)
+
+add_executable(trusted_trajectory_v3_replay_admission_test
+               tests/trajectory/trusted_trajectory_v3_replay_admission_test.cpp)
+target_include_directories(trusted_trajectory_v3_replay_admission_test PRIVATE
+                           "${CMAKE_SOURCE_DIR}/tests/trajectory")
+target_link_libraries(trusted_trajectory_v3_replay_admission_test PRIVATE ygo_policy)
+add_test(NAME trusted_trajectory_v3_replay_admission_test
+         COMMAND trusted_trajectory_v3_replay_admission_test)
+
+add_executable(trusted_trajectory_v3_collection_boundary_test
+               tests/trajectory/trusted_trajectory_v3_collection_boundary_test.cpp)
+target_include_directories(trusted_trajectory_v3_collection_boundary_test PRIVATE
+                           "${CMAKE_SOURCE_DIR}/tests/trajectory")
+target_link_libraries(trusted_trajectory_v3_collection_boundary_test PRIVATE ygo_policy)
+add_test(NAME trusted_trajectory_v3_collection_boundary_test
+         COMMAND trusted_trajectory_v3_collection_boundary_test)
 
 add_executable(strategy_profile_codec_test tests/teacher/strategy_profile_codec_test.cpp)
 target_link_libraries(strategy_profile_codec_test PRIVATE ygo_teacher)

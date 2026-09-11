@@ -1,0 +1,293 @@
+#include "ygo/trajectory/admission_v3.hpp"
+
+#include <algorithm>
+#include <utility>
+
+#include "ygo/trajectory/codec_v3.hpp"
+#include "ygo/trajectory/identity_resolver.hpp"
+#include "ygo/trajectory/restricted_evidence_v3.hpp"
+#include "ygo/trajectory/shard_v3.hpp"
+#include "ygo/trajectory/trajectory_identity_v3.hpp"
+#include "ygo/trace/sha256.hpp"
+
+namespace ygo::trajectory::admission_v3 {
+namespace {
+
+void set_error(std::string* error, std::string message) {
+    if (error != nullptr) {
+        *error = std::move(message);
+    }
+}
+
+const ParticipantPolicyAssignment* active_assignment(
+    const PolicyProvenanceEnvelope& provenance,
+    const std::uint8_t player,
+    const std::uint64_t decision_index,
+    std::string& error) {
+    const ParticipantPolicyAssignment* selected = nullptr;
+    for (const auto& assignment : provenance.participant_assignments) {
+        if (assignment.player != player ||
+            assignment.effective_from_decision_index > decision_index) {
+            continue;
+        }
+        if (selected == nullptr ||
+            assignment.effective_from_decision_index > selected->effective_from_decision_index) {
+            selected = &assignment;
+        } else if (assignment.effective_from_decision_index ==
+                   selected->effective_from_decision_index) {
+            error = "V3 admission found two active assignments at one decision index";
+            return nullptr;
+        }
+    }
+    if (selected == nullptr) {
+        error = "V3 admission found no active participant assignment";
+    }
+    return selected;
+}
+
+const PolicyArtifact* artifact_by_id(const PolicyProvenanceEnvelope& provenance,
+                                     const std::string_view id) noexcept {
+    const auto it = std::find_if(
+        provenance.policy_artifacts.begin(), provenance.policy_artifacts.end(),
+        [id](const auto& artifact) { return artifact.policy_artifact_id == id; });
+    return it == provenance.policy_artifacts.end() ? nullptr : &*it;
+}
+
+bool validate_record_attribution(const EpisodeEnvelopeV3& envelope,
+                                 const DecisionRecordV3& record,
+                                 const std::string& error_prefix,
+                                 std::string& error) {
+    const auto& attribution = record.policy_rng_decision_provenance;
+    if (record.acting_policy_assignment_id != attribution.acting_policy_assignment_id ||
+        attribution.decision_index != record.frame.decision_index) {
+        error = error_prefix + ": attribution does not match the record";
+        return false;
+    }
+    const auto* assignment = active_assignment(
+        envelope.manifest.policy_provenance, record.frame.acting_player,
+        record.frame.decision_index, error);
+    if (assignment == nullptr || assignment->participant_policy_assignment_id !=
+                                    record.acting_policy_assignment_id) {
+        if (error.empty()) {
+            error = error_prefix + ": assignment is not active for the frame";
+        }
+        return false;
+    }
+    const auto* artifact = artifact_by_id(
+        envelope.manifest.policy_provenance, assignment->policy_artifact_id);
+    if (artifact == nullptr) {
+        error = error_prefix + ": assignment references an unknown policy artifact";
+        return false;
+    }
+    // RestrictedReplayEvidenceV3 deliberately carries interruption budgets,
+    // not policy RNG initialization material.  A stochastic attribution is
+    // therefore not replay-provable at this boundary and must fail closed.
+    if (attribution.mode != PolicyRngMode::None) {
+        error = error_prefix + ": V3 admission lacks RNG initialization evidence";
+        return false;
+    }
+    if (artifact->policy_rng_contract_identity != kNoPolicyRngContractId) {
+        error = error_prefix + ": stochastic artifact has NONE RNG attribution";
+        return false;
+    }
+    try {
+        (void)canonical_policy_decision_attribution_bytes_v3(record);
+        return true;
+    } catch (const std::exception& exception) {
+        error = error_prefix + ": " + exception.what();
+        return false;
+    }
+}
+
+}  // namespace
+
+std::optional<AdmissionVerification> verify_episode_for_admission_v3(
+    const EpisodeEnvelopeV3& envelope,
+    const std::optional<RestrictedReplayEvidenceV3>& evidence,
+    const replay_v3::ReplayOptions& options,
+    const ProvenanceResolver& resolver,
+    std::string* error) {
+    try {
+        (void)canonical_episode_envelope_bytes_v3(envelope);
+        if (std::holds_alternative<FailedClosureV3>(envelope.closure)) {
+            set_error(error, "V3 failed envelope is not admissible");
+            return std::nullopt;
+        }
+        if (envelope.manifest.collection_disposition.kind != CollectionDispositionKind::Clean ||
+            !envelope.manifest.collection_disposition.policy_rejections.empty()) {
+            set_error(error, "V3 quarantined or rejected collection is not admissible");
+            return std::nullopt;
+        }
+        if (evidence.has_value()) {
+            (void)canonical_restricted_replay_evidence_bytes_v3(*evidence);
+            if (evidence->episode_semantic_id != envelope.manifest.episode_semantic_id ||
+                evidence->trusted_trajectory_contract_id != kTrustedTrajectoryV3ContractId ||
+                evidence->episodic_environment_contract_id !=
+                    environment::kEpisodicEnvironmentV4ContractId) {
+                set_error(error, "V3 restricted evidence is not bound to this V3 episode");
+                return std::nullopt;
+            }
+        }
+        if (std::holds_alternative<TerminalClosureV3>(envelope.closure) && evidence.has_value()) {
+            set_error(error, "terminal V3 admission received interruption evidence");
+            return std::nullopt;
+        }
+        environment::CertifiedEnvironmentConfig config;
+        environment::EpisodeSpec spec;
+        const auto decoded_config = decode_environment_identity_input_v4(
+            envelope.manifest.environment_identity_input);
+        if (!decoded_config || !is_current_certified_environment_v4(*decoded_config.value)) {
+            set_error(error, "V3 admission environment is not the current V3 identity");
+            return std::nullopt;
+        }
+        config = *decoded_config.value;
+        const auto decoded_spec = decode_episode_identity_input_v4(
+            envelope.manifest.episode_identity_input, config);
+        if (!decoded_spec) {
+            set_error(error, "V3 admission episode identity is not V3-canonical");
+            return std::nullopt;
+        }
+        spec = *decoded_spec.value;
+        std::string provenance_error;
+        if (!resolver.validate(envelope.manifest.policy_provenance, config, spec,
+                               &provenance_error)) {
+            set_error(error, "V3 admission policy provenance is invalid: " + provenance_error);
+            return std::nullopt;
+        }
+        for (const auto& record : envelope.records) {
+            if (!validate_record_attribution(envelope, record,
+                                             "V3 admission record attribution", provenance_error)) {
+                set_error(error, std::move(provenance_error));
+                return std::nullopt;
+            }
+        }
+
+        const auto replay = replay_v3::replay_episode_v3(envelope, evidence, options);
+        if (!replay.accepted) {
+            set_error(error, "V3 replay proof failed: " + replay.error);
+            return std::nullopt;
+        }
+        return AdmissionVerification(
+            public_gameplay_trajectory_id_v3(envelope), trajectory_record_id_v3(envelope),
+            envelope.manifest.environment_semantic_id,
+            envelope.manifest.episode_semantic_id, replay.final_engine_step_index);
+    } catch (const std::exception& exception) {
+        set_error(error, exception.what());
+        return std::nullopt;
+    } catch (...) {
+        set_error(error, "V3 admission threw");
+        return std::nullopt;
+    }
+}
+
+std::optional<AdmissionVerification> verify_collection_for_admission_v3(
+    const CandidateTrajectoryShardV3& shard,
+    const RestrictedCollectionEvidenceBundleV3& restricted_evidence,
+    const std::string_view candidate_shard_artifact_sha256,
+    const std::string_view restricted_evidence_artifact_sha256,
+    const replay_v3::ReplayOptions& options,
+    const ProvenanceResolver& resolver,
+    std::string* error) {
+    try {
+        (void)canonical_candidate_trajectory_shard_bytes_v3(shard);
+        (void)canonical_restricted_collection_evidence_bundle_bytes_v3(
+            restricted_evidence);
+        const auto computed_shard = candidate_shard_artifact_sha256_v3(shard);
+        const auto computed_evidence =
+            restricted_collection_evidence_artifact_sha256_v3(restricted_evidence);
+        if (candidate_shard_artifact_sha256 != computed_shard ||
+            restricted_evidence_artifact_sha256 != computed_evidence ||
+            restricted_evidence.candidate_shard_artifact_sha256 != computed_shard ||
+            shard.entries.empty()) {
+            set_error(error, "V3 collection artifact digest binding is invalid");
+            return std::nullopt;
+        }
+
+        std::vector<AdmissionEntryCommitmentV3> entries;
+        entries.reserve(shard.entries.size());
+        std::size_t interrupted_count = 0;
+        for (const auto& shard_entry : shard.entries) {
+            const auto decoded = decode_episode_envelope_v3(shard_entry.envelope_bytes);
+            if (!decoded) {
+                set_error(error, "V3 shard contains an undecodable envelope");
+                return std::nullopt;
+            }
+            const auto& envelope = *decoded.value;
+            const auto envelope_digest = trace::sha256_bytes(shard_entry.envelope_bytes);
+            std::optional<RestrictedReplayEvidenceV3> evidence;
+            const auto evidence_it = std::lower_bound(
+                restricted_evidence.interrupted_episodes.begin(),
+                restricted_evidence.interrupted_episodes.end(), envelope_digest,
+                [](const auto& entry, const std::string_view key) {
+                    return entry.episode_envelope_sha256 < key;
+                });
+            const bool interrupted =
+                std::holds_alternative<InterruptedClosureV3>(envelope.closure);
+            if (interrupted) {
+                ++interrupted_count;
+                if (evidence_it == restricted_evidence.interrupted_episodes.end() ||
+                    evidence_it->episode_envelope_sha256 != envelope_digest) {
+                    set_error(error, "V3 interrupted envelope lacks restricted evidence");
+                    return std::nullopt;
+                }
+                evidence = evidence_it->evidence;
+            } else if (evidence_it != restricted_evidence.interrupted_episodes.end() &&
+                       evidence_it->episode_envelope_sha256 == envelope_digest) {
+                set_error(error, "V3 non-interrupted envelope has interruption evidence");
+                return std::nullopt;
+            }
+
+            std::string episode_error;
+            const auto verified = verify_episode_for_admission_v3(
+                envelope, evidence, options, resolver, &episode_error);
+            if (!verified.has_value()) {
+                set_error(error, std::move(episode_error));
+                return std::nullopt;
+            }
+            AdmissionEntryCommitmentV3 commitment;
+            commitment.trajectory_record_id = verified->trajectory_record_id();
+            commitment.public_gameplay_trajectory_id =
+                verified->public_gameplay_trajectory_id();
+            commitment.environment_semantic_id = verified->environment_semantic_id();
+            commitment.episode_semantic_id = verified->episode_semantic_id();
+            commitment.episode_envelope_sha256 = envelope_digest;
+            commitment.closure_kind = interrupted ? 1 : 0;
+            entries.push_back(std::move(commitment));
+        }
+
+        if (restricted_evidence.interrupted_episodes.size() != interrupted_count) {
+            set_error(error, "V3 restricted evidence contains an unreferenced interrupted episode");
+            return std::nullopt;
+        }
+        std::sort(entries.begin(), entries.end(), [](const auto& left, const auto& right) {
+            return left.trajectory_record_id < right.trajectory_record_id;
+        });
+        if (std::adjacent_find(
+                entries.begin(), entries.end(), [](const auto& left, const auto& right) {
+                    return left.trajectory_record_id == right.trajectory_record_id;
+                }) != entries.end()) {
+            set_error(error, "V3 collection admission contains a duplicate trajectory record ID");
+            return std::nullopt;
+        }
+        if (entries.empty()) {
+            set_error(error, "V3 collection admission produced no commitments");
+            return std::nullopt;
+        }
+        const auto first_public_gameplay_id = entries.front().public_gameplay_trajectory_id;
+        const auto first_trajectory_record_id = entries.front().trajectory_record_id;
+        const auto first_environment_id = entries.front().environment_semantic_id;
+        const auto first_episode_id = entries.front().episode_semantic_id;
+        return AdmissionVerification(
+            first_public_gameplay_id, first_trajectory_record_id, first_environment_id,
+            first_episode_id, 0, std::string(candidate_shard_artifact_sha256),
+            std::string(restricted_evidence_artifact_sha256), std::move(entries));
+    } catch (const std::exception& exception) {
+        set_error(error, exception.what());
+        return std::nullopt;
+    } catch (...) {
+        set_error(error, "V3 collection admission threw");
+        return std::nullopt;
+    }
+}
+
+}  // namespace ygo::trajectory::admission_v3
