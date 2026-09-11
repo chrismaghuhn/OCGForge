@@ -1,6 +1,7 @@
 #include "ygo/policy/teacher.hpp"
 #include "ygo/policy/teacher_v3.hpp"
 #include "ygo/policy/teacher_runner_v4_trajectory.hpp"
+#include "ygo/environment/public_safe_state.hpp"
 #include "ygo/trajectory/codec_v3.hpp"
 #include "ygo/trajectory/trajectory_identity_v3.hpp"
 #include "ygo/teacher/salamangreat_profile.hpp"
@@ -9,10 +10,12 @@
 #include <algorithm>
 #include <array>
 #include <cstdint>
+#include <iterator>
 #include <iostream>
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -49,10 +52,11 @@ const ParticipantPolicyAssignment& assignment_for(
 }
 
 Fixture fixture(const std::uint64_t semantic_action_budget = 1,
-                const std::uint64_t engine_process_budget = 512) {
+                const std::uint64_t engine_process_budget = 512,
+                const std::uint64_t root_seed = 2) {
     Fixture result;
     result.episode_spec.contract_id = std::string(kEpisodicEnvironmentV4ContractId);
-    result.episode_spec.root_seed = 2;
+    result.episode_spec.root_seed = root_seed;
     result.run_control.engine_process_budget = engine_process_budget;
     result.run_control.semantic_action_budget = semantic_action_budget;
     result.run_control.cancellation.reason = "ADMINISTRATIVE_CANCEL";
@@ -133,7 +137,7 @@ void test_v3_runner_rejects_historical_environment() {
 }
 
 void test_v4_runner_reaches_corrected_unselect_boundary() {
-    auto value = fixture(256, 4096);
+    auto value = fixture(256, 4096, 4);
     auto created = TeacherRunnerV4TrajectoryRunner::create(
         TeacherRunnerV4TrajectoryConfig{value.environment_config, value.episode_spec,
                                         value.run_control, value.policy_provenance,
@@ -144,28 +148,111 @@ void test_v4_runner_reaches_corrected_unselect_boundary() {
     require(static_cast<bool>(result) && result.envelope.has_value(),
             "V4 corrected prefix did not seal a V3 envelope: " + result.diagnostic);
 
-    bool saw_unselect = false;
-    bool saw_selected_select = false;
-    for (const auto& record : result.envelope->records) {
-        if (record.frame.request.kind != EnvironmentDecisionKind::UnselectCard) {
-            continue;
+    constexpr std::string_view hiita_locator =
+        "p1:EXTRA_DECK:public:48815792:0";
+    const auto exposes_hiita = [](const auto& record) {
+        const auto decoded = decode_canonical_public_safe_state(
+            record.frame.public_observation.canonical_safe_state_bytes());
+        if (!decoded) {
+            return false;
         }
-        saw_unselect = true;
-        const auto selected = std::find_if(
-            record.frame.request.candidates.begin(),
-            record.frame.request.candidates.end(),
-            [&](const auto& candidate) {
-                return candidate.public_action_key == record.selected_public_action_key;
+        const auto entity = std::find_if(
+            decoded.value->entities().begin(), decoded.value->entities().end(),
+            [](const auto& value) {
+                return value.locator.value ==
+                           "p1:EXTRA_DECK:public:48815792:0" &&
+                       value.identity_known && value.passcode.has_value() &&
+                       *value.passcode == 48815792;
             });
-        require(selected != record.frame.request.candidates.end(),
-                "V4 unselect record selected an absent public key");
-        if (selected->action_kind == EnvironmentActionKind::CardSelection &&
-            selected->card_selection_operation == PublicCardSelectionOperation::Select) {
-            saw_selected_select = true;
+        return entity != decoded.value->entities().end();
+    };
+
+    const auto& records = result.envelope->records;
+    const auto hiita_it = std::find_if(
+        records.begin(), records.end(), [&](const auto& record) {
+            if (record.frame.request.kind != EnvironmentDecisionKind::IdleCommand ||
+                !exposes_hiita(record)) {
+                return false;
+            }
+            const auto candidate = std::find_if(
+                record.frame.request.candidates.begin(),
+                record.frame.request.candidates.end(),
+                [](const auto& value) {
+                    return value.action_kind == EnvironmentActionKind::IdleCommand &&
+                           value.source_reference.has_value() &&
+                           value.source_reference->kind ==
+                               PublicCardReferenceKind::VisibleCard &&
+                           value.source_reference->observation_locator ==
+                               "p1:EXTRA_DECK:public:48815792:0";
+                });
+            return candidate != record.frame.request.candidates.end() &&
+                   candidate->source_reference->observation_locator == hiita_locator &&
+                   candidate->public_action_key == record.selected_public_action_key;
+        });
+    require(hiita_it != records.end(),
+            "V4 corrected prefix did not select public Hiita 48815792");
+    require(std::next(hiita_it) != records.end(),
+            "V4 Hiita selection has no following decision record");
+
+    const auto& hiita_record = *hiita_it;
+    const auto& material_record = *std::next(hiita_it);
+    require(material_record.frame.decision_index ==
+                hiita_record.frame.decision_index + 1 &&
+                material_record.frame.request.kind == EnvironmentDecisionKind::UnselectCard,
+            "V4 Hiita selection was not immediately followed by UnselectCard");
+
+    const auto selected_material = std::find_if(
+        material_record.frame.request.candidates.begin(),
+        material_record.frame.request.candidates.end(),
+        [&](const auto& candidate) {
+            return candidate.public_action_key == material_record.selected_public_action_key;
+        });
+    require(selected_material != material_record.frame.request.candidates.end(),
+            "V4 material record selected an absent public key");
+    require(selected_material->action_kind == EnvironmentActionKind::CardSelection &&
+                selected_material->card_selection_operation ==
+                    PublicCardSelectionOperation::Select,
+            "V4 corrected material selection did not select a material candidate");
+
+    std::size_t select_candidates = 0;
+    std::size_t cancel_candidates = 0;
+    for (const auto& candidate : material_record.frame.request.candidates) {
+        if (candidate.action_kind == EnvironmentActionKind::CardSelection) {
+            require(candidate.card_selection_operation ==
+                        PublicCardSelectionOperation::Select,
+                    "V4 material domain contained a non-Select card operation");
+            ++select_candidates;
+        } else if (candidate.action_kind == EnvironmentActionKind::Cancel) {
+            require(candidate.card_selection_operation ==
+                        PublicCardSelectionOperation::None,
+                    "V4 Cancel candidate carried Select/Unselect metadata");
+            ++cancel_candidates;
+        } else {
+            throw std::runtime_error(
+                "V4 material domain contained an unexpected action kind");
         }
     }
-    require(saw_unselect && saw_selected_select,
-            "V4 corrected prefix did not accept a public Select continuation");
+    require(select_candidates == 2 && cancel_candidates == 1,
+            "V4 corrected material domain was not exactly two Selects plus Cancel");
+    require(selected_material->action_kind == EnvironmentActionKind::CardSelection,
+            "V4 Teacher selected Cancel instead of a material candidate");
+
+    require(hiita_record.successor.kind == SuccessorKind::NextFrame &&
+                hiita_record.successor.next_frame.has_value() &&
+                hiita_record.successor.next_frame->kind ==
+                    NextFrameTargetKind::NextDecisionRecord &&
+                hiita_record.successor.next_frame->next_decision_index ==
+                    material_record.frame.decision_index &&
+                hiita_record.successor.next_frame->next_public_semantic_decision_id ==
+                    material_record.frame.public_semantic_decision_id,
+            "V4 Hiita selection did not produce an accepted successor");
+    require(material_record.successor.kind == SuccessorKind::NextFrame &&
+                material_record.successor.next_frame.has_value() &&
+                material_record.successor.next_frame->kind ==
+                    NextFrameTargetKind::InterruptionPendingUnactedFrame &&
+                material_record.successor.next_frame->next_decision_index ==
+                    material_record.frame.decision_index + 1,
+            "V4 accepted material selection lacks the pending successor boundary");
 }
 
 }  // namespace

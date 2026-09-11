@@ -919,7 +919,9 @@ bool read_collection_record_v3_direct(ByteReader& reader, DecisionRecordV3& valu
 }
 
 void validate_v3_terminal_closure(const TerminalClosureV3& value) {
-    if (value.winner > 2 || value.win_reason == 255 ||
+    if (value.terminal_view_player_0.perspective_player != 0 ||
+        value.terminal_view_player_1.perspective_player != 1 ||
+        value.winner > 2 || value.win_reason == 255 ||
         (value.semantic_action_count == 0
              ? value.last_decision_index.has_value()
              : !value.last_decision_index.has_value() ||

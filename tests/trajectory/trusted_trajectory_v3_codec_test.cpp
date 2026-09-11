@@ -213,6 +213,40 @@ void test_v3_nested_canonical_round_trip_and_tamper_rejection() {
     require(decoded, "V3 episode envelope did not round-trip");
     require(canonical_episode_envelope_bytes_v3(*decoded.value) == bytes,
             "V3 envelope decode/re-encode changed canonical bytes");
+
+    auto swapped_perspectives = value;
+    auto& swapped_terminal = std::get<TerminalClosureV3>(swapped_perspectives.closure);
+    std::swap(swapped_terminal.terminal_view_player_0.perspective_player,
+              swapped_terminal.terminal_view_player_1.perspective_player);
+    swapped_terminal.terminal_view_player_0_digest = public_observation_digest(
+        swapped_terminal.terminal_view_player_0);
+    swapped_terminal.terminal_view_player_1_digest = public_observation_digest(
+        swapped_terminal.terminal_view_player_1);
+    bool swapped_rejected = false;
+    try {
+        (void)canonical_episode_envelope_bytes_v3(swapped_perspectives);
+    } catch (...) {
+        swapped_rejected = true;
+    }
+    require(swapped_rejected,
+            "V3 codec accepted terminal views with swapped perspectives");
+
+    auto wrong_perspective = value;
+    auto& wrong_terminal = std::get<TerminalClosureV3>(wrong_perspective.closure);
+    wrong_terminal.terminal_view_player_0.perspective_player = 1;
+    wrong_terminal.terminal_view_player_0_digest = public_observation_digest(
+        wrong_terminal.terminal_view_player_0);
+    wrong_terminal.terminal_view_player_1_digest = public_observation_digest(
+        wrong_terminal.terminal_view_player_1);
+    bool wrong_rejected = false;
+    try {
+        (void)canonical_episode_envelope_bytes_v3(wrong_perspective);
+    } catch (...) {
+        wrong_rejected = true;
+    }
+    require(wrong_rejected,
+            "V3 codec accepted a terminal view with the wrong perspective");
+
     require(!decode_episode_envelope_v3(canonical_episode_envelope_bytes(
                 trajectory_test::terminal_envelope(19))),
             "V3 envelope decoder accepted a V1 envelope");
