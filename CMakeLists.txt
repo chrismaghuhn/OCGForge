@@ -726,6 +726,12 @@ target_link_libraries(teacher_runner_v4_trajectory_test PRIVATE ygo_policy)
 add_test(NAME teacher_runner_v4_trajectory_test
          COMMAND teacher_runner_v4_trajectory_test)
 
+add_executable(teacher_runner_v4_hiita_reproducer_test
+               tests/teacher/teacher_runner_v4_hiita_reproducer_test.cpp)
+target_link_libraries(teacher_runner_v4_hiita_reproducer_test PRIVATE ygo_policy)
+add_test(NAME teacher_runner_v4_hiita_reproducer_test
+         COMMAND teacher_runner_v4_hiita_reproducer_test)
+
 add_executable(phase4b_teacher_identity_regression_test
                tests/teacher/phase4b_teacher_identity_regression_test.cpp)
 target_link_libraries(phase4b_teacher_identity_regression_test PRIVATE ygo_policy)
@@ -911,6 +917,14 @@ target_include_directories(episodic_environment_v4_public_operation_test PRIVATE
 target_link_libraries(episodic_environment_v4_public_operation_test PRIVATE ygo_m4)
 add_test(NAME episodic_environment_v4_public_operation_test
          COMMAND episodic_environment_v4_public_operation_test)
+
+add_executable(episodic_environment_v4_hiita_reproducer_test
+               tests/episodic/episodic_environment_v4_hiita_reproducer_test.cpp)
+target_include_directories(episodic_environment_v4_hiita_reproducer_test PRIVATE
+                           "${CMAKE_SOURCE_DIR}/src/environment")
+target_link_libraries(episodic_environment_v4_hiita_reproducer_test PRIVATE ygo_policy)
+add_test(NAME episodic_environment_v4_hiita_reproducer_test
+         COMMAND episodic_environment_v4_hiita_reproducer_test)
 
 add_executable(episodic_environment_v4_identity_test
                tests/episodic/episodic_environment_v4_identity_test.cpp)
