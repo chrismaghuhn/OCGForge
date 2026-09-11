@@ -1,4 +1,5 @@
 #include "ygo/phase6/task7_dataset_authority_provisioning_v3.hpp"
+#include "authority_publisher.hpp"
 #include "diagnostic_writer.hpp"
 
 #include <filesystem>
@@ -6,6 +7,7 @@
 #include <iostream>
 #include <memory>
 #include <string>
+#include <system_error>
 
 namespace {
 
@@ -48,6 +50,38 @@ int main(int argc, char** argv) {
         return 2;
     }
     try {
+        const auto authority_output_path = std::filesystem::path(output_path);
+        const auto diagnostics_output_path =
+            std::filesystem::path(diagnostics_path);
+        if (diagnostics_path_seen &&
+            (!ygo::phase6::tooling::publication_paths_are_distinct(
+                 authority_output_path, diagnostics_output_path) ||
+             !ygo::phase6::tooling::publication_paths_are_distinct(
+                 std::filesystem::path(authority_output_path.string() + ".staging"),
+                 diagnostics_output_path))) {
+            std::cerr << "Task7 V3 authority and diagnostics paths must differ\n";
+            return 2;
+        }
+        const auto staging_output_path = std::filesystem::path(
+            authority_output_path.string() + ".staging");
+        std::error_code output_path_error;
+        const bool authority_output_exists =
+            std::filesystem::exists(authority_output_path, output_path_error);
+        if (output_path_error) {
+            std::cerr << "Task7 V3 authority output path could not be inspected\n";
+            return 2;
+        }
+        output_path_error.clear();
+        const bool staging_output_exists =
+            std::filesystem::exists(staging_output_path, output_path_error);
+        if (output_path_error) {
+            std::cerr << "Task7 V3 authority staging path could not be inspected\n";
+            return 2;
+        }
+        if (authority_output_exists || staging_output_exists) {
+            std::cerr << "Task7 V3 authority output path must be fresh\n";
+            return 2;
+        }
         const auto schedule = ygo::phase6::make_task7_collection_schedule_v3(source_commit);
         std::unique_ptr<ygo::phase6::tooling::Task7V3ProvisionerDiagnosticWriter>
             diagnostics;
@@ -96,33 +130,29 @@ int main(int argc, char** argv) {
                       << diagnostics->error() << '\n';
             return 1;
         }
-        const auto bytes =
-            ygo::phase6::canonical_task7_v3_authority_bytes(*result.value);
-        std::ofstream output(output_path, std::ios::binary | std::ios::trunc);
-        if (!output) {
+        const auto bytes = ygo::phase6::canonical_task7_v3_authority_bytes(
+            *result.value);
+        const auto authority_id = ygo::phase6::task7_v3_authority_identity(
+            *result.value);
+        ygo::phase6::tooling::AuthorityPublicationFinalizer finalizer;
+        if (diagnostics) {
+            finalizer = [&diagnostics, &schedule] {
+                return diagnostics->write_run_end(
+                    schedule.jobs.size(), true, true);
+            };
+        }
+        std::string publication_error;
+        if (!ygo::phase6::tooling::publish_staged_authority(
+                authority_output_path, bytes, finalizer, &publication_error)) {
             if (diagnostics) {
                 diagnostics->write_run_end(schedule.jobs.size(), false, false);
             }
-            std::cerr << "Task7 V3 authority output could not be opened\n";
-            return 1;
-        }
-        output.write(reinterpret_cast<const char*>(bytes.data()),
-                     static_cast<std::streamsize>(bytes.size()));
-        if (!output) {
-            if (diagnostics) {
-                diagnostics->write_run_end(schedule.jobs.size(), false, false);
-            }
-            std::cerr << "Task7 V3 authority output could not be written\n";
-            return 1;
-        }
-        if (diagnostics &&
-            !diagnostics->write_run_end(schedule.jobs.size(), true, true)) {
-            std::cerr << "Task7 V3 diagnostics output failed: "
-                      << diagnostics->error() << '\n';
+            std::cerr << "Task7 V3 authority publication failed: "
+                      << publication_error << '\n';
             return 1;
         }
         std::cout << "TASK7_V3_AUTHORITY_ID="
-                  << ygo::phase6::task7_v3_authority_identity(*result.value) << '\n'
+                  << authority_id << '\n'
                   << "TASK7_V3_AUTHORITY_BYTES=" << bytes.size() << '\n';
         return 0;
     } catch (const std::exception& error) {

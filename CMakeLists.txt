@@ -330,6 +330,7 @@ add_test(NAME phase6_task9e_v4_trajectory_diagnostic_test
 
 add_executable(phase6_task9d_v3_provisioner_diagnostics_test
                tools/phase6_task7_v3_provisioner/diagnostic_writer.cpp
+               tools/phase6_task7_v3_provisioner/authority_publisher.cpp
                tests/phase6/phase6_task9d_v3_provisioner_diagnostics_test.cpp)
 target_include_directories(phase6_task9d_v3_provisioner_diagnostics_test PRIVATE
                            "${CMAKE_SOURCE_DIR}")
@@ -493,7 +494,8 @@ target_link_libraries(phase6_task7_v2_provisioner PRIVATE ygo_task7_v2)
 
 add_executable(phase6_task7_v3_provisioner
                tools/phase6_task7_v3_provisioner/main.cpp
-               tools/phase6_task7_v3_provisioner/diagnostic_writer.cpp)
+               tools/phase6_task7_v3_provisioner/diagnostic_writer.cpp
+               tools/phase6_task7_v3_provisioner/authority_publisher.cpp)
 target_link_libraries(phase6_task7_v3_provisioner PRIVATE ygo_task7_v3)
 
 add_executable(phase6_task7_v2_diagnostic

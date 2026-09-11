@@ -1,4 +1,5 @@
 #include "tools/phase6_task7_v3_provisioner/diagnostic_writer.hpp"
+#include "tools/phase6_task7_v3_provisioner/authority_publisher.hpp"
 
 #include "ygo/phase6/task7_dataset_authority_provisioning_v3.hpp"
 
@@ -142,10 +143,68 @@ void test_jsonl_content_and_bounded_job0() {
             "JSONL lacks selected public action key");
 }
 
+void test_atomic_authority_publication() {
+    const auto base = std::filesystem::temp_directory_path() /
+                      "ocgforge_task9d_authority_publication_test.bin";
+    const auto staged = std::filesystem::path(base.string() + ".staging");
+    if (std::filesystem::exists(base) || std::filesystem::exists(staged)) {
+        throw std::runtime_error("authority publication test path already exists");
+    }
+    require(!publication_paths_are_distinct(base, base),
+            "authority/diagnostics path collision was accepted");
+
+    const std::vector<std::uint8_t> bytes = {1, 2, 3, 4};
+    bool finalizer_observed_staging = false;
+    std::string error;
+    const auto finalizer = [&] {
+        finalizer_observed_staging = std::filesystem::exists(staged) &&
+                                     !std::filesystem::exists(base);
+        return false;
+    };
+    require(!publish_staged_authority(base, bytes, finalizer, &error),
+            "final RUN_END failure unexpectedly published authority");
+    require(finalizer_observed_staging && !std::filesystem::exists(base) &&
+                !std::filesystem::exists(staged),
+            "failed finalization left a published or staged authority");
+
+    const auto missing_parent = std::filesystem::temp_directory_path() /
+                                "ocgforge_task9d_missing_publication_parent";
+    if (std::filesystem::exists(missing_parent)) {
+        throw std::runtime_error("authority publication failure path already exists");
+    }
+    const auto unwritable = missing_parent / "authority.bin";
+    require(!publish_staged_authority(unwritable, bytes, {}, &error),
+            "staging write failure unexpectedly succeeded");
+    require(!std::filesystem::exists(unwritable),
+            "staging write failure created final authority");
+
+    bool successful_finalizer_called = false;
+    require(publish_staged_authority(
+                base, bytes,
+                [&] {
+                    successful_finalizer_called = true;
+                    return true;
+                },
+                &error),
+            "successful authority publication failed: " + error);
+    require(successful_finalizer_called && std::filesystem::exists(base),
+            "successful authority publication did not publish final file");
+    std::ifstream input(base, std::ios::binary);
+    const std::vector<std::uint8_t> published(
+        (std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+    require(published == bytes, "published authority bytes changed");
+    input.close();
+    std::error_code cleanup_error;
+    std::filesystem::remove(base, cleanup_error);
+    require(!std::filesystem::exists(staged),
+            "successful authority publication left a staging file");
+}
+
 }  // namespace
 
 int main() {
     try {
+        test_atomic_authority_publication();
         test_jsonl_content_and_bounded_job0();
         std::cout << "phase6_task9d_v3_provisioner_diagnostics_test: PASS\n";
         return 0;
