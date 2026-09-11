@@ -147,13 +147,13 @@ std::vector<std::uint8_t> framed(const std::vector<std::uint8_t>& payload) {
 }
 
 std::vector<std::uint8_t> select_unselect_payload() {
-    std::vector<std::uint8_t> payload = {MSG_SELECT_UNSELECT_CARD, 0, 1, 0};
+    std::vector<std::uint8_t> payload = {MSG_SELECT_UNSELECT_CARD, 0, 0, 1};
     append_u32(payload, 0);
     append_u32(payload, 2);
-    append_u32(payload, 1);
+    append_u32(payload, 2);
     append_card(payload, 801, 0, LOCATION_HAND, 0);
-    append_u32(payload, 1);
-    append_card(payload, 802, 1, LOCATION_HAND, 1);
+    append_card(payload, 802, 0, LOCATION_HAND, 1);
+    append_u32(payload, 0);
     return payload;
 }
 
@@ -276,11 +276,11 @@ void require_decoder_response_equivalence() {
     require(old_request.candidates[0].card_selection_operation ==
                 ygo::protocol::CardSelectionOperation::Unselect &&
                 old_request.candidates[1].card_selection_operation ==
-                    ygo::protocol::CardSelectionOperation::Select &&
+                    ygo::protocol::CardSelectionOperation::Unselect &&
                 new_request.candidates[0].card_selection_operation ==
                     ygo::protocol::CardSelectionOperation::Select &&
                 new_request.candidates[1].card_selection_operation ==
-                    ygo::protocol::CardSelectionOperation::Unselect &&
+                    ygo::protocol::CardSelectionOperation::Select &&
                 new_request.candidates[2].card_selection_operation ==
                     ygo::protocol::CardSelectionOperation::None,
             "historical/corrected operation mapping is not the frozen direction");

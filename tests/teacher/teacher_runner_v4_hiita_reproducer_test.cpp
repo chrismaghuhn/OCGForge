@@ -122,6 +122,15 @@ const TeacherCandidateEvaluationDiagnosticsV3* evaluation_for_key(
     return found == diagnostics.evaluations.end() ? nullptr : &*found;
 }
 
+bool score_lexicographically_greater(const ScoreVector& left,
+                                     const ScoreVector& right) noexcept {
+    for (std::size_t index = 0; index < left.values.size(); ++index) {
+        if (left.values[index] == right.values[index]) continue;
+        return left.values[index] > right.values[index];
+    }
+    return false;
+}
+
 bool is_hiita_idle_frame(const DecisionFrame& frame) {
     if (frame.request.kind != EnvironmentDecisionKind::IdleCommand) return false;
     const auto safe = decode_canonical_public_safe_state(
@@ -250,7 +259,9 @@ void test_teacher_v4_selects_first_hiita_material() {
             "Teacher ranking omitted a supported material or Cancel evaluation");
     const auto progress_index = static_cast<std::size_t>(
         ScoreDimension::ActiveGoalLineOrValidatedRecoveryProgress);
-    require(selected_evaluation->score->values[progress_index] >
+    require(score_lexicographically_greater(*selected_evaluation->score,
+                                             *cancel_evaluation->score) &&
+                selected_evaluation->score->values[progress_index] >
                 cancel_evaluation->score->values[progress_index] &&
                 selected_evaluation->score->values[progress_index] > 0 &&
                 cancel_evaluation->score->values[progress_index] == 0,
