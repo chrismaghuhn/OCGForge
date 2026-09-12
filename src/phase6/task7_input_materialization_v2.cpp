@@ -1187,14 +1187,10 @@ std::vector<std::uint8_t> canonical_task7_materialized_batch_bytes_v2(
     writer.string(batch.source_card_vocabulary_identity);
     writer.u32be(static_cast<std::uint32_t>(batch.samples.size()));
     std::set<std::string> sample_identities;
-    std::set<std::string> source_record_ids;
     for (std::size_t index = 0; index < batch.samples.size(); ++index) {
         const auto& sample = batch.samples[index];
         if (!sample_identities.insert(sample.sample_identity).second) {
             throw std::invalid_argument("Task7 V2 materialized batch contains duplicate sample identity");
-        }
-        if (!source_record_ids.insert(sample.source_trajectory_record_id).second) {
-            throw std::invalid_argument("Task7 V2 materialized batch contains duplicate source record");
         }
         if (sample.source_task7_authority_identity !=
                 batch.source_task7_authority_identity ||

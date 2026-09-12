@@ -320,8 +320,12 @@ void test_v2_physical_negative_matrix() {
     second_record.sample_identity =
         ygo::phase6::materialized_sample_identity_v2(second_record);
     duplicate_record_batch.samples.push_back(std::move(second_record));
-    expect_reject(duplicate_record_batch,
-                  "V2 batch accepted duplicate source record");
+    const auto duplicate_record_bytes =
+        ygo::phase6::canonical_task7_materialized_batch_bytes_v2(duplicate_record_batch);
+    require(!duplicate_record_bytes.empty() &&
+                duplicate_record_batch.samples[0].sample_identity !=
+                    duplicate_record_batch.samples[1].sample_identity,
+            "V2 batch rejected distinct decisions from one source episode");
 
     auto missing_record_batch = valid_batch;
     missing_record_batch.ragged.batch_size = 2;
