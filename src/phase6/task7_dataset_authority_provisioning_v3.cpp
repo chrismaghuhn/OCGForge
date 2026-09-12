@@ -27,6 +27,41 @@
 namespace ygo::phase6 {
 namespace {
 
+struct Task7MaterializationSourceSampleV2 final {
+    const Phase6BcSampleV2* sample = nullptr;
+    std::string source_task7_authority_identity;
+    std::string source_dataset_manifest_identity;
+    std::string source_dataset_semantic_identity;
+    std::string source_training_dataset_split_identity;
+    std::string source_card_vocabulary_identity;
+};
+
+struct Task7MaterializationSourceBatchV2 final {
+    const model::RaggedModelBatchV2* ragged = nullptr;
+    const model::CardVocabularyV1* vocabulary = nullptr;
+    std::string source_task7_authority_identity;
+    std::string source_dataset_manifest_identity;
+    std::string source_dataset_semantic_identity;
+    std::string source_training_dataset_split_identity;
+    std::string source_card_vocabulary_identity;
+    std::vector<Task7MaterializationSourceSampleV2> samples;
+};
+
+class MaterializationFailure final {
+public:
+    explicit MaterializationFailure(const Task7MaterializationErrorCodeV2 code)
+        : code_(code) {}
+
+    Task7MaterializationErrorCodeV2 code() const noexcept { return code_; }
+
+private:
+    Task7MaterializationErrorCodeV2 code_;
+};
+
+[[noreturn]] void fail_materialization(const Task7MaterializationErrorCodeV2 code) {
+    throw MaterializationFailure(code);
+}
+
 using DiagnosticClock = std::chrono::steady_clock;
 
 void emit_diagnostic(const diagnostics::Task7DiagnosticObserver& observer,
@@ -571,6 +606,151 @@ trajectory::dataset_v3::DatasetManifestV3 make_single_member_manifest(
         throw std::invalid_argument("Task7 V3 authority member manifest is invalid: " + error);
     }
     return manifest;
+}
+
+void validate_materialization_source_identity_strings(
+    const Task7MaterializationSourceBatchV2& source) {
+    if (!trajectory::is_canonical_identity(
+            source.source_task7_authority_identity,
+            "phase6_task7_dataset_authority.v3.")) {
+        fail_materialization(Task7MaterializationErrorCodeV2::InvalidAuthorityBinding);
+    }
+    if (!trajectory::is_canonical_identity(
+            source.source_dataset_manifest_identity,
+            kTask7V2DatasetManifestIdentityPrefix) ||
+        !trajectory::is_lower_hex_digest(source.source_dataset_semantic_identity)) {
+        fail_materialization(Task7MaterializationErrorCodeV2::InvalidDatasetBinding);
+    }
+    if (!trajectory::is_canonical_identity(
+            source.source_training_dataset_split_identity,
+            "phase6_dataset_split.v1.")) {
+        fail_materialization(Task7MaterializationErrorCodeV2::InvalidSplitBinding);
+    }
+}
+
+void validate_materialization_source_binding(
+    const Task7MaterializationSourceBatchV2& source) {
+    validate_materialization_source_identity_strings(source);
+    if (source.vocabulary == nullptr ||
+        source.vocabulary->identity() != source.source_card_vocabulary_identity) {
+        fail_materialization(Task7MaterializationErrorCodeV2::InvalidVocabularyBinding);
+    }
+}
+
+void validate_materialization_sample_binding(
+    const Task7MaterializationSourceBatchV2& source,
+    const Task7MaterializationSourceSampleV2& value,
+    const model::EncodedModelInputV2& reconstructed) {
+    if (value.sample == nullptr ||
+        value.source_task7_authority_identity != source.source_task7_authority_identity ||
+        value.source_dataset_manifest_identity != source.source_dataset_manifest_identity ||
+        value.source_dataset_semantic_identity != source.source_dataset_semantic_identity ||
+        value.source_training_dataset_split_identity !=
+            source.source_training_dataset_split_identity ||
+        value.source_card_vocabulary_identity != source.source_card_vocabulary_identity) {
+        fail_materialization(Task7MaterializationErrorCodeV2::InvalidSource);
+    }
+    const auto& sample = *value.sample;
+    const auto expected_encoded = model::encode_model_input_v2(
+        sample.logical_model_input, *source.vocabulary);
+    if (sample.schema_id != kPhase6BcSampleIdentityDomainV2 ||
+        phase6_sample_identity_v2(sample) != sample.sample_identity ||
+        !trajectory::is_canonical_identity(sample.trajectory_record_id,
+                                            "trajectory_record.v3.") ||
+        !trajectory::is_lower_hex_digest(sample.episode_semantic_id) ||
+        sample.encoded_model_input.card_vocabulary_identity !=
+            source.source_card_vocabulary_identity ||
+        !expected_encoded || !expected_encoded.value.has_value() ||
+        model::canonical_encoded_model_input_bytes(*expected_encoded.value) !=
+            model::canonical_encoded_model_input_bytes(sample.encoded_model_input) ||
+        model::canonical_encoded_model_input_bytes(sample.encoded_model_input) !=
+            model::canonical_encoded_model_input_bytes(reconstructed)) {
+        fail_materialization(Task7MaterializationErrorCodeV2::ModelInputMismatch);
+    }
+    (void)model::canonical_logical_model_input_bytes(sample.logical_model_input);
+    (void)model::canonical_model_supervision_sample_bytes_v2(sample.supervision);
+    if (sample.supervision.schema_id != model::kModelSupervisionSampleV2SchemaId ||
+        sample.supervision.model_input_identity !=
+            model::model_input_identity_v2(sample.logical_model_input,
+                                           sample.encoded_model_input) ||
+        sample.supervision.selected_public_action_key.empty() ||
+        sample.supervision.candidate_ordinal >= reconstructed.candidate_features.size() ||
+        reconstructed.routing_keys[sample.supervision.candidate_ordinal] !=
+            sample.supervision.selected_public_action_key) {
+        fail_materialization(Task7MaterializationErrorCodeV2::CandidateDomainMismatch);
+    }
+}
+
+Task7MaterializationErrorV2 make_materialization_error(
+    const Task7MaterializationErrorCodeV2 code) {
+    return {code, std::string(task7_materialization_error_code_name_v2(code))};
+}
+
+Task7MaterializationResultV2 materialization_failure(
+    const Task7MaterializationErrorCodeV2 code) noexcept {
+    Task7MaterializationResultV2 result;
+    result.error = make_materialization_error(code);
+    return result;
+}
+
+Task7MaterializationResultV2 materialize_task7_input_v2_from_source(
+    const Task7MaterializationSourceBatchV2& source) noexcept {
+    try {
+        if (source.ragged == nullptr || source.samples.empty() ||
+            source.samples.size() != source.ragged->batch_size) {
+            fail_materialization(Task7MaterializationErrorCodeV2::InvalidSource);
+        }
+        validate_materialization_source_binding(source);
+        const auto& ragged = *source.ragged;
+        (void)model::canonical_model_batch_layout_bytes_v2(ragged);
+
+        Task7MaterializedBatchV2 output;
+        output.configuration_identity = task7_materialization_config_identity_v2();
+        output.source_task7_authority_identity = source.source_task7_authority_identity;
+        output.source_dataset_manifest_identity = source.source_dataset_manifest_identity;
+        output.source_dataset_semantic_identity = source.source_dataset_semantic_identity;
+        output.source_training_dataset_split_identity =
+            source.source_training_dataset_split_identity;
+        output.source_card_vocabulary_identity = source.source_card_vocabulary_identity;
+        output.ragged = ragged;
+        output.samples.reserve(source.samples.size());
+        for (std::size_t index = 0; index < source.samples.size(); ++index) {
+            const auto reconstructed =
+                model::reconstruct_model_batch_sample_v2(ragged, index);
+            validate_materialization_sample_binding(source, source.samples[index],
+                                                    reconstructed);
+            const auto& source_sample = *source.samples[index].sample;
+            Task7MaterializedSampleV2 sample;
+            sample.source_task7_authority_identity =
+                source.source_task7_authority_identity;
+            sample.source_dataset_manifest_identity = source.source_dataset_manifest_identity;
+            sample.source_dataset_semantic_identity = source.source_dataset_semantic_identity;
+            sample.source_training_dataset_split_identity =
+                source.source_training_dataset_split_identity;
+            sample.source_card_vocabulary_identity = source.source_card_vocabulary_identity;
+            sample.source_trajectory_record_id = source_sample.trajectory_record_id;
+            sample.source_episode_semantic_id = source_sample.episode_semantic_id;
+            sample.source_public_semantic_decision_id =
+                source_sample.supervision.source_public_semantic_decision_id;
+            sample.source_model_input_identity_v2 =
+                source_sample.supervision.model_input_identity;
+            sample.supervision = source_sample.supervision;
+            sample.logical_model_input = source_sample.logical_model_input;
+            sample.encoded_model_input = reconstructed;
+            sample.routing_keys = reconstructed.routing_keys;
+            sample.canonical_bytes = canonical_task7_materialized_sample_bytes_v2(sample);
+            sample.sample_identity = materialized_sample_identity_v2(sample);
+            output.samples.push_back(std::move(sample));
+        }
+        output.canonical_bytes = canonical_task7_materialized_batch_bytes_v2(output);
+        return {std::optional<Task7MaterializedBatchV2>(std::move(output)), std::nullopt};
+    } catch (const MaterializationFailure& error) {
+        return materialization_failure(error.code());
+    } catch (const std::bad_alloc&) {
+        return materialization_failure(Task7MaterializationErrorCodeV2::InternalFailure);
+    } catch (...) {
+        return materialization_failure(Task7MaterializationErrorCodeV2::InternalFailure);
+    }
 }
 
 }  // namespace
@@ -1455,7 +1635,7 @@ Task7MaterializationResultV2 materialize_task7_input_v2(
         const auto manifest_bytes =
             trajectory::dataset_v3::canonical_dataset_manifest_bytes_v3(
                 authority_value.dataset_manifest);
-        detail::Task7MaterializationSourceBatchV2 source;
+        Task7MaterializationSourceBatchV2 source;
         source.vocabulary = &authority_value.vocabulary;
         source.source_task7_authority_identity = authority.identity();
         source.source_dataset_manifest_identity =
@@ -1463,8 +1643,7 @@ Task7MaterializationResultV2 materialize_task7_input_v2(
             trace::sha256_bytes(manifest_bytes);
         source.source_dataset_semantic_identity =
             authority_value.dataset_manifest.dataset_semantic_id;
-        source.source_training_dataset_split_identity =
-            authority_value.split.split_identity;
+        source.source_training_dataset_split_identity = authority_value.split.split_identity;
         source.source_card_vocabulary_identity = authority_value.vocabulary.identity();
 
         std::vector<model::EncodedModelInputV2> encoded;
@@ -1492,7 +1671,7 @@ Task7MaterializationResultV2 materialize_task7_input_v2(
             return result;
         }
         source.ragged = &*ragged.value;
-        return detail::materialize_task7_input_v2(source);
+        return materialize_task7_input_v2_from_source(source);
     } catch (const std::exception& exception) {
         Task7MaterializationResultV2 result;
         result.error = Task7MaterializationErrorV2{

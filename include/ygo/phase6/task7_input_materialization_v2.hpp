@@ -38,6 +38,8 @@ struct Task7MaterializedSampleV2 final {
     std::string source_card_vocabulary_identity;
     std::string source_trajectory_record_id;
     std::string source_episode_semantic_id;
+    std::string source_public_semantic_decision_id;
+    std::string source_model_input_identity_v2;
     model::ModelSupervisionSampleV2 supervision;
     model::LogicalModelInputV2 logical_model_input;
     model::EncodedModelInputV2 encoded_model_input;
@@ -105,34 +107,5 @@ std::string materialized_batch_identity_v2(
 
 Task7MaterializationResultV2 materialize_task7_input_v2(
     const VerifiedTask7V3Authority& authority) noexcept;
-
-namespace detail {
-
-// Internal source association used only after the public authority handoff.
-// It is not a caller-selectable authority path.
-struct Task7MaterializationSourceSampleV2 final {
-    const Phase6BcSampleV2* sample = nullptr;
-    std::string source_task7_authority_identity;
-    std::string source_dataset_manifest_identity;
-    std::string source_dataset_semantic_identity;
-    std::string source_training_dataset_split_identity;
-    std::string source_card_vocabulary_identity;
-};
-
-struct Task7MaterializationSourceBatchV2 final {
-    const model::RaggedModelBatchV2* ragged = nullptr;
-    const model::CardVocabularyV1* vocabulary = nullptr;
-    std::string source_task7_authority_identity;
-    std::string source_dataset_manifest_identity;
-    std::string source_dataset_semantic_identity;
-    std::string source_training_dataset_split_identity;
-    std::string source_card_vocabulary_identity;
-    std::vector<Task7MaterializationSourceSampleV2> samples;
-};
-
-Task7MaterializationResultV2 materialize_task7_input_v2(
-    const Task7MaterializationSourceBatchV2& source) noexcept;
-
-}  // namespace detail
 
 }  // namespace ygo::phase6

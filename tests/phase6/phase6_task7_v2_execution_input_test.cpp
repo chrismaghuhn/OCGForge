@@ -1,16 +1,20 @@
-#include "ygo/model/model_batch_layout_v2.hpp"
 #include "ygo/model/model_batch_layout.hpp"
+#include "ygo/model/model_batch_layout_v2.hpp"
 #include "ygo/model/encoded_model_input_v2.hpp"
 #include "ygo/model/logical_model_input_v2.hpp"
-#include "ygo/phase6/supervision_dataset_v2.hpp"
-#include "ygo/phase6/task7_dataset_authority_provisioning_v3.hpp"
-#include "ygo/phase6/task7_dataset_authority_provisioning_v2.hpp"
-#include "ygo/phase6/task7_input_materialization_v2.hpp"
 #include "ygo/observation/player_observation.hpp"
+#include "ygo/phase6/supervision_dataset_v2.hpp"
+#include "ygo/phase6/task7_dataset_authority_provisioning_v2.hpp"
+#include "ygo/phase6/task7_dataset_authority_provisioning_v3.hpp"
+#include "ygo/phase6/task7_input_materialization_v2.hpp"
 #include "ygo/trace/sha256.hpp"
+#include "ygo/trajectory/codec.hpp"
 
+#include <algorithm>
 #include <cstdint>
+#include <fstream>
 #include <iostream>
+#include <iterator>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -91,30 +95,48 @@ ModelFixture make_model_fixture() {
     return result;
 }
 
-ygo::phase6::detail::Task7MaterializationSourceBatchV2 make_source(
-    const ModelFixture& fixture,
-    const ygo::model::RaggedModelBatchV2& ragged) {
-    ygo::phase6::detail::Task7MaterializationSourceSampleV2 sample;
-    sample.sample = &fixture.sample;
-    sample.source_task7_authority_identity =
+ygo::phase6::Task7MaterializedSampleV2 make_materialized_sample(
+    const ModelFixture& fixture) {
+    ygo::phase6::Task7MaterializedSampleV2 result;
+    result.source_task7_authority_identity =
         "phase6_task7_dataset_authority.v3." + std::string(64, 'd');
-    sample.source_dataset_manifest_identity =
+    result.source_dataset_manifest_identity =
         "phase6_task7_dataset_manifest.v3." + std::string(64, 'e');
-    sample.source_dataset_semantic_identity = std::string(64, 'f');
-    sample.source_training_dataset_split_identity =
+    result.source_dataset_semantic_identity = std::string(64, 'f');
+    result.source_training_dataset_split_identity =
         "phase6_dataset_split.v1." + std::string(64, '1');
-    sample.source_card_vocabulary_identity = fixture.vocabulary.identity();
+    result.source_card_vocabulary_identity = fixture.vocabulary.identity();
+    result.source_trajectory_record_id = fixture.sample.trajectory_record_id;
+    result.source_episode_semantic_id = fixture.sample.episode_semantic_id;
+    result.source_public_semantic_decision_id =
+        fixture.sample.supervision.source_public_semantic_decision_id;
+    result.source_model_input_identity_v2 =
+        fixture.sample.supervision.model_input_identity;
+    result.supervision = fixture.sample.supervision;
+    result.logical_model_input = fixture.logical;
+    result.encoded_model_input = fixture.encoded;
+    result.routing_keys = fixture.encoded.routing_keys;
+    result.canonical_bytes =
+        ygo::phase6::canonical_task7_materialized_sample_bytes_v2(result);
+    result.sample_identity = ygo::phase6::materialized_sample_identity_v2(result);
+    return result;
+}
 
-    ygo::phase6::detail::Task7MaterializationSourceBatchV2 result;
-    result.ragged = &ragged;
-    result.vocabulary = &fixture.vocabulary;
+ygo::phase6::Task7MaterializedBatchV2 make_materialized_batch(
+    const ModelFixture& fixture, const ygo::model::RaggedModelBatchV2& ragged) {
+    ygo::phase6::Task7MaterializedBatchV2 result;
+    const auto sample = make_materialized_sample(fixture);
+    result.configuration_identity = ygo::phase6::task7_materialization_config_identity_v2();
     result.source_task7_authority_identity = sample.source_task7_authority_identity;
     result.source_dataset_manifest_identity = sample.source_dataset_manifest_identity;
     result.source_dataset_semantic_identity = sample.source_dataset_semantic_identity;
     result.source_training_dataset_split_identity =
         sample.source_training_dataset_split_identity;
     result.source_card_vocabulary_identity = sample.source_card_vocabulary_identity;
-    result.samples.push_back(std::move(sample));
+    result.ragged = ragged;
+    result.samples.push_back(sample);
+    result.canonical_bytes =
+        ygo::phase6::canonical_task7_materialized_batch_bytes_v2(result);
     return result;
 }
 
@@ -183,127 +205,128 @@ void test_v2_ragged_and_padded_batch_roundtrip() {
             "V2 unpadding accepted a changed operation code");
 }
 
-void test_v2_materialization_preserves_semantics() {
+void test_v2_physical_sample_grammar_and_batch_identity() {
     const auto fixture = make_model_fixture();
-    const auto batch = ygo::model::make_ragged_model_batch_v2({fixture.encoded});
-    require(static_cast<bool>(batch), "V2 materialization fixture batch failed");
-    auto source = make_source(fixture, *batch.value);
-    const auto reconstructed =
-        ygo::model::reconstruct_model_batch_sample_v2(*batch.value, 0);
-    require(fixture.sample.schema_id == ygo::phase6::kPhase6BcSampleIdentityDomainV2,
-            "V2 fixture sample schema is detached");
-    require(ygo::phase6::phase6_sample_identity_v2(fixture.sample) ==
-                fixture.sample.sample_identity,
-            "V2 fixture supervision identity is detached");
-    require(fixture.sample.encoded_model_input.card_vocabulary_identity ==
-                source.source_card_vocabulary_identity,
-            "V2 fixture vocabulary binding is detached");
-    require(ygo::model::canonical_encoded_model_input_bytes(
-                fixture.sample.encoded_model_input) ==
-                ygo::model::canonical_encoded_model_input_bytes(reconstructed),
-            "V2 fixture encoded input is detached from its ragged batch");
-    const auto materialized = ygo::phase6::detail::materialize_task7_input_v2(source);
-    require(static_cast<bool>(materialized),
-            "V2 physical materialization failed: " +
-                (materialized.error.has_value() ? materialized.error->diagnostic
-                                                 : "unknown"));
-    require(materialized.value->samples.size() == 1 &&
-                materialized.value->samples.front().encoded_model_input
-                        .candidate_features.size() == 3,
-            "V2 materialization changed sample/candidate cardinality");
-    require(materialized.value->samples.front().encoded_model_input
-                    .candidate_features[0].card_selection_operation_code == 1 &&
-                materialized.value->samples.front().encoded_model_input
-                        .candidate_features[1].card_selection_operation_code == 2,
-            "V2 materialization lost card-selection operation codes");
-    require(materialized.value->samples.front().routing_keys == fixture.encoded.routing_keys,
-            "V2 materialization changed routing-key order");
-    require(ygo::phase6::materialized_sample_identity_v2(
-                materialized.value->samples.front()) ==
-                materialized.value->samples.front().sample_identity,
-            "V2 materialized sample identity did not recompute");
-    require(!materialized.value->canonical_bytes.empty() &&
-                !materialized.value->samples.front().canonical_bytes.empty(),
-            "V2 materialization did not emit canonical bytes");
-    require(ygo::phase6::materialized_batch_identity_v2(*materialized.value) ==
+    const auto ragged = ygo::model::make_ragged_model_batch_v2({fixture.encoded});
+    require(static_cast<bool>(ragged), "V2 physical fixture batch construction failed");
+    (void)ygo::model::canonical_model_batch_layout_bytes_v2(*ragged.value);
+    const auto sample = make_materialized_sample(fixture);
+    const auto bytes =
+        ygo::phase6::canonical_task7_materialized_sample_bytes_v2(sample);
+
+    ygo::trajectory::ByteReader reader(bytes);
+    std::string value;
+    for (int index = 0; index < 15; ++index) {
+        require(reader.string(value), "V2 sample provenance prefix is truncated");
+    }
+    std::uint32_t ordinal = 0;
+    require(reader.u32be(ordinal) && ordinal == 0,
+            "V2 sample supervision ordinal is not canonical");
+    require(reader.string(value), "V2 sample observation digest is missing");
+    std::uint8_t domain_present = 0;
+    require(reader.u8(domain_present) && domain_present <= 1,
+            "V2 sample domain presence is invalid");
+    if (domain_present != 0) {
+        require(reader.string(value), "V2 sample domain digest is truncated");
+    }
+    require(reader.string(value) && value == "sample_header",
+            "V2 sample did not enter the canonical physical table vector");
+    std::uint64_t row_count = 0;
+    require(reader.u64be(row_count) && row_count == 1,
+            "V2 sample header table row count is not canonical");
+    require(!ygo::model::canonical_encoded_model_input_bytes(sample.encoded_model_input)
+                  .empty(),
+            "V2 physical sample lost its encoded source");
+
+    ygo::trajectory::ByteWriter marker_writer;
+    marker_writer.string("card_selection_operation_code");
+    const auto marker = std::move(marker_writer).take();
+    require(std::search(bytes.begin(), bytes.end(), marker.begin(), marker.end()) !=
+                bytes.end(),
+            "V2 physical candidate table omitted card-selection operation column");
+
+    auto batch = make_materialized_batch(fixture, *ragged.value);
+    require(ygo::phase6::materialized_batch_identity_v2(batch) ==
                 std::string(ygo::phase6::kTask7V2MaterializedBatchIdentityPrefix) +
-                    ygo::trace::sha256_bytes(materialized.value->canonical_bytes),
+                    ygo::trace::sha256_bytes(batch.canonical_bytes),
             "V2 materialized batch identity did not recompute");
+    require(!batch.canonical_bytes.empty() && !sample.canonical_bytes.empty(),
+            "V2 physical materialization emitted no canonical bytes");
 }
 
-void test_v2_materialization_rejects_detached_fields() {
+void test_v2_physical_negative_matrix() {
     const auto fixture = make_model_fixture();
-    const auto batch = ygo::model::make_ragged_model_batch_v2({fixture.encoded});
-    require(static_cast<bool>(batch), "V2 negative fixture batch failed");
-    auto source = make_source(fixture, *batch.value);
+    const auto ragged = ygo::model::make_ragged_model_batch_v2({fixture.encoded});
+    require(static_cast<bool>(ragged), "V2 negative fixture batch construction failed");
+    const auto sample = make_materialized_sample(fixture);
+    const auto expect_reject = [](const auto& value, const std::string& message) {
+        bool rejected = false;
+        try {
+            (void)ygo::phase6::canonical_task7_materialized_batch_bytes_v2(value);
+        } catch (...) {
+            rejected = true;
+        }
+        require(rejected, message);
+    };
 
-    auto wrong_authority = source;
-    wrong_authority.source_task7_authority_identity =
-        "phase6_task7_dataset_authority.v2." + std::string(64, '0');
-    require(!ygo::phase6::detail::materialize_task7_input_v2(wrong_authority),
-            "V2 materializer accepted a V2 authority identity");
+    auto detached_sample = sample;
+    detached_sample.source_task7_authority_identity =
+        "phase6_task7_dataset_authority.v3." + std::string(64, '0');
+    auto detached_batch = make_materialized_batch(fixture, *ragged.value);
+    detached_batch.samples.front() = detached_sample;
+    expect_reject(detached_batch, "V2 batch accepted detached authority binding");
 
-    auto wrong_routing = *batch.value;
-    wrong_routing.candidate_routing_keys[0] = wrong_routing.candidate_routing_keys[1];
-    auto wrong_routing_source = make_source(fixture, wrong_routing);
-    require(!ygo::phase6::detail::materialize_task7_input_v2(wrong_routing_source),
-            "V2 materializer accepted detached routing keys");
+    auto changed_operation = sample;
+    changed_operation.encoded_model_input.candidate_features[0]
+        .card_selection_operation_code = 2;
+    bool rejected = false;
+    try {
+        (void)ygo::phase6::canonical_task7_materialized_sample_bytes_v2(
+            changed_operation);
+    } catch (...) {
+        rejected = true;
+    }
+    require(rejected, "V2 sample accepted detached operation metadata");
 
-    auto wrong_manifest = source;
-    wrong_manifest.source_dataset_manifest_identity =
-        "phase6_task7_dataset_manifest.v3." + std::string(64, '0');
-    require(!ygo::phase6::detail::materialize_task7_input_v2(wrong_manifest),
-            "V2 materializer accepted a detached DatasetManifest identity");
+    auto valid_batch = make_materialized_batch(fixture, *ragged.value);
+    auto wrong_routing_batch = valid_batch;
+    wrong_routing_batch.ragged.candidate_routing_keys[0] =
+        wrong_routing_batch.ragged.candidate_routing_keys[1];
+    expect_reject(wrong_routing_batch, "V2 batch accepted detached routing sidecar");
 
-    auto wrong_split = source;
-    wrong_split.source_training_dataset_split_identity =
-        "phase6_dataset_split.v1." + std::string(64, '0');
-    require(!ygo::phase6::detail::materialize_task7_input_v2(wrong_split),
-            "V2 materializer accepted a detached split identity");
+    auto missing_candidate_batch = valid_batch;
+    missing_candidate_batch.ragged.candidate_rows.pop_back();
+    expect_reject(missing_candidate_batch,
+                  "V2 batch accepted a missing source candidate");
 
-    auto wrong_vocabulary = source;
-    wrong_vocabulary.source_card_vocabulary_identity =
-        "model_card_vocabulary.v1." + std::string(64, '0');
-    require(!ygo::phase6::detail::materialize_task7_input_v2(wrong_vocabulary),
-            "V2 materializer accepted a detached vocabulary identity");
+    auto duplicate_ragged = ygo::model::make_ragged_model_batch_v2(
+        {fixture.encoded, fixture.encoded});
+    require(static_cast<bool>(duplicate_ragged),
+            "V2 duplicate fixture batch construction failed");
+    auto duplicate_batch = valid_batch;
+    duplicate_batch.ragged = *duplicate_ragged.value;
+    duplicate_batch.samples.push_back(duplicate_batch.samples.front());
+    expect_reject(duplicate_batch,
+                  "V2 batch accepted duplicate materialized sample identity");
 
-    auto missing_candidate = *batch.value;
-    missing_candidate.candidate_rows.pop_back();
-    auto missing_candidate_source = make_source(fixture, missing_candidate);
-    require(!ygo::phase6::detail::materialize_task7_input_v2(missing_candidate_source),
-            "V2 materializer accepted a candidate-count mismatch");
+    auto duplicate_record_batch = valid_batch;
+    duplicate_record_batch.ragged = *duplicate_ragged.value;
+    auto second_record = duplicate_record_batch.samples.front();
+    second_record.source_public_semantic_decision_id = std::string(64, '9');
+    second_record.supervision.source_public_semantic_decision_id =
+        second_record.source_public_semantic_decision_id;
+    second_record.canonical_bytes =
+        ygo::phase6::canonical_task7_materialized_sample_bytes_v2(second_record);
+    second_record.sample_identity =
+        ygo::phase6::materialized_sample_identity_v2(second_record);
+    duplicate_record_batch.samples.push_back(std::move(second_record));
+    expect_reject(duplicate_record_batch,
+                  "V2 batch accepted duplicate source record");
 
-    auto reordered = *batch.value;
-    std::swap(reordered.candidate_rows[0], reordered.candidate_rows[1]);
-    std::swap(reordered.candidate_routing_keys[0], reordered.candidate_routing_keys[1]);
-    auto reordered_source = make_source(fixture, reordered);
-    require(!ygo::phase6::detail::materialize_task7_input_v2(reordered_source),
-            "V2 materializer accepted a candidate reorder");
-
-    auto changed_continuation = fixture.encoded;
-    changed_continuation.candidate_features[0].continuation_operation_code = 1;
-    const auto changed_continuation_batch =
-        ygo::model::make_ragged_model_batch_v2({changed_continuation});
-    require(!changed_continuation_batch,
-            "V2 batch accepted detached continuation semantics");
-
-    auto changed_submission = fixture.encoded;
-    changed_submission.candidate_features[0].submits_engine_response = false;
-    const auto changed_submission_batch =
-        ygo::model::make_ragged_model_batch_v2({changed_submission});
-    require(static_cast<bool>(changed_submission_batch),
-            "V2 response-flag mutation fixture was rejected too early");
-    auto changed_submission_source = make_source(
-        fixture, *changed_submission_batch.value);
-    require(!ygo::phase6::detail::materialize_task7_input_v2(changed_submission_source),
-            "V2 materializer accepted detached response semantics");
-
-    auto wrong_operation = fixture.encoded;
-    wrong_operation.candidate_features[0].card_selection_operation_code = 2;
-    const auto wrong_operation_batch =
-        ygo::model::make_ragged_model_batch_v2({wrong_operation});
-    require(!wrong_operation_batch,
-            "V2 batch accepted a noncanonical operation/source mismatch");
+    auto missing_record_batch = valid_batch;
+    missing_record_batch.ragged.batch_size = 2;
+    expect_reject(missing_record_batch,
+                  "V2 batch accepted a missing source record");
 }
 
 void test_v3_authority_decoder_rejects_historical_or_malformed_bytes() {
@@ -317,15 +340,46 @@ void test_v3_authority_decoder_rejects_historical_or_malformed_bytes() {
             "V3 authority decoder accepted historical schedule bytes");
 }
 
+std::vector<std::uint8_t> read_binary_file(const std::string& path) {
+    std::ifstream input(path, std::ios::binary);
+    if (!input) throw std::runtime_error("cannot open authority file: " + path);
+    return std::vector<std::uint8_t>(std::istreambuf_iterator<char>(input),
+                                    std::istreambuf_iterator<char>());
+}
+
+void test_public_authority_handoff(const int argc, char** argv) {
+    require(argc <= 2, "usage: phase6_task7_v2_execution_input_test [authority-file]");
+    if (argc == 1) {
+        std::cout << "TASK7_V2_PUBLIC_AUTHORITY_E2E=NOT_RUN_NO_AUTHORITY_ARGUMENT\n";
+        return;
+    }
+
+    const auto bytes = read_binary_file(argv[1]);
+    const auto verified = ygo::phase6::decode_task7_v3_authority(bytes);
+    require(static_cast<bool>(verified),
+            "public V3 authority decoder rejected the supplied authority");
+    const auto dataset = ygo::phase6::materialize_phase6_dataset_v2(*verified.value);
+    require(static_cast<bool>(dataset),
+            "verified V3 authority did not produce a V2 dataset");
+    const auto materialized = ygo::phase6::materialize_task7_input_v2(*verified.value);
+    require(static_cast<bool>(materialized),
+            "verified V3 authority did not produce V2 physical inputs");
+    require(!materialized.value->samples.empty() &&
+                !materialized.value->canonical_bytes.empty(),
+            "public authority handoff produced no V2 materialization");
+    std::cout << "TASK7_V2_PUBLIC_AUTHORITY_E2E=PASS\n";
+}
+
 }  // namespace
 
-int main() {
+int main(int argc, char** argv) {
     try {
         test_v2_configuration_kat();
         test_v2_ragged_and_padded_batch_roundtrip();
-        test_v2_materialization_preserves_semantics();
-        test_v2_materialization_rejects_detached_fields();
+        test_v2_physical_sample_grammar_and_batch_identity();
+        test_v2_physical_negative_matrix();
         test_v3_authority_decoder_rejects_historical_or_malformed_bytes();
+        test_public_authority_handoff(argc, argv);
         std::cout << "TASK7_V2_EXECUTION_INPUT_TEST=PASS\n";
         return 0;
     } catch (const std::exception& error) {
