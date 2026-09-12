@@ -15,8 +15,10 @@
 #include <fstream>
 #include <iostream>
 #include <iterator>
+#include <limits>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -351,6 +353,16 @@ std::vector<std::uint8_t> read_binary_file(const std::string& path) {
                                     std::istreambuf_iterator<char>());
 }
 
+std::string ordered_sample_identity_projection_sha256(
+    const ygo::phase6::Task7MaterializedBatchV2& batch) {
+    require(batch.samples.size() <= std::numeric_limits<std::uint32_t>::max(),
+            "V2 sample identity projection exceeds u32");
+    ygo::trajectory::ByteWriter writer;
+    writer.u32be(static_cast<std::uint32_t>(batch.samples.size()));
+    for (const auto& sample : batch.samples) writer.string(sample.sample_identity);
+    return ygo::trace::sha256_bytes(std::move(writer).take());
+}
+
 void test_public_authority_handoff(const int argc, char** argv) {
     require(argc <= 2, "usage: phase6_task7_v2_execution_input_test [authority-file]");
     if (argc == 1) {
@@ -371,6 +383,44 @@ void test_public_authority_handoff(const int argc, char** argv) {
     require(!materialized.value->samples.empty() &&
                 !materialized.value->canonical_bytes.empty(),
             "public authority handoff produced no V2 materialization");
+
+    const auto& physical = *materialized.value;
+    const auto& authority = *verified.value;
+    const auto& source_dataset = *dataset.value;
+    require(physical.source_task7_authority_identity == authority.identity(),
+            "V2 materialization authority binding is detached");
+    require(physical.samples.size() == source_dataset.sample_count(),
+            "V2 materialization sample count differs from the validated dataset");
+    require(physical.ragged.batch_size == physical.samples.size(),
+            "V2 materialization ragged batch count is detached");
+
+    const auto ragged_identity =
+        ygo::model::model_batch_layout_identity_v2(physical.ragged);
+    const auto materialized_identity =
+        ygo::phase6::materialized_batch_identity_v2(physical);
+    const auto materialized_sha256 =
+        ygo::trace::sha256_bytes(physical.canonical_bytes);
+    require(materialized_identity ==
+                std::string(ygo::phase6::kTask7V2MaterializedBatchIdentityPrefix) +
+                    materialized_sha256,
+            "V2 materialized batch identity did not match its canonical bytes");
+
+    std::cout << "VERIFIED_AUTHORITY_ID=" << authority.identity() << '\n';
+    std::cout << "CONFIGURATION_IDENTITY=" << physical.configuration_identity << '\n';
+    std::cout << "DATASET_SEMANTIC_ID=" << source_dataset.source_dataset_identity << '\n';
+    std::cout << "SPLIT_IDENTITY=" << source_dataset.split.split_identity << '\n';
+    std::cout << "VOCABULARY_IDENTITY=" << authority.value().vocabulary.identity() << '\n';
+    std::cout << "TRAIN_SAMPLE_COUNT=" << source_dataset.train_samples.size() << '\n';
+    std::cout << "VALIDATION_SAMPLE_COUNT=" << source_dataset.validation_samples.size() << '\n';
+    std::cout << "TEST_SAMPLE_COUNT=" << source_dataset.test_samples.size() << '\n';
+    std::cout << "TOTAL_SAMPLE_COUNT=" << physical.samples.size() << '\n';
+    std::cout << "TOTAL_CANDIDATE_COUNT=" << physical.ragged.candidate_rows.size() << '\n';
+    std::cout << "RAGGED_MODEL_BATCH_IDENTITY_V2=" << ragged_identity << '\n';
+    std::cout << "MATERIALIZED_BATCH_BYTES=" << physical.canonical_bytes.size() << '\n';
+    std::cout << "MATERIALIZED_BATCH_SHA256=" << materialized_sha256 << '\n';
+    std::cout << "MATERIALIZED_BATCH_IDENTITY=" << materialized_identity << '\n';
+    std::cout << "ORDERED_SAMPLE_IDENTITY_PROJECTION_SHA256="
+              << ordered_sample_identity_projection_sha256(physical) << '\n';
     std::cout << "TASK7_V2_PUBLIC_AUTHORITY_E2E=PASS\n";
 }
 
